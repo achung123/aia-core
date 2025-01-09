@@ -10,28 +10,37 @@
           </mxGeometry>
         </mxCell>
         <mxCell id="-WdRmDnXPYaun-5Czbbn-1" value="Javascript Frontend" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="WIyWlLk6GJQsqaUBKTNV-1">
-          <mxGeometry x="150" y="200" width="120" height="60" as="geometry" />
+          <mxGeometry x="190" y="190" width="120" height="60" as="geometry" />
         </mxCell>
         <mxCell id="-WdRmDnXPYaun-5Czbbn-3" value="RDBM (sqlite)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="WIyWlLk6GJQsqaUBKTNV-1">
-          <mxGeometry x="710" y="30" width="60" height="80" as="geometry" />
+          <mxGeometry x="740" y="180" width="60" height="80" as="geometry" />
         </mxCell>
-        <mxCell id="-WdRmDnXPYaun-5Czbbn-5" value="Raspberry PI / Jetson Nano&amp;nbsp;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="WIyWlLk6GJQsqaUBKTNV-1">
-          <mxGeometry x="480" y="350" width="120" height="60" as="geometry" />
-        </mxCell>
-        <mxCell id="-WdRmDnXPYaun-5Czbbn-8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.875;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="WIyWlLk6GJQsqaUBKTNV-1" source="-WdRmDnXPYaun-5Czbbn-7" target="-WdRmDnXPYaun-5Czbbn-3">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="680" y="100" as="targetPoint" />
-            <Array as="points">
-              <mxPoint x="681" y="200" />
-              <mxPoint x="681" y="70" />
-            </Array>
-          </mxGeometry>
+        <mxCell id="-WdRmDnXPYaun-5Czbbn-5" value="Raspberry PI / Jetson Nano (For Live Image Capture)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="WIyWlLk6GJQsqaUBKTNV-1">
+          <mxGeometry x="490" y="380" width="120" height="60" as="geometry" />
         </mxCell>
         <mxCell id="-WdRmDnXPYaun-5Czbbn-7" value="REST API + Python Backend" style="ellipse;shape=cloud;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="WIyWlLk6GJQsqaUBKTNV-1">
           <mxGeometry x="400" y="160" width="260" height="110" as="geometry" />
         </mxCell>
         <mxCell id="-WdRmDnXPYaun-5Czbbn-11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.55;entryY=0.95;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="WIyWlLk6GJQsqaUBKTNV-1" source="-WdRmDnXPYaun-5Czbbn-5" target="-WdRmDnXPYaun-5Czbbn-7">
           <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="-WdRmDnXPYaun-5Czbbn-12" value="&lt;font style=&quot;font-size: 37px;&quot;&gt;All In Analytics (Image Based + Hardware)&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontStyle=1" vertex="1" parent="WIyWlLk6GJQsqaUBKTNV-1">
+          <mxGeometry x="230" y="20" width="430" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="-WdRmDnXPYaun-5Czbbn-13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.875;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="WIyWlLk6GJQsqaUBKTNV-1" source="-WdRmDnXPYaun-5Czbbn-7" target="-WdRmDnXPYaun-5Czbbn-3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="-WdRmDnXPYaun-5Czbbn-15" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="WIyWlLk6GJQsqaUBKTNV-1" source="-WdRmDnXPYaun-5Czbbn-14" target="-WdRmDnXPYaun-5Czbbn-1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="-WdRmDnXPYaun-5Czbbn-14" value="Image Based User Input" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="WIyWlLk6GJQsqaUBKTNV-1">
+          <mxGeometry x="10" y="130" width="90" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="-WdRmDnXPYaun-5Czbbn-17" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="WIyWlLk6GJQsqaUBKTNV-1" source="-WdRmDnXPYaun-5Czbbn-16" target="-WdRmDnXPYaun-5Czbbn-1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="-WdRmDnXPYaun-5Czbbn-16" value="Text Based User Input" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="WIyWlLk6GJQsqaUBKTNV-1">
+          <mxGeometry x="10" y="260" width="90" height="50" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>
