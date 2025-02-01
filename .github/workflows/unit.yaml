@@ -49,12 +49,11 @@ jobs:
       # install your root project, if required
       #----------------------------------------------
       - name: Install project
-        run: poetry install --no-interaction --with test
+        run: poetry install --no-interaction --no-root --with test
       #----------------------------------------------
       #              run test suite
       #----------------------------------------------
       - name: Run tests
         run: |
           source .venv/bin/activate
-          PYTHONPATH=src/ pytest tests/
-          coverage report
+          PYTHONPATH=src/ pytest test/
