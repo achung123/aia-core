@@ -1,9 +1,10 @@
 from fastapi import FastAPI
-from routes.routes import router
+from routes import routes
 
 app = FastAPI(title="FastAPI Boilerplate")
 
-app.include_router(router.routes.game)
+app.include_router(routes.game)
+
 
 @app.get("/")
 def read_root():

@@ -1,9 +1,9 @@
 # All In Analytics
-This repositroy is home to the core backend components of the All In Analytics project. This project is the primary home of a custom hold-em insight tool. This tool will allow users to track historical hands / odds at the end of each game. Most of the initial logic will be centered around odds calculations, visualization, and the aggregation of historical-hand data. Learning based components will slowly be introduced when the system is up and running so we can pass in input from games in real-time. 
+This repositroy is home to the core backend components of the All In Analytics project. This project is the primary home of a custom hold-em insight tool. This tool will allow users to track historical hands / odds at the end of each game. Most of the initial logic will be centered around odds calculations, visualization, and the aggregation of historical-hand data. Learning based components will slowly be introduced when the system is up and running so we can pass in input from games in real-time.
 
 # Developers Guide
 
-Below is the structure of the All In Analytics  backend system. 
+Below is the structure of the All In Analytics  backend system.
 
 ```
 all-in-analytics-core/
@@ -18,7 +18,7 @@ all-in-analytics-core/
 │  ├─ Dockerfile
 │  ├─ pyproject.toml
 ```
-This system is comprised of a FastAPI application that uses a docker image to run in. The API will provide a simple CRUD interface to in memory relational database. This interface will support: 
+This system is comprised of a FastAPI application that uses a docker image to run in. The API will provide a simple CRUD interface to in memory relational database. This interface will support:
 
 - Updating historical game records
 - Querying specific user filters for searching historical games
@@ -34,7 +34,7 @@ Once this is installed you can setup the poetry environement locally with the fo
 
 `poetry install --no-root`
 
-## Building Docker Container and Running FastAPI application 
+## Building Docker Container and Running FastAPI application
 
 Users can easily build the docker container and run the app locally within a uvicorn server running within the docker container. First ensure that you have the Docker Engine installed:
 
@@ -52,6 +52,6 @@ docker build -t all-in-analytics-core .
 docker run -t all-in-analytics-core
 ```
 
-## Interacting with the FastAPI application 
+## Interacting with the FastAPI application
 
 **WIP**

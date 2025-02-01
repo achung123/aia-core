@@ -12,13 +12,19 @@ pydantic = "*"
 fastapi = "*"
 uvicorn = "*"
 
-
 [tool.poetry.group.test]
 optional = true
 
 [tool.poetry.group.test.dependencies]
 pytest = "*"
 pytest-mock = "*"
+
+[tool.poetry.group.dev]
+optional = true
+
+[tool.poetry.group.dev.dependencies]
+ruff = "*"
+pre-commit = "*"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
