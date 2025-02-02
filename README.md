@@ -67,10 +67,9 @@ You can then navigate to the following [URL](http://localhost:8000/) to see a si
 ```
 {"message":"Welcome to the All In Analytics Core Backend!"}
 ```
-You can also navigate to the [docs route](http://localhost:8000/docs) to interact directly with the API and see the docuemntation! Isn't that so cool???
+You can also navigate to the [docs route](http://localhost:8000/docs) to interact directly with the API and see the docuemntation!
 
 ![Docs Image](docs/images/docs_page_screenshot.png)
-
 
 ## Interacting with the FastAPI application
 **WIP**

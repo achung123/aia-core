@@ -10,7 +10,7 @@ def create_game():
     return {"message": "New Game Created"}
 
 
-@router.get("/game/{game_id}")
+@router.get("/{game_id}")
 def get_game(game_id: int):
     # TODO: Implement this endpoint
     return {"message": f"Game {game_id}"}
