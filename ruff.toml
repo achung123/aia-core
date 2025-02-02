@@ -34,5 +34,7 @@ ignore = [
     "TRY003", # external messages in exceptions are too verbose
     "TD002",
     "TD003",
+    "INP001",
+    "S101",
     "FIX002", # too verbose descriptions of todos
 ]
