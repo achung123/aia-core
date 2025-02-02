@@ -59,8 +59,18 @@ cd ~/all-in-analytics-core
 docker build -t all-in-analytics-core .
 
 # Spin up the Docker contianer with app
-docker run -t all-in-analytics-core
+docker run -p 8000:8000 all-in-analytics-core
 ```
+
+You can then navigate to the following [URL](http://localhost:8000/) to see a simple JSON output below:
+
+```
+{"message":"Welcome to the All In Analytics Core Backend!"}
+```
+You can also navigate to the [docs route](http://localhost:8000/docs) to interact directly with the API and see the docuemntation! Isn't that so cool???
+
+![Docs Image](docs/image/docs_page_screenshot.png)
+
 
 ## Interacting with the FastAPI application
 **WIP**
