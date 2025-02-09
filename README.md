@@ -1,4 +1,4 @@
-# All In Analytics
+# All In Analytics Core
 This repositroy is home to the core backend components of the All In Analytics project. This project is the primary home of a custom hold-em insight tool. This tool will allow users to track historical hands / odds at the end of each game. Most of the initial logic will be centered around odds calculations, visualization, and the aggregation of historical-hand data. Hardware based components will slowly be introduced when the system is up and running so we can pass in input from games in real-time.
 
 # Developers Guide
