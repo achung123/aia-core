@@ -11,6 +11,8 @@ python = "^3.12"
 pydantic = "*"
 fastapi = "*"
 uvicorn = "*"
+pandas = "*"
+sqlalchemy = "*"
 
 [tool.poetry.group.test]
 optional = true
