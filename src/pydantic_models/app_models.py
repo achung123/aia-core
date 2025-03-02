@@ -79,17 +79,31 @@ class Card(BaseModel):
     suit: CardSuit
 
 
+# Pydantic models for data validation
+class Game(BaseModel):
+    game_id: int
+    game_date: str
+    winner: str
+    losers: str
+
+
 class Hand(BaseModel):
-    """
-    Model representing a hand of cards.
-
-    Attributes:
-        cards (list[Card]): The list of cards in the hand.
-        role (Role): The role of the player holding the hand.
-
-    """
-
-    cards: list[Card]
-    role: Role
+    game_id: str
+    player_id: str
+    hand_number: int
+    hole_cards: str
+    on_cheese: bool
 
 
+class Community(BaseModel):
+    game_id: str
+    hand_number: int
+    board_cards: str
+    active_players: str
+
+
+class GameStatistic(BaseModel):
+    game_id: str
+    player_id: str
+    best_hands: str  # possibly a list?
+    hole_cards: str

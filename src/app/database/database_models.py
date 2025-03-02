@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, Date, Float, create_engine
+from sqlalchemy import Boolean, Column, Float, Integer, String, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 
 db_url = "sqlite:///poker_game.db"
@@ -11,7 +11,7 @@ class Game(Base):
     __tablename__ = "game"
 
     game_id = Column(Integer, primary_key=True, autoincrement=True)
-    game_date = Column(Integer)
+    game_date = Column(String)
     winner = Column(String)
     losers = Column(String)
 
@@ -35,10 +35,10 @@ class Community(Base):
     hand_number = Column(Integer)
     board_cards = Column(String)
     active_players = Column(String)
-    
 
-class Game_statistc(Base):
-    __tablename__ = "game_statistc"
+
+class GameStatistc(Base):
+    __tablename__ = "game_statistic"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     game_id = Column(String)
@@ -47,8 +47,8 @@ class Game_statistc(Base):
     hole_cards = Column(String)
 
 
-class Player_statistcs(Base):
-    __tablename__ = "player_statistcs"
+class PlayerStatistc(Base):
+    __tablename__ = "player_statistc"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     start_date = Column(Integer)
@@ -56,6 +56,6 @@ class Player_statistcs(Base):
     player_id = Column(String)
     win_rate = Column(Float)
     best_hand = Column(String)
-    
+
 
 Base.metadata.create_all(engine)
