@@ -91,3 +91,5 @@ class Hand(BaseModel):
 
     cards: list[Card]
     role: Role
+
+
