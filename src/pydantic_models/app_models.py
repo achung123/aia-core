@@ -1,7 +1,7 @@
 from enum import Enum
-
-from pydantic import BaseModel
-
+import datetime
+from pydantic import BaseModel, Field, field_validator
+from dateutil.parser import parse
 
 class Role(Enum):
     """Enumeration for the role of a player in the game."""
@@ -78,16 +78,44 @@ class Card(BaseModel):
     rank: CardRank
     suit: CardSuit
 
+class GameRequest(BaseModel):
+    game_date: str = Field(..., description="Date in MM-DD-YYYY format")
+
+    @field_validator("game_date")
+    @classmethod
+    def validate_game_date(cls, value: str) -> str:
+        """Ensure game_date follows MM-DD-YYYY format and is a valid date."""
+        try:
+            parse(value, dayfirst=False, yearfirst=False)  # Validate the date
+        except ValueError:
+            raise ValueError("game_date must be a valid date in MM-DD-YYYY format")
+        return value
+
+# Pydantic models for data validation
+class GameResponse(BaseModel):
+    game_id: int
+    game_date: str
+    winner: str
+    losers: str
+
 
 class Hand(BaseModel):
-    """
-    Model representing a hand of cards.
+    game_id: str
+    player_id: str
+    hand_number: int
+    hole_cards: str
+    on_cheese: bool
 
-    Attributes:
-        cards (list[Card]): The list of cards in the hand.
-        role (Role): The role of the player holding the hand.
 
-    """
+class Community(BaseModel):
+    game_id: str
+    hand_number: int
+    board_cards: str
+    active_players: str
 
-    cards: list[Card]
-    role: Role
+
+class GameStatistic(BaseModel):
+    game_id: str
+    player_id: str
+    best_hands: str  # possibly a list?
+    hole_cards: str
