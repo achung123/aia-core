@@ -1,7 +1,7 @@
 from enum import Enum
-
-from pydantic import BaseModel
-
+import datetime
+from pydantic import BaseModel, Field, field_validator
+from dateutil.parser import parse
 
 class Role(Enum):
     """Enumeration for the role of a player in the game."""
@@ -78,9 +78,21 @@ class Card(BaseModel):
     rank: CardRank
     suit: CardSuit
 
+class GameRequest(BaseModel):
+    game_date: str = Field(..., description="Date in MM-DD-YYYY format")
+
+    @field_validator("game_date")
+    @classmethod
+    def validate_game_date(cls, value: str) -> str:
+        """Ensure game_date follows MM-DD-YYYY format and is a valid date."""
+        try:
+            parse(value, dayfirst=False, yearfirst=False)  # Validate the date
+        except ValueError:
+            raise ValueError("game_date must be a valid date in MM-DD-YYYY format")
+        return value
 
 # Pydantic models for data validation
-class Game(BaseModel):
+class GameResponse(BaseModel):
     game_id: int
     game_date: str
     winner: str
