@@ -170,7 +170,9 @@ class CommunityResponse(BaseModel):
     message: str
     game_date: str
     hand_number: int
-    current_game_state: str  # flop, turn, river, bad_game_state_move
+    community_cards: CommunityCards
+
+    active_players: dict[GameState, list[str]] | None = None
 
 
 class CommunityErrorResponse(BaseModel):

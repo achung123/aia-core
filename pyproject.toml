@@ -6,6 +6,7 @@ authors = ["Adam"]
 
 [tool.poetry.dependencies]
 python = "^3.12"
+ipython = "^9.0.1"
 
 [tool.poetry.group.src.dependencies]
 pydantic = "*"
