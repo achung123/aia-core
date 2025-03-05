@@ -5,7 +5,7 @@ from .routes import game
 app = FastAPI(title="All In Analytics Core Backend", version="1.0.0")
 
 # Include the routers
-app.include_router(game.router, prefix="/game", tags=["Game"])
+app.include_router(game.router)
 
 
 @app.get("/")
