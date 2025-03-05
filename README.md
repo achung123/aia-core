@@ -58,8 +58,8 @@ cd ~/all-in-analytics-core
 # Build the Docker image using the Dockerfile
 docker build -t all-in-analytics-core .
 
-# Spin up the Docker contianer with app
-docker run -p 8000:8000 all-in-analytics-core
+# Spin up the Docker contianer with app with mounted /src
+docker run -p 8000:8000 -v $(pwd)/src:/src all-in-analytics-core
 ```
 
 You can then navigate to the following [URL](http://localhost:8000/) to see a simple JSON output below:
