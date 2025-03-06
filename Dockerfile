@@ -1,6 +1,6 @@
 FROM python:3.12
 
-COPY ./src /src
+# COPY ./src /src
 
 ENV POETRY_NO_INTERACTION=1 \
   POETRY_VIRTUALENVS_CREATE=false \
