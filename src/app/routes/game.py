@@ -175,3 +175,30 @@ def get_community(game_date: str, hand_number: int):
             active_players=active_players,
         )
         return response.model_dump()
+
+# Endpoint to Update winners and losers
+# @router.put("/{game_id}")
+# def update_game(
+#     db: Annotated[Session, Depends(get_db)], game_id: int, game: pydantic_models.Game
+# ):
+#     """
+#     Update a game by ID
+#     """
+#     db_game = (
+#         db.query(database.database_models.Game)
+#         .filter(database.database_models.Game.game_id == game_id)
+#         .first()
+#     )
+#     if db_game is None:
+#         raise HTTPException(status_code=404, detail="Game not found")
+
+#     db_game.winner = game.winner
+#     db_game.losers = game.losers
+#     db.commit()
+
+#     return pydantic_models.GameResponse(
+#         game_id=db_game.game_id,
+#         game_date=db_game.game_date,
+#         winner=db_game.winner,`z`
+#         losers=db_game.losers,
+#     )
