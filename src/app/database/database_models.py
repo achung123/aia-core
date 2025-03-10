@@ -24,5 +24,12 @@ class Community(Base):
     river_card = Column(String)
     players = Column(String)
 
+class Game(Base):
+    __tablename__ = "game"
+
+    game_id = Column(Integer, primary_key=True, autoincrement=True)
+    game_date = Column(Integer)
+    winner = Column(String)
+    losers = Column(String)
 
 Base.metadata.create_all(engine)
