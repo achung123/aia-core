@@ -1,9 +1,11 @@
+import datetime
 from typing import Annotated
 
+import pytz
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.database.database_models import Community, engine
+from app.database.database_models import Community, Game, engine
 from pydantic_models.app_models import (
     Card,
     CardRank,
@@ -12,6 +14,7 @@ from pydantic_models.app_models import (
     CommunityErrorResponse,
     CommunityRequest,
     CommunityResponse,
+    GameResponse,
     GameState,
 )
 
@@ -27,54 +30,46 @@ def get_db():
         db.close()
 
 
-# @router.post("/")
-# def create_game(db: Annotated[Session, Depends(get_db)]):
-#     """
-#     Create a new game table
-#     """
-#     today = datetime.datetime.now(datetime.timedelta("America/New_York")).date()
-#     formatted_date = today.strftime("%m-%d-%Y")
-#     games = (
-#         db.query(db.database_models.Game)
-#         .filter(db.database_models.Game.game_date == formatted_date)
-#         .all()
-#     )
-#     if games:
-#         raise HTTPException(status_code=404, detail="Game already exists...")
+@router.post("/")
+def create_game(db: Annotated[Session, Depends(get_db)]):
+    """
+    Create a new game table
+    """
+    today = datetime.datetime.now(pytz.timezone("America/New_York")).date()
+    formatted_date = today.strftime("%m-%d-%Y")
+    games = db.query(Game).filter(Game.game_date == formatted_date).all()
+    if games:
+        raise HTTPException(status_code=404, detail="Game already exists...")
 
-#     game_entry = db.database_models.Game(
-#         game_date=formatted_date, winner="Gil", losers="Adam,Matt,Zain"
-#     )
-#     db.add(game_entry)
-#     db.commit()
+    game_entry = Game(game_date=formatted_date, winner="Gil", losers="Adam,Matt,Zain")
+    db.add(game_entry)
+    db.commit()
 
-#     queried_game = (
-#         db.query(db.database_models.Game)
-#         .filter(db.database_models.Game.game_date == formatted_date)
-#         .first()
-#     )
+    queried_game = db.query(Game).filter(Game.game_date == formatted_date).first()
+
+    return GameResponse(
+        game_id=queried_game.game_id,
+        game_date=queried_game.game_date,
+        winner=queried_game.winner,
+        losers=queried_game.losers,
+    )
 
 
-# # Endpoint to get a game by id
-# @router.get("/")
-# def get_game_by_date(request: GameRequest, db: Annotated[Session, Depends(get_db)]):
-#     """
-#     Get a game by date
-#     """
-#     game = (
-#         db.query(db.database_models.Game)
-#         .filter(db.database_models.Game.game_date == request.game_date)
-#         .first()
-#     )
-#     if game is None:
-#         raise HTTPException(status_code=404, detail="Game not found")
+@router.get("/{game_date}")
+def get_game_by_date(game_date: str, db: Annotated[Session, Depends(get_db)]):
+    """
+    Get a game by date
+    """
+    game = db.query(Game).filter(Game.game_date == game_date).first()
+    if game is None:
+        raise HTTPException(status_code=404, detail="Game not found")
 
-#     return GameResponse(
-#         game_id=game.game_id,
-#         game_date=game.game_date,
-#         winner=game.winner,
-#         losers=game.losers,
-#     )
+    return GameResponse(
+        game_id=game.game_id,
+        game_date=game.game_date,
+        winner=game.winner,
+        losers=game.losers,
+    )
 
 
 @router.post("/community")
