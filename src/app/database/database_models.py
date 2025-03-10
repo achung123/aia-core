@@ -28,7 +28,7 @@ class Game(Base):
     __tablename__ = "game"
 
     game_id = Column(Integer, primary_key=True, autoincrement=True)
-    game_date = Column(Integer)
+    game_date = Column(String)
     winner = Column(String)
     losers = Column(String)
 
