@@ -12,8 +12,6 @@ from pydantic_models.app_models import (
     CommunityErrorResponse,
     CommunityRequest,
     CommunityResponse,
-    GameRequest,
-    GameResponse,
     GameState,
 )
 
