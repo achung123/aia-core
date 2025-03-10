@@ -113,6 +113,13 @@ class GameRequest(BaseModel):
         return value
 
 
+class GameResponse(BaseModel):
+    game_id: int
+    game_date: str
+    winner: str
+    losers: str
+
+
 class CommunityCards(BaseModel):
     model_config = ConfigDict(use_enum_values=True)
 
