@@ -16,6 +16,7 @@ class Community(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     game_date = Column(String)
+    time_stamp = Column(String)
     hand_number = Column(Integer)
     flop_card_0 = Column(String)
     flop_card_1 = Column(String)
@@ -24,12 +25,14 @@ class Community(Base):
     river_card = Column(String)
     players = Column(String)
 
+
 class Game(Base):
     __tablename__ = "game"
 
     game_id = Column(Integer, primary_key=True, autoincrement=True)
     game_date = Column(String)
     winner = Column(String)
-    losers = Column(String)
+    players = Column(String)
+
 
 Base.metadata.create_all(engine)

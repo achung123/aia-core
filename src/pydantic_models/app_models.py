@@ -90,8 +90,8 @@ class Card(BaseModel):
 
     model_config = ConfigDict(use_enum_values=True)
 
-    suit: CardSuit
     rank: CardRank
+    suit: CardSuit
 
     def __str__(self) -> str:
         return f"{self.rank}{self.suit}"
@@ -120,8 +120,24 @@ class GameResponse(BaseModel):
     losers: str
 
 
-class CommunityCards(BaseModel):
+class CommunityState(BaseModel):
+    """
+    Model representing the community in a game. We define the community cards as a list of cards.
+    and the active players as a list of strings.
+
+    Attributes:
+        active_players (list[str]): The active players in the game.
+        flop_card_0 (Card): The first card in the flop.
+        flop_card_1 (Card): The second card in the flop.
+        flop_card_2 (Card): The third card in the flop.
+        turn_card (Card | None): The turn card.
+        river_card (Card | None): The river card.
+
+    """
+
     model_config = ConfigDict(use_enum_values=True)
+
+    active_players: list[str]
 
     flop_card_0: Card
     flop_card_1: Card
@@ -142,7 +158,7 @@ class CommunityCards(BaseModel):
         return GameState.BAD_GAME_STATE.value
 
 
-class CommunityRequest(GameRequest):
+class CommunityRequest(BaseModel):
     """
     Model representing the community cards in a game.
 
@@ -153,9 +169,7 @@ class CommunityRequest(GameRequest):
 
     """
 
-    hand_number: int
-
-    community_cards: CommunityCards
+    community_state: CommunityState
 
 
 class CommunityResponse(BaseModel):
@@ -177,9 +191,7 @@ class CommunityResponse(BaseModel):
     message: str
     game_date: str
     hand_number: int
-    community_cards: CommunityCards
-
-    active_players: dict[GameState, list[str]] | None = None
+    community_states: list[CommunityState]
 
 
 class CommunityErrorResponse(BaseModel):

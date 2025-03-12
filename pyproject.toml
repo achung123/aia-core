@@ -15,6 +15,7 @@ uvicorn = "*"
 python-dateutil = "*"
 SQLAlchemy = "*"
 pytz = "*"
+httpx = "*"
 
 [tool.poetry.group.test]
 optional = true
