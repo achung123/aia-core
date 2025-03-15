@@ -4,7 +4,7 @@ from typing import Annotated
 import pytz
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, sessionmaker
-
+from sqlalchemy.exc import OperationalError
 from app.database.database_models import Game, engine
 from app.database.database_queries import (
     query_community_with_date_and_hand,
@@ -24,7 +24,7 @@ from .utils import (
     _validate_game_date,
 )
 
-router = APIRouter(prefix="/game", tags=["game"])
+router = APIRouter(prefix='/game', tags=['game'])
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
@@ -36,18 +36,18 @@ def _get_db():
         db.close()
 
 
-@router.post("/")
+@router.post('/')
 def create_game(db: Annotated[Session, Depends(_get_db)]):
     """
     Create a new game table
     """
-    today = datetime.datetime.now(pytz.timezone("America/New_York")).date()
-    formatted_date = today.strftime("%m-%d-%Y")
+    today = datetime.datetime.now(pytz.timezone('America/New_York')).date()
+    formatted_date = today.strftime('%m-%d-%Y')
     games = db.query(Game).filter(Game.game_date == formatted_date).all()
     if games:
-        raise HTTPException(status_code=404, detail="Game already exists...")
+        raise HTTPException(status_code=404, detail='Game already exists...')
 
-    game_entry = Game(game_date=formatted_date, winner="Gil", losers="Adam,Matt,Zain")
+    game_entry = Game(game_date=formatted_date, winner='Gil', losers='Adam,Matt,Zain')
     db.add(game_entry)
     db.commit()
 
@@ -61,14 +61,14 @@ def create_game(db: Annotated[Session, Depends(_get_db)]):
     )
 
 
-@router.get("/{game_date}")
+@router.get('/{game_date}')
 def get_game_by_date(game_date: str, db: Annotated[Session, Depends(_get_db)]):
     """
     Get a game by date
     """
     game = db.query(Game).filter(Game.game_date == game_date).first()
     if game is None:
-        raise HTTPException(status_code=404, detail="Game not found")
+        raise HTTPException(status_code=404, detail='Game not found')
 
     return GameResponse(
         game_id=game.game_id,
@@ -78,7 +78,7 @@ def get_game_by_date(game_date: str, db: Annotated[Session, Depends(_get_db)]):
     )
 
 
-@router.post("/community/{game_date}/{hand_number}")
+@router.post('/community/{game_date}/{hand_number}')
 def push_community(
     game_date: str,
     hand_number: int,
@@ -86,18 +86,26 @@ def push_community(
     db: Annotated[Session, Depends(_get_db)],
 ):
     # Check if the game exists
-    if query_game_with_date(db, game_date) is None:
+    try:
+        game = query_game_with_date(db, game_date)
+        if game is None:
+            response = CommunityErrorResponse(
+                status='FAILURE',
+                message='Game Not Found',
+            )
+            raise HTTPException(status_code=404, detail=response.model_dump())
+    except OperationalError as e:
         response = CommunityErrorResponse(
-            status="FAILURE",
-            message="Game Not Found",
+            status='FAILURE',
+            message='Database Error',
         )
-        raise HTTPException(status_code=404, detail=response.model_dump())
+        raise HTTPException(status_code=500, detail=response.model_dump()) from e
 
     # Check if the game state in request is valid
     if request.community_state.game_state == GameState.BAD_GAME_STATE:
         response = CommunityErrorResponse(
-            status="FAILURE",
-            message="Invalid Move",
+            status='FAILURE',
+            message='Invalid Move',
         )
         raise HTTPException(status_code=400, detail=response.model_dump())
 
@@ -105,8 +113,8 @@ def push_community(
         game_date = _validate_game_date(game_date)
     except ValueError as e:
         response = CommunityErrorResponse(
-            status="FAILURE",
-            message="Invalid Date",
+            status='FAILURE',
+            message='Invalid Date',
         )
         raise HTTPException(status_code=400, detail=response.model_dump()) from e
 
@@ -121,8 +129,8 @@ def push_community(
     community_query = query_community_with_date_and_hand(db, game_date, hand_number)
     if not community_query:
         response = CommunityErrorResponse(
-            status="FAILURE",
-            message="Community Cards Not Found",
+            status='FAILURE',
+            message='Community Cards Not Found',
         )
         raise HTTPException(status_code=404, detail=response.model_dump())
 
@@ -143,8 +151,8 @@ def push_community(
         community_states.append(river_community_state)
 
     response = CommunityResponse(
-        status="SUCCESS",
-        message="Community Cards Pushed",
+        status='SUCCESS',
+        message='Community Cards Pushed',
         game_date=game_date,
         hand_number=hand_number,
         community_states=community_states,
@@ -152,15 +160,15 @@ def push_community(
     return response.model_dump()
 
 
-@router.get("/community/{game_date}/{hand_number}")
+@router.get('/community/{game_date}/{hand_number}')
 def get_community(
     game_date: str, hand_number: int, db: Annotated[Session, Depends(_get_db)]
 ):
     community_query = query_community_with_date_and_hand(db, game_date, hand_number)
     if not community_query:
         response = CommunityErrorResponse(
-            status="FAILURE",
-            message="Community Cards Not Found",
+            status='FAILURE',
+            message='Community Cards Not Found',
         )
         raise HTTPException(status_code=404, detail=response.model_dump())
 
@@ -174,8 +182,8 @@ def get_community(
     community = community_query[0]
 
     response = CommunityResponse(
-        status="SUCCESS",
-        message="Community Cards Found",
+        status='SUCCESS',
+        message='Community Cards Found',
         game_date=community.game_date,
         hand_number=community.hand_number,
         community_states=community_states,

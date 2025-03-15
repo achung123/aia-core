@@ -18,12 +18,12 @@ def test_valid_card():
 
 def test_invalid_card_rank():
     with pytest.raises(ValidationError):
-        Card(rank="Ace", suit=CardSuit.SPADES)
+        Card(rank='Ace', suit=CardSuit.SPADES)
 
 
 def test_invalid_card_suit():
     with pytest.raises(ValidationError):
-        Card(rank=CardRank.ACE, suit="Spades")
+        Card(rank=CardRank.ACE, suit='Spades')
 
 
 def test_valid_community_request_river():
@@ -33,7 +33,7 @@ def test_valid_community_request_river():
         flop_card_2=Card(rank=CardRank.THREE, suit=CardSuit.SPADES),
         turn_card=Card(rank=CardRank.FOUR, suit=CardSuit.DIAMONDS),
         river_card=Card(rank=CardRank.FIVE, suit=CardSuit.SPADES),
-        active_players=["Gil", "Adam", "Zain", "Matt"],
+        active_players=['Gil', 'Adam', 'Zain', 'Matt'],
     )
     assert community_state.flop_card_0.rank == CardRank.ACE
     assert community_state.flop_card_0.suit == CardSuit.SPADES
@@ -52,17 +52,17 @@ def test_valid_community_request_river():
 
 
 def test_json_validiate():
-    card_dict = {"rank": "A", "suit": "S"}
+    card_dict = {'rank': 'A', 'suit': 'S'}
     card = Card.model_validate(card_dict)
     assert card.rank == CardRank.ACE
     assert card.suit == CardSuit.SPADES
     community_cards_dict = {
-        "flop_card_0": {"rank": "A", "suit": "S"},
-        "flop_card_1": {"rank": "2", "suit": "C"},
-        "flop_card_2": {"rank": "3", "suit": "S"},
-        "turn_card": {"rank": "4", "suit": "D"},
-        "river_card": {"rank": "5", "suit": "S"},
-        "active_players": ["Gil", "Adam", "Zain", "Matt"],
+        'flop_card_0': {'rank': 'A', 'suit': 'S'},
+        'flop_card_1': {'rank': '2', 'suit': 'C'},
+        'flop_card_2': {'rank': '3', 'suit': 'S'},
+        'turn_card': {'rank': '4', 'suit': 'D'},
+        'river_card': {'rank': '5', 'suit': 'S'},
+        'active_players': ['Gil', 'Adam', 'Zain', 'Matt'],
     }
     community_state = CommunityState.model_validate(community_cards_dict)
     assert community_state.flop_card_0.rank == CardRank.ACE
