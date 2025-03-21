@@ -1,177 +1,191 @@
-from fastapi import APIRouter, HTTPException
-from sqlalchemy.orm import sessionmaker
+import datetime
+from typing import Annotated
 
-from app.database.database_models import Community, engine
+import pytz
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.exc import OperationalError
+from app.database.database_models import Game, engine
+from app.database.database_queries import (
+    query_community_with_date_and_hand,
+    query_game_with_date,
+)
 from pydantic_models.app_models import (
-    Card,
-    CardRank,
-    CardSuit,
-    CommunityCards,
     CommunityErrorResponse,
     CommunityRequest,
     CommunityResponse,
+    GameResponse,
     GameState,
 )
 
-router = APIRouter(prefix="/game", tags=["game"])
+from .utils import (
+    _convert_community_query_to_state,
+    _convert_community_state_to_query,
+    _validate_game_date,
+)
 
-SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
-
-
-@router.post("/")
-def create_game():
-    return {"message": "New Game Created"}
-
-
-@router.get("/{game_id}")
-def get_game(game_id: int):
-    # TODO: Implement this endpoint
-    return {"message": f"Game {game_id}"}
+router = APIRouter(prefix='/game', tags=['game'])
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
-@router.post("/community")
-def push_community(request: CommunityRequest):
-    if request.community_cards.game_state == GameState.BAD_GAME_STATE:
+def _get_db():
+    db = SessionLocal()
+    try:
+        yield db  # Dependency injection
+    finally:
+        db.close()
+
+
+@router.post('/')
+def create_game(db: Annotated[Session, Depends(_get_db)]):
+    """
+    Create a new game table
+    """
+    today = datetime.datetime.now(pytz.timezone('America/New_York')).date()
+    formatted_date = today.strftime('%m-%d-%Y')
+    games = db.query(Game).filter(Game.game_date == formatted_date).all()
+    if games:
+        raise HTTPException(status_code=404, detail='Game already exists...')
+
+    game_entry = Game(game_date=formatted_date, winner='Gil', losers='Adam,Matt,Zain')
+    db.add(game_entry)
+    db.commit()
+
+    queried_game = db.query(Game).filter(Game.game_date == formatted_date).first()
+
+    return GameResponse(
+        game_id=queried_game.game_id,
+        game_date=queried_game.game_date,
+        winner=queried_game.winner,
+        losers=queried_game.losers,
+    )
+
+
+@router.get('/{game_date}')
+def get_game_by_date(game_date: str, db: Annotated[Session, Depends(_get_db)]):
+    """
+    Get a game by date
+    """
+    game = db.query(Game).filter(Game.game_date == game_date).first()
+    if game is None:
+        raise HTTPException(status_code=404, detail='Game not found')
+
+    return GameResponse(
+        game_id=game.game_id,
+        game_date=game.game_date,
+        winner=game.winner,
+        losers=game.losers,
+    )
+
+
+@router.post('/community/{game_date}/{hand_number}')
+def push_community(
+    game_date: str,
+    hand_number: int,
+    request: CommunityRequest,
+    db: Annotated[Session, Depends(_get_db)],
+):
+    # Check if the game exists
+    try:
+        game = query_game_with_date(db, game_date)
+        if game is None:
+            response = CommunityErrorResponse(
+                status='FAILURE',
+                message='Game Not Found',
+            )
+            raise HTTPException(status_code=404, detail=response.model_dump())
+    except OperationalError as e:
         response = CommunityErrorResponse(
-            status="error",
-            message="Invalid Move",
+            status='FAILURE',
+            message='Database Error',
+        )
+        raise HTTPException(status_code=500, detail=response.model_dump()) from e
+
+    # Check if the game state in request is valid
+    if request.community_state.game_state == GameState.BAD_GAME_STATE:
+        response = CommunityErrorResponse(
+            status='FAILURE',
+            message='Invalid Move',
         )
         raise HTTPException(status_code=400, detail=response.model_dump())
 
-    game_date = request.game_date
-    hand_number = request.hand_number
-    community_cards = request.community_cards
-    active_players = None
-    with SessionLocal() as session:
-        if community_cards.game_state == GameState.FLOP:
-            turn_card = None
-            river_card = None
-            active_players = {GameState.FLOP: request.players}
-        elif community_cards.game_state == GameState.TURN:
-            turn_card = str(community_cards.turn_card)
-            river_card = None
-            flop_active_players = (
-                session.query(Community)
-                .filter(
-                    Community.game_date == game_date,
-                    Community.hand_number == hand_number,
-                )
-                .order_by(Community.id)
-                .all()[-1]
-                .players.split(",")
-            )
-            active_players = {GameState.TURN: request.players} | {
-                GameState.FLOP: flop_active_players
-            }
-        elif community_cards.game_state == GameState.RIVER:
-            turn_card = str(community_cards.turn_card)
-            river_card = str(community_cards.river_card)
-            flop_active_players = (
-                session.query(Community)
-                .filter(
-                    Community.game_date == game_date,
-                    Community.hand_number == hand_number,
-                )
-                .order_by(Community.id)
-                .all()[-2]
-                .players.split(",")
-            )
-            turn_active_players = (
-                session.query(Community)
-                .filter(
-                    Community.game_date == game_date,
-                    Community.hand_number == hand_number,
-                )
-                .order_by(Community.id)
-                .all()[-1]
-                .players.split(",")
-            )
-            active_players = (
-                {GameState.RIVER: request.players}
-                | {GameState.TURN: turn_active_players}
-                | {GameState.FLOP: flop_active_players}
-            )
-
-        community = Community(
-            game_date=game_date,
-            hand_number=hand_number,
-            flop_card_0=str(community_cards.flop_card_0),
-            flop_card_1=str(community_cards.flop_card_1),
-            flop_card_2=str(community_cards.flop_card_2),
-            turn_card=turn_card,
-            river_card=river_card,
-            players=",".join(request.players),
+    try:
+        game_date = _validate_game_date(game_date)
+    except ValueError as e:
+        response = CommunityErrorResponse(
+            status='FAILURE',
+            message='Invalid Date',
         )
-        session.add(community)
-        session.commit()
+        raise HTTPException(status_code=400, detail=response.model_dump()) from e
+
+    community_state = request.community_state
+    community = _convert_community_state_to_query(
+        game_date, hand_number, community_state
+    )
+    db.add(community)
+    db.commit()
+
+    # Query the community table for the response
+    community_query = query_community_with_date_and_hand(db, game_date, hand_number)
+    if not community_query:
+        response = CommunityErrorResponse(
+            status='FAILURE',
+            message='Community Cards Not Found',
+        )
+        raise HTTPException(status_code=404, detail=response.model_dump())
+
+    community_states = []
+
+    flop_community_query = community_query[0]
+    flop_community_state = _convert_community_query_to_state(flop_community_query)
+    community_states.append(flop_community_state)
+
+    if community_state.game_state in (GameState.TURN, GameState.RIVER):
+        turn_community_query = community_query[1]
+        turn_community_state = _convert_community_query_to_state(turn_community_query)
+        community_states.append(turn_community_state)
+
+    if community_state.game_state == GameState.RIVER:
+        river_community_query = community_query[2]
+        river_community_state = _convert_community_query_to_state(river_community_query)
+        community_states.append(river_community_state)
 
     response = CommunityResponse(
-        status="success",
-        message="Community Cards Pushed",
+        status='SUCCESS',
+        message='Community Cards Pushed',
         game_date=game_date,
         hand_number=hand_number,
-        community_cards=community_cards,
-        active_players=active_players,
+        community_states=community_states,
     )
     return response.model_dump()
 
 
-@router.get("/community/{game_date}/{hand_number}")
-def get_community(game_date: str, hand_number: int):
-    with SessionLocal() as session:
-        community = (
-            session.query(Community)
-            .filter(
-                Community.game_date == game_date, Community.hand_number == hand_number
-            )
-            .order_by(Community.id)  # Or `Community.id.desc()` for descending order
-            .all()
+@router.get('/community/{game_date}/{hand_number}')
+def get_community(
+    game_date: str, hand_number: int, db: Annotated[Session, Depends(_get_db)]
+):
+    community_query = query_community_with_date_and_hand(db, game_date, hand_number)
+    if not community_query:
+        response = CommunityErrorResponse(
+            status='FAILURE',
+            message='Community Cards Not Found',
         )
-        if not community:
-            response = CommunityErrorResponse(
-                status="error",
-                message="Community Cards Not Found",
-            )
-            raise HTTPException(status_code=404, detail=response.model_dump())
+        raise HTTPException(status_code=404, detail=response.model_dump())
 
-        game_states = [GameState.FLOP, GameState.TURN, GameState.RIVER]
-        active_players = {
-            game_states[i]: data.players.split(",") for i, data in enumerate(community)
-        }
+    community_states = []
 
-        community = community[-1]
-        comunity_cards = CommunityCards(
-            flop_card_0=Card(
-                rank=CardRank(community.flop_card_0[0]),
-                suit=CardSuit(community.flop_card_0[1]),
-            ),
-            flop_card_1=Card(
-                rank=CardRank(community.flop_card_1[0]),
-                suit=CardSuit(community.flop_card_1[1]),
-            ),
-            flop_card_2=Card(
-                rank=CardRank(community.flop_card_2[0]),
-                suit=CardSuit(community.flop_card_2[1]),
-            ),
-            turn_card=Card(
-                rank=CardRank(community.turn_card[0]),
-                suit=CardSuit(community.turn_card[1]),
-            )
-            if community.turn_card
-            else None,
-            river_card=Card(
-                rank=CardRank(community.river_card[0]),
-                suit=CardSuit(community.river_card[1]),
-            )
-            if community.river_card
-            else None,
-        )
-        response = CommunityResponse(
-            status="success",
-            message="Community Cards Found",
-            game_date=community.game_date,
-            hand_number=community.hand_number,
-            community_cards=comunity_cards,
-            active_players=active_players,
-        )
-        return response.model_dump()
+    for community_entry in community_query:
+        community_state = _convert_community_query_to_state(community_entry)
+        community_states.append(community_state)
+
+    game_date = community_query[0].game_date
+    community = community_query[0]
+
+    response = CommunityResponse(
+        status='SUCCESS',
+        message='Community Cards Found',
+        game_date=community.game_date,
+        hand_number=community.hand_number,
+        community_states=community_states,
+    )
+    return response.model_dump()
