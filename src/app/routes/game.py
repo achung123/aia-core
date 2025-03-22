@@ -19,9 +19,9 @@ from pydantic_models.app_models import (
 )
 
 from .utils import (
-    _convert_community_query_to_state,
-    _convert_community_state_to_query,
-    _validate_game_date,
+    convert_community_query_to_state,
+    convert_community_state_to_query,
+    validate_game_date,
 )
 
 router = APIRouter(prefix='/game', tags=['game'])
@@ -88,7 +88,7 @@ def push_community(
     # Check if the game exists
     try:
         game = query_game_with_date(db, game_date)
-        if game is None:
+        if not game:
             response = CommunityErrorResponse(
                 status='FAILURE',
                 message='Game Not Found',
@@ -110,7 +110,7 @@ def push_community(
         raise HTTPException(status_code=400, detail=response.model_dump())
 
     try:
-        game_date = _validate_game_date(game_date)
+        game_date = validate_game_date(game_date)
     except ValueError as e:
         response = CommunityErrorResponse(
             status='FAILURE',
@@ -119,7 +119,7 @@ def push_community(
         raise HTTPException(status_code=400, detail=response.model_dump()) from e
 
     community_state = request.community_state
-    community = _convert_community_state_to_query(
+    community = convert_community_state_to_query(
         game_date, hand_number, community_state
     )
     db.add(community)
@@ -137,17 +137,17 @@ def push_community(
     community_states = []
 
     flop_community_query = community_query[0]
-    flop_community_state = _convert_community_query_to_state(flop_community_query)
+    flop_community_state = convert_community_query_to_state(flop_community_query)
     community_states.append(flop_community_state)
 
     if community_state.game_state in (GameState.TURN, GameState.RIVER):
         turn_community_query = community_query[1]
-        turn_community_state = _convert_community_query_to_state(turn_community_query)
+        turn_community_state = convert_community_query_to_state(turn_community_query)
         community_states.append(turn_community_state)
 
     if community_state.game_state == GameState.RIVER:
         river_community_query = community_query[2]
-        river_community_state = _convert_community_query_to_state(river_community_query)
+        river_community_state = convert_community_query_to_state(river_community_query)
         community_states.append(river_community_state)
 
     response = CommunityResponse(
@@ -175,7 +175,7 @@ def get_community(
     community_states = []
 
     for community_entry in community_query:
-        community_state = _convert_community_query_to_state(community_entry)
+        community_state = convert_community_query_to_state(community_entry)
         community_states.append(community_state)
 
     game_date = community_query[0].game_date

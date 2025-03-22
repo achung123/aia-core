@@ -24,6 +24,47 @@ def test_post_community_cards(client, game_setup):
     assert data['hand_number'] == 1
 
 
+def test_post_community_cards_missing_game(client):
+    game_date = '01-10-2023'
+    hand_number = 1
+
+    community_state = CommunityState(
+        flop_card_0=Card(rank='A', suit='S'),
+        flop_card_1=Card(rank='K', suit='H'),
+        flop_card_2=Card(rank='2', suit='D'),
+        active_players=['Gil', 'Adam', 'Zain', 'Matt'],
+    )
+
+    request = CommunityRequest(community_state=community_state)
+    response = client.post(
+        f'/game/community/{game_date}/{hand_number}', json=request.model_dump()
+    )
+    assert response.status_code == 404
+    assert response.json()['detail']['status'] == 'FAILURE'
+    assert response.json()['detail']['message'] == 'Game Not Found'
+
+
+def test_post_community_cards_bad_game(client, game_setup):
+    game_date = '01-10-2023'
+    hand_number = 1
+
+    community_state = CommunityState(
+        flop_card_0=Card(rank='A', suit='S'),
+        flop_card_1=Card(rank='K', suit='H'),
+        flop_card_2=Card(rank='2', suit='D'),
+        river_card=Card(rank='2', suit='C'),
+        active_players=['Gil', 'Adam', 'Zain', 'Matt'],
+    )
+
+    request = CommunityRequest(community_state=community_state)
+    response = client.post(
+        f'/game/community/{game_date}/{hand_number}', json=request.model_dump()
+    )
+    assert response.status_code == 400
+    assert response.json()['detail']['status'] == 'FAILURE'
+    assert response.json()['detail']['message'] == 'Invalid Move'
+
+
 def test_get_community_cards(client, community_setup):
     response = client.get('/game/community/01-10-2023/1')
     assert response.status_code == 200

@@ -10,7 +10,7 @@ from pydantic_models.app_models import (
 )
 
 
-def _convert_community_query_to_state(community_query: Community) -> CommunityState:
+def convert_community_query_to_state(community_query: Community) -> CommunityState:
     """
     Convert a Community query to a CommunityState model.
 
@@ -21,7 +21,6 @@ def _convert_community_query_to_state(community_query: Community) -> CommunitySt
         CommunityState: The Community state model
 
     """
-    print(community_query)
     turn_card = (
         None
         if community_query.turn_card == 'None'
@@ -52,7 +51,7 @@ def _convert_community_query_to_state(community_query: Community) -> CommunitySt
     )
 
 
-def _convert_community_state_to_query(
+def convert_community_state_to_query(
     game_date: str, hand_number: int, community_state: CommunityState
 ) -> Community:
     """
@@ -86,7 +85,7 @@ def _convert_community_state_to_query(
     )
 
 
-def _validate_game_date(value: str) -> str:
+def validate_game_date(value: str) -> str:
     """Ensure game_date follows MM-DD-YYYY format and is a valid date."""
     try:
         parse(value, dayfirst=False, yearfirst=False)  # Validate the date
