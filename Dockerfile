@@ -1,22 +1,20 @@
+FROM ghcr.io/astral-sh/uv:latest AS uv
+
 FROM python:3.12
 
-# COPY ./src /src
+# Copy uv from the uv image
+COPY --from=uv /uv /usr/local/bin/uv
 
-ENV POETRY_NO_INTERACTION=1 \
-  POETRY_VIRTUALENVS_CREATE=false \
-  POETRY_CACHE_DIR='/var/cache/pypoetry' \
-  POETRY_HOME='/usr/local' \
-  POETRY_VERSION=1.7.1 \
-  PYTHONPATH=/src
-  # ^^^
-  # Make sure to update it!
-
-# System deps:
-RUN curl -sSL https://install.python-poetry.org | python3 -
+ENV PYTHONPATH=/src
 
 # Copy only requirements to cache them in docker layer
-COPY pyproject.toml .
-RUN poetry install --no-root
+COPY pyproject.toml uv.lock* .
+# Export dependencies from pyproject.toml and install them
+# --no-emit-workspace: exclude local package (matching Poetry's --no-root behavior)
+# --no-dev: exclude dev dependencies
+# --no-editable: ensure non-editable installs
+RUN uv export --no-emit-workspace --no-dev --no-editable -o requirements.txt && \
+    uv pip install --system -r requirements.txt
 
 WORKDIR /src
 EXPOSE 8000
