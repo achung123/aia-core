@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date, datetime
 from enum import Enum
 
 from dateutil.parser import parse
@@ -206,3 +207,84 @@ class CommunityErrorResponse(BaseModel):
 
     status: str
     message: str
+
+
+# === Game/Hand/Player Request/Response Models ===
+
+
+class GameSessionCreate(BaseModel):
+    game_date: date
+    player_names: list[str] = Field(..., min_length=1)
+
+
+class GameSessionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    game_id: int
+    game_date: date
+    status: str
+    created_at: datetime
+    player_names: list[str]
+    hand_count: int
+
+
+class PlayerResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    player_id: int
+    name: str
+    created_at: datetime
+
+
+class PlayerHandEntry(BaseModel):
+    model_config = ConfigDict(use_enum_values=True)
+
+    player_name: str
+    card_1: Card
+    card_2: Card
+    result: str | None = None
+    profit_loss: float | None = None
+
+
+class HandCreate(BaseModel):
+    model_config = ConfigDict(use_enum_values=True)
+
+    flop_1: Card
+    flop_2: Card
+    flop_3: Card
+    turn: Card | None = None
+    river: Card | None = None
+    player_entries: list[PlayerHandEntry] = Field(..., min_length=1)
+
+
+class PlayerHandResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    player_hand_id: int
+    hand_id: int
+    player_id: int
+    player_name: str
+    card_1: str
+    card_2: str
+    result: str | None = None
+    profit_loss: float | None = None
+
+
+class HandResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    hand_id: int
+    game_id: int
+    hand_number: int
+    flop_1: str
+    flop_2: str
+    flop_3: str
+    turn: str | None = None
+    river: str | None = None
+    created_at: datetime
+    player_hands: list[PlayerHandResponse] = []
+
+
+class HandResultUpdate(BaseModel):
+    result: str
+    profit_loss: float
