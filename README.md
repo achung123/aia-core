@@ -26,22 +26,21 @@ This system is comprised of a FastAPI application that uses a docker image to ru
 
 ## Environment Setup
 
-Some environement setup to get everything working together nicely is necessary. We need the following tools below to be installed on our system in order to test / run the application:
+Some environment setup to get everything working together nicely is necessary. We need the following tools below to be installed on our system in order to test / run the application:
 
-- [Poetry Package Manager](https://python-poetry.org/docs/)
+- [uv Package Manager](https://docs.astral.sh/uv/)
 
-Once this is installed you can setup the poetry environement locally with the following command executed at the root of the repository:
+Once this is installed you can set up the environment locally with the following command executed at the root of the repository:
 
-`poetry install --no-root --with dev`
+`uv sync --group test --group dev`
 
 ## Running Unit Tests Locally
 
 Users can easily run unit tests locally by using the following commands below:
 
 ```bash
-poetry install --no-root --with test
 cd ~/all-in-analytics-core
-PYTHONPATH=src/ pytest test/
+PYTHONPATH=src/ uv run pytest test/
 ```
 
 ## Building Docker Container and Running FastAPI application
