@@ -1,5 +1,5 @@
 ---
-name: Xavier
+name: Xavier (Professor x)
 description: Master Prompt Engineer — describe an agent and get the full scaffold in one shot.
 argument-hint: create agent <description> | design workflow <description> | audit <path> | list
 tools:

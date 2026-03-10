@@ -1,5 +1,5 @@
 ---
-name: Hank
+name: Hank (Beast)
 description: Staff SWE — TDD-first implementer for beads tasks, debugging, and refactoring.
 argument-hint: implement <id> | debug <description> | refactor <target> | test <target>
 tools:

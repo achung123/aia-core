@@ -1,5 +1,5 @@
 ---
-name: Jean
+name: Jean (Phoenix)
 description: Master Project Planner — turn an abstract idea or design doc into spec, plan, and task files.
 argument-hint: plan <idea or doc> | intake <idea or doc> | spec <idea or doc> | tasks <idea or doc>
 tools:
