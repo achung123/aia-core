@@ -51,10 +51,67 @@ class TestAlembicConfiguration:
         env_py = (PROJECT_ROOT / 'alembic' / 'env.py').read_text()
         assert 'target_metadata = Base.metadata' in env_py
 
-    def test_env_py_imports_from_app(self):
-        env_py = (PROJECT_ROOT / 'alembic' / 'env.py').read_text()
-        assert 'from app.database.database_models import' in env_py
-
     def test_alembic_ini_points_to_correct_sqlalchemy_url(self):
         ini = (PROJECT_ROOT / 'alembic.ini').read_text()
         assert 'sqlite:' in ini, 'alembic.ini must have a SQLite connection string'
+
+    def test_env_py_imports_from_app_models(self):
+        """env.py must import Base from the new app.database.models module."""
+        env_py = (PROJECT_ROOT / 'alembic' / 'env.py').read_text()
+        assert 'from app.database.models import' in env_py
+
+
+class TestAlembicMigrations:
+    """T-006: Migration creates and drops all 5 new tables."""
+
+    EXPECTED_TABLES = {'players', 'game_sessions', 'game_players', 'hands', 'player_hands'}
+
+    def _run_alembic(self, command_name, revision, db_url):
+        from alembic.config import Config
+        from alembic import command as alembic_command
+
+        cfg = Config(str(PROJECT_ROOT / 'alembic.ini'))
+        cfg.set_main_option('sqlalchemy.url', db_url)
+        getattr(alembic_command, command_name)(cfg, revision)
+
+    def test_migration_file_exists(self):
+        """At least one migration file must exist in alembic/versions/."""
+        versions_dir = PROJECT_ROOT / 'alembic' / 'versions'
+        py_files = [f for f in versions_dir.iterdir() if f.suffix == '.py']
+        assert len(py_files) >= 1, 'No migration files found in alembic/versions/'
+
+    def test_upgrade_head_creates_all_tables(self, tmp_path):
+        """alembic upgrade head must create all 5 new tables."""
+        from sqlalchemy import create_engine, inspect
+
+        db_path = tmp_path / 'test_migration.db'
+        db_url = f'sqlite:///{db_path}'
+
+        self._run_alembic('upgrade', 'head', db_url)
+
+        engine = create_engine(db_url)
+        tables = set(inspect(engine).get_table_names())
+        engine.dispose()
+
+        assert self.EXPECTED_TABLES.issubset(tables), (
+            f'Missing tables after upgrade: {self.EXPECTED_TABLES - tables}'
+        )
+
+    def test_downgrade_base_drops_all_tables(self, tmp_path):
+        """alembic downgrade base must drop all 5 new tables."""
+        from sqlalchemy import create_engine, inspect
+
+        db_path = tmp_path / 'test_migration.db'
+        db_url = f'sqlite:///{db_path}'
+
+        self._run_alembic('upgrade', 'head', db_url)
+        self._run_alembic('downgrade', 'base', db_url)
+
+        engine = create_engine(db_url)
+        tables = set(inspect(engine).get_table_names())
+        engine.dispose()
+
+        remaining = self.EXPECTED_TABLES & tables
+        assert not remaining, (
+            f'Tables still exist after downgrade: {remaining}'
+        )
