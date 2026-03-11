@@ -2,7 +2,7 @@
 
 **Project ID:** aia-core-001
 **Date:** 2026-03-09
-**Total Tasks:** 58
+**Total Tasks:** 63
 **Status:** Draft
 
 ---
@@ -69,6 +69,11 @@
 | T-056 | Fix: Deduplicate `player_names` before `GamePlayer` inserts | bug | none | S-2.1 |
 | T-057 | Fix: Wrap player auto-creation in `try/except IntegrityError` with re-query fallback | bug | none | S-2.1 |
 | T-058 | Fix: Deduplicate resolved `player_id` set after lookup for case-variant `player_names` | bug | T-056 | S-2.1 |
+| T-059 | Fix: Wire duplicate card validation into record_hand() before Hand flush | bug | T-019, T-018 | S-3.1 |
+| T-060 | Fix: Handle race condition in hand_number assignment | bug | T-018 | S-3.1 |
+| T-061 | Fix: Guard against duplicate player_entries in record_hand() | bug | T-018 | S-3.1 |
+| T-062 | Perf: Move db.flush() outside player_entries loop in record_hand() | task | T-018 | S-3.1 |
+| T-063 | Cleanup: Remove unnecessary db.refresh(hand) after commit in record_hand() | task | T-018 | S-3.1 |
 
 ---
 
@@ -1164,6 +1169,152 @@ for name in list(dict.fromkeys(payload.player_names)):
 
 ---
 
+### T-059 — Fix: Wire duplicate card validation into record_hand() before Hand flush
+
+**Category:** bug
+**Severity:** HIGH
+**Priority:** 1
+**Discovered-from:** aia-core-az2 (T-018)
+**Beads:** TBD
+**Dependencies:** T-019, T-018
+**Story Ref:** S-3.1
+
+S-3.1 AC-3 requires that a `POST /games/{game_id}/hands` request containing duplicate cards across community cards and all player hole cards is rejected. T-019 is scoped to build the `validate_no_duplicate_cards` utility and unit-test it in isolation. However, `record_hand()` never calls it. A request where Alice holds `AS/KH` and Bob also holds `AS/2D` returns HTTP 201 and stores the invalid data permanently. The endpoint is in a spec-violating state until the validator is wired in before `db.flush()` on the `Hand`.
+
+**Fix:**
+In `src/app/routes/hands.py`, before `db.add(hand)`, collect all card strings from the payload and call the validator:
+```python
+from pydantic_models.card_validator import validate_no_duplicate_cards
+
+all_cards = [
+    str(payload.flop_1), str(payload.flop_2), str(payload.flop_3),
+    *(str(payload.turn),) if payload.turn else (),
+    *(str(payload.river),) if payload.river else (),
+    *(str(e.card_1) for e in payload.player_entries),
+    *(str(e.card_2) for e in payload.player_entries),
+]
+try:
+    validate_no_duplicate_cards(all_cards)
+except ValueError as exc:
+    raise HTTPException(status_code=422, detail=str(exc))
+```
+
+**Acceptance Criteria:**
+1. `POST /games/{game_id}/hands` with duplicate cards across community + player hole cards returns 422 (not 201)
+2. No `Hand` or `PlayerHand` row is written to the database on rejection
+3. A test confirms the rejection: e.g. Alice `AS/KH`, Bob `AS/2D` → 422
+4. Existing valid-hand tests continue to return 201
+5. The validator is invoked before the first `db.flush()` (no DB writes on failure)
+
+---
+
+### T-060 — Fix: Handle race condition in hand_number assignment
+
+**Category:** bug
+**Severity:** MEDIUM
+**Priority:** 2
+**Discovered-from:** aia-core-az2 (T-018)
+**Dependencies:** T-018
+**Story Ref:** S-3.1
+
+`record_hand()` reads the current maximum `hand_number` for a game (`func.max(Hand.hand_number)`), increments it, and writes the result as the new hand's `hand_number`. This is a classic read-then-write TOCTOU race: two concurrent `POST /games/{game_id}/hands` requests can both read the same maximum (e.g. 3), both compute 4, and both attempt to insert a row with `hand_number = 4`. The second insert hits the `uq_hand_game_number` unique constraint and raises an unhandled `sqlalchemy.exc.IntegrityError`, returning HTTP 500 to the client.
+
+**Fix (preferred):** Catch `IntegrityError` on the `db.flush()` after `db.add(hand)` and re-raise as HTTP 409:
+```python
+from sqlalchemy.exc import IntegrityError
+
+try:
+    db.flush()
+except IntegrityError:
+    db.rollback()
+    raise HTTPException(
+        status_code=409,
+        detail="Hand number conflict — a concurrent request already recorded this hand. Please retry.",
+    )
+```
+**Alternative:** Use a DB-level sequence or `AUTOINCREMENT`-like column for `hand_number` scoped to `game_id`, eliminating the read step entirely (requires a schema migration).
+
+**Acceptance Criteria:**
+1. Two simultaneous `POST /games/{game_id}/hands` requests do not produce HTTP 500
+2. The second request receives HTTP 409 with a descriptive message (preferred fix) or succeeds with the next available number (sequence fix)
+3. The `uq_hand_game_number` constraint is never violated in production
+4. Existing single-request hand recording tests continue to pass
+
+---
+
+### T-061 — Fix: Guard against duplicate player_entries in record_hand()
+
+**Category:** bug
+**Severity:** MEDIUM
+**Priority:** 2
+**Discovered-from:** aia-core-az2 (T-018)
+**Dependencies:** T-018
+**Story Ref:** S-3.1
+
+`record_hand()` iterates over `payload.player_entries` without checking for duplicate player names. If the same player appears twice (e.g. `[{player_name: "Alice", ...}, {player_name: "alice", ...}]`), the first iteration adds a `PlayerHand` and flushes. The second resolves the same `Player` record via the case-insensitive lookup, creates another `PlayerHand` for the same `(hand_id, player_id)` pair, and the `db.flush()` hits the `uq_player_hand` unique constraint, raising an unhandled `IntegrityError` → HTTP 500.
+
+**Fix:**
+Before the loop, check for duplicate player names:
+```python
+seen_names = {e.player_name.lower() for e in payload.player_entries}
+if len(seen_names) != len(payload.player_entries):
+    raise HTTPException(
+        status_code=400,
+        detail="Duplicate player names in player_entries are not allowed.",
+    )
+```
+
+**Acceptance Criteria:**
+1. `POST /games/{game_id}/hands` with duplicate player names in `player_entries` returns 400 (not 500)
+2. No `Hand` or `PlayerHand` row is written for the rejected request
+3. A test confirms: same player name (case-insensitive) in two entries → 400
+4. Existing tests with distinct player entries continue to pass
+
+---
+
+### T-062 — Perf: Move db.flush() outside player_entries loop in record_hand()
+
+**Category:** task
+**Severity:** LOW
+**Priority:** 3
+**Discovered-from:** aia-core-az2 (T-018)
+**Dependencies:** T-018
+**Story Ref:** S-3.1
+
+`record_hand()` calls `db.flush()` inside the `for entry in payload.player_entries` loop, once per player. Each flush forces a DB round-trip with no functional justification — no subsequent loop iteration reads the previously-flushed row, and `db.commit()` at the end persists all rows atomically. With N players this generates N unnecessary round-trips. The `hand_id` required by each `PlayerHand` is already available from the earlier `db.flush()` on the `Hand` row before the loop begins.
+
+**Fix:**
+Remove `db.flush()` from inside the loop and allow all `PlayerHand` inserts to flush as part of `db.commit()`.
+
+**Acceptance Criteria:**
+1. `db.flush()` does not appear inside the `player_entries` loop
+2. All `PlayerHand` rows are still committed correctly on success
+3. No functional change to the endpoint's response or error behaviour
+4. Existing record-hand tests continue to pass
+
+---
+
+### T-063 — Cleanup: Remove unnecessary db.refresh(hand) after commit in record_hand()
+
+**Category:** task
+**Severity:** LOW
+**Priority:** 3
+**Discovered-from:** aia-core-az2 (T-018)
+**Dependencies:** T-018
+**Story Ref:** S-3.1
+
+After `db.commit()`, `record_hand()` calls `db.refresh(hand)`, issuing a `SELECT` to reload the `Hand` row from the database. The call is effectless: `HandResponse` is built from Python attributes already set before the commit (`hand.hand_id`, `hand.game_id`, `hand.hand_number`, community card fields, and `player_hand_responses` assembled during the loop). `db.refresh` would be necessary only if the response required a server-computed value not yet reflected in the Python object (e.g. a DB trigger-set timestamp). No such values are read.
+
+**Fix:**
+Remove `db.refresh(hand)` from `record_hand()`.
+
+**Acceptance Criteria:**
+1. `db.refresh(hand)` is not called after `db.commit()`
+2. The `HandResponse` returned is unchanged — same fields, same values
+3. Existing record-hand tests continue to pass
+
+---
+
 ## Bugs / Findings
 
 ### F-001 — Single-record-only traversal test (T-044)
@@ -1849,3 +2000,165 @@ When `date_from > date_to`, the current implementation silently applies both fil
 2. **Return empty list** (current behaviour) and document this in the spec (S-2.3 AC) and the OpenAPI description for the endpoint.
 
 Whichever is chosen, add a test `test_list_game_sessions_inverted_date_range` that calls `GET /games?date_from=2025-12-31&date_to=2025-01-01` and asserts the documented response (422 or `[]`).
+
+---
+
+### F-046 — `game.status == 'completed'` comparison is case-sensitive with no DB-level constraint
+
+**Source Task:** aia-core-pnq (T-016: Implement Complete Game Session endpoint)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/routes/games.py — `complete_game_session`
+
+The guard `if game.status == 'completed'` that prevents double-completion is a plain Python string equality check. Because `GameSession.status` is an unconstrained `String` column (no Enum or CHECK constraint — see F-030), values such as `'Completed'` or `'COMPLETED'` can exist in the database and will silently bypass the guard. The endpoint would then attempt to set status to `'completed'` again, returning a spurious 200 response instead of 400. This is a pre-existing model issue (not introduced by T-016), but the Complete endpoint is the first caller that relies on status equality for correctness.
+
+**Suggested follow-up:** Address the root cause via F-030 — add a DB-level `Enum('active', 'completed', name='game_status')` constraint to `GameSession.status`. Once the constraint is in place, the only valid status values are `'active'` and `'completed'`, and the string comparison in `complete_game_session` becomes reliable. Until then, consider normalising the comparison: `if game.status.lower() == 'completed'`.
+
+---
+
+### F-047 — Test file duplicates engine/session/override boilerplate from `test_create_game_session_api.py`
+
+**Source Task:** aia-core-pnq (T-016: Implement Complete Game Session endpoint)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** test/test_complete_game_session_api.py — module-level setup
+
+`test_complete_game_session_api.py` reproduces the module-level `engine`, `SessionLocal`, `override_get_db`, and `autouse` `setup_db` fixture verbatim from `test_create_game_session_api.py`. This is consistent with the pattern already noted in F-022 / T-053 for `test_player_api.py`. The duplication creates a third independent `create_all`/`drop_all` cycle on a separate in-memory engine, with the same fragile isolation risks: if any `conftest.py` fixture is also used in these tests, the two engines are out of sync.
+
+No new action required beyond T-053; this finding confirms the scope of that task extends to `test_complete_game_session_api.py`.
+
+---
+
+### F-048 — Detail message not asserted in `test_complete_game_400_detail_message_if_already_completed`
+
+**Source Task:** aia-core-pnq (T-016: Implement Complete Game Session endpoint)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** test/test_complete_game_session_api.py — `test_complete_game_400_detail_message_if_already_completed`
+
+The test asserts only `assert 'detail' in response.json()`, confirming that a `detail` key is present in the error body but not what it says. The actual message text (e.g. `"Game session is already completed"`) is never checked. A regression that changed the message to an empty string, a generic `"Bad Request"`, or an unrelated error description would pass this test undetected. The test name explicitly promises `detail_message` coverage, making the gap misleading.
+
+**Suggested fix:** Replace the existence check with a value assertion:
+```python
+assert response.json()['detail'] == 'Game session is already completed'
+```
+This pins the contract for the error response and ensures that any rephrase of the message is a conscious, test-breaking decision.
+
+---
+
+### F-049 — S-3.1 AC-3 not implemented — no duplicate card validation wired into record_hand()
+
+**Source Task:** aia-core-az2 (T-018: Implement Record New Hand endpoint)
+**Review Date:** 2026-03-11
+**Severity:** HIGH
+**File:** src/app/routes/hands.py — `record_hand`
+**Tracked as:** T-059 (tasks.md) / TBD (beads)
+
+S-3.1 AC-3 requires that requests containing duplicate cards across community cards and all player hole cards are rejected. T-019 is scoped to build the `validate_no_duplicate_cards` utility and unit-test it in isolation, but `record_hand()` never calls it. A request where Alice holds `AS/KH` and Bob also holds `AS/2D` succeeds with HTTP 201 and stores the invalid data permanently. The endpoint is in a spec-violating state until T-019's validator is wired in before the first `db.flush()` on the `Hand`.
+
+**Suggested follow-up:** Implement T-059 — collect all card fields from `payload` (community + all player hole cards) and call `validate_no_duplicate_cards` before `db.add(hand)`, raising 422 on failure.
+
+---
+
+### F-050 — Race condition in hand_number assignment
+
+**Source Task:** aia-core-az2 (T-018: Implement Record New Hand endpoint)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/routes/hands.py — `record_hand` (hand_number assignment block)
+**Tracked as:** T-060
+
+`func.max(Hand.hand_number) + 1` is a read-then-write. Two concurrent `POST /games/{game_id}/hands` requests for the same game read the same maximum, compute the same next `hand_number`, and both attempt to insert. The second insert hits the `uq_hand_game_number` unique constraint as an unhandled `sqlalchemy.exc.IntegrityError`, returning HTTP 500.
+
+**Suggested follow-up:** Implement T-060 — catch `IntegrityError` on the `Hand` flush and return 409, or migrate to a DB-level sequence for `hand_number` scoped to `game_id`.
+
+---
+
+### F-051 — Duplicate player names in player_entries cause unhandled IntegrityError 500
+
+**Source Task:** aia-core-az2 (T-018: Implement Record New Hand endpoint)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/routes/hands.py — `record_hand` player loop
+**Tracked as:** T-061
+
+No guard exists before the loop to detect duplicate player names. A `player_entries` list containing the same player twice (case-insensitively) resolves to the same `player_id` on both iterations. The second `db.flush()` inside the loop hits the `uq_player_hand` unique constraint and raises an unhandled `IntegrityError` → HTTP 500. The fix is to check `len(player_entries) == len({e.player_name.lower() for e in payload.player_entries})` before the loop and raise 400 on mismatch.
+
+**Suggested follow-up:** Implement T-061 — add the duplicate-name guard before the loop.
+
+---
+
+### F-052 — Per-entry db.flush() inside player_entries loop is unnecessary
+
+**Source Task:** aia-core-az2 (T-018: Implement Record New Hand endpoint)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** src/app/routes/hands.py — `record_hand` player loop
+**Tracked as:** T-062
+
+`db.flush()` is called once per `PlayerHand` inside the loop. Each call forces a DB round-trip before the next iteration with no functional justification — no subsequent iteration reads the previously-flushed row, and all inserts are committed atomically by `db.commit()` at the end. With N players this generates N unnecessary round-trips.
+
+**Suggested follow-up:** Implement T-062 — remove `db.flush()` from inside the loop.
+
+---
+
+### F-053 — db.refresh(hand) after commit is effectively a no-op
+
+**Source Task:** aia-core-az2 (T-018: Implement Record New Hand endpoint)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** src/app/routes/hands.py — `record_hand` (line after db.commit())
+**Tracked as:** T-063
+
+`db.refresh(hand)` issues a `SELECT` to reload the `Hand` row after commit. The `HandResponse` is built entirely from Python attributes already set before the commit (set in the `Hand(...)` constructor; `player_hand_responses` assembled during the loop). No server-computed value is read from `hand` after the refresh. The call adds one unnecessary DB round-trip on every successful request.
+
+**Suggested follow-up:** Implement T-063 — remove `db.refresh(hand)`.
+
+---
+
+### F-054 — Turn/river duplicate paths lack explicit test coverage in `TestDuplicateCardValidation`
+
+**Source Task:** aia-core-4fy (T-059: Wire duplicate card validation into record_hand)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** test/test_record_hand_api.py — `TestDuplicateCardValidation`
+
+`record_hand()` conditionally appends `turn` and `river` to `all_cards` only when those fields are present in the payload — which is correct. However, no test in `TestDuplicateCardValidation` asserts that a duplicate involving the turn or river field returns 422. For example, the case where `turn == flop_1` (e.g. `turn='AS'` when `flop_1='AS'`) is not exercised. If the conditional inclusion of `turn` and `river` were inadvertently removed during a refactor, all existing duplicate tests would continue to pass.
+
+The implementation is correct — this is a test coverage gap only.
+
+**Suggested follow-up:** Add at least two test cases to `TestDuplicateCardValidation`:
+1. `turn` duplicates a community card (e.g. `turn == flop_1`) → assert 422.
+2. `river` duplicates a community or turn card → assert 422.
+
+---
+
+### F-055 — AC-2 not verified at DB layer — no assertion that Hand row is absent on 422
+
+**Source Task:** aia-core-4fy (T-059: Wire duplicate card validation into record_hand)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** test/test_record_hand_api.py — `TestDuplicateCardValidation`
+
+T-059 AC-2 states: *"No `Hand` or `PlayerHand` row is written to the database on rejection."* The tests in `TestDuplicateCardValidation` assert that the endpoint returns 422, but none query the database afterward to confirm that zero `Hand` rows were written for that game. The implementation validates before the first `db.flush()` so the contract is upheld in code, but the test exercises only the surface HTTP contract — a future regression that validated after the flush (writing a partial row before rejecting) would pass all current tests.
+
+The implementation is correct — this is a test coverage gap only.
+
+**Suggested follow-up:** In one or more `TestDuplicateCardValidation` tests, after asserting 422, query the `db_session` fixture directly and assert that no `Hand` row exists for the game:
+```python
+from src.app.database.models import Hand
+hand_count = db_session.query(Hand).filter(Hand.game_id == game_id).count()
+assert hand_count == 0, "No Hand row should be written on duplicate-card rejection"
+```
+
+---
+
+### F-056 — `db.refresh(hand)` on line 106 is effectless (pre-existing)
+
+**Source Task:** aia-core-4fy (T-059: Wire duplicate card validation into record_hand)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** src/app/routes/hands.py — line 106 (`db.refresh(hand)` after `db.commit()`)
+**Tracked as:** F-053 / T-063
+
+`db.refresh(hand)` issues a `SELECT` to reload the `Hand` row after `db.commit()`. The `HandResponse` is built entirely from Python attributes set before the commit; no server-computed value is read from `hand` after the refresh. The call is a wasted round-trip on every successful request. This is a pre-existing finding — already captured as F-053 and tracked for resolution in T-063. Noted here for completeness as it was observed during the aia-core-4fy review.

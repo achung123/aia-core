@@ -113,7 +113,9 @@ class TestCompleteGameSession:
         response = client.patch(f'/games/{game_id}/complete')
         assert response.status_code == 400
 
-    def test_complete_game_400_detail_message_if_already_completed(self, client, created_game):
+    def test_complete_game_400_detail_message_if_already_completed(
+        self, client, created_game
+    ):
         game_id = created_game['game_id']
         client.patch(f'/games/{game_id}/complete')
         response = client.patch(f'/games/{game_id}/complete')
