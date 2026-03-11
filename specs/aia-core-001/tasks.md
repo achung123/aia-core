@@ -903,3 +903,135 @@ If individual test files create their own engines (rather than using the shared 
 1. `PRAGMA foreign_keys = ON` is applied to all SQLite test connections via `conftest.py`
 2. A test that inserts a `PlayerHand` with a non-existent `hand_id` raises `IntegrityError` (verifying enforcement is active)
 3. All existing tests continue to pass
+
+---
+
+## Bugs / Findings
+
+### F-001 — Single-record-only traversal test (T-044)
+
+**Source Task:** aia-core-q9i (T-044: Fix: Add Player.hands_played relationship and wire back_populates)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** test/test_player_model.py — `test_player_hands_played_traversal`
+
+`test_player_hands_played_traversal` creates exactly one `PlayerHand` record and asserts `len(player.hands_played) == 1`. A multi-hand case (same player, two distinct hands) is not tested, leaving a collection-loading edge case unverified. If the relationship were misconfigured to return only the first record, this test would not catch it.
+
+**Suggested follow-up:** Add a parameterised or second test that creates two `PlayerHand` records for the same player and asserts `len(player.hands_played) == 2`.
+
+---
+
+### F-002 — No empty-list baseline test (T-044)
+
+**Source Task:** aia-core-q9i (T-044: Fix: Add Player.hands_played relationship and wire back_populates)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** test/test_player_model.py — `TestPlayerHandsPlayedRelationship`
+
+No test in `TestPlayerHandsPlayedRelationship` verifies that a freshly created `Player` with zero associated `PlayerHand` records returns `[]` from `player.hands_played`. This is the normal initial state for any new player and is directly relevant to T-032 (Player Stats endpoint), which iterates over `player.hands_played` to compute stats — an unverified `None` vs `[]` distinction could cause a runtime `TypeError` there.
+
+**Suggested follow-up:** Add a test `test_player_hands_played_empty_by_default` that creates a `Player`, commits, refreshes, and asserts `player.hands_played == []`.
+
+---
+
+### F-003 — env.py missing render_as_batch=True (T-006)
+
+**Source Task:** aia-core-ewq (T-006: Write initial Alembic migration for all new models)
+**Review Date:** 2026-03-11
+**Severity:** HIGH
+**File:** alembic/env.py — both `context.configure` calls (offline and online)
+
+`render_as_batch=True` is absent from both `context.configure` calls. SQLite does not support `ALTER TABLE` natively; any future ALTER-based migration (T-045, T-046) will fail or emit invalid SQL without this flag.
+
+**Suggested follow-up:** Add `render_as_batch=True` to both `context.configure` calls (offline and online) before any ALTER migration is authored.
+
+---
+
+### F-004 — profit_loss uses Float, not Numeric(10,2) (T-006)
+
+**Source Task:** aia-core-ewq (T-006: Write initial Alembic migration for all new models)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** alembic/versions/731dac60f062_create_initial_tables.py — `profit_loss` column definition
+
+The migration uses `Float` for the `profit_loss` column. Known debt tracked in T-045, but shipping in the initial migration means the fix requires an ALTER migration rather than a simple schema edit. All P&L aggregations will silently accumulate floating-point rounding errors until fixed.
+
+**Suggested follow-up:** Address in T-045; ensure `render_as_batch=True` (F-003) is in place before authoring that ALTER migration.
+
+---
+
+### F-005 — result uses unbounded String, no Enum constraint (T-006)
+
+**Source Task:** aia-core-ewq (T-006: Write initial Alembic migration for all new models)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** alembic/versions/731dac60f062_create_initial_tables.py — `result` column definition
+
+Known debt tracked in T-046. The `result` column accepts any string value with no Enum or CHECK constraint enforced at the database level. Any invalid string written to this column will silently break `GROUP BY result` stats queries.
+
+**Suggested follow-up:** Address in T-046 by converting `result` to a constrained Enum or adding a CHECK constraint.
+
+---
+
+### F-006 — FK columns have no indexes (T-006)
+
+**Source Task:** aia-core-ewq (T-006: Write initial Alembic migration for all new models)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** alembic/versions/731dac60f062_create_initial_tables.py — `game_players`, `hands`, `player_hands` table definitions
+
+`game_players.game_id` / `player_id`, `hands.game_id`, and `player_hands.hand_id` / `player_id` have no explicit indexes. SQLite does not auto-create indexes for FK columns. This will cause full-table scans on every join used by the Stats and Search endpoints.
+
+**Suggested follow-up:** Add explicit `sa.Index` entries for each FK column in the migration (or in a follow-up migration before the Stats/Search endpoints are wired up).
+
+---
+
+### F-007 — Tests verify table presence only (T-006)
+
+**Source Task:** aia-core-ewq (T-006: Write initial Alembic migration for all new models)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** test/test_alembic_setup.py — `test_upgrade_head_creates_all_tables`
+
+`test_upgrade_head_creates_all_tables` asserts only that expected table names exist; it does not assert column types, nullability, FK presence, or named constraint existence. AC-2 states "correct columns, FKs, and constraints" — those are entirely untested.
+
+**Suggested follow-up:** Extend the test (or add a companion test) to introspect column definitions and FK metadata using SQLAlchemy's `inspect()` API.
+
+---
+
+### F-008 — Module docstring references T-001 instead of T-006 (T-006)
+
+**Source Task:** aia-core-ewq (T-006: Write initial Alembic migration for all new models)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** test/test_alembic_setup.py — module docstring
+
+The module docstring says T-001; the file now covers T-006. Documentation drift that will confuse future readers tracing test coverage.
+
+**Suggested follow-up:** Update the module docstring to reference T-006.
+
+---
+
+### F-009 — alembic.ini hardcodes poker.db with no env-var override (T-006)
+
+**Source Task:** aia-core-ewq (T-006: Write initial Alembic migration for all new models)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** alembic.ini — `sqlalchemy.url`
+
+`alembic upgrade head` run from the repo root will target the production `poker.db` file with no warning and no mechanism to override the target via environment variable. Running migrations in CI or a dev environment will silently modify or create the production database file.
+
+**Suggested follow-up:** Read `DATABASE_URL` (or equivalent) from the environment in `alembic/env.py` and fall back to the `alembic.ini` value only when the variable is unset.
+
+---
+
+### F-010 — Online env.py test uses unbounded EOF slice (T-047)
+
+**Source Task:** aia-core-uas (T-047: Fix: Add render_as_batch=True to Alembic env.py context.configure calls)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** test/test_alembic_setup.py — `test_env_py_has_render_as_batch_online`
+
+`test_env_py_has_render_as_batch_online` slices `env_py[online_start:]` to EOF, while the offline test correctly bounds its slice to the next dispatch block. If `render_as_batch=True` were ever present in dead code appended after the function — but absent from the actual `context.configure()` call — the online test would pass despite the fix being missing, producing a false positive.
+
+**Suggested fix:** Bound the online slice to stop at the dispatch block (e.g. the next `def ` or `with context.begin_transaction()` boundary), mirroring the approach used in the offline assertion.

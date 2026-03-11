@@ -23,8 +23,9 @@ Drive an entire beads epic to completion by looping through implement → review
 - All tasks in the epic should already exist in beads (synced by Logan from Jean's `tasks.md`)
 - Anna never writes code, reviews code, or manages tasks directly — she invokes sub-agents for every action
 - Sub-agents are invoked using the `agent` tool
-- Bug counter tracks findings created between consecutive task closes — resets to 0 on each successful close
-- Break-glass threshold: **5 bugs without a task close**
+- Only **CRITICAL + HIGH** findings are filed into beads and count toward break-glass; MEDIUM and LOW findings are recorded in `tasks.md` only and never trigger a halt
+- Per-window counter tracks CRITICAL+HIGH findings between consecutive task closes; appended to a rolling history on each close; window counter resets to 0 on close
+- Break-glass triggers if the last 5 window counts form an exponential growth sequence: each count ≥ 1.5× the previous (e.g., 2 → 4 → 8 → 16 → 24)
 - **Fully autonomous** — no user interaction unless break-glass triggers
 
 ---
@@ -32,7 +33,7 @@ Drive an entire beads epic to completion by looping through implement → review
 # Instructions
 
 1. **Initialize loop state:**
-   - Set `cycle_count = 0`, `bug_counter = 0`, `tasks_completed = 0`
+   - Set `cycle_count = 0`, `window_crit_high = 0`, `window_history = []`, `tasks_completed = 0`
    - Run `bd list --json` to inventory all tasks in the epic and count total tasks
    - Run `bd ready --json` to see what's available now
 
@@ -54,25 +55,25 @@ Drive an entire beads epic to completion by looping through implement → review
    - If **findings exist** → proceed to Phase 4
 
 5. **Phase 4 — File Findings:**
-   - Invoke **Jean** via sub-agent: instruct her to append a **Bugs / Findings** section to the project's `tasks.md` listing each finding with:
+   - Invoke **Jean** via sub-agent: instruct her to append a **Bugs / Findings** section to the project's `tasks.md` listing **all** findings with:
      - Severity (CRITICAL / HIGH / MEDIUM / LOW)
      - Description from Scott's report
      - Source task reference (beads ID)
-   - Invoke **Logan** via sub-agent: `@logan sync <project>` to import new findings into beads
-   - Instruct Logan to apply severity-to-priority mapping:
+   - Invoke **Logan** via sub-agent: `@logan sync <project>` to import **only CRITICAL and HIGH findings** into beads
+   - Instruct Logan to apply severity-to-priority mapping for CRITICAL and HIGH only:
      - CRITICAL → priority 0
      - HIGH → priority 1
-     - MEDIUM → priority 2
-     - LOW → priority 3
-   - Increment `bug_counter` by the number of findings filed
-   - **Break-glass check:** if `bug_counter >= 5`:
-     - Output a Break-Glass Report (cycles completed, tasks done vs remaining, all bugs in current window with severities, the task that triggered halt)
-     - Ask user: *"Break glass triggered — 5+ bugs created without a successful task close. Options: (1) Fix bugs first and resume, (2) Adjust scope and continue, (3) Abort the epic."*
+     - MEDIUM and LOW → recorded in `tasks.md` only; do **not** file into beads
+   - Increment `window_crit_high` by the count of **CRITICAL and HIGH** findings only; MEDIUM and LOW findings are recorded in tasks.md but not filed into beads and do not affect break-glass tracking
+   - **Break-glass check:** evaluate `window_history` (the last 5 completed window counts); if `len(window_history) >= 4` and the last 4 values plus `window_crit_high` form a sequence where each value is ≥ 1.5× the previous:
+     - Build a Break-Glass Report: cycles completed, tasks done vs remaining, the 5-window CRITICAL+HIGH history, all CRITICAL/HIGH bugs filed across those windows with source tasks
+     - Ask user: *"Break glass triggered — exponential growth in CRITICAL/HIGH findings across 5 consecutive tasks. Options: (1) Fix high-severity bugs first and resume, (2) Adjust scope and continue, (3) Abort the epic."*
      - **STOP and wait for user input**
 
 6. **Phase 5 — Close Task:**
    - Invoke **Logan** via sub-agent: `@logan close <id> --reason "Implemented and reviewed"`
-   - Set `bug_counter = 0` (reset — successful close clears the window)
+   - Append `window_crit_high` to `window_history`; keep only the last 5 entries
+   - Set `window_crit_high = 0` (reset for next inter-task window)
    - Increment `tasks_completed`
    - Increment `cycle_count`
 
@@ -101,7 +102,7 @@ Drive an entire beads epic to completion by looping through implement → review
 | Findings | Jean + Logan | N bugs filed, synced to beads |
 | Close | Logan | ✅ Closed / ⏭️ Skipped (findings) |
 
-**Bug counter:** N/5 — [OK / ⚠️ APPROACHING / 🛑 BREAK GLASS]
+**CRIT+HIGH (this window):** N | **History (last 5):** [w1, w2, w3, w4, w5] — [OK / ⚠️ GROWING / 🛑 BREAK GLASS]
 **Epic progress:** X/Y tasks complete
 ```
 

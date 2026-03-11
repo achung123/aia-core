@@ -20,7 +20,7 @@ Resume the orchestration loop after a user-initiated pause (5-cycle checkpoint) 
 # Context
 
 - The loop may have been paused at a 5-cycle checkpoint (user said "stop" or didn't respond)
-- The loop may have been halted by break-glass (5+ bugs without a task close)
+- The loop may have been halted by break-glass (exponential growth in CRITICAL+HIGH findings across 5 consecutive task windows — each window ≥ 1.5× the previous)
 - Anna must reconstruct state from beads since there's no persistent loop state file
 - After break-glass, the user should have specified which option they chose:
   1. Fix bugs first and resume — bugs should have been addressed before calling resume
@@ -36,7 +36,7 @@ Resume the orchestration loop after a user-initiated pause (5-cycle checkpoint) 
    - Run `bd ready --json` to see available work
    - Check for any in_progress tasks that may have been left mid-cycle
    - Estimate `cycle_count` from the number of closed tasks
-   - Set `bug_counter = 0` (fresh start after explicit user decision to resume)
+   - Set `window_crit_high = 0` and `window_history = []` (fresh start after explicit user decision to resume)
 
 2. **Handle in-progress tasks:**
    - If a task is in_progress, check if it has been implemented (look for recent commits or test results)
@@ -62,7 +62,8 @@ Resume the orchestration loop after a user-initiated pause (5-cycle checkpoint) 
 | Cycles completed so far | N |
 | Tasks completed | X / Y |
 | Tasks remaining | W |
-| Bug counter | 0 (reset on resume) |
+| CRIT+HIGH window counter | 0 (reset on resume) |
+| Window history | [] (cleared on resume) |
 | Resume point | Phase N — <description> |
 
 Resuming from cycle N+1. Continue? (yes / adjust / stop)
@@ -83,7 +84,8 @@ Resuming from cycle N+1. Continue? (yes / adjust / stop)
 | Cycles completed so far | 3 |
 | Tasks completed | 2 / 12 |
 | Tasks remaining | 10 |
-| Bug counter | 0 (reset on resume) |
+| CRIT+HIGH window counter | 0 (reset on resume) |
+| Window history | [] (cleared on resume) |
 | Resume point | Phase 1 — Pick next ready task |
 
 Previous break-glass bugs appear to have been addressed (3 closed since halt).
@@ -96,5 +98,5 @@ Resuming from cycle 4. Continue? (yes / adjust / stop)
 
 - **Never assume loop state** — always reconstruct from beads
 - **Never skip the user confirmation** before re-entering the loop
-- **Never carry over the old bug counter** — resume always resets to 0 (user made a deliberate decision)
+- **Never carry over the old window counter or history** — resume always resets both to zero/empty (user made a deliberate decision)
 - **Never resume without checking for stale in-progress tasks** — they may need cleanup

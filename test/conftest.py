@@ -4,8 +4,8 @@ from sqlalchemy import create_engine, StaticPool
 from sqlalchemy.orm import sessionmaker
 
 from app.database.database_models import Base, Game, Community
+from app.database.session import get_db
 from app.main import app
-from app.routes.game import _get_db
 
 DATABASE_URL = 'sqlite:///:memory:'  # In-memory database for testing
 engine = create_engine(
@@ -33,7 +33,7 @@ def setup_and_teardown_db():
 @pytest.fixture
 def client():
     """Provides a test client for FastAPI with overridden database."""
-    app.dependency_overrides[_get_db] = override_get_db
+    app.dependency_overrides[get_db] = override_get_db
     return TestClient(app)
 
 

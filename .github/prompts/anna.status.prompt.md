@@ -20,7 +20,8 @@ Provide a clear snapshot of the current orchestration loop state so the user can
 - Anna tracks loop state across cycles: cycle count, tasks completed, total tasks, bug counter, and break-glass status
 - The source of truth for task state is beads (`bd list`, `bd ready`)
 - Recent reports from Scott are in `specs/<project>/reports/`
-- The bug counter tracks findings created since the last successful task close
+- The break-glass tracker counts only **CRITICAL + HIGH** findings per inter-task window; MEDIUM and LOW are excluded from break-glass tracking
+- A rolling history of the last 5 window counts is maintained; exponential growth (each value ≥ 1.5× previous across all 5) triggers break-glass
 
 ---
 
@@ -45,8 +46,9 @@ Provide a clear snapshot of the current orchestration loop state so the user can
 | Tasks completed | X / Y |
 | Tasks in progress | Z |
 | Tasks remaining | W |
-| Bug counter (since last close) | N / 5 |
-| Break-glass status | OK / ⚠️ APPROACHING / 🛑 TRIGGERED |
+| CRIT+HIGH this window | N |
+| Window history (last 5) | [w1, w2, w3, w4, w5] |
+| Break-glass status | OK / ⚠️ GROWING / 🛑 TRIGGERED |
 | Next checkpoint | In N cycles |
 
 ### Ready Tasks (next up)
@@ -76,7 +78,8 @@ Provide a clear snapshot of the current orchestration loop state so the user can
 | Tasks completed | 5 / 12 |
 | Tasks in progress | 1 |
 | Tasks remaining | 6 |
-| Bug counter (since last close) | 2 / 5 |
+| CRIT+HIGH this window | 1 |
+| Window history (last 5) | [0, 1, 0, 2, 1] |
 | Break-glass status | OK |
 | Next checkpoint | In 3 cycles |
 
