@@ -90,19 +90,25 @@ class TestGetSingleHand:
         response = client.get(f'/games/{game_id}/hands/{hand_number}')
         assert response.status_code == 200
 
-    def test_get_hand_returns_correct_hand_number(self, client, game_with_players, recorded_hand):
+    def test_get_hand_returns_correct_hand_number(
+        self, client, game_with_players, recorded_hand
+    ):
         game_id = game_with_players
         hand_number = recorded_hand['hand_number']
         response = client.get(f'/games/{game_id}/hands/{hand_number}')
         assert response.json()['hand_number'] == hand_number
 
-    def test_get_hand_returns_correct_game_id(self, client, game_with_players, recorded_hand):
+    def test_get_hand_returns_correct_game_id(
+        self, client, game_with_players, recorded_hand
+    ):
         game_id = game_with_players
         hand_number = recorded_hand['hand_number']
         response = client.get(f'/games/{game_id}/hands/{hand_number}')
         assert response.json()['game_id'] == game_id
 
-    def test_get_hand_returns_community_cards(self, client, game_with_players, recorded_hand):
+    def test_get_hand_returns_community_cards(
+        self, client, game_with_players, recorded_hand
+    ):
         game_id = game_with_players
         hand_number = recorded_hand['hand_number']
         response = client.get(f'/games/{game_id}/hands/{hand_number}')
@@ -113,7 +119,9 @@ class TestGetSingleHand:
         assert data['turn'] == '5C'
         assert data['river'] == 'JD'
 
-    def test_get_hand_returns_player_hands(self, client, game_with_players, recorded_hand):
+    def test_get_hand_returns_player_hands(
+        self, client, game_with_players, recorded_hand
+    ):
         game_id = game_with_players
         hand_number = recorded_hand['hand_number']
         response = client.get(f'/games/{game_id}/hands/{hand_number}')
@@ -121,7 +129,9 @@ class TestGetSingleHand:
         assert 'player_hands' in data
         assert len(data['player_hands']) == 2
 
-    def test_get_hand_player_hands_contain_names(self, client, game_with_players, recorded_hand):
+    def test_get_hand_player_hands_contain_names(
+        self, client, game_with_players, recorded_hand
+    ):
         game_id = game_with_players
         hand_number = recorded_hand['hand_number']
         response = client.get(f'/games/{game_id}/hands/{hand_number}')
@@ -134,7 +144,9 @@ class TestGetSingleHand:
         response = client.get(f'/games/{game_id}/hands/{hand_number}')
         assert 'hand_id' in response.json()
 
-    def test_get_hand_returns_created_at(self, client, game_with_players, recorded_hand):
+    def test_get_hand_returns_created_at(
+        self, client, game_with_players, recorded_hand
+    ):
         game_id = game_with_players
         hand_number = recorded_hand['hand_number']
         response = client.get(f'/games/{game_id}/hands/{hand_number}')
@@ -152,7 +164,9 @@ class TestGetSingleHand:
         response = client.get(f'/games/{game_with_players}/hands/99999')
         assert response.status_code == 404
 
-    def test_get_hand_404_detail_for_nonexistent_hand_number(self, client, game_with_players):
+    def test_get_hand_404_detail_for_nonexistent_hand_number(
+        self, client, game_with_players
+    ):
         response = client.get(f'/games/{game_with_players}/hands/99999')
         assert 'detail' in response.json()
 

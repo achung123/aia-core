@@ -302,3 +302,19 @@ class HandResponse(BaseModel):
 class HandResultUpdate(BaseModel):
     result: str
     profit_loss: float
+
+
+class PlayerResultEntry(BaseModel):
+    player_name: str
+    result: str
+    profit_loss: float
+
+
+class CommunityCardsUpdate(BaseModel):
+    model_config = ConfigDict(use_enum_values=True)
+
+    flop_1: Card
+    flop_2: Card
+    flop_3: Card
+    turn: Card | None = None
+    river: Card | None = None

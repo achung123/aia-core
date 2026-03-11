@@ -2,7 +2,7 @@
 
 **Project ID:** aia-core-001
 **Date:** 2026-03-09
-**Total Tasks:** 63
+**Total Tasks:** 65
 **Status:** Draft
 
 ---
@@ -74,6 +74,8 @@
 | T-061 | Fix: Guard against duplicate player_entries in record_hand() | bug | T-018 | S-3.1 |
 | T-062 | Perf: Move db.flush() outside player_entries loop in record_hand() | task | T-018 | S-3.1 |
 | T-063 | Cleanup: Remove unnecessary db.refresh(hand) after commit in record_hand() | task | T-018 | S-3.1 |
+| T-064 | Perf: Use selectinload on Hand.player_hands in get_hand() | task | T-020 | S-3.2 |
+| T-065 | Fix: Add explicit guard on Game query before Hand query in get_hand() | bug | T-020 | S-3.2 |
 
 ---
 
@@ -1315,6 +1317,74 @@ Remove `db.refresh(hand)` from `record_hand()`.
 
 ---
 
+### T-064 — Perf: Use selectinload on Hand.player_hands in get_hand()
+
+**Category:** task
+**Severity:** MEDIUM
+**Priority:** 2
+**Discovered-from:** aia-core-rso (T-020)
+**Dependencies:** T-020
+**Story Ref:** S-3.2
+
+`get_hand()` in `src/app/routes/hands.py` loads the `Hand` ORM object and then accesses `hand.player_hands` to build `HandResponse`. Because `player_hands` is a lazy-loaded relationship, SQLAlchemy issues a second `SELECT` query at the point of access — one query to fetch the `Hand` row, a second to load its `PlayerHand` children. For an endpoint that semantically returns a single record, this is an unnecessary extra round-trip. Any future addition of further nested relationships (e.g. loading `PlayerHand.player`) would compound the problem.
+
+**Fix:**
+In `src/app/routes/hands.py`, update the `get_hand()` query to eagerly load `Hand.player_hands` using `selectinload`:
+```python
+from sqlalchemy.orm import selectinload
+
+hand = (
+    db.query(Hand)
+    .options(selectinload(Hand.player_hands))
+    .filter(Hand.game_id == game_id, Hand.hand_number == hand_number)
+    .first()
+)
+```
+`selectinload` is preferred over `joinedload` here because the relationship is a collection and `selectinload` avoids row-multiplication.
+
+**Acceptance Criteria:**
+1. The `get_hand()` query uses `selectinload(Hand.player_hands)` at query time
+2. No additional lazy-load `SELECT` is issued when `hand.player_hands` is accessed to build the response
+3. Existing `GET /games/{game_id}/hands/{hand_number}` tests continue to pass
+
+---
+
+### T-065 — Fix: Add explicit guard on Game query before Hand query in get_hand()
+
+**Category:** bug
+**Severity:** MEDIUM
+**Priority:** 2
+**Discovered-from:** aia-core-rso (T-020)
+**Dependencies:** T-020
+**Story Ref:** S-3.2
+
+`get_hand()` queries for the `Hand` directly using `(Hand.game_id == game_id, Hand.hand_number == hand_number)`. If the `game_id` does not exist, the `Hand` query correctly returns `None` and the existing 404 guard fires. However, there is no prior explicit check that the `GameSession` itself exists. A future refactor that inlines or reorders the query — or one that returns a stale session object through a different code path — could bypass the implicit guard and allow execution to proceed with a `None` game, risking an unhandled `AttributeError`. The guard is also semantically important for producing a diagnostic 404 message that distinguishes between "game not found" and "hand not found" — currently both collapse to the same 404.
+
+**Fix:**
+In `src/app/routes/hands.py`, add an explicit game existence check before the `Hand` query:
+```python
+game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
+if game is None:
+    raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
+
+hand = (
+    db.query(Hand)
+    .options(selectinload(Hand.player_hands))
+    .filter(Hand.game_id == game_id, Hand.hand_number == hand_number)
+    .first()
+)
+if hand is None:
+    raise HTTPException(status_code=404, detail=f"Hand {hand_number} not found in game {game_id}")
+```
+
+**Acceptance Criteria:**
+1. A `GET /games/{game_id}/hands/{hand_number}` request where `game_id` does not exist returns 404 with a message containing `"Game"` (not just `"Hand"`)
+2. A request where the game exists but the hand does not returns 404 with a message containing `"Hand"`
+3. A valid request returns 200 with the full hand data
+4. Existing tests continue to pass; a new test covers the game-not-found 404 path
+
+---
+
 ## Bugs / Findings
 
 ### F-001 — Single-record-only traversal test (T-044)
@@ -2197,3 +2267,311 @@ The implementation is correct — this is a test coverage gap only. It overlaps 
 assert response.status_code == 400
 ```
 This guards against accidental reversion to 422 or propagation as 500.
+
+---
+
+### F-059 — N+1 query pattern on player_hands in GET /games/{game_id}/hands/{hand_number}
+
+**Source Task:** aia-core-rso (T-020: Implement Get Single Hand endpoint)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/routes/hands.py — `get_hand`
+**Tracked as:** T-064
+
+`get_hand()` fetches the `Hand` ORM object with a primary query, then accesses `hand.player_hands` to build `HandResponse`. Because `Hand.player_hands` is a lazy-loaded relationship, SQLAlchemy issues a second `SELECT` at the point of attribute access — one query for the `Hand` row, one for its `PlayerHand` children. For a single-record endpoint this is one unnecessary round-trip; the pattern scales poorly if additional nested relationships (e.g. `PlayerHand.player`) are added later.
+
+**Suggested fix:** Apply `selectinload(Hand.player_hands)` at query time so the relationship is loaded in a single batched `SELECT IN` rather than deferred:
+```python
+from sqlalchemy.orm import selectinload
+
+hand = (
+    db.query(Hand)
+    .options(selectinload(Hand.player_hands))
+    .filter(Hand.game_id == game_id, Hand.hand_number == hand_number)
+    .first()
+)
+```
+
+---
+
+### F-060 — Silent null guard risk: no explicit game existence check before Hand query in get_hand()
+
+**Source Task:** aia-core-rso (T-020: Implement Get Single Hand endpoint)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/routes/hands.py — `get_hand`
+**Tracked as:** T-065
+
+`get_hand()` queries `Hand` directly using `(Hand.game_id == game_id, Hand.hand_number == hand_number)`. When the game does not exist, the `Hand` query correctly returns `None` and the 404 fires. However, there is no prior explicit check that the `GameSession` itself exists. A future refactor that inlines or reorders the query could allow execution to proceed with a `None` game context, causing an unhandled `AttributeError` or a misleading 404 body. Additionally, the current implementation cannot distinguish between "game not found" and "hand not found" in its 404 detail message — both collapse to a single message — making it harder for callers to diagnose the failure.
+
+**Suggested fix:** Add an explicit game existence guard before the `Hand` query (see T-065 for full implementation). This makes the defensive intent explicit, guards against future code-path regressions, and enables distinct 404 messages for the two failure modes.
+
+---
+
+### F-061 — Missing `player_count` and `street_reached` summary fields in `HandResponse` (aia-core-szn / T-021)
+
+**Source Task:** aia-core-szn (T-021: Implement List Hands in Game endpoint)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/pydantic_models/app_models.py — `HandResponse`
+
+T-021 AC-2 requires that each hand in the `GET /games/{game_id}/hands` response includes `player_count` and `street_reached` (farthest street: flop/turn/river). S-3.3 AC-2 states the same. `HandResponse` is currently constructed from raw ORM data and does not expose either field as an explicit computed summary. The raw player list is present via `player_hands`, and the community card columns are present, but callers must recompute these summaries client-side — which violates the spec contract and makes `HandResponse` unusable as-is for the list view.
+
+**Suggested fix:** Add `@computed_field` properties to `HandResponse` in `src/pydantic_models/app_models.py`:
+```python
+from pydantic import computed_field
+
+class HandResponse(BaseModel):
+    ...
+    player_hands: list[PlayerHandResponse]
+    flop_1: str
+    flop_2: str
+    flop_3: str
+    turn: str | None
+    river: str | None
+
+    @computed_field
+    @property
+    def player_count(self) -> int:
+        return len(self.player_hands)
+
+    @computed_field
+    @property
+    def street_reached(self) -> str:
+        if self.river:
+            return 'river'
+        if self.turn:
+            return 'turn'
+        return 'flop'
+```
+
+**Acceptance Criteria:**
+1. `HandResponse` exposes `player_count` (integer) as a computed summary field
+2. `HandResponse` exposes `street_reached` (one of `'flop'`, `'turn'`, `'river'`) as a computed summary field
+3. Both fields are included in the JSON serialisation of the response
+4. T-021 AC-2 and S-3.3 AC-2 are satisfied without client-side recomputation
+
+---
+
+### F-062 — N+1 query anti-pattern: per-player `db.query(Player)` lookup inside `list_hands` loop (aia-core-szn / T-021)
+
+**Source Task:** aia-core-szn (T-021: Implement List Hands in Game endpoint)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/routes/hands.py — `list_hands`
+
+For each hand in the result set, for each `PlayerHand` associated with that hand, `list_hands` issues a separate `db.query(Player).filter(Player.player_id == ph.player_id).first()` call. With H hands and an average of P players per hand, this produces O(H × P) database round-trips. On a game with 20 hands of 6 players each, this is 120 individual `SELECT` statements where a single pre-loaded map or JOIN would suffice. The pattern is structurally identical to the N+1 issue flagged in F-038 / F-042 for game sessions, but with a multiplicative (not additive) round-trip cost.
+
+**Suggested fix:** Pre-load a `player_id → Player` map from a single query before entering the loop, then resolve player names from the in-memory map:
+```python
+player_ids = {ph.player_id for hand in hands for ph in hand.player_hands}
+players_by_id = {
+    p.player_id: p
+    for p in db.query(Player).filter(Player.player_id.in_(player_ids)).all()
+}
+
+for hand in hands:
+    player_hand_responses = [
+        PlayerHandResponse(
+            player_name=players_by_id[ph.player_id].name,
+            ...
+        )
+        for ph in hand.player_hands
+    ]
+```
+Alternatively, add `selectinload(Hand.player_hands).selectinload(PlayerHand.player)` to the initial `Hand` query so the ORM resolves all relationships in two batched `SELECT IN` statements instead of H × P individual queries.
+
+**Acceptance Criteria:**
+1. `list_hands` does not issue a per-`PlayerHand` `db.query(Player)` call inside any loop
+2. All player names are resolved via a single pre-loaded map or via eagerly-loaded ORM relationships
+3. Total DB round-trips for the endpoint are O(1) or O(2) regardless of hand or player count
+4. Existing `GET /games/{game_id}/hands` tests continue to pass
+
+---
+
+### F-063 — Silent empty-string fallback on missing player in `list_hands` and `get_hand` (aia-core-szn / T-021)
+
+**Source Task:** aia-core-szn (T-021: Implement List Hands in Game endpoint)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** src/app/routes/hands.py — `list_hands` and `get_hand` player lookup
+
+Both `list_hands` and `get_hand` resolve a `Player` from `db.query(Player).filter(Player.player_id == ph.player_id).first()` and then produce `player_name = player.name if player else ''`. A missing player (`player is None`) indicates a broken FK relationship — a `PlayerHand` row references a `player_id` that no longer exists in the `players` table. This is a database corruption scenario, not a valid application state. Silently returning an empty string masks the corruption: the response looks structurally valid but contains meaningless data, making the bug invisible to callers and future debugging sessions. The correct response is HTTP 500 with a diagnostic detail, so the problem surfaces immediately.
+
+**Suggested fix:** In both `list_hands` and `get_hand`, replace the silent fallback with an explicit guard:
+```python
+if player is None:
+    raise HTTPException(
+        status_code=500,
+        detail=f"Data integrity error: PlayerHand {ph.player_hand_id} references "
+               f"non-existent player_id {ph.player_id}",
+    )
+player_name = player.name
+```
+
+**Acceptance Criteria:**
+1. When `db.query(Player)` returns `None` for a `PlayerHand.player_id`, the handler raises `HTTPException(500)` with a diagnostic message in both `list_hands` and `get_hand`
+2. No empty-string `player_name` is ever returned in a response
+3. A unit test mocking the player query to return `None` asserts a 500 response
+
+---
+
+### F-064 — Duplicate `PlayerHandResponse` construction logic in `list_hands` and `get_hand` (aia-core-szn / T-021)
+
+**Source Task:** aia-core-szn (T-021: Implement List Hands in Game endpoint)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** src/app/routes/hands.py — `list_hands` and `get_hand`
+
+Both `list_hands` and `get_hand` contain near-identical loops that iterate over `hand.player_hands`, resolve a `Player` from the DB, and construct a `PlayerHandResponse`. Any change to the shape of `PlayerHandResponse` or to the player-lookup logic (e.g. the fix in F-062 or F-063) must be applied in two places or the endpoints will silently diverge. This is the same duplication pattern noted in F-039 for `GameSessionResponse` construction across `create_game_session` and `get_game_session`.
+
+**Suggested fix:** Extract a private helper function that encapsulates the loop:
+```python
+def _build_player_hand_responses(
+    hand: Hand, players_by_id: dict[int, Player]
+) -> list[PlayerHandResponse]:
+    responses = []
+    for ph in hand.player_hands:
+        player = players_by_id.get(ph.player_id)
+        if player is None:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Data integrity error: PlayerHand {ph.player_hand_id} references "
+                       f"non-existent player_id {ph.player_id}",
+            )
+        responses.append(PlayerHandResponse(
+            player_name=player.name,
+            card_1=ph.card_1,
+            card_2=ph.card_2,
+            result=ph.result,
+            profit_loss=ph.profit_loss,
+        ))
+    return responses
+```
+Both `list_hands` and `get_hand` then call `_build_player_hand_responses(hand, players_by_id)`. This consolidates both F-063 (silent fallback) and F-064 (duplication) in a single fix.
+
+**Acceptance Criteria:**
+1. A private helper `_build_player_hand_responses` (or equivalent) is extracted and used by both `list_hands` and `get_hand`
+2. The player-lookup and `PlayerHandResponse` construction logic appears exactly once in the codebase
+3. Any modification to `PlayerHandResponse` construction only requires a single edit
+4. All existing tests for both endpoints continue to pass
+
+---
+
+### F-065 — No tests asserting `player_count` and `street_reached` values in `test_list_hands_api.py` (aia-core-szn / T-021)
+
+**Source Task:** aia-core-szn (T-021: Implement List Hands in Game endpoint)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** test/test_list_hands_api.py
+
+`test_list_hands_api.py` does not assert the values of `player_count` or `street_reached` in any response object. T-021 AC-2 explicitly requires these as per-hand summary fields. Without assertions on their values, the test suite cannot detect a regression where (a) the fields are present but always return zero/null, (b) `street_reached` returns the wrong street (e.g. `'flop'` when a river card is present), or (c) `player_count` is miscounted. These tests should be added when F-061 is addressed and the fields are added to `HandResponse`.
+
+**Suggested follow-up:** After implementing F-061 (`@computed_field` properties on `HandResponse`), add tests to `test_list_hands_api.py` covering:
+1. A hand with only flop cards and 2 players: assert `street_reached == 'flop'` and `player_count == 2`.
+2. A hand with flop + turn and 4 players: assert `street_reached == 'turn'` and `player_count == 4`.
+3. A hand with flop + turn + river: assert `street_reached == 'river'`.
+4. A hand with 0 players (edge case): assert `player_count == 0`.
+
+---
+
+### F-066 — No enum constraint on `result` field in `PlayerResultEntry` and `PlayerHandCreate` (aia-core-mu4 / T-022)
+
+**Source Task:** aia-core-mu4 (T-022: Implement Record Hand Result endpoint)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/pydantic_models/app_models.py — `PlayerResultEntry.result` and `PlayerHandCreate.result`
+
+`PlayerResultEntry.result` is declared as `result: str` with no constraint. Any arbitrary string — including `'banana'`, `'WIN'`, or the empty string — passes Pydantic validation and is forwarded directly into the `PlayerHand.result` column. S-3.4 specifies the valid vocabulary as `win`, `loss`, and `fold`. The identical gap exists on `PlayerHandCreate.result`, which is used by the `POST /games/{game_id}/hands` endpoint. Both fields ultimately write to the same `PlayerHand.result` column; without a Pydantic-level constraint, invalid values bypass the DB-level enum guard (T-046) only if that migration has not yet been applied, and produce schema-violating data in any environment where T-046 is still outstanding.
+
+**Fix:**
+Add a shared `HandResult` string enum in `src/pydantic_models/app_models.py`:
+```python
+from enum import Enum
+
+class HandResult(str, Enum):
+    win = 'win'
+    loss = 'loss'
+    fold = 'fold'
+```
+Then update both fields to use it:
+```python
+# In PlayerResultEntry:
+result: HandResult | None = None
+
+# In PlayerHandCreate:
+result: HandResult | None = None
+```
+Using `str, Enum` ensures FastAPI serialises the field as a plain string in JSON responses and OpenAPI docs display the allowed values as an enum.
+
+**Acceptance Criteria:**
+1. `PlayerResultEntry(player_name='Alice', result='banana')` raises a Pydantic `ValidationError`
+2. `PlayerHandCreate(..., result='WIN')` raises a Pydantic `ValidationError`
+3. `PlayerResultEntry(player_name='Alice', result='win')` is valid
+4. `result=None` remains valid (nullable)
+5. The OpenAPI schema for both fields lists `win`, `loss`, `fold` as the allowed values
+6. Existing tests that pass valid result values continue to pass without modification
+
+---
+
+### F-067 — Dead code: `HandResultUpdate` class is defined but never used (aia-core-mu4 / T-022)
+
+**Source Task:** aia-core-mu4 (T-022: Implement Record Hand Result endpoint)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** src/pydantic_models/app_models.py — `HandResultUpdate`
+
+`HandResultUpdate` is defined in `app_models.py` but is never imported, referenced, or instantiated anywhere in the codebase — not in any route handler, test, or other module. The T-022 endpoint uses `PlayerResultEntry` (a list thereof) as its request body, not `HandResultUpdate`. The class appears to be an early draft that was superseded by `PlayerResultEntry` and not removed. Dead model classes inflate the public surface area of the module, mislead readers into assuming the class is load-bearing, and create maintenance debt as the surrounding schema evolves.
+
+**Fix:**
+Delete the `HandResultUpdate` class from `src/pydantic_models/app_models.py`. Verify with a project-wide search that no import or reference to `HandResultUpdate` exists before deletion.
+
+**Acceptance Criteria:**
+1. `HandResultUpdate` is removed from `src/pydantic_models/app_models.py`
+2. No import or reference to `HandResultUpdate` exists anywhere in `src/` or `test/`
+3. All existing tests continue to pass after the deletion
+
+---
+
+### F-068 — No test for empty `players` payload — `PATCH` with `[]` silently succeeds (aia-core-mu4 / T-022)
+
+**Source Task:** aia-core-mu4 (T-022: Implement Record Hand Result endpoint)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** test/test_record_hand_result_api.py; src/app/routes/hands.py — `update_hand_results`
+
+`PATCH /games/{game_id}/hands/{hand_number}/results` with `{"players": []}` skips the update loop entirely, calls `db.commit()`, and returns the hand unchanged with HTTP 200. This is a valid no-op semantically, but it is completely untested. Without a test, a future refactor that inadvertently raises an error on an empty list (e.g. adding a `min_length=1` validator or a pre-loop guard) would not be caught by the existing suite, and the edge-case contract would remain invisible to reviewers.
+
+**Suggested follow-up:** Add a test `test_update_hand_results_empty_players_list` to `test/test_record_hand_result_api.py`:
+1. Create a game, hand, and at least one player entry with a recorded result.
+2. PATCH with `{"players": []}`.
+3. Assert HTTP 200.
+4. Assert the existing player result is unchanged (no accidental reset).
+
+**Acceptance Criteria:**
+1. `PATCH` with `{"players": []}` returns 200
+2. The existing `PlayerHand` records for the hand are unmodified after the empty PATCH
+3. The test is present in `test_record_hand_result_api.py` and passes
+
+---
+
+### F-069 — No idempotency/overwrite test for repeated `PATCH` on the same player (aia-core-mu4 / T-022)
+
+**Source Task:** aia-core-mu4 (T-022: Implement Record Hand Result endpoint)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** test/test_record_hand_result_api.py; src/app/routes/hands.py — `update_hand_results`
+
+The endpoint is intended to be idempotent and to overwrite on repeated calls: a second `PATCH` for the same player should supersede the first. No test exercises this contract. Without it, a regression that accumulated results (e.g. appending instead of overwriting) or raised a conflict error on a second PATCH to the same player would go undetected by the existing suite.
+
+**Suggested follow-up:** Add a test `test_update_hand_results_overwrite_existing` to `test/test_record_hand_result_api.py`:
+1. Create a game, hand, and player.
+2. PATCH to set Alice's result to `'win'` and `profit_loss` to `10.00`.
+3. Assert the first PATCH returns 200 with `result == 'win'`.
+4. PATCH again with Alice's result set to `'loss'` and `profit_loss` to `-5.00`.
+5. Assert the second PATCH returns 200 and the stored values are now `result == 'loss'` and `profit_loss == -5.00` (not the original values).
+
+**Acceptance Criteria:**
+1. A second `PATCH` for the same player with different values returns 200 and overwrites the first
+2. The `PlayerHand` record reflects the most-recent PATCH values after the second call
+3. No error is raised on repeated PATCHing of the same player
