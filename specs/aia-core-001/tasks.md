@@ -2,7 +2,7 @@
 
 **Project ID:** aia-core-001
 **Date:** 2026-03-09
-**Total Tasks:** 43
+**Total Tasks:** 50
 **Status:** Draft
 
 ---
@@ -54,6 +54,13 @@
 | T-041 | Implement Review and Confirm Detected Cards endpoint | feature | T-040, T-018 | S-8.3 |
 | T-042 | Implement Detection Correction feedback storage and tests | feature | T-041 | S-8.4 |
 | T-043 | Migrate package manager from Poetry to uv | setup | none | — |
+| T-044 | Fix: Add `Player.hands_played` relationship and wire `back_populates` | bug | none | S-1.4 |
+| T-045 | Fix: Change `profit_loss` column type from `Float` to `Numeric(10,2)` | bug | none | S-1.4 |
+| T-046 | Fix: Add `Enum` constraint on `PlayerHand.result` column | bug | none | S-1.4 |
+| T-047 | Fix: Add `cascade='all, delete-orphan'` to `Hand.player_hands` relationship | bug | none | S-1.4 |
+| T-048 | Fix: Add NOT NULL enforcement tests for `card_1`, `card_2`, `hand_id`, `player_id` | bug | none | S-1.4 |
+| T-049 | Fix: Add `back_populates` to `PlayerHand.player` relationship | bug | T-044 | S-1.4 |
+| T-050 | Fix: Enable SQLite FK enforcement (`PRAGMA foreign_keys = ON`) in test fixtures | bug | none | S-1.4 |
 
 ---
 
@@ -699,3 +706,200 @@ Replace Poetry with uv as the project package manager. Convert `pyproject.toml` 
 3. `Dockerfile` installs uv and uses `uv sync` / `uv run`
 4. `uv run pytest` and `uv run uvicorn src.app.main:app` both succeed
 5. Setup script and README updated with uv instructions
+
+---
+
+## Bugs / Findings
+
+*Tasks in this section were discovered during code review. Each is linked to its source task via `discovered-from`. Priority mapping: HIGH → 1, MEDIUM → 2, LOW → 3.*
+
+---
+
+### T-044 — Fix: Add `Player.hands_played` relationship and wire `back_populates`
+
+**Category:** bug
+**Severity:** HIGH
+**Priority:** 1
+**Discovered-from:** T-005
+**Dependencies:** none
+**Story Ref:** S-1.4
+**Blocks:** T-032
+
+The T-005 spec explicitly required adding a `Player.hands_played` relationship, but it was never added to the `Player` model. `PlayerHand.player` was also defined without `back_populates`, leaving the relationship unidirectional. Accessing `player.hands_played` at runtime raises `AttributeError`. This breaks ORM traversal from `Player → PlayerHand` and will block the Player Stats endpoint (T-032).
+
+**Fix:**
+In `src/app/database/models.py`, add to the `Player` model:
+```python
+hands_played = relationship('PlayerHand', back_populates='player')
+```
+And update `PlayerHand.player` to:
+```python
+player = relationship('Player', back_populates='hands_played')
+```
+
+**Acceptance Criteria:**
+1. `Player` has a `hands_played` attribute that returns associated `PlayerHand` records via ORM traversal
+2. `PlayerHand.player` has `back_populates='hands_played'`
+3. `some_player.hands_played` does not raise `AttributeError`
+4. Existing tests continue to pass
+
+---
+
+### T-045 — Fix: Change `profit_loss` column type from `Float` to `Numeric(10,2)`
+
+**Category:** bug
+**Severity:** MEDIUM
+**Priority:** 2
+**Discovered-from:** T-005
+**Dependencies:** none
+**Story Ref:** S-1.4
+
+`profit_loss` is stored as IEEE 754 `Float`, which accumulates binary rounding errors. For a poker analytics app where P&L values are summed across many hands for session and lifetime stats, these errors compound silently. This should use `Numeric(precision=10, scale=2)` for exact decimal representation, which supports values up to ±99,999,999.99 — sufficient for poker P&L.
+
+**Fix:**
+In `src/app/database/models.py`, update the `PlayerHand.profit_loss` column:
+```python
+profit_loss = Column(Numeric(precision=10, scale=2), nullable=True)
+```
+Ensure `Numeric` is imported from `sqlalchemy`.
+
+**Acceptance Criteria:**
+1. `profit_loss` column uses `Numeric(10, 2)` in the model
+2. The Alembic migration (T-006) reflects the `Numeric` type, not `Float`
+3. Values stored and retrieved round-trip without floating-point error (e.g., `0.10` returns `Decimal('0.10')`)
+
+---
+
+### T-046 — Fix: Add `Enum` constraint on `PlayerHand.result` column
+
+**Category:** bug
+**Severity:** MEDIUM
+**Priority:** 2
+**Discovered-from:** T-005
+**Dependencies:** none
+**Story Ref:** S-1.4
+
+`result` is defined as an unbounded `String`, allowing any value (`"WIN"`, `"loser"`, `""`) to be inserted without error. The spec defines `result` as `"win/loss/fold"`, implying a fixed vocabulary. Without a DB-level constraint, stats queries that group on `result` will silently produce wrong output if inconsistent values are present. The Pydantic layer (T-007/T-008) should use the same enum values.
+
+**Fix:**
+In `src/app/database/models.py`, update the `PlayerHand.result` column:
+```python
+result = Column(Enum('win', 'loss', 'fold', name='hand_result'), nullable=True)
+```
+Ensure `Enum` is imported from `sqlalchemy`.
+
+**Acceptance Criteria:**
+1. `result` column uses `Enum('win', 'loss', 'fold', name='hand_result')`
+2. Inserting a value outside `{'win', 'loss', 'fold'}` raises a DB-level error
+3. `None` (nullable) is still accepted
+4. The Alembic migration (T-006) includes the enum type definition
+
+---
+
+### T-047 — Fix: Add `cascade='all, delete-orphan'` to `Hand.player_hands` relationship
+
+**Category:** bug
+**Severity:** MEDIUM
+**Priority:** 2
+**Discovered-from:** T-005
+**Dependencies:** none
+**Story Ref:** S-1.4
+
+`Hand.player_hands` has no `cascade` argument. Deleting a `Hand` via the ORM will not automatically delete associated `PlayerHand` records. Under SQLite (FK enforcement off by default), this leaves orphaned rows. Under PostgreSQL, it raises an `IntegrityError`. This is a latent data integrity risk ahead of T-030 (Add/Remove Player from Hand) and any future editing flow that deletes or replaces hands.
+
+**Fix:**
+In `src/app/database/models.py`, update the `Hand.player_hands` relationship:
+```python
+player_hands = relationship('PlayerHand', back_populates='hand', cascade='all, delete-orphan')
+```
+
+**Acceptance Criteria:**
+1. `Hand.player_hands` relationship includes `cascade='all, delete-orphan'`
+2. Deleting a `Hand` via the ORM automatically deletes all associated `PlayerHand` records
+3. Existing tests continue to pass
+
+---
+
+### T-048 — Fix: Add NOT NULL enforcement tests for `card_1`, `card_2`, `hand_id`, `player_id`
+
+**Category:** bug
+**Severity:** MEDIUM
+**Priority:** 2
+**Discovered-from:** T-005
+**Dependencies:** none
+**Story Ref:** S-1.4
+
+`card_1`, `card_2`, `hand_id`, and `player_id` are all `nullable=False` in the `PlayerHand` model, but no test asserts this. A typo or future refactor changing any to `nullable=True` would pass all 23 current tests undetected. Tests should assert the `nullable=False` constraint is present on each required column.
+
+**Fix:**
+Add a `TestPlayerHandNotNullColumns` class to `test/test_player_hand_model.py` (or extend `TestPlayerHandNullableColumns`). For each required column, assert that its `nullable` attribute is `False`:
+```python
+from sqlalchemy import inspect
+
+def test_card_1_not_nullable(self):
+    mapper = inspect(PlayerHand)
+    col = next(c for c in mapper.columns if c.key == 'card_1')
+    assert not col.nullable, 'card_1 should be NOT NULL'
+```
+Repeat for `card_2`, `hand_id`, and `player_id`.
+
+**Acceptance Criteria:**
+1. Test class exists asserting `nullable=False` for `card_1`, `card_2`, `hand_id`, and `player_id`
+2. Tests are parametrized or cover all four columns explicitly
+3. All new tests pass
+
+---
+
+### T-049 — Fix: Add `back_populates` to `PlayerHand.player` relationship
+
+**Category:** bug
+**Severity:** LOW
+**Priority:** 3
+**Discovered-from:** T-005
+**Dependencies:** T-044
+**Story Ref:** S-1.4
+
+`PlayerHand.player` was defined without `back_populates`, making it unidirectional and inconsistent with `PlayerHand.hand` (which correctly uses `back_populates='player_hands'`). This is a direct symptom of the missing `Player.hands_played` relationship (H-1 / T-044). Fixing T-044 resolves this finding as a side-effect; this task serves as an explicit reminder to verify the wiring is complete and consistent.
+
+**Fix:**
+Verify that after applying T-044, `PlayerHand.player` reads:
+```python
+player = relationship('Player', back_populates='hands_played')
+```
+This task is considered complete once T-044 is merged and the `back_populates` on both sides is confirmed.
+
+**Acceptance Criteria:**
+1. `PlayerHand.player` has `back_populates='hands_played'`
+2. `PlayerHand.hand` has `back_populates='player_hands'` (unchanged — confirming consistency)
+3. Both relationships are bidirectional and symmetric
+
+---
+
+### T-050 — Fix: Enable SQLite FK enforcement (`PRAGMA foreign_keys = ON`) in test fixtures
+
+**Category:** bug
+**Severity:** LOW
+**Priority:** 3
+**Discovered-from:** T-005
+**Dependencies:** none
+**Story Ref:** S-1.4
+
+SQLite disables FK enforcement by default. The `db_session` fixture in `test/test_player_hand_model.py` (and other model test files) does not execute `PRAGMA foreign_keys = ON`. Any test asserting that an FK violation raises `IntegrityError` would produce a false pass. This is a cross-cutting concern — the fix belongs in `test/conftest.py` so all test modules benefit automatically.
+
+**Fix:**
+In `test/conftest.py`, add an SQLAlchemy event listener to the shared test engine:
+```python
+from sqlalchemy import event
+
+@event.listens_for(engine, 'connect')
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute('PRAGMA foreign_keys=ON')
+    cursor.close()
+```
+If individual test files create their own engines (rather than using the shared fixture), apply the same listener in each file or refactor them to use the `conftest.py` engine.
+
+**Acceptance Criteria:**
+1. `PRAGMA foreign_keys = ON` is applied to all SQLite test connections via `conftest.py`
+2. A test that inserts a `PlayerHand` with a non-existent `hand_id` raises `IntegrityError` (verifying enforcement is active)
+3. All existing tests continue to pass
