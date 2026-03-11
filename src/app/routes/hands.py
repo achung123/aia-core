@@ -14,6 +14,54 @@ from pydantic_models.card_validator import validate_no_duplicate_cards
 router = APIRouter(prefix='/games', tags=['hands'])
 
 
+@router.get('/{game_id}/hands/{hand_number}', response_model=HandResponse)
+def get_hand(
+    game_id: int,
+    hand_number: int,
+    db: Annotated[Session, Depends(get_db)],
+):
+    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
+    if game is None:
+        raise HTTPException(status_code=404, detail='Game session not found')
+
+    hand = (
+        db.query(Hand)
+        .filter(Hand.game_id == game_id, Hand.hand_number == hand_number)
+        .first()
+    )
+    if hand is None:
+        raise HTTPException(status_code=404, detail='Hand not found')
+
+    player_hand_responses: list[PlayerHandResponse] = []
+    for ph in hand.player_hands:
+        player = db.query(Player).filter(Player.player_id == ph.player_id).first()
+        player_hand_responses.append(
+            PlayerHandResponse(
+                player_hand_id=ph.player_hand_id,
+                hand_id=ph.hand_id,
+                player_id=ph.player_id,
+                player_name=player.name if player else '',
+                card_1=ph.card_1,
+                card_2=ph.card_2,
+                result=ph.result,
+                profit_loss=ph.profit_loss,
+            )
+        )
+
+    return HandResponse(
+        hand_id=hand.hand_id,
+        game_id=hand.game_id,
+        hand_number=hand.hand_number,
+        flop_1=hand.flop_1,
+        flop_2=hand.flop_2,
+        flop_3=hand.flop_3,
+        turn=hand.turn,
+        river=hand.river,
+        created_at=hand.created_at,
+        player_hands=player_hand_responses,
+    )
+
+
 @router.post('/{game_id}/hands', status_code=201, response_model=HandResponse)
 def record_hand(
     game_id: int,

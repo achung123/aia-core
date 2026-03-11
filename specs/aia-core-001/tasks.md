@@ -2162,3 +2162,38 @@ assert hand_count == 0, "No Hand row should be written on duplicate-card rejecti
 **Tracked as:** F-053 / T-063
 
 `db.refresh(hand)` issues a `SELECT` to reload the `Hand` row after `db.commit()`. The `HandResponse` is built entirely from Python attributes set before the commit; no server-computed value is read from `hand` after the refresh. The call is a wasted round-trip on every successful request. This is a pre-existing finding — already captured as F-053 and tracked for resolution in T-063. Noted here for completeness as it was observed during the aia-core-4fy review.
+
+---
+
+### F-057 — Turn/river duplicate paths lack explicit rejection tests (aia-core-wxn / T-019)
+
+**Source Task:** aia-core-wxn (T-019: Implement duplicate card validation logic)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** test/test_record_hand_api.py — `TestDuplicateCardValidation`
+**Suggested follow-up:** T-023 (aia-core-3yf) — Write tests for Hand Management endpoints
+
+`validate_no_duplicate_cards` correctly handles turn- and river-involved duplicates at the utility level, and `record_hand()` correctly includes `turn` and `river` in `all_cards` conditionally. However, no integration test in `TestDuplicateCardValidation` exercises a rejection path where the duplicate card is the turn or river field. For example, the case `turn == flop_1` (e.g. `turn='AS'` when `flop_1='AS'`) is not asserted as returning 422. If the conditional inclusion of `turn` or `river` in `all_cards` were inadvertently dropped during a refactor, all existing duplicate tests would still pass.
+
+The implementation is correct — this is a test coverage gap only. It overlaps with F-054 (discovered during the T-059 review) and is consolidated for resolution in T-023.
+
+**Suggested follow-up:** In T-023, add at least two test cases to `TestDuplicateCardValidation`:
+1. `turn` duplicates a community card (e.g. `turn == flop_1`) → assert 422.
+2. `river` duplicates a community or turn card → assert 422.
+
+---
+
+### F-058 — No explicit integration test that duplicate card rejection returns 400, not 422 (aia-core-wxn / T-019)
+
+**Source Task:** aia-core-wxn (T-019: Implement duplicate card validation logic)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** test/test_record_hand_api.py — `TestDuplicateCardValidation`; src/app/routes/hands.py — `record_hand`
+
+`record_hand()` catches `ValueError` from `validate_no_duplicate_cards` and raises `HTTPException(status_code=400, ...)`. The existing tests assert that a duplicate-card request returns a non-2xx response, but no test explicitly asserts `response.status_code == 400`. If `status_code=400` were accidentally changed back to `422` (the default Pydantic validation error code), or if the `try/except ValueError` block were removed and the `ValueError` propagated as an unhandled 500, the existing tests would not catch the regression. The distinction between 400 and 422 is contractual: 400 signals a domain-level rule violation (cards already in play), while 422 signals a structural validation failure; they carry different semantics for API consumers.
+
+**Suggested follow-up:** In `TestDuplicateCardValidation`, update at least one existing test (or add a dedicated one) to assert the exact status code:
+```python
+assert response.status_code == 400
+```
+This guards against accidental reversion to 422 or propagation as 500.

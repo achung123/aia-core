@@ -132,9 +132,7 @@ class TestRecordHandBasic:
         self, client, game_with_players
     ):
         resp = client.post(f'/games/{game_with_players}/hands', json=HAND_PAYLOAD)
-        player_hands = {
-            ph['player_name']: ph for ph in resp.json()['player_hands']
-        }
+        player_hands = {ph['player_name']: ph for ph in resp.json()['player_hands']}
         assert player_hands['Alice']['card_1'] == '7S'
         assert player_hands['Alice']['card_2'] == '8S'
         assert player_hands['Bob']['card_1'] == '9H'
@@ -162,9 +160,7 @@ class TestRecordHandBasic:
         }
         resp = client.post(f'/games/{game_with_players}/hands', json=payload)
         assert resp.status_code == 201
-        player_hands = {
-            ph['player_name']: ph for ph in resp.json()['player_hands']
-        }
+        player_hands = {ph['player_name']: ph for ph in resp.json()['player_hands']}
         assert player_hands['Alice']['result'] == 'win'
         assert player_hands['Alice']['profit_loss'] == 50.0
         assert player_hands['Bob']['result'] == 'loss'
@@ -183,9 +179,7 @@ class TestRecordHandBasic:
             assert hand is not None
             assert hand.game_id == game_with_players
 
-            phs = (
-                db.query(PlayerHand).filter(PlayerHand.hand_id == hand_id).all()
-            )
+            phs = db.query(PlayerHand).filter(PlayerHand.hand_id == hand_id).all()
             assert len(phs) == 2
         finally:
             db.close()
@@ -252,7 +246,9 @@ class TestRecordHandValidation:
         resp = client.post(f'/games/{game_with_players}/hands', json=payload)
         assert resp.status_code == 404
 
-    def test_record_hand_player_not_in_game_returns_400(self, client, game_with_players):
+    def test_record_hand_player_not_in_game_returns_400(
+        self, client, game_with_players
+    ):
         """A player that exists in the DB but is not in this game gets 400."""
         # Create a player not in the game
         client.post('/players', json={'name': 'Charlie'})
