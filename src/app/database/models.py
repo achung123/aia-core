@@ -16,6 +16,7 @@ class Player(Base):
     games = relationship(
         'GameSession', secondary='game_players', back_populates='players'
     )
+    hands_played = relationship('PlayerHand', back_populates='player')
 
 
 class GameSession(Base):
@@ -80,4 +81,4 @@ class PlayerHand(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     hand = relationship('Hand', back_populates='player_hands')
-    player = relationship('Player')
+    player = relationship('Player', back_populates='hands_played')

@@ -112,3 +112,74 @@ class TestPlayerInBaseMetadata:
         from app.database.models import Base
 
         assert 'players' in Base.metadata.tables
+
+
+# ---------------------------------------------------------------------------
+# AC-4: Player.hands_played relationship (T-044)
+# ---------------------------------------------------------------------------
+
+class TestPlayerHandsPlayedRelationship:
+    """AC-4: Player.hands_played is a relationship to PlayerHand with back_populates."""
+
+    def test_player_has_hands_played_attribute(self):
+        from app.database.models import Player
+
+        assert hasattr(Player, 'hands_played'), (
+            'Player model must have a hands_played attribute'
+        )
+
+    def test_player_hands_played_is_relationship(self):
+        from sqlalchemy.orm import RelationshipProperty
+        from sqlalchemy import inspect
+        from app.database.models import Player
+
+        mapper = inspect(Player)
+        rel_keys = {r.key for r in mapper.relationships}
+        assert 'hands_played' in rel_keys, (
+            'Player.hands_played must be a SQLAlchemy relationship'
+        )
+
+    def test_player_hands_played_back_populates_player(self):
+        from sqlalchemy import inspect
+        from app.database.models import Player
+
+        mapper = inspect(Player)
+        rel = next(r for r in mapper.relationships if r.key == 'hands_played')
+        assert rel.back_populates == 'player', (
+            f"Player.hands_played.back_populates must be 'player', got {rel.back_populates!r}"
+        )
+
+    def test_player_hands_played_traversal(self, db_session):
+        from app.database.models import GameSession, Hand, Player, PlayerHand
+        from datetime import date
+
+        game = GameSession(game_date=date(2026, 3, 9))
+        db_session.add(game)
+        db_session.flush()
+
+        hand = Hand(
+            game_id=game.game_id,
+            hand_number=1,
+            flop_1='AS',
+            flop_2='KH',
+            flop_3='QD',
+        )
+        db_session.add(hand)
+        db_session.flush()
+
+        player = Player(name='TestPlayer')
+        db_session.add(player)
+        db_session.flush()
+
+        ph = PlayerHand(
+            hand_id=hand.hand_id,
+            player_id=player.player_id,
+            card_1='2C',
+            card_2='3D',
+        )
+        db_session.add(ph)
+        db_session.commit()
+
+        db_session.refresh(player)
+        assert len(player.hands_played) == 1
+        assert player.hands_played[0].card_1 == '2C'

@@ -368,3 +368,49 @@ class TestPlayerHandCreation:
         result = db_session.query(PlayerHand).first()
         assert result.created_at is not None
         assert isinstance(result.created_at, datetime)
+
+
+# ---------------------------------------------------------------------------
+# AC-6: PlayerHand.player relationship uses back_populates (T-044)
+# ---------------------------------------------------------------------------
+
+class TestPlayerHandPlayerRelationship:
+    """AC-6: PlayerHand.player has back_populates='hands_played'."""
+
+    def test_player_hand_has_player_relationship(self):
+        from sqlalchemy import inspect
+        from app.database.models import PlayerHand
+
+        mapper = inspect(PlayerHand)
+        rel_keys = {r.key for r in mapper.relationships}
+        assert 'player' in rel_keys
+
+    def test_player_hand_player_back_populates_hands_played(self):
+        from sqlalchemy import inspect
+        from app.database.models import PlayerHand
+
+        mapper = inspect(PlayerHand)
+        rel = next(r for r in mapper.relationships if r.key == 'player')
+        assert rel.back_populates == 'hands_played', (
+            f"PlayerHand.player.back_populates must be 'hands_played', got {rel.back_populates!r}"
+        )
+
+    def test_player_hand_player_reverse_traversal(self, db_session):
+        from app.database.models import PlayerHand
+
+        hand = _make_hand(db_session)
+        player = _make_player(db_session)
+        db_session.commit()
+
+        ph = PlayerHand(
+            hand_id=hand.hand_id,
+            player_id=player.player_id,
+            card_1='AS',
+            card_2='KH',
+        )
+        db_session.add(ph)
+        db_session.commit()
+
+        db_session.refresh(ph)
+        assert ph.player is not None
+        assert ph.player.name == 'Alice'
