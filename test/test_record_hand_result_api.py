@@ -95,11 +95,15 @@ class TestRecordHandResultBasic:
         )
         assert resp.status_code == 200
         body = resp.json()
-        alice_ph = next(ph for ph in body['player_hands'] if ph['player_name'] == 'Alice')
+        alice_ph = next(
+            ph for ph in body['player_hands'] if ph['player_name'] == 'Alice'
+        )
         assert alice_ph['result'] == 'win'
         assert alice_ph['profit_loss'] == 50.0
 
-    def test_patch_results_leaves_unspecified_player_untouched(self, client, game_with_hand):
+    def test_patch_results_leaves_unspecified_player_untouched(
+        self, client, game_with_hand
+    ):
         """AC-2: Unspecified players keep their original result/profit_loss (None)."""
         game_id, hand_number = game_with_hand
         resp = client.patch(
@@ -123,7 +127,9 @@ class TestRecordHandResultBasic:
         )
         assert resp.status_code == 200
         body = resp.json()
-        alice_ph = next(ph for ph in body['player_hands'] if ph['player_name'] == 'Alice')
+        alice_ph = next(
+            ph for ph in body['player_hands'] if ph['player_name'] == 'Alice'
+        )
         bob_ph = next(ph for ph in body['player_hands'] if ph['player_name'] == 'Bob')
         assert alice_ph['result'] == 'win'
         assert alice_ph['profit_loss'] == 50.0

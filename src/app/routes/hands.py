@@ -12,6 +12,8 @@ from pydantic_models.app_models import (
     CommunityCardsUpdate,
     HandCreate,
     HandResponse,
+    HoleCardsUpdate,
+    PlayerHandEntry,
     PlayerHandResponse,
     PlayerResultEntry,
 )
@@ -189,6 +191,222 @@ def edit_community_cards(
         created_at=hand.created_at,
         player_hands=player_hand_responses,
     )
+
+
+@router.patch(
+    '/{game_id}/hands/{hand_number}/players/{player_name}',
+    response_model=PlayerHandResponse,
+)
+def edit_player_hole_cards(
+    game_id: int,
+    hand_number: int,
+    player_name: str,
+    payload: HoleCardsUpdate,
+    db: Annotated[Session, Depends(get_db)],
+):
+    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
+    if game is None:
+        raise HTTPException(status_code=404, detail='Game session not found')
+
+    hand = (
+        db.query(Hand)
+        .filter(Hand.game_id == game_id, Hand.hand_number == hand_number)
+        .first()
+    )
+    if hand is None:
+        raise HTTPException(status_code=404, detail='Hand not found')
+
+    player = (
+        db.query(Player).filter(func.lower(Player.name) == player_name.lower()).first()
+    )
+    if player is None:
+        raise HTTPException(status_code=404, detail=f'Player {player_name!r} not found')
+
+    ph = (
+        db.query(PlayerHand)
+        .filter(
+            PlayerHand.hand_id == hand.hand_id,
+            PlayerHand.player_id == player.player_id,
+        )
+        .first()
+    )
+    if ph is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f'Player {player_name!r} not found in this hand',
+        )
+
+    # Build full card set: new hole cards + community cards + other players' hole cards
+    all_cards = [str(payload.card_1), str(payload.card_2)]
+    all_cards.extend([hand.flop_1, hand.flop_2, hand.flop_3])
+    if hand.turn is not None:
+        all_cards.append(hand.turn)
+    if hand.river is not None:
+        all_cards.append(hand.river)
+    for other_ph in hand.player_hands:
+        if other_ph.player_id != player.player_id:
+            all_cards.append(other_ph.card_1)
+            all_cards.append(other_ph.card_2)
+    try:
+        validate_no_duplicate_cards(all_cards)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    ph.card_1 = str(payload.card_1)
+    ph.card_2 = str(payload.card_2)
+
+    db.commit()
+    db.refresh(ph)
+
+    return PlayerHandResponse(
+        player_hand_id=ph.player_hand_id,
+        hand_id=ph.hand_id,
+        player_id=ph.player_id,
+        player_name=player.name,
+        card_1=ph.card_1,
+        card_2=ph.card_2,
+        result=ph.result,
+        profit_loss=ph.profit_loss,
+    )
+
+
+@router.post(
+    '/{game_id}/hands/{hand_number}/players',
+    status_code=201,
+    response_model=PlayerHandResponse,
+)
+def add_player_to_hand(
+    game_id: int,
+    hand_number: int,
+    payload: PlayerHandEntry,
+    db: Annotated[Session, Depends(get_db)],
+):
+    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
+    if game is None:
+        raise HTTPException(status_code=404, detail='Game session not found')
+
+    hand = (
+        db.query(Hand)
+        .filter(Hand.game_id == game_id, Hand.hand_number == hand_number)
+        .first()
+    )
+    if hand is None:
+        raise HTTPException(status_code=404, detail='Hand not found')
+
+    player = (
+        db.query(Player)
+        .filter(func.lower(Player.name) == payload.player_name.lower())
+        .first()
+    )
+    if player is None:
+        raise HTTPException(
+            status_code=404, detail=f'Player {payload.player_name!r} not found'
+        )
+
+    game_player_ids = {p.player_id for p in game.players}
+    if player.player_id not in game_player_ids:
+        raise HTTPException(
+            status_code=400,
+            detail=f'Player {payload.player_name!r} is not a participant in this game',
+        )
+
+    existing_ph = (
+        db.query(PlayerHand)
+        .filter(
+            PlayerHand.hand_id == hand.hand_id,
+            PlayerHand.player_id == player.player_id,
+        )
+        .first()
+    )
+    if existing_ph is not None:
+        raise HTTPException(
+            status_code=400,
+            detail=f'Player {payload.player_name!r} is already recorded in this hand',
+        )
+
+    # Build full card set: new hole cards + community cards + existing hole cards
+    all_cards = [str(payload.card_1), str(payload.card_2)]
+    all_cards.extend([hand.flop_1, hand.flop_2, hand.flop_3])
+    if hand.turn is not None:
+        all_cards.append(hand.turn)
+    if hand.river is not None:
+        all_cards.append(hand.river)
+    for existing in hand.player_hands:
+        all_cards.append(existing.card_1)
+        all_cards.append(existing.card_2)
+    try:
+        validate_no_duplicate_cards(all_cards)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    ph = PlayerHand(
+        hand_id=hand.hand_id,
+        player_id=player.player_id,
+        card_1=str(payload.card_1),
+        card_2=str(payload.card_2),
+        result=payload.result,
+        profit_loss=payload.profit_loss,
+    )
+    db.add(ph)
+    db.commit()
+    db.refresh(ph)
+
+    return PlayerHandResponse(
+        player_hand_id=ph.player_hand_id,
+        hand_id=ph.hand_id,
+        player_id=ph.player_id,
+        player_name=player.name,
+        card_1=ph.card_1,
+        card_2=ph.card_2,
+        result=ph.result,
+        profit_loss=ph.profit_loss,
+    )
+
+
+@router.delete(
+    '/{game_id}/hands/{hand_number}/players/{player_name}',
+    status_code=204,
+)
+def remove_player_from_hand(
+    game_id: int,
+    hand_number: int,
+    player_name: str,
+    db: Annotated[Session, Depends(get_db)],
+):
+    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
+    if game is None:
+        raise HTTPException(status_code=404, detail='Game session not found')
+
+    hand = (
+        db.query(Hand)
+        .filter(Hand.game_id == game_id, Hand.hand_number == hand_number)
+        .first()
+    )
+    if hand is None:
+        raise HTTPException(status_code=404, detail='Hand not found')
+
+    player = (
+        db.query(Player).filter(func.lower(Player.name) == player_name.lower()).first()
+    )
+    if player is None:
+        raise HTTPException(status_code=404, detail=f'Player {player_name!r} not found')
+
+    ph = (
+        db.query(PlayerHand)
+        .filter(
+            PlayerHand.hand_id == hand.hand_id,
+            PlayerHand.player_id == player.player_id,
+        )
+        .first()
+    )
+    if ph is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f'Player {player_name!r} not found in this hand',
+        )
+
+    db.delete(ph)
+    db.commit()
 
 
 @router.post('/{game_id}/hands', status_code=201, response_model=HandResponse)

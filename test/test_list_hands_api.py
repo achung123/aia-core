@@ -98,7 +98,9 @@ class TestListHandsInGame:
         response = client.get(f'/games/{game_with_players}/hands')
         assert response.status_code == 200
 
-    def test_list_hands_returns_empty_list_when_no_hands(self, client, game_with_players):
+    def test_list_hands_returns_empty_list_when_no_hands(
+        self, client, game_with_players
+    ):
         response = client.get(f'/games/{game_with_players}/hands')
         assert response.json() == []
 
@@ -121,7 +123,9 @@ class TestListHandsInGame:
         response = client.get(f'/games/{game_with_players}/hands')
         assert len(response.json()) == 2
 
-    def test_list_hands_ordered_by_hand_number_ascending(self, client, game_with_players):
+    def test_list_hands_ordered_by_hand_number_ascending(
+        self, client, game_with_players
+    ):
         client.post(f'/games/{game_with_players}/hands', json=HAND_PAYLOAD_1)
         client.post(f'/games/{game_with_players}/hands', json=HAND_PAYLOAD_2)
         data = client.get(f'/games/{game_with_players}/hands').json()
@@ -153,7 +157,9 @@ class TestListHandsInGame:
         data = client.get(f'/games/{game_with_players}/hands').json()
         assert len(data[0]['player_hands']) == 2
 
-    def test_list_hands_only_returns_hands_for_given_game(self, client, game_with_players):
+    def test_list_hands_only_returns_hands_for_given_game(
+        self, client, game_with_players
+    ):
         # Create a second game
         resp2 = client.post(
             '/games',

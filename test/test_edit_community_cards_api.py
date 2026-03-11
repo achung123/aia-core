@@ -215,7 +215,9 @@ class TestEditCommunityCardsIncludesPlayerHands:
 class TestEditCommunityCardsDuplicateRejection:
     """AC-2: Rejects edits that introduce duplicate cards."""
 
-    def test_duplicate_within_new_community_cards_rejected(self, client, game_with_hand):
+    def test_duplicate_within_new_community_cards_rejected(
+        self, client, game_with_hand
+    ):
         """Duplicate among the new community cards themselves should return 400."""
         game_id, hand_number = game_with_hand
         resp = client.patch(

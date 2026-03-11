@@ -2575,3 +2575,206 @@ The endpoint is intended to be idempotent and to overwrite on repeated calls: a 
 1. A second `PATCH` for the same player with different values returns 200 and overwrites the first
 2. The `PlayerHand` record reflects the most-recent PATCH values after the second call
 3. No error is raised on repeated PATCHing of the same player
+
+---
+
+### F-070 — River duplicate test missing in `TestEditCommunityCards` (aia-core-qjt / T-028)
+
+**Source Task:** aia-core-qjt (T-028: Implement Edit Community Cards endpoint)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** test/test_edit_community_cards_api.py — `TestEditCommunityCards`
+
+`TestEditCommunityCards` contains duplicate-rejection tests for the flop and turn streets, but no test asserts that setting `river` to a value already present as a community card or player hole card returns 400. Because `edit_community_cards()` passes the full set of community cards (including the new `river` value) plus all player hole cards into `validate_no_duplicate_cards`, the river path is exercised by the same code as the flop/turn paths. However, without an explicit test, a regression that accidentally excluded `river` from the `all_cards` assembly — for example, a conditional that checked `payload.turn` but not `payload.river` — would not be caught by the existing suite. The test gap leaves the river duplicate validation contract effectively unverified at the integration level.
+
+**Suggested follow-up:** Add at least one test to `TestEditCommunityCards` that:
+1. Creates a game, hand, and at least one player with known hole cards.
+2. PATCHes the hand setting `river` to a card already present as one of the player's hole cards.
+3. Asserts HTTP 400 is returned (no update written).
+4. Optionally: a second case where `river` duplicates an existing community card (e.g. `river == flop_1`).
+
+**Acceptance Criteria:**
+1. A test exists asserting that `river` set to an existing hole card value returns 400
+2. A test exists (or the above covers) asserting that `river` set to an existing community card value returns 400
+3. Both new tests pass against the current implementation
+
+---
+
+### F-071 — Full-replace PATCH semantics for optional community card fields are non-standard and undocumented (aia-core-qjt / T-028)
+
+**Source Task:** aia-core-qjt (T-028: Implement Edit Community Cards endpoint)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/routes/hands.py — `edit_community_cards`; src/pydantic_models/app_models.py — `CommunityCardUpdate`
+
+`PATCH /games/{game_id}/hands/{hand_number}` uses a full-replace model for the optional `turn` and `river` fields: if the caller sends `{"turn": null}`, the handler sets `hand.turn = None`, clearing the field. This deviates from RFC 7396 merge-patch semantics, where an absent key means "leave unchanged" and `null` means "delete the field". Under the current implementation, omitting `turn` from the payload also clears it (because `CommunityCardUpdate` defaults it to `None`), making omission and explicit null indistinguishable. The behaviour is intentional and is covered by tests, but it is not documented in the OpenAPI endpoint description or in the spec (S-5.1). API consumers expecting standard PATCH semantics — where an absent field is a no-op — will silently lose `turn` or `river` data on a partial PATCH.
+
+**Suggested fix:** Add an explicit note to the FastAPI route decorator describing the semantics:
+```python
+@router.patch(
+    '/games/{game_id}/hands/{hand_number}',
+    summary='Edit community cards',
+    description=(
+        'Updates community card values for the specified hand. '
+        '**Full-replace semantics apply to optional fields**: '
+        'omitting `turn` or `river` from the request body clears those fields. '
+        'To preserve an existing value, repeat it in the payload.'
+    ),
+)
+```
+Alternatively, switch to explicit optional-with-sentinel semantics using `turn: str | None | Unset = UNSET` (or Pydantic v2's `model_fields_set`) so omission and null are distinguishable — but this is a larger change and should be weighed against consistency with other PATCH endpoints.
+
+**Acceptance Criteria:**
+1. The endpoint's OpenAPI `description` (or equivalent docstring) explicitly states that omitting `turn` or `river` clears the field
+2. S-5.1 acceptance criteria in `specs/aia-core-001/spec.md` are updated to document the full-replace behaviour
+3. No change to the current functional behaviour is required — documentation only
+
+---
+
+### F-072 — Misleading 404 detail text when player exists globally but not in the hand (aia-core-xw3 / T-029)
+
+**Source Task:** aia-core-xw3 (T-029: Implement Edit Player Hole Cards endpoint)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/routes/hands.py — `edit_player_hole_cards`
+
+`edit_player_hole_cards` performs two sequential existence checks:
+
+1. **Global player lookup** — queries `Player` by `player_id`; if not found, raises `HTTPException(404, detail="Player not found")`.
+2. **Hand membership lookup** — queries `PlayerHand` for `(hand_id, player_id)`; if not found, raises `HTTPException(404, detail=...)`.
+
+The problem is in the first check. A player who exists in the `players` table but was never enrolled in this specific hand clears the global guard and reaches the second check, which correctly returns 404. However, a player whose `player_id` does not exist at all also returns a 404 — with the message `"Player not found"`. This message is technically correct for that case, but the two-step path means that a caller passing a valid `player_id` that is simply absent from this hand will first hit the global check (passes), then the `PlayerHand` check (fails with the second detail message). As long as the second message is specific (e.g. `"Player not in this hand"`), the end-to-end behaviour is fine. The risk is that a future refactor collapses the two checks into a single `PlayerHand` query, which would silently lose the distinction between "player does not exist" and "player exists but not in this hand" — both would return the less-informative message.
+
+Additionally, the current two-query path issues an extra `SELECT` against `players` on every request, even when the `PlayerHand` lookup alone would be sufficient to determine non-membership. If a `PlayerHand` row is missing it is ambiguous whether the player ID is invalid or simply not enrolled, but that ambiguity is acceptable for a 404 in most API contracts.
+
+**Suggested fix (low-risk):** Ensure the second 404 message explicitly states `"Player not in this hand"` (or similar) so the two 404 paths always produce distinguishable detail strings. Add a test that asserts the exact `detail` text for each path.
+
+**Suggested fix (optional refactor):** Collapse to a single `PlayerHand` query using a JOIN on `Player`:
+```python
+player_hand = (
+    db.query(PlayerHand)
+    .join(Player, Player.player_id == PlayerHand.player_id)
+    .filter(PlayerHand.hand_id == hand.hand_id, PlayerHand.player_id == player_id)
+    .first()
+)
+if player_hand is None:
+    raise HTTPException(status_code=404, detail="Player not found in this hand")
+```
+This eliminates the extra round-trip and produces a single, unambiguous 404 message. The distinction between "unknown player ID" and "player not enrolled" is collapsed, which is acceptable if the API contract does not require distinguishing the two cases.
+
+**Acceptance Criteria:**
+1. A request with a `player_id` that does not exist in the `players` table returns 404
+2. A request with a valid `player_id` that is not enrolled in the specified hand returns 404 with a detail message that clearly references the hand (e.g. contains `"hand"` or `"not in this hand"`)
+3. The two 404 paths produce distinguishable `detail` strings
+4. Tests exist asserting the exact `detail` text for both paths
+
+---
+
+### F-073 — `test_player_not_in_hand_returns_404` manages its own `dependency_overrides` and `TestClient` — teardown not guaranteed (aia-core-xw3 / T-029)
+
+**Source Task:** aia-core-xw3 (T-029: Implement Edit Player Hole Cards endpoint)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** test/test_edit_hole_cards_api.py — `test_player_not_in_hand_returns_404`
+
+`test_player_not_in_hand_returns_404` manually sets `app.dependency_overrides[get_db] = lambda: session` and constructs a bare `TestClient(app)` inline, rather than using the shared `client` fixture from `conftest.py`. Because the override is set inside the test body with no `try/finally` guard and no `yield`-based teardown, an unexpected exception mid-test (e.g. an assertion error, a DB error during setup) will exit the function before the cleanup line is reached. `app.dependency_overrides` remains populated for all subsequent tests in the session, injecting a stale DB session into every endpoint that calls `get_db`. This is the same class of issue resolved for the `client` fixture in F-012 / T-049, now reproduced in a single test.
+
+Additionally, the inline `TestClient` does not enter a context manager, so FastAPI lifespan events are not exercised — consistent with the pattern noted in F-019, but still a latent risk when lifespan handlers are added.
+
+**Suggested fix:** Remove the inline `dependency_overrides` manipulation and `TestClient` construction. Use the `client` fixture (and the shared `db_session` fixture for any direct DB assertions), which already handles teardown via `yield` + `app.dependency_overrides.clear()`:
+
+```python
+def test_player_not_in_hand_returns_404(client, db_session):
+    # ... setup using db_session ...
+    response = client.patch(f"/games/{game_id}/hands/{hand_number}/players/{player_id}/hole-cards", json={...})
+    assert response.status_code == 404
+```
+
+**Acceptance Criteria:**
+1. `test_player_not_in_hand_returns_404` uses the `client` fixture and does not set `app.dependency_overrides` directly
+2. No inline `TestClient` is constructed inside the test body
+3. The test continues to assert a 404 response and passes
+4. If the test raises mid-execution, `app.dependency_overrides` is left clean for subsequent tests
+
+---
+
+### F-074 — Unhandled IntegrityError on concurrent add_player_to_hand calls (aia-core-3r6 / T-030)
+
+**Source Task:** aia-core-3r6 (T-030: Implement Add/Remove Player from Hand endpoints)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/routes/hands.py — `add_player_to_hand`
+
+`add_player_to_hand` performs an explicit duplicate check (`db.query(PlayerHand).filter(...).first()`) before inserting a new `PlayerHand` row. Two concurrent `POST` requests for the same `(hand_id, player_id)` pair can both pass this guard before either completes its commit. Both then proceed to `db.add(ph)` / `db.commit()`. The second commit hits the `uq_player_hand` unique constraint and raises an unhandled `sqlalchemy.exc.IntegrityError`, which propagates as HTTP 500 instead of a structured error response. This is the same TOCTOU class as F-020 (T-051 / `create_player`), F-027 (T-056 / `create_game_session`), and F-050 (T-060 / `record_hand`).
+
+**Suggested fix:** Wrap the `db.add(ph)` / `db.commit()` block in a `try/except IntegrityError` and re-raise as HTTP 400:
+```python
+from sqlalchemy.exc import IntegrityError
+
+try:
+    db.add(ph)
+    db.commit()
+except IntegrityError as exc:
+    db.rollback()
+    raise HTTPException(
+        status_code=400,
+        detail="Player is already in this hand.",
+    ) from exc
+```
+
+**Acceptance Criteria:**
+1. When two concurrent `POST` requests for the same `(game_id, hand_number, player_id)` race past the duplicate guard, the second request receives HTTP 400 (not 500)
+2. The HTTP 400 detail message indicates the player is already enrolled in the hand
+3. A unit test using a mocked session simulates the `IntegrityError` on commit and asserts a 400 response
+4. The existing explicit-duplicate-check path (sequential duplicate POST) continues to return 400 as before
+
+---
+
+### F-075 — No integration test for identical hole cards in add_player_to_hand payload (aia-core-3r6 / T-030)
+
+**Source Task:** aia-core-3r6 (T-030: Implement Add/Remove Player from Hand endpoints)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** test/test_add_remove_player_hand_api.py
+
+`add_player_to_hand` passes `card_1` and `card_2` (along with all existing community and hole cards for the hand) through `validate_no_duplicate_cards` before inserting the new `PlayerHand` row. A payload where `card_1 == card_2` (e.g. `{"card_1": "AS", "card_2": "AS"}`) would therefore be rejected with HTTP 400 via the validator. However, no test in `test_add_remove_player_hand_api.py` exercises this specific path. The validator unit tests (`test_card_validator.py`) cover the self-duplicate case at the utility level, but the same-card-twice case is not verified end-to-end through the `POST /games/{game_id}/hands/{hand_number}/players` endpoint. If the call site inadvertently excluded `card_1` or `card_2` from the `all_cards` assembly (e.g. only passing community cards and other players' hole cards but not the new player's own cards), the regression would be invisible to the current test suite.
+
+**Suggested follow-up:** Add a test `test_add_player_with_identical_hole_cards_returns_400` to `test/test_add_remove_player_hand_api.py`:
+1. Create a game, hand (with known community cards), and a player.
+2. `POST` to add the player with `card_1 == card_2` (e.g. `"AS"` / `"AS"`).
+3. Assert HTTP 400.
+4. Assert no `PlayerHand` row was written for that player.
+
+**Acceptance Criteria:**
+1. A `POST` with `card_1 == card_2` returns 400
+2. No `PlayerHand` row is written to the database on rejection
+3. The test is present in `test_add_remove_player_hand_api.py` and passes
+
+---
+
+### F-076 — game.players lazy-loads all game participants per add_player_to_hand call (aia-core-3r6 / T-030)
+
+**Source Task:** aia-core-3r6 (T-030: Implement Add/Remove Player from Hand endpoints)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** src/app/routes/hands.py — `add_player_to_hand`
+
+`add_player_to_hand` accesses `game.players` to verify that the target player is enrolled in the game session before adding them to the hand. `GameSession.players` is a lazy-loaded relationship, so accessing it triggers a full `SELECT` of all `GamePlayer` rows for that `game_id`. For a game session with a large roster (e.g. a tournament with 50+ registered players) this loads all participant records into memory for a membership check that only needs a single row. The issue is consistent with the pattern used in `record_hand` (noted in F-042 / F-038 for game session list/get endpoints) and does not represent a regression introduced by T-030 specifically.
+
+No immediate action required beyond existing tracking. This finding is noted to establish a complete picture of lazy-load patterns in `hands.py` so that a future performance pass (e.g. when T-064 is addressed) considers `add_player_to_hand` alongside `get_hand` and `list_hands`.
+
+**Suggested follow-up:** When the lazy-load pattern in `hands.py` is systematically addressed (e.g. as part of T-064 or a follow-on perf task), replace the `game.players` access with a targeted existence query:
+```python
+membership = (
+    db.query(GamePlayer)
+    .filter(GamePlayer.game_id == game_id, GamePlayer.player_id == player_id)
+    .first()
+)
+if membership is None:
+    raise HTTPException(status_code=400, detail="Player is not enrolled in this game session.")
+```
+This reduces the membership check to a single indexed lookup regardless of roster size.
+
+**Acceptance Criteria:**
+1. No code change is required at this time — this is a documentation-only finding
+2. A follow-up task or note is filed to consider `add_player_to_hand` during any future lazy-load remediation pass in `hands.py`

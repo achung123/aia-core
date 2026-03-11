@@ -318,3 +318,25 @@ class CommunityCardsUpdate(BaseModel):
     flop_3: Card
     turn: Card | None = None
     river: Card | None = None
+
+
+class HoleCardsUpdate(BaseModel):
+    model_config = ConfigDict(use_enum_values=True)
+
+    card_1: Card
+    card_2: Card
+
+
+class PlayerStatsResponse(BaseModel):
+    player_name: str
+    total_hands_played: int
+    hands_won: int
+    hands_lost: int
+    hands_folded: int
+    win_rate: float
+    total_profit_loss: float
+    avg_profit_loss_per_hand: float
+    avg_profit_loss_per_session: float
+    flop_pct: float
+    turn_pct: float
+    river_pct: float
