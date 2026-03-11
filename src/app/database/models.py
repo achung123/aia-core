@@ -1,6 +1,6 @@
 from datetime import date, datetime, timezone
 
-from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Column, Date, DateTime, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -61,3 +61,23 @@ class Hand(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     game_session = relationship('GameSession', back_populates='hands')
+    player_hands = relationship('PlayerHand', back_populates='hand')
+
+
+class PlayerHand(Base):
+    __tablename__ = 'player_hands'
+    __table_args__ = (
+        UniqueConstraint('hand_id', 'player_id', name='uq_player_hand'),
+    )
+
+    player_hand_id = Column(Integer, primary_key=True, autoincrement=True)
+    hand_id = Column(Integer, ForeignKey('hands.hand_id'), nullable=False)
+    player_id = Column(Integer, ForeignKey('players.player_id'), nullable=False)
+    card_1 = Column(String, nullable=False)
+    card_2 = Column(String, nullable=False)
+    result = Column(String, nullable=True)
+    profit_loss = Column(Float, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    hand = relationship('Hand', back_populates='player_hands')
+    player = relationship('Player')
