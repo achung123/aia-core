@@ -9,11 +9,9 @@ from sqlalchemy import create_engine, StaticPool
 from sqlalchemy.orm import sessionmaker
 
 from app.database.database_models import Base as LegacyBase
-from app.database.models import Base as ModelsBase, Hand, ImageUpload, CardDetection
+from app.database.models import Base as ModelsBase, Hand
 from app.database.session import get_db
 from app.main import app
-from app.routes.images import get_card_detector
-from app.services.card_detector import MockCardDetector
 
 DATABASE_URL = 'sqlite:///:memory:'
 engine = create_engine(

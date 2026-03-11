@@ -5,6 +5,7 @@ Revises: 11460bb0db95
 Create Date: 2026-03-11 15:18:50.315740
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -22,7 +23,12 @@ def upgrade() -> None:
     """Upgrade schema."""
     with op.batch_alter_table('hands', schema=None) as batch_op:
         batch_op.add_column(sa.Column('source_upload_id', sa.Integer(), nullable=True))
-        batch_op.create_foreign_key('fk_hands_source_upload_id', 'image_uploads', ['source_upload_id'], ['upload_id'])
+        batch_op.create_foreign_key(
+            'fk_hands_source_upload_id',
+            'image_uploads',
+            ['source_upload_id'],
+            ['upload_id'],
+        )
 
 
 def downgrade() -> None:

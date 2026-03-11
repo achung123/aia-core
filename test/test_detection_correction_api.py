@@ -22,8 +22,6 @@ from app.database.models import (
 )
 from app.database.session import get_db
 from app.main import app
-from app.routes.images import get_card_detector
-from app.services.card_detector import MockCardDetector
 
 DATABASE_URL = 'sqlite:///:memory:'
 engine = create_engine(
@@ -99,9 +97,7 @@ def _seed_detections(upload_id: int):
             )
         # Set upload status to 'detected' so confirm endpoint accepts it
         upload = (
-            db.query(ImageUpload)
-            .filter(ImageUpload.upload_id == upload_id)
-            .first()
+            db.query(ImageUpload).filter(ImageUpload.upload_id == upload_id).first()
         )
         upload.status = 'detected'
         db.commit()
@@ -151,7 +147,7 @@ def _confirm_different_payload():
     """
     return {
         'community_cards': {
-            'flop_1': {'rank': '9', 'suit': 'S'},   # was AS
+            'flop_1': {'rank': '9', 'suit': 'S'},  # was AS
             'flop_2': {'rank': 'K', 'suit': 'H'},
             'flop_3': {'rank': 'Q', 'suit': 'D'},
             'turn': {'rank': 'J', 'suit': 'C'},
@@ -168,6 +164,7 @@ def _confirm_different_payload():
 
 
 # ── Model: DetectionCorrection schema ──────────────────────────────────
+
 
 class TestDetectionCorrectionModel:
     """DetectionCorrection model has the right columns and constraints."""
@@ -217,6 +214,7 @@ class TestDetectionCorrectionModel:
 
 
 # ── Corrections stored on mismatch ─────────────────────────────────────
+
 
 class TestCorrectionsStoredOnMismatch:
     """When confirmed cards differ from detected cards, corrections are stored."""
@@ -312,6 +310,7 @@ class TestCorrectionsStoredOnMismatch:
 
 # ── No corrections when values match ───────────────────────────────────
 
+
 class TestNoCorrectionsOnMatch:
     """When confirmed values match detected values, no corrections are stored."""
 
@@ -333,6 +332,7 @@ class TestNoCorrectionsOnMatch:
 
 
 # ── GET /images/corrections endpoint ───────────────────────────────────
+
 
 class TestGetCorrections:
     """GET /images/corrections returns full correction history."""
@@ -417,9 +417,9 @@ class TestGetCorrections:
             db.commit()
         payload2 = {
             'community_cards': {
-                'flop_1': {'rank': '4', 'suit': 'C'},   # was 5C -> correction
-                'flop_2': {'rank': '6', 'suit': 'D'},   # matches
-                'flop_3': {'rank': '8', 'suit': 'S'},   # matches
+                'flop_1': {'rank': '4', 'suit': 'C'},  # was 5C -> correction
+                'flop_2': {'rank': '6', 'suit': 'D'},  # matches
+                'flop_3': {'rank': '8', 'suit': 'S'},  # matches
             },
             'player_hands': [
                 {
@@ -441,6 +441,7 @@ class TestGetCorrections:
 
 
 # ── Full pipeline test ──────────────────────────────────────────────────
+
 
 class TestFullPipeline:
     """Full pipeline: upload -> detect -> confirm with corrections -> verify."""

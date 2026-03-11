@@ -4427,3 +4427,100 @@ No test exercises the confirm endpoint with exactly one player in `player_hands`
 **File:** src/app/routes/images.py — GET detection endpoint
 
 After a successful confirm, the upload status transitions to `'confirmed'`. The GET detection endpoint does not explicitly check for or document behaviour when `status == 'confirmed'`. The endpoint works correctly (returns the existing detections), but the intent is unclear — it is not documented whether a confirmed upload should still serve detection results or return a different response (e.g. a redirect to the created hand).
+
+---
+
+## T-042 (aia-core-j1u) — Detection Correction Code Review Findings (2026-03-11)
+
+*Source task: aia-core-j1u (T-042: Implement Detection Correction feedback storage and tests)*
+*Review Date: 2026-03-11*
+
+---
+
+### M-1 — Missing UniqueConstraint on (upload_id, card_position) in DetectionCorrection table (MEDIUM) (aia-core-j1u / T-042)
+
+**Source Task:** aia-core-j1u (T-042: Implement Detection Correction feedback storage and tests)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/database/models.py — `DetectionCorrection` model
+
+Duplicate corrections are possible if the confirm endpoint is bypassed or called in a way that skips the application-level status guard. Without a `UniqueConstraint('upload_id', 'card_position')` on the `DetectionCorrection` table, the database cannot prevent two correction rows for the same upload and card position.
+
+**Suggested fix:** Add `UniqueConstraint('upload_id', 'card_position', name='uq_correction_upload_position')` to the `DetectionCorrection` model and generate a corresponding Alembic migration.
+
+**Acceptance Criteria:**
+1. The `DetectionCorrection` model includes a unique constraint on `(upload_id, card_position)`
+2. An Alembic migration applies the constraint
+3. Attempting to insert a duplicate `(upload_id, card_position)` pair raises `IntegrityError`
+
+---
+
+### M-2 — Unidirectional relationship — ImageUpload lacks corrections back-reference (MEDIUM) (aia-core-j1u / T-042)
+
+**Source Task:** aia-core-j1u (T-042: Implement Detection Correction feedback storage and tests)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/database/models.py — `ImageUpload` / `DetectionCorrection` models
+
+`DetectionCorrection.image_upload` relationship exists but `ImageUpload` has no reciprocal `corrections` relationship. This makes it impossible to eagerly load corrections from the upload side without an explicit join, complicating queries and future endpoint work.
+
+**Suggested fix:** Add `corrections = relationship("DetectionCorrection", back_populates="image_upload")` to `ImageUpload` and wire `back_populates` on both sides.
+
+**Acceptance Criteria:**
+1. `ImageUpload` has a `corrections` relationship pointing to `DetectionCorrection`
+2. `back_populates` is set on both `ImageUpload.corrections` and `DetectionCorrection.image_upload`
+3. Accessing `upload.corrections` returns the associated correction rows
+
+---
+
+### M-3 — GET /images/corrections returns all corrections globally with no pagination or filtering (MEDIUM) (aia-core-j1u / T-042)
+
+**Source Task:** aia-core-j1u (T-042: Implement Detection Correction feedback storage and tests)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/routes/images.py — `GET /images/corrections` endpoint
+
+The endpoint returns every `DetectionCorrection` row in the database with no pagination, filtering, or limit. As the correction table grows this will degrade response times and memory usage.
+
+**Suggested fix:** Add `skip`/`limit` query parameters (consistent with other paginated endpoints) and optional `upload_id` filter.
+
+**Acceptance Criteria:**
+1. `GET /images/corrections` accepts `skip` and `limit` query parameters
+2. `GET /images/corrections?upload_id=<id>` filters results to a single upload
+3. Default response is paginated (e.g. limit=100)
+4. Tests cover paginated and filtered queries
+
+---
+
+### L-1 — Hole card position naming convention couples confirm endpoint to detection naming (LOW) (aia-core-j1u / T-042)
+
+**Source Task:** aia-core-j1u (T-042: Implement Detection Correction feedback storage and tests)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** src/app/routes/images.py — confirm endpoint
+
+The `card_position` values (e.g. `hole_1`, `hole_2`, `hole_3`, `hole_4`) are an implicit contract between the detection pipeline and the confirm/correction endpoints. This naming convention is undocumented and not validated — if the detection pipeline changes position names, the correction storage silently stores mismatched keys.
+
+---
+
+### L-2 — Test file uses module-level engine/SessionLocal (LOW) (aia-core-j1u / T-042)
+
+**Source Task:** aia-core-j1u (T-042: Implement Detection Correction feedback storage and tests)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** test/test_confirm_detection_api.py
+
+The test file creates a module-level `engine` and `SessionLocal` using SQLite with `StaticPool`. This is consistent with the rest of the test suite but depends on `StaticPool` behaviour to share a single in-memory database across the test session. Not a bug, but worth noting the coupling.
+
+---
+
+### L-3 — No test for multi-player correction scenario with hole_3/hole_4 positions (LOW) (aia-core-j1u / T-042)
+
+**Source Task:** aia-core-j1u (T-042: Implement Detection Correction feedback storage and tests)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** test/test_confirm_detection_api.py
+
+Existing tests cover two-player scenarios with `hole_1`/`hole_2` positions. No test exercises a scenario where a second player's hole cards (`hole_3`/`hole_4`) generate corrections, leaving that code path unverified.
+
+**Suggested follow-up:** Add a test that submits a confirm request with two players where the second player's hole cards differ from detection, and verify corrections are stored for `hole_3` and `hole_4` positions.
