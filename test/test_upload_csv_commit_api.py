@@ -589,3 +589,178 @@ class TestCommitValidationErrors:
             files={'file': ('hands.csv', csv_bytes, 'text/csv')},
         )
         assert response.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# Edge cases: empty CSV, GamePlayer association, error detail structure
+# ---------------------------------------------------------------------------
+
+
+class TestCommitEmptyCSV:
+    """Headers-only CSV should commit successfully with zero counts."""
+
+    def test_empty_csv_returns_201(self, client):
+        csv_bytes = _make_csv([])
+        response = client.post(
+            '/upload/csv/commit',
+            files={'file': ('hands.csv', csv_bytes, 'text/csv')},
+        )
+        assert response.status_code == 201
+
+    def test_empty_csv_zero_counts(self, client):
+        csv_bytes = _make_csv([])
+        data = client.post(
+            '/upload/csv/commit',
+            files={'file': ('hands.csv', csv_bytes, 'text/csv')},
+        ).json()
+        assert data['games_created'] == 0
+        assert data['hands_created'] == 0
+        assert data['players_created'] == 0
+        assert data['players_matched'] == 0
+
+
+class TestCommitGamePlayerAssociation:
+    """Verify GamePlayer association records link players to game sessions."""
+
+    def test_game_player_records_created(self, client):
+        from app.database.models import GamePlayer
+
+        csv_bytes = _make_csv([ADAM_H1, GIL_H1])
+        client.post(
+            '/upload/csv/commit',
+            files={'file': ('hands.csv', csv_bytes, 'text/csv')},
+        )
+        db = SessionLocal()
+        try:
+            gps = db.query(GamePlayer).all()
+            assert len(gps) == 2
+        finally:
+            db.close()
+
+    def test_game_player_not_duplicated_across_hands(self, client):
+        from app.database.models import GamePlayer
+
+        # Adam appears in hand 1 and hand 2 — only 1 GamePlayer for Adam in this session
+        csv_bytes = _make_csv([ADAM_H1, GIL_H1, ADAM_H2, GIL_H2])
+        client.post(
+            '/upload/csv/commit',
+            files={'file': ('hands.csv', csv_bytes, 'text/csv')},
+        )
+        db = SessionLocal()
+        try:
+            gps = db.query(GamePlayer).all()
+            # 2 players × 1 game session = 2 GamePlayer records
+            assert len(gps) == 2
+        finally:
+            db.close()
+
+
+class TestCommitValidationErrorDetails:
+    """400 responses from commit include structured error details."""
+
+    def test_invalid_card_error_contains_detail_dict(self, client):
+        row = [
+            '03-09-2026',
+            '1',
+            'Adam',
+            'XX',
+            'KH',
+            '2C',
+            '3D',
+            '4S',
+            '5H',
+            '6C',
+            'win',
+            '0',
+        ]
+        csv_bytes = _make_csv([row])
+        response = client.post(
+            '/upload/csv/commit',
+            files={'file': ('hands.csv', csv_bytes, 'text/csv')},
+        )
+        assert response.status_code == 400
+        detail = response.json()['detail']
+        assert detail['valid'] is False
+        assert detail['error_count'] > 0
+        assert isinstance(detail['errors'], list)
+
+    def test_no_hands_created_on_duplicate_card_error(self, client):
+        from app.database.models import Hand
+
+        dup_row_1 = [
+            '03-09-2026',
+            '1',
+            'Adam',
+            'AS',
+            'KH',
+            '2C',
+            '3D',
+            '4S',
+            '5H',
+            '6C',
+            'win',
+            '0',
+        ]
+        dup_row_2 = [
+            '03-09-2026',
+            '1',
+            'Gil',
+            'AS',
+            'QD',
+            '2C',
+            '3D',
+            '4S',
+            '5H',
+            '6C',
+            'loss',
+            '0',
+        ]
+        csv_bytes = _make_csv([dup_row_1, dup_row_2])
+        client.post(
+            '/upload/csv/commit',
+            files={'file': ('hands.csv', csv_bytes, 'text/csv')},
+        )
+        db = SessionLocal()
+        try:
+            assert db.query(Hand).count() == 0
+        finally:
+            db.close()
+
+
+class TestCommitSecondAppend:
+    """Two separate commits create independent data — no cross-commit dedup."""
+
+    def test_second_commit_creates_separate_session(self, client):
+        from app.database.models import GameSession
+
+        csv_bytes_1 = _make_csv([ADAM_H1, GIL_H1])
+        csv_bytes_2 = _make_csv([ADAM_D2, GIL_D2])
+        client.post(
+            '/upload/csv/commit',
+            files={'file': ('hands.csv', csv_bytes_1, 'text/csv')},
+        )
+        client.post(
+            '/upload/csv/commit',
+            files={'file': ('hands.csv', csv_bytes_2, 'text/csv')},
+        )
+        db = SessionLocal()
+        try:
+            sessions = db.query(GameSession).all()
+            assert len(sessions) == 2
+        finally:
+            db.close()
+
+    def test_second_commit_reuses_existing_players(self, client):
+        csv_bytes_1 = _make_csv([ADAM_H1, GIL_H1])
+        csv_bytes_2 = _make_csv([ADAM_D2, GIL_D2])
+        client.post(
+            '/upload/csv/commit',
+            files={'file': ('hands.csv', csv_bytes_1, 'text/csv')},
+        )
+        data = client.post(
+            '/upload/csv/commit',
+            files={'file': ('hands.csv', csv_bytes_2, 'text/csv')},
+        ).json()
+        # Second commit should match both players, create none
+        assert data['players_created'] == 0
+        assert data['players_matched'] == 2

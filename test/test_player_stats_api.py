@@ -335,6 +335,46 @@ class TestPlayerStatsStreetDistribution:
         assert abs(resp.json()['river_pct'] - 33.33) < 0.01
 
 
+class TestPlayerStatsBobComputation:
+    """Verify Bob's full computation accuracy with known data."""
+
+    def test_bob_total_hands_played(self, seeded_client):
+        resp = seeded_client.get('/stats/players/Bob')
+        assert resp.json()['total_hands_played'] == 3
+
+    def test_bob_hands_won(self, seeded_client):
+        resp = seeded_client.get('/stats/players/Bob')
+        assert resp.json()['hands_won'] == 1
+
+    def test_bob_hands_lost(self, seeded_client):
+        resp = seeded_client.get('/stats/players/Bob')
+        assert resp.json()['hands_lost'] == 2
+
+    def test_bob_hands_folded(self, seeded_client):
+        resp = seeded_client.get('/stats/players/Bob')
+        assert resp.json()['hands_folded'] == 0
+
+    def test_bob_avg_profit_loss_per_hand(self, seeded_client):
+        resp = seeded_client.get('/stats/players/Bob')
+        # -70.0 / 3 = -23.33
+        assert abs(resp.json()['avg_profit_loss_per_hand'] - (-23.33)) < 0.01
+
+    def test_bob_avg_profit_loss_per_session(self, seeded_client):
+        resp = seeded_client.get('/stats/players/Bob')
+        # session1: -30+10=-20, session2: -50 → (-20+-50)/2 = -35.0
+        assert abs(resp.json()['avg_profit_loss_per_session'] - (-35.0)) < 0.01
+
+    def test_bob_turn_pct(self, seeded_client):
+        resp = seeded_client.get('/stats/players/Bob')
+        # Bob's hands with turn: hand2(game1) + hand1(game2) = 2/3 = 66.67%
+        assert abs(resp.json()['turn_pct'] - 66.67) < 0.01
+
+    def test_bob_river_pct(self, seeded_client):
+        resp = seeded_client.get('/stats/players/Bob')
+        # Bob's hands with river: hand1(game2) = 1/3 = 33.33%
+        assert abs(resp.json()['river_pct'] - 33.33) < 0.01
+
+
 class TestPlayerStatsResponseFields:
     """Response includes all required fields."""
 

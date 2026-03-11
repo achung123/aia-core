@@ -227,6 +227,47 @@ class TestAddPlayerToHand:
         )
         assert resp.status_code == 400
 
+    def test_add_player_400_self_duplicate_cards(self, client, game_with_hand):
+        """card_1 == card_2 for the new player should return 400."""
+        game_id, hand_number = game_with_hand
+        resp = client.post(
+            f'/games/{game_id}/hands/{hand_number}/players',
+            json={
+                'player_name': 'Bob',
+                'card_1': {'rank': 'Q', 'suit': 'C'},
+                'card_2': {'rank': 'Q', 'suit': 'C'},
+            },
+        )
+        assert resp.status_code == 400
+
+    def test_add_player_case_insensitive(self, client, game_with_hand):
+        """Player name lookup should be case-insensitive."""
+        game_id, hand_number = game_with_hand
+        resp = client.post(
+            f'/games/{game_id}/hands/{hand_number}/players',
+            json={
+                'player_name': 'bob',
+                'card_1': {'rank': 'Q', 'suit': 'C'},
+                'card_2': {'rank': 'J', 'suit': 'D'},
+            },
+        )
+        assert resp.status_code == 201
+        assert resp.json()['player_name'] == 'Bob'
+
+    def test_add_player_error_response_has_detail(self, client, game_with_hand):
+        """Duplicate card error includes a detail message."""
+        game_id, hand_number = game_with_hand
+        resp = client.post(
+            f'/games/{game_id}/hands/{hand_number}/players',
+            json={
+                'player_name': 'Bob',
+                'card_1': {'rank': 'A', 'suit': 'S'},
+                'card_2': {'rank': '10', 'suit': 'H'},
+            },
+        )
+        assert resp.status_code == 400
+        assert 'detail' in resp.json()
+
 
 # ---------------------------------------------------------------------------
 # DELETE — Remove player from hand
@@ -272,3 +313,32 @@ class TestRemovePlayerFromHand:
         game_id, hand_number = game_with_hand
         resp = client.delete(f'/games/{game_id}/hands/{hand_number}/players/alice')
         assert resp.status_code == 204
+
+    def test_remove_then_readd_player(self, client, game_with_hand):
+        """After removing a player, they can be re-added with new cards."""
+        game_id, hand_number = game_with_hand
+        client.delete(f'/games/{game_id}/hands/{hand_number}/players/Alice')
+        resp = client.post(
+            f'/games/{game_id}/hands/{hand_number}/players',
+            json={
+                'player_name': 'Alice',
+                'card_1': {'rank': 'Q', 'suit': 'C'},
+                'card_2': {'rank': 'J', 'suit': 'D'},
+            },
+        )
+        assert resp.status_code == 201
+        assert resp.json()['card_1'] == 'QC'
+
+    def test_remove_player_frees_cards_for_others(self, client, game_with_hand):
+        """After removing Alice (who had 7S, 8S), Bob can use those cards."""
+        game_id, hand_number = game_with_hand
+        client.delete(f'/games/{game_id}/hands/{hand_number}/players/Alice')
+        resp = client.post(
+            f'/games/{game_id}/hands/{hand_number}/players',
+            json={
+                'player_name': 'Bob',
+                'card_1': {'rank': '7', 'suit': 'S'},
+                'card_2': {'rank': '8', 'suit': 'S'},
+            },
+        )
+        assert resp.status_code == 201

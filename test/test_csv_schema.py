@@ -7,7 +7,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
-from pydantic_models.csv_schema import CSV_COLUMNS, CSV_COLUMN_FORMATS, parse_csv
+from pydantic_models.csv_schema import (
+    CSV_COLUMNS,
+    CSV_COLUMN_FORMATS,
+    is_valid_card,
+    parse_csv,
+    validate_csv_rows,
+)
 
 
 client = TestClient(app)
@@ -261,6 +267,116 @@ class TestCSVParser:
         entry = result[('03-09-2026', '1')][0]
         assert entry['turn'] == ''
         assert entry['river'] == ''
+
+
+# === is_valid_card() unit tests ===
+
+
+class TestIsValidCard:
+    def test_valid_standard_cards(self):
+        assert is_valid_card('AS') is True
+        assert is_valid_card('KH') is True
+        assert is_valid_card('2D') is True
+        assert is_valid_card('QC') is True
+
+    def test_valid_ten_rank_card(self):
+        assert is_valid_card('10H') is True
+        assert is_valid_card('10S') is True
+        assert is_valid_card('10D') is True
+        assert is_valid_card('10C') is True
+
+    def test_invalid_card_bad_rank(self):
+        assert is_valid_card('XX') is False
+        assert is_valid_card('1S') is False
+
+    def test_invalid_card_bad_suit(self):
+        assert is_valid_card('AX') is False
+        assert is_valid_card('KZ') is False
+
+    def test_invalid_card_empty_string(self):
+        assert is_valid_card('') is False
+
+    def test_invalid_card_single_char(self):
+        assert is_valid_card('A') is False
+
+
+# === validate_csv_rows() unit tests ===
+
+
+class TestValidateCSVRows:
+    def _valid_grouped(self):
+        return {
+            ('03-09-2026', '1'): [
+                {
+                    'game_date': '03-09-2026',
+                    'hand_number': '1',
+                    'player_name': 'Adam',
+                    'hole_card_1': 'AS',
+                    'hole_card_2': 'KH',
+                    'flop_1': '2C',
+                    'flop_2': '3D',
+                    'flop_3': '4S',
+                    'turn': '5H',
+                    'river': '6C',
+                    'result': 'win',
+                    'profit_loss': '50.0',
+                },
+            ]
+        }
+
+    def test_valid_rows_no_errors(self):
+        errors = validate_csv_rows(self._valid_grouped())
+        assert errors == []
+
+    def test_invalid_card_produces_error(self):
+        grouped = self._valid_grouped()
+        grouped[('03-09-2026', '1')][0]['hole_card_1'] = 'XX'
+        errors = validate_csv_rows(grouped)
+        assert len(errors) >= 1
+        assert errors[0]['field'] == 'hole_card_1'
+
+    def test_optional_empty_turn_river_no_errors(self):
+        grouped = self._valid_grouped()
+        grouped[('03-09-2026', '1')][0]['turn'] = ''
+        grouped[('03-09-2026', '1')][0]['river'] = ''
+        errors = validate_csv_rows(grouped)
+        assert errors == []
+
+    def test_invalid_optional_turn_produces_error(self):
+        grouped = self._valid_grouped()
+        grouped[('03-09-2026', '1')][0]['turn'] = 'ZZ'
+        errors = validate_csv_rows(grouped)
+        assert len(errors) >= 1
+        fields = [e['field'] for e in errors]
+        assert 'turn' in fields
+
+    def test_duplicate_cards_detected(self):
+        grouped = {
+            ('03-09-2026', '1'): [
+                {
+                    'game_date': '03-09-2026',
+                    'hand_number': '1',
+                    'player_name': 'Adam',
+                    'hole_card_1': 'AS',
+                    'hole_card_2': 'AS',
+                    'flop_1': '2C',
+                    'flop_2': '3D',
+                    'flop_3': '4S',
+                    'turn': '5H',
+                    'river': '6C',
+                    'result': 'win',
+                    'profit_loss': '50.0',
+                },
+            ]
+        }
+        errors = validate_csv_rows(grouped)
+        assert len(errors) >= 1
+        dup_errors = [e for e in errors if 'Duplicate' in e.get('message', '')]
+        assert len(dup_errors) >= 1
+
+    def test_empty_grouped_no_errors(self):
+        errors = validate_csv_rows({})
+        assert errors == []
 
 
 # === GET /upload/csv/schema endpoint ===

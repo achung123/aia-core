@@ -260,6 +260,48 @@ class TestEditCommunityCardsDuplicateRejection:
         )
         assert resp.status_code == 400
 
+    def test_river_duplicate_of_hole_card_rejected(self, client, game_with_hand):
+        game_id, hand_number = game_with_hand
+        # Alice has 7S and 8S
+        resp = client.patch(
+            f'/games/{game_id}/hands/{hand_number}',
+            json={
+                'flop_1': {'rank': 'Q', 'suit': 'C'},
+                'flop_2': {'rank': 'J', 'suit': 'D'},
+                'flop_3': {'rank': '3', 'suit': 'H'},
+                'turn': {'rank': '4', 'suit': 'C'},
+                'river': {'rank': '7', 'suit': 'S'},  # duplicates Alice's card_1
+            },
+        )
+        assert resp.status_code == 400
+
+    def test_turn_duplicate_of_river_rejected(self, client, game_with_hand):
+        game_id, hand_number = game_with_hand
+        resp = client.patch(
+            f'/games/{game_id}/hands/{hand_number}',
+            json={
+                'flop_1': {'rank': 'Q', 'suit': 'C'},
+                'flop_2': {'rank': 'J', 'suit': 'D'},
+                'flop_3': {'rank': '3', 'suit': 'H'},
+                'turn': {'rank': '4', 'suit': 'C'},
+                'river': {'rank': '4', 'suit': 'C'},  # same as turn
+            },
+        )
+        assert resp.status_code == 400
+
+    def test_error_response_has_detail(self, client, game_with_hand):
+        game_id, hand_number = game_with_hand
+        resp = client.patch(
+            f'/games/{game_id}/hands/{hand_number}',
+            json={
+                'flop_1': {'rank': 'Q', 'suit': 'C'},
+                'flop_2': {'rank': 'Q', 'suit': 'C'},
+                'flop_3': {'rank': '3', 'suit': 'H'},
+            },
+        )
+        assert resp.status_code == 400
+        assert 'detail' in resp.json()
+
     def test_valid_update_with_no_duplicates_succeeds(self, client, game_with_hand):
         game_id, hand_number = game_with_hand
         resp = client.patch(
@@ -273,6 +315,30 @@ class TestEditCommunityCardsDuplicateRejection:
             },
         )
         assert resp.status_code == 200
+
+
+class TestEditCommunityCardsPersistence:
+    """Verify edits survive a subsequent GET."""
+
+    def test_get_after_patch_returns_updated_cards(self, client, game_with_hand):
+        game_id, hand_number = game_with_hand
+        client.patch(
+            f'/games/{game_id}/hands/{hand_number}',
+            json={
+                'flop_1': {'rank': 'Q', 'suit': 'C'},
+                'flop_2': {'rank': 'J', 'suit': 'D'},
+                'flop_3': {'rank': '3', 'suit': 'H'},
+                'turn': {'rank': '4', 'suit': 'C'},
+            },
+        )
+        get_resp = client.get(f'/games/{game_id}/hands/{hand_number}')
+        assert get_resp.status_code == 200
+        data = get_resp.json()
+        assert data['flop_1'] == 'QC'
+        assert data['flop_2'] == 'JD'
+        assert data['flop_3'] == '3H'
+        assert data['turn'] == '4C'
+        assert data['river'] is None
 
 
 class TestEditCommunityCardsNotFound:

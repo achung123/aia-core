@@ -131,29 +131,21 @@ class TestHandWithTurnNoRiver:
     def test_create_hand_with_turn_no_river_returns_201(
         self, client, game_with_players
     ):
-        resp = client.post(
-            f'/games/{game_with_players}/hands', json=TURN_ONLY_PAYLOAD
-        )
+        resp = client.post(f'/games/{game_with_players}/hands', json=TURN_ONLY_PAYLOAD)
         assert resp.status_code == 201
 
     def test_create_hand_with_turn_no_river_stores_turn(
         self, client, game_with_players
     ):
-        resp = client.post(
-            f'/games/{game_with_players}/hands', json=TURN_ONLY_PAYLOAD
-        )
+        resp = client.post(f'/games/{game_with_players}/hands', json=TURN_ONLY_PAYLOAD)
         data = resp.json()
         assert data['turn'] == 'QC'
         assert data['river'] is None
 
     def test_get_hand_with_turn_no_river(self, client, game_with_players):
-        resp = client.post(
-            f'/games/{game_with_players}/hands', json=TURN_ONLY_PAYLOAD
-        )
+        resp = client.post(f'/games/{game_with_players}/hands', json=TURN_ONLY_PAYLOAD)
         hand_number = resp.json()['hand_number']
-        get_resp = client.get(
-            f'/games/{game_with_players}/hands/{hand_number}'
-        )
+        get_resp = client.get(f'/games/{game_with_players}/hands/{hand_number}')
         assert get_resp.status_code == 200
         data = get_resp.json()
         assert data['turn'] == 'QC'
@@ -233,9 +225,7 @@ class TestDuplicateCardsTurnRiver:
 class TestCaseInsensitivePlayerLookup:
     """Player name lookups are case-insensitive across endpoints."""
 
-    def test_record_hand_case_insensitive_player_name(
-        self, client, game_with_players
-    ):
+    def test_record_hand_case_insensitive_player_name(self, client, game_with_players):
         payload = {
             'flop_1': {'rank': 'A', 'suit': 'S'},
             'flop_2': {'rank': 'K', 'suit': 'H'},
@@ -395,9 +385,7 @@ class TestRecordHandResultEdgeCases:
         assert body['flop_3'] == '2D'
         assert body['turn'] == 'QC'
         assert body['river'] == 'JD'
-        alice = next(
-            ph for ph in body['player_hands'] if ph['player_name'] == 'Alice'
-        )
+        alice = next(ph for ph in body['player_hands'] if ph['player_name'] == 'Alice')
         assert alice['card_1'] == '7S'
         assert alice['card_2'] == '8S'
 
@@ -438,17 +426,13 @@ class TestHandManagementIntegration:
         resp = client.get(f'/games/{game_with_players}/hands')
         assert resp.status_code == 200
         hand = resp.json()[0]
-        alice = next(
-            ph for ph in hand['player_hands'] if ph['player_name'] == 'Alice'
-        )
+        alice = next(ph for ph in hand['player_hands'] if ph['player_name'] == 'Alice')
         assert alice['result'] == 'win'
         assert alice['profit_loss'] == 75.0
 
     def test_multiple_hands_independent_numbering(self, client, game_with_players):
         """Hands numbering increments; each hand is independent."""
-        resp1 = client.post(
-            f'/games/{game_with_players}/hands', json=FLOP_ONLY_PAYLOAD
-        )
+        resp1 = client.post(f'/games/{game_with_players}/hands', json=FLOP_ONLY_PAYLOAD)
         # Second hand with different cards
         payload2 = {
             'flop_1': {'rank': '3', 'suit': 'C'},
@@ -494,9 +478,7 @@ class TestHandManagementIntegration:
         hand_number = create_resp.json()['hand_number']
 
         # Get
-        get_resp = client.get(
-            f'/games/{game_with_players}/hands/{hand_number}'
-        )
+        get_resp = client.get(f'/games/{game_with_players}/hands/{hand_number}')
         assert get_resp.status_code == 200
         assert get_resp.json()['hand_number'] == hand_number
 
@@ -523,7 +505,5 @@ class TestHandManagementIntegration:
         """The same cards can appear in different hands (validation is per-hand)."""
         client.post(f'/games/{game_with_players}/hands', json=FLOP_ONLY_PAYLOAD)
         # Same cards in a second hand is OK — duplicate validation is within a hand
-        resp = client.post(
-            f'/games/{game_with_players}/hands', json=FLOP_ONLY_PAYLOAD
-        )
+        resp = client.post(f'/games/{game_with_players}/hands', json=FLOP_ONLY_PAYLOAD)
         assert resp.status_code == 201

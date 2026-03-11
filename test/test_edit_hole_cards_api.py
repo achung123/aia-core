@@ -208,6 +208,18 @@ class TestEditHoleCardsDuplicateRejection:
         )
         assert resp.status_code == 400
 
+    def test_error_response_has_detail(self, client, game_with_hand):
+        game_id, hand_number = game_with_hand
+        resp = client.patch(
+            f'/games/{game_id}/hands/{hand_number}/players/Alice',
+            json={
+                'card_1': {'rank': 'Q', 'suit': 'C'},
+                'card_2': {'rank': 'Q', 'suit': 'C'},
+            },
+        )
+        assert resp.status_code == 400
+        assert 'detail' in resp.json()
+
     def test_valid_update_with_no_duplicates_succeeds(self, client, game_with_hand):
         game_id, hand_number = game_with_hand
         resp = client.patch(
@@ -218,6 +230,27 @@ class TestEditHoleCardsDuplicateRejection:
             },
         )
         assert resp.status_code == 200
+
+
+class TestEditHoleCardsPersistence:
+    """Verify edits survive a subsequent GET."""
+
+    def test_get_after_patch_returns_updated_cards(self, client, game_with_hand):
+        game_id, hand_number = game_with_hand
+        client.patch(
+            f'/games/{game_id}/hands/{hand_number}/players/Alice',
+            json={
+                'card_1': {'rank': 'Q', 'suit': 'C'},
+                'card_2': {'rank': 'J', 'suit': 'D'},
+            },
+        )
+        get_resp = client.get(f'/games/{game_id}/hands/{hand_number}')
+        assert get_resp.status_code == 200
+        alice = next(
+            ph for ph in get_resp.json()['player_hands'] if ph['player_name'] == 'Alice'
+        )
+        assert alice['card_1'] == 'QC'
+        assert alice['card_2'] == 'JD'
 
 
 class TestEditHoleCardsNotFound:

@@ -359,6 +359,52 @@ class TestLeaderboardExplicitDefaultMetric:
         assert resp1.json() == resp2.json()
 
 
+class TestLeaderboardComputationAccuracy:
+    """Verify exact computed values across all metrics with known data."""
+
+    def test_win_rate_sort_exact_values(self, seeded_client):
+        """Verify exact win_rate values: Charlie=100.0, Alice=66.67, Bob=33.33."""
+        resp = seeded_client.get('/stats/leaderboard?metric=win_rate')
+        entries = resp.json()
+        charlie = entries[0]
+        alice = entries[1]
+        bob = entries[2]
+        assert charlie['win_rate'] == 100.0
+        assert abs(alice['win_rate'] - 66.67) < 0.01
+        assert abs(bob['win_rate'] - 33.33) < 0.01
+
+    def test_win_rate_sort_ranks_reassigned(self, seeded_client):
+        """Ranks reflect the win_rate ordering, not the default sort."""
+        resp = seeded_client.get('/stats/leaderboard?metric=win_rate')
+        entries = resp.json()
+        ranks = {e['player_name']: e['rank'] for e in entries}
+        assert ranks['Charlie'] == 1
+        assert ranks['Alice'] == 2
+        assert ranks['Bob'] == 3
+
+    def test_hands_played_sort_exact_values(self, seeded_client):
+        """Alice=3, Bob=3, Charlie=1 — verify exact hands_played values."""
+        resp = seeded_client.get('/stats/leaderboard?metric=hands_played')
+        entries = resp.json()
+        values = {e['player_name']: e['hands_played'] for e in entries}
+        assert values['Alice'] == 3
+        assert values['Bob'] == 3
+        assert values['Charlie'] == 1
+
+    def test_hands_played_sort_charlie_last(self, seeded_client):
+        resp = seeded_client.get('/stats/leaderboard?metric=hands_played')
+        assert resp.json()[-1]['player_name'] == 'Charlie'
+        assert resp.json()[-1]['rank'] == 3
+
+    def test_profit_loss_sort_exact_values(self, seeded_client):
+        """Charlie=100.0, Alice=80.0, Bob=-70.0 — verify exact P/L."""
+        resp = seeded_client.get('/stats/leaderboard')
+        values = {e['player_name']: e['total_profit_loss'] for e in resp.json()}
+        assert values['Charlie'] == 100.0
+        assert values['Alice'] == 80.0
+        assert values['Bob'] == -70.0
+
+
 class TestLeaderboardExcludesPlayersWithNoResults:
     """Players with no recorded results are excluded from leaderboard."""
 

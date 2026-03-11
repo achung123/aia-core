@@ -427,3 +427,103 @@ class TestResponseStructure:
         )
         assert response.status_code == 200
         assert 'error_count' in response.json()
+
+
+class TestEmptyCSV:
+    def test_headers_only_no_data_rows_returns_200(self, client):
+        csv_bytes = _make_csv([])
+        response = client.post(
+            '/upload/csv',
+            files={'file': ('hands.csv', csv_bytes, 'text/csv')},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data['valid'] is True
+        assert data['total_rows'] == 0
+        assert data['error_count'] == 0
+
+
+class TestTenRankCards:
+    def test_valid_10_rank_cards_accepted(self, client):
+        row = [
+            '03-09-2026',
+            '1',
+            'Adam',
+            '10H',
+            '10S',
+            '2C',
+            '3D',
+            '4S',
+            '5H',
+            '6C',
+            'win',
+            '50.0',
+        ]
+        csv_bytes = _make_csv([row])
+        response = client.post(
+            '/upload/csv',
+            files={'file': ('hands.csv', csv_bytes, 'text/csv')},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        # 10H and 10S are duplicate-free, both valid
+        assert data['valid'] is True
+
+
+class TestHeaderEdgeCases:
+    def test_extra_columns_returns_400(self, client):
+        bad_headers = CSV_COLUMNS + ['extra_col']
+        csv_bytes = _make_csv([VALID_ROW_ADAM + ['extra']], headers=bad_headers)
+        response = client.post(
+            '/upload/csv',
+            files={'file': ('hands.csv', csv_bytes, 'text/csv')},
+        )
+        assert response.status_code == 400
+
+    def test_missing_columns_returns_400(self, client):
+        short_headers = CSV_COLUMNS[:5]
+        csv_bytes = _make_csv([VALID_ROW_ADAM[:5]], headers=short_headers)
+        response = client.post(
+            '/upload/csv',
+            files={'file': ('hands.csv', csv_bytes, 'text/csv')},
+        )
+        assert response.status_code == 400
+
+    def test_totally_empty_file_returns_valid_empty(self, client):
+        response = client.post(
+            '/upload/csv',
+            files={'file': ('hands.csv', b'', 'text/csv')},
+        )
+        # Empty file has no headers — parser returns empty dict, treated as 0 rows
+        assert response.status_code == 200
+        data = response.json()
+        assert data['valid'] is True
+        assert data['total_rows'] == 0
+
+
+class TestInvalidOptionalCards:
+    def test_invalid_river_with_empty_turn_reported(self, client):
+        row = [
+            '03-09-2026',
+            '1',
+            'Adam',
+            'AS',
+            'KH',
+            '2C',
+            '3D',
+            '4S',
+            '',
+            'ZZ',
+            'win',
+            '0',
+        ]
+        csv_bytes = _make_csv([row])
+        response = client.post(
+            '/upload/csv',
+            files={'file': ('hands.csv', csv_bytes, 'text/csv')},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data['valid'] is False
+        fields = [e['field'] for e in data['errors']]
+        assert 'river' in fields
