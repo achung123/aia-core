@@ -217,6 +217,16 @@ class GameSessionCreate(BaseModel):
     player_names: list[str] = Field(..., min_length=1)
 
 
+class GameSessionListItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    game_id: int
+    game_date: date
+    status: str
+    player_count: int
+    hand_count: int
+
+
 class GameSessionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

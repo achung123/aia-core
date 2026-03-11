@@ -1640,3 +1640,125 @@ The case-variant deduplication test (added per T-058 AC-2) asserts only that the
 assert set(data['player_names']) == {'Adam', 'Gil'}
 ```
 This confirms that the first-seen casing (`'Adam'`) is preserved and that no additional players are introduced.
+
+---
+
+### F-037 — Undefended `None` after re-query in `IntegrityError` except branch (T-057)
+
+**Source Task:** aia-core-dce (T-057: Fix: Wrap player auto-creation in try/except IntegrityError with re-query fallback)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/routes/games.py — `IntegrityError` except branch
+
+After catching `IntegrityError` and rolling back, the except branch re-queries the player by `func.lower(Player.name) == func.lower(name)` and assigns the result directly to `player`. If the re-query returns `None` — because the player was deleted between the failed insert and the re-query, or because the `IntegrityError` was triggered by a constraint other than the `Player.name` unique index — execution continues with `player = None`. The subsequent `db.add(GamePlayer(game_id=game.game_id, player_id=player.player_id))` then raises `AttributeError: 'NoneType' object has no attribute 'player_id'`, returning an unhandled HTTP 500.
+
+**Suggested fix:**
+In `src/app/routes/games.py`, add a guard immediately after the re-query inside the `except IntegrityError` block:
+```python
+except IntegrityError:
+    db.rollback()
+    player = (
+        db.query(Player)
+        .filter(func.lower(Player.name) == func.lower(name))
+        .first()
+    )
+    if player is None:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Player '{name}' could not be created or retrieved.",
+        )
+```
+Alternatively, assert: `assert player is not None, f"Re-query for player '{name}' returned None after IntegrityError"` — but the `HTTPException` form is preferable in a request handler since it produces a structured response rather than an unhandled `AssertionError`.
+
+**Acceptance Criteria:**
+1. When the re-query after `IntegrityError` returns `None`, the handler raises `HTTPException(500)` with a descriptive message rather than propagating `AttributeError`
+2. A unit test covering this branch mocks the re-query to return `None` and asserts a 500 response (not an unhandled exception)
+3. The normal TOCTOU path (re-query returns the existing player) continues to return 201
+
+---
+
+### F-038 — N+1 query pattern on `game.players` and `game.hands` in `get_game_session`
+
+**Source Task:** aia-core-5a4 (T-014: Implement Get Game Session endpoint)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/routes/games.py — `get_game_session`
+
+`game.players` and `game.hands` are lazy-loaded relationships. When `get_game_session` accesses both to build the response, SQLAlchemy issues two additional `SELECT` statements after the initial `GET` query for the `GameSession` — one for players, one for hands. This is a textbook N+1 pattern: a single endpoint call that semantically fetches one record generates three round-trips. The problem compounds if this endpoint is called in a list context or if additional relationships are added later.
+
+**Suggested fix:** Use `joinedload` or `selectinload` at query time to eagerly load both relationships in the initial `SELECT`:
+```python
+from sqlalchemy.orm import selectinload
+
+game = (
+    db.query(GameSession)
+    .options(selectinload(GameSession.players), selectinload(GameSession.hands))
+    .filter(GameSession.game_id == game_id)
+    .first()
+)
+```
+`selectinload` is preferred over `joinedload` here because it avoids row multiplication when both `players` and `hands` are loaded simultaneously.
+
+---
+
+### F-039 — `GameSessionResponse` construction duplicated across `create_game_session` and `get_game_session`
+
+**Source Task:** aia-core-5a4 (T-014: Implement Get Game Session endpoint)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/routes/games.py — `create_game_session` and `get_game_session` response blocks
+
+The block that builds a `GameSessionResponse` from a `GameSession` ORM object — extracting `game_id`, `game_date`, `status`, computing `player_names`, and computing `hand_count` — is duplicated verbatim in both `create_game_session` and `get_game_session`. Any future change to the response shape (e.g. adding a new field, changing the serialisation of `game_date`) must be applied in two places or the endpoints will diverge silently.
+
+**Suggested fix:** Extract a private helper function (or configure Pydantic ORM mode) to centralise the mapping:
+```python
+def _build_game_response(game: GameSession) -> GameSessionResponse:
+    return GameSessionResponse(
+        game_id=game.game_id,
+        game_date=game.game_date,
+        status=game.status,
+        player_names=[p.name for p in game.players],
+        hand_count=len(game.hands),
+    )
+```
+Both handlers then call `return _build_game_response(game)`. Alternatively, enable Pydantic's `model_config = ConfigDict(from_attributes=True)` on `GameSessionResponse` and call `GameSessionResponse.model_validate(game)` directly, provided the field names align.
+
+---
+
+### F-040 — `hand_count` test covers zero only — no assertion after hands are recorded
+
+**Source Task:** aia-core-5a4 (T-014: Implement Get Game Session endpoint)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** test/test_get_game_session_api.py
+
+The test that asserts `hand_count` in the `GET /games/{game_id}` response only verifies the zero case (a freshly created session with no hands). No test records one or more hands and then re-fetches the session to assert `hand_count` increments. A regression that hard-coded `hand_count: 0`, or miscounted by off-by-one, would not be caught.
+
+**Suggested follow-up:** Add a test that:
+1. Creates a game session
+2. POSTs one (or more) hands to that session
+3. GETs the session and asserts `hand_count == 1` (or the expected value)
+
+---
+
+### F-041 — `player_names` ordering in `GET /games/{game_id}` response is nondeterministic and undocumented
+
+**Source Task:** aia-core-5a4 (T-014: Implement Get Game Session endpoint)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** src/app/routes/games.py — `get_game_session` response construction; specs/aia-core-001/spec.md — S-2.2
+
+`player_names` is built as `[p.name for p in game.players]`, where `game.players` is loaded via an ORM relationship with no explicit `ORDER BY`. The order of names in the response is therefore determined by whatever the database returns — which may vary across queries, database engines, or SQLAlchemy versions. This means two identical GETs can return different orderings, making client-side equality assertions brittle and the API contract ambiguous.
+
+The spec (S-2.2) does not document ordering semantics for `player_names`, leaving the behaviour undefined by design.
+
+**Suggested follow-up (code):** Add an `order_by` clause to the relationship or query to enforce a stable ordering (e.g. alphabetical by `Player.name`):
+```python
+player_names=[p.name for p in sorted(game.players, key=lambda p: p.name)]
+```
+Or apply `order_by` at the relationship level in the model:
+```python
+players = relationship('Player', secondary='game_players', order_by='Player.name')
+```
+
+**Suggested follow-up (spec):** Update S-2.2 acceptance criteria to document the ordering guarantee (alphabetical, insertion order, or explicitly unordered) so it is testable and contractual.
