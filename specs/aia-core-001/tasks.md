@@ -1035,3 +1035,94 @@ The module docstring says T-001; the file now covers T-006. Documentation drift 
 `test_env_py_has_render_as_batch_online` slices `env_py[online_start:]` to EOF, while the offline test correctly bounds its slice to the next dispatch block. If `render_as_batch=True` were ever present in dead code appended after the function — but absent from the actual `context.configure()` call — the online test would pass despite the fix being missing, producing a false positive.
 
 **Suggested fix:** Bound the online slice to stop at the dispatch block (e.g. the next `def ` or `with context.begin_transaction()` boundary), mirroring the approach used in the offline assertion.
+
+---
+
+### F-011 — check_same_thread: False applied unconditionally (T-010)
+
+**Source Task:** aia-core-8h2 (T-010: Implement database session dependency with new engine)
+**Review Date:** 2026-03-11
+**Severity:** HIGH
+**File:** src/app/database/session.py
+
+`connect_args={"check_same_thread": False}` is passed to `create_engine` regardless of the database URL. This is a SQLite-only DBAPI argument. When `DATABASE_URL` is set to a PostgreSQL URL, `psycopg2` rejects the unknown kwarg with a `TypeError` at engine creation, making the env-var pathway non-functional.
+
+**Suggested fix:** Make `connect_args` conditional on `DATABASE_URL.startswith('sqlite')`.
+
+---
+
+### F-012 — client fixture never clears dependency_overrides (T-010)
+
+**Source Task:** aia-core-8h2 (T-010: Implement database session dependency with new engine)
+**Review Date:** 2026-03-11
+**Severity:** HIGH
+**File:** test/conftest.py
+
+The `client` fixture uses `return` instead of `yield`, so `app.dependency_overrides` is never cleared after the test. The in-memory DB override persists for the entire test session on the shared app singleton, potentially contaminating unrelated tests.
+
+**Suggested fix:** Change to `yield TestClient(app)` and add `app.dependency_overrides.clear()` in teardown.
+
+---
+
+### F-013 — get_db missing rollback on exception (T-010)
+
+**Source Task:** aia-core-8h2 (T-010: Implement database session dependency with new engine)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/database/session.py — `get_db`
+
+`get_db` has no exception handling. `Session.close()` does not rollback, so a partial transaction from an error path can leave the connection dirty.
+
+**Suggested fix:** Add `except Exception: db.rollback(); raise` before the `finally` block.
+
+---
+
+### F-014 — test_engine_uses_database_url_env_or_default assertion too loose (T-010)
+
+**Source Task:** aia-core-8h2 (T-010: Implement database session dependency with new engine)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** test/test_session_dependency.py — `test_engine_uses_database_url_env_or_default`
+
+The assertion `('sqlite' in url or 'postgresql' in url)` passes for any SQLite URL, providing no coverage of the specific required default.
+
+**Suggested fix:** Assert the exact default value `'sqlite:///./poker.db'` rather than a broad substring check.
+
+---
+
+### F-015 — Missing return type annotation on get_db (T-010)
+
+**Source Task:** aia-core-8h2 (T-010: Implement database session dependency with new engine)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** src/app/database/session.py — `get_db`
+
+`get_db` has no return type annotation. The correct annotation is `Generator[Session, None, None]`.
+
+**Suggested fix:** Add `-> Generator[Session, None, None]` to the function signature and import `Generator` from `typing`.
+
+---
+
+### F-016 — Path-relative Path('src/...') in test assertions (T-010)
+
+**Source Task:** aia-core-8h2 (T-010: Implement database session dependency with new engine)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** test/test_session_dependency.py
+
+Assertions using `Path('src/...')` are fragile when pytest is invoked from a directory other than the project root, causing tests to fail with misleading path errors.
+
+**Suggested fix:** Use `Path(__file__).parent.parent / 'src' / ...` to anchor paths relative to the test file.
+
+---
+
+### F-017 — Env-var DATABASE_URL branch has zero test coverage (T-010)
+
+**Source Task:** aia-core-8h2 (T-010: Implement database session dependency with new engine)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** src/app/database/session.py
+
+The `DATABASE_URL` env-var branch is executed at module import time. Once the module is cached in `sys.modules`, setting the env var in a test has no effect, making the branch untestable without explicit test isolation (e.g. `importlib.reload` or `monkeypatch` + module reload).
+
+**Suggested fix:** Wrap engine creation in a factory function or lazy-initializer so the env var is read at call time, enabling proper test isolation.
