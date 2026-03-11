@@ -178,7 +178,9 @@ class TestEditHoleCardsDuplicateRejection:
         )
         assert resp.status_code == 400
 
-    def test_hole_card_duplicate_of_community_card_rejected(self, client, game_with_hand):
+    def test_hole_card_duplicate_of_community_card_rejected(
+        self, client, game_with_hand
+    ):
         """A new hole card that duplicates a community card should return 400."""
         game_id, hand_number = game_with_hand
         # Community cards: AS, KH, 2D

@@ -14,6 +14,7 @@ dependencies = [
     "alembic",
     "pytz",
     "httpx",
+    "python-multipart>=0.0.22",
 ]
 
 [dependency-groups]

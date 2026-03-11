@@ -3,12 +3,18 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session, joinedload
 
-from app.database.models import Player, PlayerHand
+from app.database.models import GameSession, Hand, Player, PlayerHand
 from app.database.session import get_db
-from pydantic_models.app_models import PlayerStatsResponse
+from pydantic_models.app_models import (
+    GameStatsPlayerEntry,
+    GameStatsResponse,
+    LeaderboardEntry,
+    LeaderboardMetric,
+    PlayerStatsResponse,
+)
 
 router = APIRouter(prefix='/stats', tags=['stats'])
 
@@ -84,4 +90,132 @@ def get_player_stats(
         flop_pct=100.0,
         turn_pct=round(hands_with_turn / total * 100, 2),
         river_pct=round(hands_with_river / total * 100, 2),
+    )
+
+
+@router.get('/leaderboard', response_model=list[LeaderboardEntry])
+def get_leaderboard(
+    db: Annotated[Session, Depends(get_db)],
+    metric: LeaderboardMetric = LeaderboardMetric.total_profit_loss,
+):
+    rows = (
+        db.query(
+            Player.name,
+            func.count(PlayerHand.player_hand_id).label('hands_played'),
+            func.coalesce(func.sum(PlayerHand.profit_loss), 0.0).label('total_pl'),
+            func.sum(case((PlayerHand.result == 'win', 1), else_=0)).label('wins'),
+        )
+        .join(PlayerHand, Player.player_id == PlayerHand.player_id)
+        .filter(PlayerHand.result.isnot(None))
+        .group_by(Player.player_id, Player.name)
+        .all()
+    )
+
+    entries = []
+    for row in rows:
+        hands = row.hands_played
+        wins = row.wins or 0
+        win_rate = round(wins / hands * 100, 2) if hands > 0 else 0.0
+        entries.append(
+            LeaderboardEntry(
+                rank=0,
+                player_name=row.name,
+                total_profit_loss=round(float(row.total_pl), 2),
+                win_rate=win_rate,
+                hands_played=hands,
+            )
+        )
+
+    if metric == LeaderboardMetric.win_rate:
+        entries.sort(key=lambda e: e.win_rate, reverse=True)
+    elif metric == LeaderboardMetric.hands_played:
+        entries.sort(key=lambda e: e.hands_played, reverse=True)
+    else:
+        entries.sort(key=lambda e: e.total_profit_loss, reverse=True)
+
+    for i, entry in enumerate(entries, start=1):
+        entry.rank = i
+
+    return entries
+
+
+@router.get('/games/{game_id}', response_model=GameStatsResponse)
+def get_game_stats(
+    game_id: int,
+    db: Annotated[Session, Depends(get_db)],
+):
+    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
+    if game is None:
+        raise HTTPException(status_code=404, detail='Game not found')
+
+    total_hands = (
+        db.query(func.count(Hand.hand_id)).filter(Hand.game_id == game_id).scalar()
+    )
+
+    player_hands = (
+        db.query(PlayerHand)
+        .join(Hand, PlayerHand.hand_id == Hand.hand_id)
+        .join(Player, PlayerHand.player_id == Player.player_id)
+        .filter(Hand.game_id == game_id, PlayerHand.result.isnot(None))
+        .all()
+    )
+
+    # Aggregate per-player
+    stats: dict[int, dict] = {}
+    for ph in player_hands:
+        pid = ph.player_id
+        if pid not in stats:
+            stats[pid] = {
+                'player_name': ph.player.name,
+                'hands_played': 0,
+                'hands_won': 0,
+                'hands_lost': 0,
+                'hands_folded': 0,
+                'profit_loss': 0.0,
+            }
+        s = stats[pid]
+        s['hands_played'] += 1
+        if ph.result == 'win':
+            s['hands_won'] += 1
+        elif ph.result == 'loss':
+            s['hands_lost'] += 1
+        elif ph.result == 'fold':
+            s['hands_folded'] += 1
+        s['profit_loss'] += ph.profit_loss or 0.0
+
+    # Include players registered in the session but with no results
+    for player in game.players:
+        if player.player_id not in stats:
+            stats[player.player_id] = {
+                'player_name': player.name,
+                'hands_played': 0,
+                'hands_won': 0,
+                'hands_lost': 0,
+                'hands_folded': 0,
+                'profit_loss': 0.0,
+            }
+
+    player_stats = []
+    for s in stats.values():
+        total = s['hands_played']
+        win_rate = round(s['hands_won'] / total * 100, 2) if total > 0 else 0.0
+        player_stats.append(
+            GameStatsPlayerEntry(
+                player_name=s['player_name'],
+                hands_played=total,
+                hands_won=s['hands_won'],
+                hands_lost=s['hands_lost'],
+                hands_folded=s['hands_folded'],
+                win_rate=win_rate,
+                profit_loss=round(s['profit_loss'], 2),
+            )
+        )
+
+    player_stats.sort(key=lambda e: e.player_name)
+
+    return GameStatsResponse(
+        game_id=game.game_id,
+        game_date=game.game_date,
+        total_hands=total_hands,
+        player_stats=player_stats,
     )

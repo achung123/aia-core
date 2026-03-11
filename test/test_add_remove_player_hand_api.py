@@ -238,9 +238,7 @@ class TestRemovePlayerFromHand:
 
     def test_remove_player_returns_204(self, client, game_with_hand):
         game_id, hand_number = game_with_hand
-        resp = client.delete(
-            f'/games/{game_id}/hands/{hand_number}/players/Alice'
-        )
+        resp = client.delete(f'/games/{game_id}/hands/{hand_number}/players/Alice')
         assert resp.status_code == 204
 
     def test_remove_player_no_longer_in_hand(self, client, game_with_hand):
@@ -261,22 +259,16 @@ class TestRemovePlayerFromHand:
 
     def test_remove_player_404_player_not_found(self, client, game_with_hand):
         game_id, hand_number = game_with_hand
-        resp = client.delete(
-            f'/games/{game_id}/hands/{hand_number}/players/Charlie'
-        )
+        resp = client.delete(f'/games/{game_id}/hands/{hand_number}/players/Charlie')
         assert resp.status_code == 404
 
     def test_remove_player_404_player_not_in_hand(self, client, game_with_hand):
         """Bob is a game participant but not recorded in this hand."""
         game_id, hand_number = game_with_hand
-        resp = client.delete(
-            f'/games/{game_id}/hands/{hand_number}/players/Bob'
-        )
+        resp = client.delete(f'/games/{game_id}/hands/{hand_number}/players/Bob')
         assert resp.status_code == 404
 
     def test_remove_player_case_insensitive(self, client, game_with_hand):
         game_id, hand_number = game_with_hand
-        resp = client.delete(
-            f'/games/{game_id}/hands/{hand_number}/players/alice'
-        )
+        resp = client.delete(f'/games/{game_id}/hands/{hand_number}/players/alice')
         assert resp.status_code == 204

@@ -2778,3 +2778,283 @@ This reduces the membership check to a single indexed lookup regardless of roste
 **Acceptance Criteria:**
 1. No code change is required at this time — this is a documentation-only finding
 2. A follow-up task or note is filed to consider `add_player_to_hand` during any future lazy-load remediation pass in `hands.py`
+
+---
+
+### F-077 — Non-deterministic tie-breaking in leaderboard sort (aia-core-3lv / T-033)
+
+**Source Task:** aia-core-3lv (T-033: Implement Leaderboard endpoint)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** src/app/routes/stats.py — leaderboard query `ORDER BY` clause
+
+The leaderboard query sorts rows by the selected metric (e.g. `total_profit_loss DESC`) but specifies no secondary sort key. When two or more players share the same metric value, their relative order is determined by whatever the database engine returns — which is unspecified and may vary between queries, query plans, or database versions. This means two identical `GET /stats/leaderboard` requests can return players in different orders for tied positions, making the response non-deterministic and breaking client-side equality assertions in tests.
+
+**Fix:**
+Add `Player.name.asc()` as a secondary sort key to every leaderboard `ORDER BY` clause so that ties are broken alphabetically:
+```python
+.order_by(sort_column.desc(), Player.name.asc())
+```
+This applies regardless of which `metric` query param is active (`total_profit_loss`, `win_rate`, or `hands_played`).
+
+**Acceptance Criteria:**
+1. Two `GET /stats/leaderboard` requests with the same `metric` and tied players always return those players in the same order
+2. Tied players are ordered alphabetically by `player_name` ascending
+3. A test seeds two players with identical metric values and asserts the response lists them in alphabetical order
+4. Existing leaderboard tests continue to pass
+
+---
+
+### F-078 — `wins or 0` guard in leaderboard query is unreachable dead code (aia-core-3lv / T-033)
+
+**Source Task:** aia-core-3lv (T-033: Implement Leaderboard endpoint)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** src/app/routes/stats.py — leaderboard win-rate calculation
+
+The leaderboard route computes `wins` via `func.sum(case(..., else_=0))`. Because `else_=0` is always provided, the aggregate can never return `NULL` — SQLAlchemy's `func.sum` returns `NULL` only when all input rows are `NULL`, and the `case` expression guarantees an integer `0` for every non-matching row. The downstream expression `wins or 0` is therefore unreachable: `wins` is always an integer, never `None` or falsy (unless the player has zero hands, in which case `wins == 0` and `wins or 0` still evaluates to `0`). The guard adds no protection and misleads readers into thinking `wins` can be `None` at that point.
+
+**Fix:**
+Remove the `or 0` guard and use `wins` directly:
+```python
+# Before:
+win_rate = round((wins or 0) / total_hands * 100, 2) if total_hands else 0.0
+
+# After:
+win_rate = round(wins / total_hands * 100, 2) if total_hands else 0.0
+```
+
+**Acceptance Criteria:**
+1. The `or 0` fallback is removed from the `wins` usage in the win-rate calculation
+2. All existing leaderboard tests continue to pass without modification
+3. No functional change to the endpoint's response values
+
+---
+
+### F-079 — Unnecessary Player JOIN gives false impression of eager loading in `get_game_stats` (aia-core-5pi / T-034)
+
+**Source Task:** aia-core-5pi (T-034: Implement Per-Session Stats endpoint)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/routes/stats.py — `get_game_stats` player_hands query
+
+The `player_hands` query in `get_game_stats` includes `.join(Player, PlayerHand.player_id == Player.player_id)`, but the `Player` table is never referenced in any `.filter()` or `.order_by()` clause — it has no effect on the result set. The join exists solely because the loop body then accesses `ph.player.name` to populate the `player_name` key in the per-player stats dict. However, SQLAlchemy does not use a raw SQL `JOIN` in a `.query(PlayerHand)` call to populate `PlayerHand.player` — that relationship is lazy-loaded separately. The JOIN therefore does nothing except make the query wider, while `ph.player.name` still triggers one lazy-load `SELECT` per distinct `player_id` encountered in the loop. The net result is a misleading JOIN that provides no eager-loading benefit and incurs unnecessary SQL overhead.
+
+**Fix:**
+Remove the `.join(Player, ...)` from the query and instead add `.options(joinedload(PlayerHand.player))` to request genuine eager loading. `joinedload` is already imported from `sqlalchemy.orm` in this file:
+```python
+player_hands = (
+    db.query(PlayerHand)
+    .join(Hand, PlayerHand.hand_id == Hand.hand_id)
+    .options(joinedload(PlayerHand.player))
+    .filter(Hand.game_id == game_id, PlayerHand.result.isnot(None))
+    .all()
+)
+```
+With `joinedload(PlayerHand.player)`, SQLAlchemy performs a single SQL `JOIN` that populates `ph.player` for all returned rows, eliminating the per-player lazy-load selects.
+
+**Acceptance Criteria:**
+1. The `.join(Player, PlayerHand.player_id == Player.player_id)` line is removed from the `player_hands` query
+2. `.options(joinedload(PlayerHand.player))` is added to the same query
+3. `ph.player.name` accesses in the loop do not trigger additional SQL queries after the change
+4. Existing `GET /stats/games/{game_id}` tests continue to pass
+
+---
+
+### F-080 — `game.players` triggers lazy load on stats fallback path in `get_game_stats` (aia-core-5pi / T-034)
+
+**Source Task:** aia-core-5pi (T-034: Implement Per-Session Stats endpoint)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/routes/stats.py — `get_game_stats` game query and `game.players` access
+
+`game` is loaded via `db.query(GameSession).filter(GameSession.game_id == game_id).first()` with no `.options()` clause. Later, the fallback loop `for player in game.players:` — which ensures players with zero recorded results appear in the response — accesses `GameSession.players`, a lazy-loaded relationship. This triggers a second SQL query to load all `GamePlayer` rows for the session. The pattern is structurally identical to F-038 (`get_game_session`) and F-042 (`list_game_sessions`): a relationship is accessed after the initial query without having been eagerly loaded. Here the impact is limited to a single extra round-trip per stats request, but it is unnecessary and inconsistent with how `get_player_stats` loads its relationships.
+
+**Fix:**
+Add `.options(joinedload(GameSession.players))` to the initial game query:
+```python
+from sqlalchemy.orm import joinedload
+
+game = (
+    db.query(GameSession)
+    .options(joinedload(GameSession.players))
+    .filter(GameSession.game_id == game_id)
+    .first()
+)
+```
+`joinedload` is already imported in this file. With this change, `game.players` is populated in the initial `SELECT` and accessing it in the fallback loop issues no additional SQL.
+
+**Acceptance Criteria:**
+1. The `game` query uses `.options(joinedload(GameSession.players))`
+2. Accessing `game.players` in the fallback loop does not trigger a separate SQL query
+3. Existing `GET /stats/games/{game_id}` tests continue to pass
+
+---
+
+### F-081 — Naming inconsistency: `GameStatsPlayerEntry.profit_loss` vs `PlayerStatsResponse.total_profit_loss` (aia-core-5pi / T-034)
+
+**Source Task:** aia-core-5pi (T-034: Implement Per-Session Stats endpoint)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** src/pydantic_models/app_models.py — `GameStatsPlayerEntry` (line 366) and `PlayerStatsResponse` (line 337)
+
+Both `GameStatsPlayerEntry` and `PlayerStatsResponse` expose a player's profit/loss figure, but the field names differ: `GameStatsPlayerEntry` uses `profit_loss` while `PlayerStatsResponse` uses `total_profit_loss`. An API consumer building a unified analytics view from both `GET /stats/games/{game_id}` and `GET /stats/players/{player_name}` must handle two different field names for the conceptually equivalent value. The inconsistency is invisible at the HTTP level (both fields appear in JSON), making it an easy source of silent client-side bugs (e.g. a consumer reads `.profit_loss` on a `PlayerStatsResponse` object and gets `None` or `AttributeError`).
+
+No functional bug exists — both fields are correctly populated. However, the inconsistency will surface as a friction point for any typed client SDK auto-generated from the OpenAPI schema.
+
+**Suggested follow-up:** Decide on a canonical field name for the P/L figure across all stats response models. Options:
+1. Rename `GameStatsPlayerEntry.profit_loss` → `total_profit_loss` (matches `PlayerStatsResponse` and `LeaderboardEntry`, which also uses `total_profit_loss`)
+2. Rename `PlayerStatsResponse.total_profit_loss` → `profit_loss` (shorter, but less consistent with `LeaderboardEntry`)
+
+Option 1 is preferred for consistency with `LeaderboardEntry`. Renaming requires updating the route handler (`stats.py`) and any tests that assert on the `profit_loss` key in game stats responses.
+
+---
+
+### F-082 — Silent asymmetry between `total_hands` and per-player `hands_played` counts (aia-core-5pi / T-034)
+
+**Source Task:** aia-core-5pi (T-034: Implement Per-Session Stats endpoint)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** src/app/routes/stats.py — `get_game_stats`
+
+`get_game_stats` returns two hand-count figures that are computed from different populations with no explanation in the code:
+
+- `total_hands` (`GameStatsResponse.total_hands`) — counts **all** `Hand` rows for the game via `func.count(Hand.hand_id)`, regardless of whether any player result has been recorded.
+- `hands_played` per player (`GameStatsPlayerEntry.hands_played`) — counts only `PlayerHand` rows where `result IS NOT NULL`, because the `player_hands` query filters on `PlayerHand.result.isnot(None)`.
+
+This means `total_hands` can be, for example, `10` while all players show `hands_played == 7` — the three-hand gap represents hands that were recorded but whose results have not yet been entered. The behaviour is correct and intentional (it allows the response to convey both "how many hands were played" and "how many hands have complete results"), but it is entirely unexplained in the code. A future maintainer is likely to perceive the discrepancy as a bug and attempt to "fix" the query in a way that silently changes the semantics.
+
+**Suggested follow-up:** Add an inline comment to the `player_hands` query or to the `total_hands` computation to explain the intentional asymmetry:
+```python
+# total_hands counts all recorded hands, including those with no results entered yet.
+total_hands = (
+    db.query(func.count(Hand.hand_id)).filter(Hand.game_id == game_id).scalar()
+)
+
+# player_hands filters to result IS NOT NULL — hands_played per player reflects
+# only hands where a result has been recorded, which may be fewer than total_hands.
+player_hands = (
+    ...
+    .filter(Hand.game_id == game_id, PlayerHand.result.isnot(None))
+    ...
+)
+```
+
+**Acceptance Criteria:**
+1. Inline comments in `get_game_stats` explain that `total_hands` counts all hands and that per-player `hands_played` counts only result-recorded hands
+2. No functional change to the endpoint's response values
+3. The asymmetry is documented in the OpenAPI endpoint description or in the spec (S-6.5 AC) so that API consumers understand why the numbers may differ
+
+---
+
+### F-083 — Inefficient `query.count()` on multi-join ORM query in `search_hands_by_player` (aia-core-dqj / T-036)
+
+**Source Task:** aia-core-dqj (T-036: Implement Search Hands by Player endpoint)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/routes/search.py — `search_hands_by_player` (line 36)
+
+`total = query.count()` is called on the full four-table join query (`Hand`, `PlayerHand`, `Player`, `GameSession`). SQLAlchemy wraps the entire join as a subquery — `SELECT count(*) FROM (SELECT hand.hand_id, player_hand.player_hand_id, player.player_id, game_session.game_id FROM ... WHERE ...)` — even though the count only needs to know how many `PlayerHand` rows match the player filter. The `GameSession` join (needed only to fetch `game_date` for the result payload) participates in the count subquery unnecessarily, increasing its cost. As the dataset grows, the difference between a focused count and a full-join count compounds.
+
+**Suggested fix:** Issue a separate, targeted count query scoped to the minimum tables required (PlayerHand + Player):
+```python
+total = (
+    db.query(func.count(PlayerHand.player_hand_id))
+    .join(Player, Player.player_id == PlayerHand.player_id)
+    .filter(func.lower(Player.name) == player.lower())
+    .scalar()
+)
+```
+This executes a simple two-table aggregate rather than wrapping the full four-join query in a subquery.
+
+**Acceptance Criteria:**
+1. The count query touches only `PlayerHand` and `Player` (no `Hand` or `GameSession` join)
+2. The returned `total` value is identical to the previous result for any valid input
+3. Existing `GET /hands` pagination tests continue to pass
+
+---
+
+### F-084 — Non-deterministic ordering when player participated in two games on the same date (aia-core-dqj / T-036)
+
+**Source Task:** aia-core-dqj (T-036: Implement Search Hands by Player endpoint)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/routes/search.py — `search_hands_by_player` (line 32)
+
+`.order_by(GameSession.game_date, Hand.hand_number)` is ambiguous when a player participated in two or more games on the same calendar date. `hand_number` is scoped to a single `GameSession` and restarts at 1 for every new game, so for two games on the same date the combined result set contains interleaved rows from both games without a stable, predictable sequence. The database is free to return these rows in any order it chooses, and the ordering will vary between PostgreSQL and SQLite and may differ across query plans for the same query in production. This makes paginated results non-reproducible: fetching page 1 and page 2 separately may yield different orderings than fetching all rows at once.
+
+**Suggested fix:** Add `GameSession.game_id` as a tiebreaker after `game_date`:
+```python
+.order_by(GameSession.game_date, GameSession.game_id, Hand.hand_number)
+```
+`game_id` is a monotonically increasing integer PK, providing a stable and consistent ordering for games on the same date.
+
+**Acceptance Criteria:**
+1. The `order_by` clause includes `GameSession.game_id` between `game_date` and `hand_number`
+2. A test with two games on the same date verifies that the result order is deterministic and consistent across both calls (e.g. page 1 then page 2 produce no duplicate or missing rows)
+3. Existing search tests continue to pass
+
+---
+
+### F-085 — `profit_loss` not asserted in `test_search_hands_player_api.py` tests (aia-core-dqj / T-036)
+
+**Source Task:** aia-core-dqj (T-036: Implement Search Hands by Player endpoint)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** test/test_search_hands_player_api.py — result assertions
+
+The test fixture creates a `PlayerHand` with `profit_loss=50.0`, but no assertion in the test verifies that `profit_loss` is present and correct in the API response. The field appears in `PlayerHandResponse` and is populated by `ph.profit_loss` in the route handler, but the absence of a test assertion means a future regression silently zeroing or omitting `profit_loss` would go undetected. This is the same class of coverage gap noted in F-001 (single-record traversal) — the fixture establishes intent but the assertion does not follow through.
+
+**Suggested fix:** Add an assertion on the `player_hand` sub-object in the happy-path test:
+```python
+assert result['player_hand']['profit_loss'] == 50.0
+```
+
+**Acceptance Criteria:**
+1. At least one test in `test_search_hands_player_api.py` asserts `result['player_hand']['profit_loss'] == 50.0`
+2. The assertion is placed where the fixture value is verifiable (i.e. in a test that uses the fixture creating `profit_loss=50.0`)
+3. All existing tests continue to pass
+
+---
+
+### F-086 — `player_name` not asserted in `PlayerHandResponse` in search result tests (aia-core-dqj / T-036)
+
+**Source Task:** aia-core-dqj (T-036: Implement Search Hands by Player endpoint)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** test/test_search_hands_player_api.py — result assertions
+
+`PlayerHandResponse` carries a `player_name` field populated from `player_obj.name` in the route handler. No test in `test_search_hands_player_api.py` asserts that `player_name` is present and correctly set in the serialised response. If the `player_obj.name` assignment were accidentally replaced with a hardcoded value, an empty string, or dropped entirely, all search tests would still pass. This gap also leaves the contract between `search_hands_by_player` and its callers unverified for this field.
+
+**Suggested fix:** Add an assertion on `player_name` in the happy-path test:
+```python
+assert result['player_hand']['player_name'] == 'Alice'  # or whichever name the fixture uses
+```
+
+**Acceptance Criteria:**
+1. At least one test asserts `result['player_hand']['player_name']` equals the fixture player's name
+2. All existing tests continue to pass
+
+---
+
+### F-087 — `per_page` upper bound of 200 is undocumented in the API (aia-core-dqj / T-036)
+
+**Source Task:** aia-core-dqj (T-036: Implement Search Hands by Player endpoint)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** src/app/routes/search.py — `search_hands_by_player` (line 24)
+
+`per_page: Annotated[int, Query(ge=1, le=200)] = 50` enforces a maximum of 200 results per page. The constraint is sensible — it prevents clients from requesting arbitrarily large pages and overloading the server — but it is implicit. The `le=200` validator produces a 422 response for `per_page=201` with a generic FastAPI validation error; there is no `description` on the `Query` field and no OpenAPI doc comment explaining the cap. API consumers discovering this limit for the first time will receive an opaque validation error with no context.
+
+**Suggested fix:** Add a `description` to the `Query` annotation:
+```python
+per_page: Annotated[
+    int,
+    Query(ge=1, le=200, description='Number of results per page (max 200)'),
+] = 50
+```
+
+**Acceptance Criteria:**
+1. The `per_page` `Query` annotation includes a `description` that mentions the 200-result maximum
+2. The OpenAPI spec (e.g. `GET /openapi.json`) reflects the description on `per_page`
+3. No functional change to the endpoint's validation behaviour

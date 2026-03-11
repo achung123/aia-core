@@ -340,3 +340,57 @@ class PlayerStatsResponse(BaseModel):
     flop_pct: float
     turn_pct: float
     river_pct: float
+
+
+class LeaderboardMetric(str, Enum):
+    total_profit_loss = 'total_profit_loss'
+    win_rate = 'win_rate'
+    hands_played = 'hands_played'
+
+
+class LeaderboardEntry(BaseModel):
+    rank: int
+    player_name: str
+    total_profit_loss: float
+    win_rate: float
+    hands_played: int
+
+
+class GameStatsPlayerEntry(BaseModel):
+    player_name: str
+    hands_played: int
+    hands_won: int
+    hands_lost: int
+    hands_folded: int
+    win_rate: float
+    profit_loss: float
+
+
+class GameStatsResponse(BaseModel):
+    game_id: int
+    game_date: date
+    total_hands: int
+    player_stats: list[GameStatsPlayerEntry]
+
+
+class HandSearchResult(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    hand_id: int
+    game_id: int
+    game_date: date
+    hand_number: int
+    flop_1: str
+    flop_2: str
+    flop_3: str
+    turn: str | None = None
+    river: str | None = None
+    created_at: datetime
+    player_hand: PlayerHandResponse
+
+
+class PaginatedHandSearchResponse(BaseModel):
+    total: int
+    page: int
+    per_page: int
+    results: list[HandSearchResult]
