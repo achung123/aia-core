@@ -3855,3 +3855,575 @@ The `file_path` column on the `image_uploads` table has no `UNIQUE` constraint. 
 **Acceptance Criteria:**
 1. The resolved `upload_dir` is identical whether `uvicorn` is launched from the project root, from `src/`, or from `/`
 2. No existing tests break after the path anchoring change
+
+---
+
+## Cycle 2 — aia-core-x03 Findings (2026-03-11)
+
+*Source task: aia-core-x03 (error-path cleanup fix)*
+*Review Date: 2026-03-11*
+
+---
+
+### H-1 — `db.flush()` failure orphans `tmp_path` (HIGH) (aia-core-x03)
+
+**Source Task:** aia-core-x03 (error-path cleanup fix)
+**Review Date:** 2026-03-11
+**Severity:** HIGH
+**File:** src/app/routes/images.py — [lines 50–57](src/app/routes/images.py#L50-L57)
+
+No `try/except` wraps the `db.flush()` call, so if `flush()` raises the temporary file written to disk is never cleaned up.  The orphaned `tmp_path` accumulates on disk with no corresponding DB record.
+
+**Suggested fix:** Wrap the `db.flush()` call in a `try/except` block (or extend the surrounding error-path handler) that deletes `tmp_path` before re-raising.
+
+**Acceptance Criteria:**
+1. A simulated `db.flush()` failure leaves no `tmp_path` file on disk
+2. The endpoint returns an appropriate 5xx response
+3. A test covers this failure path
+
+---
+
+### H-2 — `os.remove(final_path)` in commit-failure handler is unguarded (HIGH) (aia-core-x03)
+
+**Source Task:** aia-core-x03 (error-path cleanup fix)
+**Review Date:** 2026-03-11
+**Severity:** HIGH
+**File:** src/app/routes/images.py — [lines 69–73](src/app/routes/images.py#L69-L73)
+
+If `os.remove(final_path)` raises `OSError`, the bare `except` block exits before `db.rollback()` is reached, leaving the database session in a broken state for the remainder of the request lifecycle.
+
+**Suggested fix:** Guard `os.remove` with its own `try/except OSError` so that `db.rollback()` is always called regardless of whether the file removal succeeds.
+
+**Acceptance Criteria:**
+1. A simulated `os.remove` `OSError` during commit-failure handling still triggers `db.rollback()`
+2. The endpoint returns an appropriate 5xx response
+3. A test covers this scenario
+
+---
+
+### M-1 — `os.remove(tmp_path)` in rename-failure handler is unguarded (MEDIUM) (aia-core-x03)
+
+**Source Task:** aia-core-x03 (error-path cleanup fix)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/routes/images.py — [lines 63–65](src/app/routes/images.py#L63-L65)
+
+If `os.remove(tmp_path)` raises `OSError` in the rename-failure handler, the `HTTPException` is never raised and FastAPI receives an unhandled `OSError`, producing an opaque 500 instead of a descriptive error response.
+
+**Suggested fix:** Wrap `os.remove(tmp_path)` in a `try/except OSError` so that control always reaches the `HTTPException` raise.
+
+**Acceptance Criteria:**
+1. A simulated `os.remove` `OSError` in the rename-failure handler still results in an `HTTPException` being raised
+2. The endpoint returns a 5xx response with a meaningful message
+3. A test covers this path
+
+---
+
+### M-2 — No test covers `db.flush()` failure (MEDIUM) (aia-core-x03)
+
+**Source Task:** aia-core-x03 (error-path cleanup fix)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+
+The `db.flush()` failure path introduced by the H-1 gap is completely untested.  A regression in this code path would go undetected by the test suite.
+
+**Suggested fix:** Add a unit/integration test that patches `db.flush` to raise and asserts both that `tmp_path` is cleaned up and that the endpoint returns a 5xx response.
+
+**Acceptance Criteria:**
+1. A test exists that mocks `db.flush()` to raise a `SQLAlchemyError`
+2. The test asserts no `tmp_path` file remains on disk after the failure
+3. The test asserts the endpoint returns a 5xx status code
+
+---
+
+### L-1 — `file.filename` can be `None` → unhandled `TypeError` (LOW) (aia-core-x03)
+
+**Source Task:** aia-core-x03 (error-path cleanup fix)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** src/app/routes/images.py — [line 46](src/app/routes/images.py#L46)
+
+`os.path.basename(file.filename)` raises `TypeError` when `file.filename` is `None`, which is a valid state for multipart uploads that omit the `filename` parameter.  The unhandled exception surfaces as an HTTP 500 instead of a descriptive 422 client error.
+
+**Suggested fix:** Add an explicit guard before the `os.path.basename` call and raise `HTTPException(status_code=422)` when `file.filename is None`.
+
+**Acceptance Criteria:**
+1. A multipart upload with no `filename` field returns HTTP 422 (not 500)
+2. The response body contains a message indicating the filename is required
+3. A test covers this path
+
+---
+
+## Cycle 3 — aia-core-i8r Findings (2026-03-11)
+
+*Source task: aia-core-i8r*
+*Review Date: 2026-03-11*
+
+---
+
+### M-1 — `os.remove(tmp_path)` in rename-failure path is unguarded (MEDIUM) (aia-core-i8r)
+
+**Source Task:** aia-core-i8r
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/routes/images.py — [L63](src/app/routes/images.py#L63)
+
+`os.remove(tmp_path)` in the rename-failure handler is not wrapped in a `try/except`. If `tmp_path` disappears between the failed `os.rename` and the `os.remove` call (e.g. another process or a prior cleanup routine has already removed it), the `OSError` propagates unhandled and the `HTTPException` is never raised — FastAPI surfaces an opaque 500 instead.
+
+**Suggested fix:** Apply the same `try/except OSError: pass` pattern used elsewhere in the file around this `os.remove` call so that control always reaches the `raise HTTPException(...)` line.
+
+**Acceptance Criteria:**
+1. A simulated `OSError` from `os.remove(tmp_path)` in the rename-failure path still results in the `HTTPException` being raised
+2. The endpoint returns a structured error response (not an unhandled 500) in this scenario
+3. A test covers this path
+
+---
+
+### M-2 — `get_db()` never calls `db.rollback()` on exception exit (MEDIUM) (aia-core-i8r)
+
+**Source Task:** aia-core-i8r
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/database/session.py — [L19-L22](src/app/database/session.py#L19-L22)
+
+The rename-failure path (and other error paths) raise `HTTPException` without an explicit rollback. `get_db()` relies on implicit rollback-on-close behaviour from the DB driver, but `Session.close()` does not guarantee a rollback in all SQLAlchemy configurations. Adding an explicit `db.rollback()` to the `get_db` `finally` block (or a dedicated `except` branch) would make all error paths consistent and safe regardless of driver or session configuration. This is closely related to the pre-existing finding F-013.
+
+**Suggested fix:** Add `db.rollback()` to the `get_db` generator's `finally` block (or inside an `except Exception: db.rollback(); raise` clause before `finally`) so that any uncommitted transaction is reliably rolled back on exception exit.
+
+**Acceptance Criteria:**
+1. `get_db()` explicitly calls `db.rollback()` when the request exits via an exception
+2. A test verifies the rollback is invoked on an error path (e.g. by asserting no partial data is committed after a handler raises)
+3. Normal (non-exception) request paths are unaffected
+
+---
+
+### L-1 — Overly broad `os.remove` mock in regression test (LOW) (aia-core-i8r)
+
+**Source Task:** aia-core-i8r
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** test/test_image_upload_api.py — [L311](test/test_image_upload_api.py#L311)
+
+The regression test patches `os.remove` with a blanket mock that intercepts every call to `os.remove` for the duration of the test, including any internal calls made by other library code or fixtures. A targeted `side_effect` function — one that raises only when called with `tmp_path` and passes through (or no-ops) for any other argument — would be more precise and would prevent the mock from accidentally suppressing legitimate `os.remove` calls in the test environment.
+
+**Suggested fix:** Replace the blanket mock with a `side_effect` that selectively raises `OSError` only for the specific path under test:
+```python
+target_path = ...  # the tmp_path value for this test
+def raise_for_target(path):
+    if path == target_path:
+        raise OSError("simulated failure")
+mocker.patch("os.remove", side_effect=raise_for_target)
+```
+
+**Acceptance Criteria:**
+1. The `os.remove` mock targets only the specific path being tested
+2. The test continues to assert the intended failure behaviour
+3. No unrelated `os.remove` calls in the test environment are inadvertently suppressed
+
+---
+
+### L-2 — `raise HTTPException(...) from None` silently discards root-cause exception (LOW) (aia-core-i8r)
+
+**Source Task:** aia-core-i8r
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** src/app/routes/images.py — [L76-L77](src/app/routes/images.py#L76-L77)
+
+`raise HTTPException(...) from None` explicitly suppresses the original exception's context. Structured logging middleware and APM tools (Sentry, OpenTelemetry) inspect `__cause__` and `__context__` to capture root-cause detail; suppressing the chain means the DB error, constraint name, and originating stack frame are all discarded at the tracing layer. No logging statement precedes the raise, so commit-failure diagnosis in production requires attaching a debugger. This is the same pattern flagged in F-026 for `create_player`.
+
+**Suggested fix:** Replace `from None` with `from exc` (where `exc` is the caught exception) so the original exception is preserved as the explicit chain. Additionally, consider logging the exception before re-raising:
+```python
+except Exception as exc:
+    # log exc here if a logger is available
+    raise HTTPException(status_code=500, detail="Failed to save upload record.") from exc
+```
+
+**Acceptance Criteria:**
+1. The `HTTPException` raised on commit failure carries the original exception as its `__cause__` (i.e. `from exc` rather than `from None`)
+2. No functional change to the HTTP response sent to the client
+3. Structured logging or APM tooling can capture the root-cause exception chain
+
+---
+
+## Cycle 4 — aia-core-3gp Findings (2026-03-11)
+
+*Source task: aia-core-3gp*
+*Review Date: 2026-03-11*
+
+---
+
+### M-1 — `_has_valid_image_magic` is format-agnostic (MEDIUM) (aia-core-3gp)
+
+**Source Task:** aia-core-3gp
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+
+PNG bytes uploaded with `Content-Type: image/jpeg` pass validation silently. The magic-byte helper inspects only whether the bytes match *any* known image format, without cross-checking against the declared `Content-Type`. A client can therefore store a PNG file under a JPEG content-type (and vice versa) with no rejection.
+
+**Suggested fix:** Thread the declared `content_type` into `_has_valid_image_magic` and enforce that the actual bytes match the declared format — i.e. if `content_type` is `image/jpeg`, only accept JPEG magic bytes; if `image/png`, only accept PNG magic bytes.
+
+**Acceptance Criteria:**
+1. PNG bytes submitted with `Content-Type: image/jpeg` are rejected with HTTP 415
+2. JPEG bytes submitted with `Content-Type: image/png` are rejected with HTTP 415
+3. Correctly paired content-type + magic bytes continue to pass
+4. Tests cover each mismatch combination
+
+---
+
+### M-2 — No test for empty file body (MEDIUM) (aia-core-3gp)
+
+**Source Task:** aia-core-3gp
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+
+An empty upload (zero-byte body) correctly returns HTTP 415, but this behaviour is untested. A future refactor of the magic-byte or content-length guard could silently regress the empty-body path without any test catching it.
+
+**Suggested fix:** Add a test that uploads a zero-byte file and asserts a 415 response.
+
+**Acceptance Criteria:**
+1. A test uploads an empty file body and asserts HTTP 415
+2. The test is grouped with other magic-byte / content-type validation tests
+
+---
+
+### L-1 — Asymmetry between JPEG and PNG magic-byte checks (LOW) (aia-core-3gp)
+
+**Source Task:** aia-core-3gp
+**Review Date:** 2026-03-11
+**Severity:** LOW
+
+The JPEG check inspects only 3 bytes (`FF D8 FF`), while the PNG check inspects all 8 signature bytes. The JPEG check could be tightened by also verifying that the 4th byte is a known APP marker (e.g. `E0` for JFIF, `E1` for Exif), which would reduce the chance of a non-JPEG file that happens to start with `FF D8 FF` passing validation.
+
+**Suggested fix:** Extend the JPEG check to also validate the 4th byte against a set of known APP markers (`{0xE0, 0xE1, 0xE2, 0xE8, 0xEE, 0xFE}`).
+
+**Acceptance Criteria:**
+1. The JPEG magic-byte check includes a 4th-byte APP-marker validation
+2. Valid JFIF and Exif JPEG files continue to pass
+3. A file with `FF D8 FF` followed by an unknown 4th byte is rejected
+
+---
+
+### L-2 — Test helper comment for `_make_jpeg` undersells the 4th byte (LOW) (aia-core-3gp)
+
+**Source Task:** aia-core-3gp
+**Review Date:** 2026-03-11
+**Severity:** LOW
+
+The comment on the `_make_jpeg` test helper implies that all 4 bytes (`FF D8 FF E0`) are magic/signature bytes, when in fact only the first 3 are the universal JPEG SOI + marker prefix; `0xE0` is specifically the APP0 marker for JFIF. This is a minor documentation inaccuracy but could mislead future contributors into treating `E0` as a required JPEG magic byte rather than one valid APP marker among several.
+
+**Suggested fix:** Update the comment to clarify that `0xE0` is the APP0 (JFIF) marker, not part of the universal JPEG magic bytes.
+
+**Acceptance Criteria:**
+1. The `_make_jpeg` helper comment accurately describes which bytes are universal JPEG magic and which byte is the APP0 marker
+2. No functional change
+
+---
+
+## Cycle 5 — aia-core-4qe Findings (2026-03-11)
+
+*Source task: aia-core-4qe (db.flush() try/except fix)*
+*Review Date: 2026-03-11*
+
+---
+
+### H-1 — Missing db.rollback() after flush failure (HIGH) (aia-core-4qe)
+
+**Source Task:** aia-core-4qe
+**Review Date:** 2026-03-11
+**Severity:** HIGH
+
+`src/app/routes/images.py` L66-74: the flush error handler removes `tmp_path` and raises `HTTPException` without calling `db.rollback()`. The session is left in an invalid/error state for the remainder of the request lifecycle. The commit-failure handler at L87-95 does call `db.rollback()` — this path must be made consistent.
+
+**Suggested fix:** Add `db.rollback()` before `raise HTTPException(...)` in the flush error handler (L66-74), mirroring the pattern already used in the commit-failure handler.
+
+**Acceptance Criteria:**
+1. `db.rollback()` is called in the flush error handler before the `HTTPException` is raised
+2. Behaviour is consistent with the commit-failure error path
+3. Existing flush-failure tests are updated to assert `db.rollback()` is called
+
+---
+
+### M-1 — Original DB exception discarded with no logging (MEDIUM) (aia-core-4qe)
+
+**Source Task:** aia-core-4qe
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+
+All three error paths use `raise HTTPException(...) from None`, which discards the original DB exception and produces no log output. DB flush/commit failures are therefore completely invisible in production. Operators have no signal when the database layer is misbehaving.
+
+**Suggested fix:** Log the original exception before raising (e.g. `logger.exception("DB flush failed: %s", exc)`) or replace `from None` with `from exc` to preserve the exception chain. Apply consistently across all three error paths.
+
+**Acceptance Criteria:**
+1. Each error path logs the original exception at ERROR level before raising `HTTPException`
+2. The original exception is not silently swallowed
+3. Tests verify that logging occurs on each error path
+
+---
+
+### L-1 — test_flush_failure_removes_tmp_file does not assert db.rollback() (LOW) (aia-core-4qe)
+
+**Source Task:** aia-core-4qe
+**Review Date:** 2026-03-11
+**Severity:** LOW
+
+`test_flush_failure_removes_tmp_file` verifies that the temporary file is removed on a flush failure but does not assert that `db.rollback()` is called. This gap allowed H-1 to land undetected — the test passed even though the session was left in a broken state.
+
+**Suggested fix:** Extend the test to assert `mock_db.rollback.assert_called_once()` (or equivalent) after the flush failure is triggered.
+
+**Acceptance Criteria:**
+1. `test_flush_failure_removes_tmp_file` asserts `db.rollback()` is called
+2. The test fails before H-1 is fixed and passes after
+
+---
+
+## T-040 (aia-core-e7q) — Card Detection Pipeline Integration Findings (2026-03-11)
+
+*Source task: aia-core-e7q (T-040: Implement Card Detection pipeline integration)*
+*Review Date: 2026-03-11*
+
+---
+
+### H-1 — Module-level singleton `_detector` prevents dependency injection and testability (HIGH) (aia-core-e7q / T-040)
+
+**Source Task:** aia-core-e7q (T-040: Implement Card Detection pipeline integration)
+**Review Date:** 2026-03-11
+**Severity:** HIGH
+**File:** src/app/routes/images.py — [L22](src/app/routes/images.py#L22)
+
+`_detector = MockCardDetector()` is hardcoded at module level. The route imports `MockCardDetector` directly rather than the `CardDetector` protocol. When a real detector is implemented, swapping requires editing production code. Tests cannot inject a controlled detector.
+
+**Suggested fix:** Use FastAPI dependency injection with `Depends(get_card_detector)` and `app.dependency_overrides` for tests.
+
+**Acceptance Criteria:**
+1. `_detector` is no longer instantiated at module level
+2. Card detector is injected via `Depends(get_card_detector)`
+3. Tests override the detector via `app.dependency_overrides`
+
+---
+
+### H-2 — No error handling around `_detector.detect()` call (HIGH) (aia-core-e7q / T-040)
+
+**Source Task:** aia-core-e7q (T-040: Implement Card Detection pipeline integration)
+**Review Date:** 2026-03-11
+**Severity:** HIGH
+**File:** src/app/routes/images.py — [L132](src/app/routes/images.py#L132)
+
+If `detect()` raises, the endpoint returns an unhandled 500 with no rollback. Upload status stays in `processing` limbo. Partial `CardDetection` rows could be inconsistent.
+
+**Suggested fix:** Wrap detection + insert in `try/except`. On failure, rollback and set `upload.status = 'failed'`.
+
+**Acceptance Criteria:**
+1. A `detect()` exception is caught and does not produce an unhandled 500
+2. On detection failure, `upload.status` is set to `'failed'` and the transaction is rolled back
+3. Partial `CardDetection` rows are not left in the database
+4. A test covers the detection-failure path
+
+---
+
+### H-3 — Race condition on concurrent GET requests for the same upload (HIGH) (aia-core-e7q / T-040)
+
+**Source Task:** aia-core-e7q (T-040: Implement Card Detection pipeline integration)
+**Review Date:** 2026-03-11
+**Severity:** HIGH
+**File:** src/app/routes/images.py — [L130-L142](src/app/routes/images.py#L130-L142)
+
+Two simultaneous GET requests for a `processing` upload will both detect and insert 14 rows instead of 7.
+
+**Suggested fix:** Add a unique constraint on `(upload_id, card_position)` and/or use `SELECT FOR UPDATE`.
+
+**Acceptance Criteria:**
+1. Concurrent GET requests for the same `processing` upload do not produce duplicate `CardDetection` rows
+2. A unique constraint on `(upload_id, card_position)` exists at the DB level
+3. The endpoint handles the constraint violation gracefully (no unhandled 500)
+
+---
+
+### M-1 — `safe_name` variable — `file.filename` could be `None`, causing `TypeError` in `os.path.basename(None)` (MEDIUM) (aia-core-e7q / T-040)
+
+**Source Task:** aia-core-e7q (T-040: Implement Card Detection pipeline integration)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/routes/images.py
+
+Inherited from T-039. `file.filename` can be `None` for multipart uploads that omit the `filename` parameter. `os.path.basename(None)` raises `TypeError` → HTTP 500.
+
+---
+
+### M-2 — `CardDetection` model lacks unique constraint on `(upload_id, card_position)` (MEDIUM) (aia-core-e7q / T-040)
+
+**Source Task:** aia-core-e7q (T-040: Implement Card Detection pipeline integration)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/database/ (CardDetection model and migration)
+
+DB-level aspect of H-3. Without a unique constraint on `(upload_id, card_position)`, duplicate detection rows can be inserted by concurrent requests or buggy detection logic with no DB-level safeguard.
+
+---
+
+### M-3 — Migration creates both `image_uploads` and `card_detections` in one file but title only mentions `card_detections` (MEDIUM) (aia-core-e7q / T-040)
+
+**Source Task:** aia-core-e7q (T-040: Implement Card Detection pipeline integration)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** alembic/versions/ (card_detections migration)
+
+The migration file title references only `card_detections` but the migration body creates or modifies both `image_uploads` and `card_detections` tables. Misleading title makes it harder to trace schema changes to specific migrations.
+
+---
+
+### M-4 — `detect()` return type is `list[dict]` — untyped dicts (MEDIUM) (aia-core-e7q / T-040)
+
+**Source Task:** aia-core-e7q (T-040: Implement Card Detection pipeline integration)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/services/ (CardDetector protocol / MockCardDetector)
+
+`detect()` returns `list[dict]` with no type enforcement on dict keys or values. Should use `TypedDict` or a dataclass for contract enforcement so that callers get static type checking on detection results.
+
+---
+
+### L-1 — `@runtime_checkable` on `CardDetector` protocol is unused (LOW) (aia-core-e7q / T-040)
+
+**Source Task:** aia-core-e7q (T-040: Implement Card Detection pipeline integration)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+
+The `@runtime_checkable` decorator on the `CardDetector` protocol is present but no code uses `isinstance()` checks against it. Dead decorator that adds no value.
+
+---
+
+### L-2 — `MockCardDetector` confidence range hardcoded to 0.75–0.99 (LOW) (aia-core-e7q / T-040)
+
+**Source Task:** aia-core-e7q (T-040: Implement Card Detection pipeline integration)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+
+The mock always returns confidence values between 0.75 and 0.99. Tests cannot exercise low-confidence thresholding or edge cases near a confidence cutoff without a way to control the range.
+
+---
+
+### L-3 — Tests don't verify `detection_id` is populated as positive integer (LOW) (aia-core-e7q / T-040)
+
+**Source Task:** aia-core-e7q (T-040: Implement Card Detection pipeline integration)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+
+No test asserts that `detection_id` in the response is a positive integer. A bug returning `null` or `0` for the primary key would go undetected.
+
+---
+
+### L-4 — `file.filename` null-check inherited from T-039 (LOW) (aia-core-e7q / T-040)
+
+**Source Task:** aia-core-e7q (T-040: Implement Card Detection pipeline integration)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+
+Same root cause as M-1 (inherited from T-039). Tracked separately as a low-severity reminder that the upstream fix in T-039 resolves this for the T-040 code path as well.
+
+---
+
+## T-041 (aia-core-xmu) — Confirm Detection Endpoint Code Review Findings (2026-03-11)
+
+*Source task: aia-core-xmu (T-041: Implement Confirm Detection endpoint)*
+*Review Date: 2026-03-11*
+
+---
+
+### H-1 — Duplicate player in `player_hands` causes unhandled 500 (HIGH) (aia-core-xmu / T-041)
+
+**Source Task:** aia-core-xmu (T-041: Implement Confirm Detection endpoint)
+**Review Date:** 2026-03-11
+**Severity:** HIGH
+**File:** src/app/routes/images.py — confirm endpoint (around L280-293)
+
+If the same `player_name` appears twice in `player_hands`, the second flush violates the `uq_player_hand` constraint → `IntegrityError` → unhandled 500. The same pattern exists in the `record_hand` endpoint (inherited, not newly introduced).
+
+**Suggested fix:** Validate uniqueness of `player_name` values before insertion, or catch `IntegrityError` and return 400.
+
+**Acceptance Criteria:**
+1. A request with duplicate `player_name` values in `player_hands` returns HTTP 400 (not 500)
+2. The 400 response body identifies the duplicate player name
+3. No `PlayerHand` rows are written on rejection
+4. A test covers the duplicate `player_name` path
+
+---
+
+### M-1 — Race condition on `hand_number` auto-increment (MEDIUM) (aia-core-xmu / T-041)
+
+**Source Task:** aia-core-xmu (T-041: Implement Confirm Detection endpoint)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/routes/images.py — confirm endpoint
+
+Concurrent confirms could produce the same `hand_number` → `IntegrityError` → 500. Pre-existing pattern inherited from `record_hand`.
+
+---
+
+### M-2 — No `UniqueConstraint` on `source_upload_id` column in Hand model (MEDIUM) (aia-core-xmu / T-041)
+
+**Source Task:** aia-core-xmu (T-041: Implement Confirm Detection endpoint)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/database/models.py — `Hand` model
+
+The status guard prevents double-confirm at the application level, but there is no DB-level defense. A race condition or future code path bypassing the status check could insert two `Hand` rows from the same upload with no constraint violation.
+
+**Suggested fix:** Add `UniqueConstraint('source_upload_id', name='uq_hand_source_upload')` to the `Hand` model and generate a corresponding Alembic migration.
+
+**Acceptance Criteria:**
+1. The `Hand` model includes a unique constraint on `source_upload_id`
+2. An Alembic migration applies the constraint
+3. Attempting to insert a second `Hand` with the same `source_upload_id` raises `IntegrityError`
+
+---
+
+### M-3 — Missing test for duplicate `player_name` in request body (MEDIUM) (aia-core-xmu / T-041)
+
+**Source Task:** aia-core-xmu (T-041: Implement Confirm Detection endpoint)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** test/test_confirm_detection_api.py
+
+The bug tracked in H-1 has zero test coverage. No existing test calls the confirm endpoint with a `player_hands` list containing repeated `player_name` entries.
+
+**Suggested follow-up:** Add a test `test_confirm_detection_duplicate_player_name_returns_400` that submits `player_hands` with the same player name twice and asserts HTTP 400.
+
+**Acceptance Criteria:**
+1. A test exists that submits duplicate `player_name` values in `player_hands`
+2. The test asserts HTTP 400 is returned
+3. The test verifies no `Hand` or `PlayerHand` rows are written
+
+---
+
+### L-1 — No explicit rollback on validation failure mid-loop (LOW) (aia-core-xmu / T-041)
+
+**Source Task:** aia-core-xmu (T-041: Implement Confirm Detection endpoint)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** src/app/routes/images.py — confirm endpoint
+
+If a validation failure (e.g. player not found) raises `HTTPException` mid-loop after some `PlayerHand` rows have been flushed, the handler relies on implicit session close to roll back the partial transaction rather than an explicit `db.rollback()` call.
+
+---
+
+### L-2 — No test for single-player confirm (LOW) (aia-core-xmu / T-041)
+
+**Source Task:** aia-core-xmu (T-041: Implement Confirm Detection endpoint)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** test/test_confirm_detection_api.py
+
+No test exercises the confirm endpoint with exactly one player in `player_hands`. The minimum-player path is unverified, leaving edge cases around single-entry list handling untested.
+
+**Suggested follow-up:** Add a test `test_confirm_detection_single_player` that submits a confirm request with one player and asserts HTTP 201 with correct response data.
+
+---
+
+### L-3 — Upload status `'confirmed'` not explicitly handled in GET detection endpoint (LOW) (aia-core-xmu / T-041)
+
+**Source Task:** aia-core-xmu (T-041: Implement Confirm Detection endpoint)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** src/app/routes/images.py — GET detection endpoint
+
+After a successful confirm, the upload status transitions to `'confirmed'`. The GET detection endpoint does not explicitly check for or document behaviour when `status == 'confirmed'`. The endpoint works correctly (returns the existing detections), but the intent is unclear — it is not documented whether a confirmed upload should still serve detection results or return a different response (e.g. a redirect to the created hand).

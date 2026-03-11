@@ -436,6 +436,14 @@ def record_hand(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    # Reject duplicate player names
+    player_names = [e.player_name.lower() for e in payload.player_entries]
+    if len(player_names) != len(set(player_names)):
+        raise HTTPException(
+            status_code=400,
+            detail='Duplicate player_name in player_entries',
+        )
+
     max_hand_number = (
         db.query(func.max(Hand.hand_number)).filter(Hand.game_id == game_id).scalar()
     )

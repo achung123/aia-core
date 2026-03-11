@@ -295,6 +295,7 @@ class HandResponse(BaseModel):
     flop_3: str
     turn: str | None = None
     river: str | None = None
+    source_upload_id: int | None = None
     created_at: datetime
     player_hands: list[PlayerHandResponse] = []
 
@@ -394,6 +395,29 @@ class PaginatedHandSearchResponse(BaseModel):
     page: int
     per_page: int
     results: list[HandSearchResult]
+
+
+class ConfirmCommunityCards(BaseModel):
+    model_config = ConfigDict(use_enum_values=True)
+
+    flop_1: Card
+    flop_2: Card
+    flop_3: Card
+    turn: Card | None = None
+    river: Card | None = None
+
+
+class ConfirmPlayerEntry(BaseModel):
+    model_config = ConfigDict(use_enum_values=True)
+
+    player_name: str
+    card_1: Card
+    card_2: Card
+
+
+class ConfirmDetectionRequest(BaseModel):
+    community_cards: ConfirmCommunityCards
+    player_hands: list[ConfirmPlayerEntry] = Field(..., min_length=1)
 
 
 class CSVCommitSummary(BaseModel):

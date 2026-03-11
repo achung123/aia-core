@@ -61,7 +61,7 @@ def _record_hand(client, game_id, payload):
 # Hand payloads — all cards within each hand are unique.
 # AS appears as: community card in EARLY_HAND, hole card (Alice) in LATE_HAND.
 EARLY_HAND_PAYLOAD = {
-    'flop_1': {'rank': 'A', 'suit': 'S'},   # AS — community
+    'flop_1': {'rank': 'A', 'suit': 'S'},  # AS — community
     'flop_2': {'rank': 'K', 'suit': 'H'},
     'flop_3': {'rank': '2', 'suit': 'D'},
     'player_entries': [
@@ -83,13 +83,13 @@ EARLY_HAND_PAYLOAD = {
 }
 
 LATE_HAND_PAYLOAD = {
-    'flop_1': {'rank': 'K', 'suit': 'D'},   # KD — different suit from early KH
+    'flop_1': {'rank': 'K', 'suit': 'D'},  # KD — different suit from early KH
     'flop_2': {'rank': 'Q', 'suit': 'C'},
     'flop_3': {'rank': 'J', 'suit': 'H'},
     'player_entries': [
         {
             'player_name': 'Alice',
-            'card_1': {'rank': 'A', 'suit': 'S'},   # AS — hole card
+            'card_1': {'rank': 'A', 'suit': 'S'},  # AS — hole card
             'card_2': {'rank': '2', 'suit': 'C'},
             'result': 'win',
             'profit_loss': 100.0,
@@ -292,9 +292,7 @@ class TestSearchHandsByCard:
 
     def test_card_combined_with_player(self, client, seeded_data):
         """card=AS + player=Alice returns Alice's appearances with AS."""
-        response = client.get(
-            '/hands', params={'card': 'AS', 'player': 'Alice'}
-        )
+        response = client.get('/hands', params={'card': 'AS', 'player': 'Alice'})
         data = response.json()
         assert data['total'] > 0
         for result in data['results']:

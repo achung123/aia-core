@@ -49,6 +49,7 @@ def client():
 # CSV helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_csv(rows: list[list[str]], headers: list[str] | None = None) -> bytes:
     buf = io.StringIO()
     writer = csv.writer(buf)
@@ -59,21 +60,100 @@ def _make_csv(rows: list[list[str]], headers: list[str] | None = None) -> bytes:
 
 
 # Two players, one hand, game date 03-09-2026
-ADAM_H1 = ['03-09-2026', '1', 'Adam', 'AS', 'KH', '2C', '3D', '4S', '5H', '6C', 'win', '50.0']
-GIL_H1 = ['03-09-2026', '1', 'Gil', 'JH', 'QD', '2C', '3D', '4S', '5H', '6C', 'loss', '-50.0']
+ADAM_H1 = [
+    '03-09-2026',
+    '1',
+    'Adam',
+    'AS',
+    'KH',
+    '2C',
+    '3D',
+    '4S',
+    '5H',
+    '6C',
+    'win',
+    '50.0',
+]
+GIL_H1 = [
+    '03-09-2026',
+    '1',
+    'Gil',
+    'JH',
+    'QD',
+    '2C',
+    '3D',
+    '4S',
+    '5H',
+    '6C',
+    'loss',
+    '-50.0',
+]
 
 # Second hand, same game date
-ADAM_H2 = ['03-09-2026', '2', 'Adam', '10C', '9H', '7D', '8S', 'KS', 'QC', 'JS', 'fold', '-10.0']
-GIL_H2 = ['03-09-2026', '2', 'Gil', 'AH', '2D', '7D', '8S', 'KS', 'QC', 'JS', 'win', '10.0']
+ADAM_H2 = [
+    '03-09-2026',
+    '2',
+    'Adam',
+    '10C',
+    '9H',
+    '7D',
+    '8S',
+    'KS',
+    'QC',
+    'JS',
+    'fold',
+    '-10.0',
+]
+GIL_H2 = [
+    '03-09-2026',
+    '2',
+    'Gil',
+    'AH',
+    '2D',
+    '7D',
+    '8S',
+    'KS',
+    'QC',
+    'JS',
+    'win',
+    '10.0',
+]
 
 # Different date for multi-session test
-ADAM_D2 = ['03-10-2026', '1', 'Adam', 'AS', 'KH', '2C', '3D', '4S', '5H', '6C', 'win', '20.0']
-GIL_D2 = ['03-10-2026', '1', 'Gil', 'JH', 'QD', '2C', '3D', '4S', '5H', '6C', 'loss', '-20.0']
+ADAM_D2 = [
+    '03-10-2026',
+    '1',
+    'Adam',
+    'AS',
+    'KH',
+    '2C',
+    '3D',
+    '4S',
+    '5H',
+    '6C',
+    'win',
+    '20.0',
+]
+GIL_D2 = [
+    '03-10-2026',
+    '1',
+    'Gil',
+    'JH',
+    'QD',
+    '2C',
+    '3D',
+    '4S',
+    '5H',
+    '6C',
+    'loss',
+    '-20.0',
+]
 
 
 # ---------------------------------------------------------------------------
 # AC-1 / AC-3: Valid commit returns 201 with summary counts
 # ---------------------------------------------------------------------------
+
 
 class TestCommitSuccessResponse:
     """Successful commit returns 201 and a summary payload."""
@@ -92,7 +172,12 @@ class TestCommitSuccessResponse:
             '/upload/csv/commit',
             files={'file': ('hands.csv', csv_bytes, 'text/csv')},
         ).json()
-        for key in ('games_created', 'hands_created', 'players_created', 'players_matched'):
+        for key in (
+            'games_created',
+            'hands_created',
+            'players_created',
+            'players_matched',
+        ):
             assert key in data
 
     def test_commit_single_game_date_creates_one_game(self, client):
@@ -133,6 +218,7 @@ class TestCommitSuccessResponse:
 # AC-2: Game sessions grouped by date
 # ---------------------------------------------------------------------------
 
+
 class TestCommitMultiDateSessions:
     """Two distinct game_dates produce two separate GameSession records."""
 
@@ -166,6 +252,7 @@ class TestCommitMultiDateSessions:
 # ---------------------------------------------------------------------------
 # AC-2: Players auto-created and reused by name
 # ---------------------------------------------------------------------------
+
 
 class TestCommitPlayerCreation:
     """Players are created on first encounter; existing players are reused."""
@@ -228,6 +315,7 @@ class TestCommitPlayerCreation:
 # ---------------------------------------------------------------------------
 # DB record verification
 # ---------------------------------------------------------------------------
+
 
 class TestCommitDatabaseRecords:
     """Verify Hand and PlayerHand records are persisted correctly."""
@@ -293,7 +381,11 @@ class TestCommitDatabaseRecords:
         db = SessionLocal()
         try:
             adam = db.query(Player).filter(Player.name == 'Adam').first()
-            ph = db.query(PlayerHand).filter(PlayerHand.player_id == adam.player_id).first()
+            ph = (
+                db.query(PlayerHand)
+                .filter(PlayerHand.player_id == adam.player_id)
+                .first()
+            )
             assert ph.card_1 == 'AS'
             assert ph.card_2 == 'KH'
         finally:
@@ -310,7 +402,11 @@ class TestCommitDatabaseRecords:
         db = SessionLocal()
         try:
             adam = db.query(Player).filter(Player.name == 'Adam').first()
-            ph = db.query(PlayerHand).filter(PlayerHand.player_id == adam.player_id).first()
+            ph = (
+                db.query(PlayerHand)
+                .filter(PlayerHand.player_id == adam.player_id)
+                .first()
+            )
             assert ph.result == 'win'
             assert ph.profit_loss == pytest.approx(50.0)
         finally:
@@ -319,7 +415,20 @@ class TestCommitDatabaseRecords:
     def test_turn_river_empty_stored_as_null(self, client):
         from app.database.models import Hand
 
-        row = ['03-09-2026', '1', 'Adam', 'AS', 'KH', '2C', '3D', '4S', '', '', 'fold', '-10.0']
+        row = [
+            '03-09-2026',
+            '1',
+            'Adam',
+            'AS',
+            'KH',
+            '2C',
+            '3D',
+            '4S',
+            '',
+            '',
+            'fold',
+            '-10.0',
+        ]
         csv_bytes = _make_csv([row])
         client.post(
             '/upload/csv/commit',
@@ -354,6 +463,7 @@ class TestCommitDatabaseRecords:
 # Validation failures — no data committed (AC-1 rollback path)
 # ---------------------------------------------------------------------------
 
+
 class TestCommitValidationErrors:
     """Invalid CSV must return 400 and leave the database unchanged."""
 
@@ -366,7 +476,20 @@ class TestCommitValidationErrors:
         assert response.status_code == 400
 
     def test_invalid_card_values_returns_400(self, client):
-        row = ['03-09-2026', '1', 'Adam', 'XX', 'KH', '2C', '3D', '4S', '5H', '6C', 'win', '0']
+        row = [
+            '03-09-2026',
+            '1',
+            'Adam',
+            'XX',
+            'KH',
+            '2C',
+            '3D',
+            '4S',
+            '5H',
+            '6C',
+            'win',
+            '0',
+        ]
         csv_bytes = _make_csv([row])
         response = client.post(
             '/upload/csv/commit',
@@ -377,7 +500,20 @@ class TestCommitValidationErrors:
     def test_invalid_csv_no_game_sessions_created(self, client):
         from app.database.models import GameSession
 
-        row = ['03-09-2026', '1', 'Adam', 'XX', 'KH', '2C', '3D', '4S', '5H', '6C', 'win', '0']
+        row = [
+            '03-09-2026',
+            '1',
+            'Adam',
+            'XX',
+            'KH',
+            '2C',
+            '3D',
+            '4S',
+            '5H',
+            '6C',
+            'win',
+            '0',
+        ]
         csv_bytes = _make_csv([row])
         client.post(
             '/upload/csv/commit',
@@ -392,7 +528,20 @@ class TestCommitValidationErrors:
     def test_invalid_csv_no_players_created(self, client):
         from app.database.models import Player
 
-        row = ['03-09-2026', '1', 'Adam', 'XX', 'KH', '2C', '3D', '4S', '5H', '6C', 'win', '0']
+        row = [
+            '03-09-2026',
+            '1',
+            'Adam',
+            'XX',
+            'KH',
+            '2C',
+            '3D',
+            '4S',
+            '5H',
+            '6C',
+            'win',
+            '0',
+        ]
         csv_bytes = _make_csv([row])
         client.post(
             '/upload/csv/commit',
@@ -406,8 +555,34 @@ class TestCommitValidationErrors:
 
     def test_duplicate_cards_in_hand_returns_400(self, client):
         # Adam and Gil share the same hole card (AS)
-        dup_row_1 = ['03-09-2026', '1', 'Adam', 'AS', 'KH', '2C', '3D', '4S', '5H', '6C', 'win', '0']
-        dup_row_2 = ['03-09-2026', '1', 'Gil', 'AS', 'QD', '2C', '3D', '4S', '5H', '6C', 'loss', '0']
+        dup_row_1 = [
+            '03-09-2026',
+            '1',
+            'Adam',
+            'AS',
+            'KH',
+            '2C',
+            '3D',
+            '4S',
+            '5H',
+            '6C',
+            'win',
+            '0',
+        ]
+        dup_row_2 = [
+            '03-09-2026',
+            '1',
+            'Gil',
+            'AS',
+            'QD',
+            '2C',
+            '3D',
+            '4S',
+            '5H',
+            '6C',
+            'loss',
+            '0',
+        ]
         csv_bytes = _make_csv([dup_row_1, dup_row_2])
         response = client.post(
             '/upload/csv/commit',

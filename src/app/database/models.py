@@ -62,6 +62,9 @@ class Hand(Base):
     flop_3 = Column(String, nullable=False)
     turn = Column(String, nullable=True)
     river = Column(String, nullable=True)
+    source_upload_id = Column(
+        Integer, ForeignKey('image_uploads.upload_id'), nullable=True
+    )
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     game_session = relationship('GameSession', back_populates='hands')
@@ -93,3 +96,40 @@ class ImageUpload(Base):
     file_path = Column(String, nullable=False)
     status = Column(String, nullable=False, default='processing')
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    detections = relationship('CardDetection', back_populates='image_upload')
+
+
+class CardDetection(Base):
+    __tablename__ = 'card_detections'
+    __table_args__ = (
+        UniqueConstraint(
+            'upload_id', 'card_position', name='uq_detection_upload_position'
+        ),
+    )
+
+    detection_id = Column(Integer, primary_key=True, autoincrement=True)
+    upload_id = Column(Integer, ForeignKey('image_uploads.upload_id'), nullable=False)
+    card_position = Column(String, nullable=False)
+    detected_value = Column(String, nullable=False)
+    confidence = Column(Float, nullable=False)
+    bbox_x = Column(Float, nullable=True)
+    bbox_y = Column(Float, nullable=True)
+    bbox_width = Column(Float, nullable=True)
+    bbox_height = Column(Float, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    image_upload = relationship('ImageUpload', back_populates='detections')
+
+
+class DetectionCorrection(Base):
+    __tablename__ = 'detection_corrections'
+
+    correction_id = Column(Integer, primary_key=True, autoincrement=True)
+    upload_id = Column(Integer, ForeignKey('image_uploads.upload_id'), nullable=False)
+    card_position = Column(String, nullable=False)
+    detected_value = Column(String, nullable=False)
+    corrected_value = Column(String, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    image_upload = relationship('ImageUpload')

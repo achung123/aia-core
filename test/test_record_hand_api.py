@@ -345,6 +345,29 @@ class TestDuplicateCardValidation:
         resp = client.post(f'/games/{game_with_players}/hands', json=payload)
         assert 'duplicate' in resp.json()['detail'].lower()
 
+    def test_duplicate_player_name_returns_400(self, client, game_with_players):
+        """Same player_name appearing twice should be rejected with 400."""
+        payload = {
+            'flop_1': {'rank': 'A', 'suit': 'S'},
+            'flop_2': {'rank': 'K', 'suit': 'H'},
+            'flop_3': {'rank': '2', 'suit': 'D'},
+            'player_entries': [
+                {
+                    'player_name': 'Alice',
+                    'card_1': {'rank': '7', 'suit': 'S'},
+                    'card_2': {'rank': '8', 'suit': 'S'},
+                },
+                {
+                    'player_name': 'Alice',
+                    'card_1': {'rank': '9', 'suit': 'H'},
+                    'card_2': {'rank': '10', 'suit': 'H'},
+                },
+            ],
+        }
+        resp = client.post(f'/games/{game_with_players}/hands', json=payload)
+        assert resp.status_code == 400
+        assert 'duplicate' in resp.json()['detail'].lower()
+
     def test_no_duplicate_cards_accepted(self, client, game_with_players):
         """A hand with all unique cards (including turn/river) succeeds."""
         payload = {
