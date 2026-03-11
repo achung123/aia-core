@@ -60,6 +60,26 @@ class TestAlembicConfiguration:
         env_py = (PROJECT_ROOT / 'alembic' / 'env.py').read_text()
         assert 'from app.database.models import' in env_py
 
+    def test_env_py_has_render_as_batch_offline(self):
+        """env.py run_migrations_offline must have render_as_batch=True for SQLite ALTER support."""
+        env_py = (PROJECT_ROOT / 'alembic' / 'env.py').read_text()
+        # Find the offline configure block and verify render_as_batch=True is present
+        offline_start = env_py.index('def run_migrations_offline')
+        online_start = env_py.index('def run_migrations_online')
+        offline_block = env_py[offline_start:online_start]
+        assert 'render_as_batch=True' in offline_block, (
+            'run_migrations_offline() context.configure() must include render_as_batch=True'
+        )
+
+    def test_env_py_has_render_as_batch_online(self):
+        """env.py run_migrations_online must have render_as_batch=True for SQLite ALTER support."""
+        env_py = (PROJECT_ROOT / 'alembic' / 'env.py').read_text()
+        online_start = env_py.index('def run_migrations_online')
+        online_block = env_py[online_start:]
+        assert 'render_as_batch=True' in online_block, (
+            'run_migrations_online() context.configure() must include render_as_batch=True'
+        )
+
 
 class TestAlembicMigrations:
     """T-006: Migration creates and drops all 5 new tables."""
