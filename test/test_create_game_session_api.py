@@ -229,3 +229,73 @@ class TestCreateGameSession:
             assert len(links) == 2
         finally:
             db.close()
+
+
+class TestAutoCreatePlayerTOCTOURaceCondition:
+    """POST /games — TOCTOU race in player auto-creation (aia-core-dce).
+
+    Simulates the scenario where two concurrent requests both pass the
+    'player is None' check before either flushes. The second INSERT raises
+    IntegrityError. The fix wraps the flush in begin_nested() / except
+    IntegrityError with a re-query fallback.
+    """
+
+    @pytest.fixture
+    def toctou_client(self):
+        """Client whose DB simulates the TOCTOU window.
+
+        'RacePlayer' is pre-committed to the DB (the concurrent winner), but
+        the route's first Player query is intercepted to return None (the loser
+        thread's view before the other commit was visible). The subsequent
+        flush will hit the unique constraint → IntegrityError.
+        """
+        from unittest.mock import MagicMock
+
+        from app.database.models import Player as PlayerModel
+
+        # Simulate the concurrent request that inserted 'RacePlayer' first.
+        pre_db = SessionLocal()
+        pre_db.add(PlayerModel(name='RacePlayer'))
+        pre_db.commit()
+        pre_db.close()
+
+        # Route's session: first Player query returns None (TOCTOU window).
+        route_db = SessionLocal()
+        query_count = [0]
+        original_query = route_db.query
+
+        def toctou_query(model, *args, **kwargs):
+            if model is PlayerModel:
+                query_count[0] += 1
+                if query_count[0] == 1:
+                    mock_q = MagicMock()
+                    mock_q.filter.return_value.first.return_value = None
+                    return mock_q
+            return original_query(model, *args, **kwargs)
+
+        route_db.query = toctou_query
+
+        def override():
+            yield route_db
+
+        app.dependency_overrides[get_db] = override
+        yield TestClient(app)
+        app.dependency_overrides.clear()
+        route_db.close()
+
+    def test_integrity_error_on_player_flush_returns_201(self, toctou_client):
+        """TOCTOU: IntegrityError on player flush → savepoint rollback + re-query → 201."""
+        response = toctou_client.post(
+            '/games',
+            json={'game_date': '2026-03-20', 'player_names': ['RacePlayer']},
+        )
+        assert response.status_code == 201
+
+    def test_integrity_error_on_player_flush_links_correct_player(self, toctou_client):
+        """After TOCTOU fallback, the pre-existing player is included in the response."""
+        response = toctou_client.post(
+            '/games',
+            json={'game_date': '2026-03-20', 'player_names': ['RacePlayer']},
+        )
+        assert response.status_code == 201
+        assert 'RacePlayer' in response.json()['player_names']

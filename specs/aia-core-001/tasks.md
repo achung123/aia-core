@@ -1623,3 +1623,20 @@ After `db.commit()` and `db.refresh(game)`, the handler accesses `game.players` 
 The T-056 fix deduplicates exact-string entries via `dict.fromkeys()`, but no test covers case-variant duplicates such as `['Adam', 'adam']`. This gap means the regression tracked in F-034 / T-058 will not be caught by the test suite until it surfaces in production.
 
 **Suggested follow-up:** Add `test_create_game_session_with_case_variant_duplicate_player_names` that POSTs `player_names: ['Adam', 'adam']` and asserts a 201 response with the player appearing exactly once. The test should be authored alongside the T-058 fix so it fails before the fix is applied and passes after.
+
+---
+
+### F-036 — Case-variant dedup test does not assert first-occurrence semantics
+
+**Source Task:** aia-core-z9f (T-058: Fix: Deduplicate resolved player_id set after lookup for case-variant player_names)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** test/test_create_game_session_api.py
+
+The case-variant deduplication test (added per T-058 AC-2) asserts only that the duplicate resolves to a single entry, but does not pin *which* form is returned. Without `assert set(data['player_names']) == {'Adam', 'Gil'}`, a regression that returned `'adam'` instead of `'Adam'` (last-occurrence wins) would still pass the test. Explicitly asserting the set locks in first-occurrence retention semantics, making the contract visible and regression-proof.
+
+**Suggested fix:** In `test_create_game_session_with_case_variant_duplicate_player_names`, replace or supplement the count assertion with:
+```python
+assert set(data['player_names']) == {'Adam', 'Gil'}
+```
+This confirms that the first-seen casing (`'Adam'`) is preserved and that no additional players are introduced.

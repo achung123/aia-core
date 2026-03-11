@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database.models import GamePlayer, GameSession, Player
@@ -28,9 +29,19 @@ def create_game_session(
             db.query(Player).filter(func.lower(Player.name) == name.lower()).first()
         )
         if player is None:
-            player = Player(name=name)
-            db.add(player)
-            db.flush()
+            try:
+                with db.begin_nested():
+                    player = Player(name=name)
+                    db.add(player)
+                    db.flush()
+            except IntegrityError:
+                # Concurrent request inserted the same player between our check
+                # and our flush (TOCTOU). Roll back the savepoint and re-query.
+                player = (
+                    db.query(Player)
+                    .filter(func.lower(Player.name) == name.lower())
+                    .first()
+                )
         if player.player_id in seen_player_ids:
             continue
         seen_player_ids.add(player.player_id)
