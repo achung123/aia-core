@@ -118,6 +118,7 @@ class TestPlayerInBaseMetadata:
 # AC-4: Player.hands_played relationship (T-044)
 # ---------------------------------------------------------------------------
 
+
 class TestPlayerHandsPlayedRelationship:
     """AC-4: Player.hands_played is a relationship to PlayerHand with back_populates."""
 
@@ -129,7 +130,6 @@ class TestPlayerHandsPlayedRelationship:
         )
 
     def test_player_hands_played_is_relationship(self):
-        from sqlalchemy.orm import RelationshipProperty
         from sqlalchemy import inspect
         from app.database.models import Player
 

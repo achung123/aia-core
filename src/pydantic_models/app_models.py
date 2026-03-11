@@ -228,6 +228,10 @@ class GameSessionResponse(BaseModel):
     hand_count: int
 
 
+class PlayerCreate(BaseModel):
+    name: str
+
+
 class PlayerResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

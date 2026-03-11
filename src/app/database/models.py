@@ -1,6 +1,15 @@
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 
-from sqlalchemy import Column, Date, DateTime, Float, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import (
+    Column,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -27,9 +36,7 @@ class GameSession(Base):
     status = Column(String, nullable=False, default='active')
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
-    players = relationship(
-        'Player', secondary='game_players', back_populates='games'
-    )
+    players = relationship('Player', secondary='game_players', back_populates='games')
 
     hands = relationship('Hand', back_populates='game_session')
 
@@ -37,12 +44,8 @@ class GameSession(Base):
 class GamePlayer(Base):
     __tablename__ = 'game_players'
 
-    game_id = Column(
-        Integer, ForeignKey('game_sessions.game_id'), primary_key=True
-    )
-    player_id = Column(
-        Integer, ForeignKey('players.player_id'), primary_key=True
-    )
+    game_id = Column(Integer, ForeignKey('game_sessions.game_id'), primary_key=True)
+    player_id = Column(Integer, ForeignKey('players.player_id'), primary_key=True)
 
 
 class Hand(Base):
@@ -67,9 +70,7 @@ class Hand(Base):
 
 class PlayerHand(Base):
     __tablename__ = 'player_hands'
-    __table_args__ = (
-        UniqueConstraint('hand_id', 'player_id', name='uq_player_hand'),
-    )
+    __table_args__ = (UniqueConstraint('hand_id', 'player_id', name='uq_player_hand'),)
 
     player_hand_id = Column(Integer, primary_key=True, autoincrement=True)
     hand_id = Column(Integer, ForeignKey('hands.hand_id'), nullable=False)

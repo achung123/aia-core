@@ -30,6 +30,7 @@ def db_session():
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_hand(db_session, hand_number=1):
     from app.database.models import GameSession, Hand
 
@@ -61,6 +62,7 @@ def _make_player(db_session, name='Alice'):
 # ---------------------------------------------------------------------------
 # AC-1: PlayerHand model exists with all specified columns
 # ---------------------------------------------------------------------------
+
 
 class TestPlayerHandModelExists:
     """AC-1: PlayerHand model exists with all columns and correct tablename."""
@@ -148,6 +150,7 @@ class TestPlayerHandModelExists:
 # AC-2: Foreign keys are correctly defined
 # ---------------------------------------------------------------------------
 
+
 class TestPlayerHandForeignKeys:
     """AC-2: hand_id and player_id are foreign keys."""
 
@@ -171,6 +174,7 @@ class TestPlayerHandForeignKeys:
 # ---------------------------------------------------------------------------
 # AC-3: Unique constraint on (hand_id, player_id)
 # ---------------------------------------------------------------------------
+
 
 class TestPlayerHandUniqueConstraint:
     """AC-3: Unique constraint on (hand_id, player_id) prevents duplicates."""
@@ -201,7 +205,7 @@ class TestPlayerHandUniqueConstraint:
             db_session.flush()
 
     def test_same_player_different_hands_allowed(self, db_session):
-        from app.database.models import GameSession, Hand, PlayerHand
+        from app.database.models import PlayerHand
 
         player = _make_player(db_session)
         hand1 = _make_hand(db_session, hand_number=1)
@@ -255,6 +259,7 @@ class TestPlayerHandUniqueConstraint:
 # AC-4: result and profit_loss are nullable
 # ---------------------------------------------------------------------------
 
+
 class TestPlayerHandNullableColumns:
     """AC-4: result and profit_loss are nullable."""
 
@@ -272,7 +277,9 @@ class TestPlayerHandNullableColumns:
         col = next(c for c in mapper.columns if c.key == 'profit_loss')
         assert col.nullable, 'profit_loss should be nullable'
 
-    def test_player_hand_can_be_created_without_result_and_profit_loss(self, db_session):
+    def test_player_hand_can_be_created_without_result_and_profit_loss(
+        self, db_session
+    ):
         from app.database.models import PlayerHand
 
         hand = _make_hand(db_session)
@@ -318,6 +325,7 @@ class TestPlayerHandNullableColumns:
 # ---------------------------------------------------------------------------
 # AC-5: created_at auto-populates, card_1/card_2 are stored
 # ---------------------------------------------------------------------------
+
 
 class TestPlayerHandCreation:
     """AC-5: Full round-trip creation with all fields."""
@@ -373,6 +381,7 @@ class TestPlayerHandCreation:
 # ---------------------------------------------------------------------------
 # AC-6: PlayerHand.player relationship uses back_populates (T-044)
 # ---------------------------------------------------------------------------
+
 
 class TestPlayerHandPlayerRelationship:
     """AC-6: PlayerHand.player has back_populates='hands_played'."""

@@ -2,7 +2,7 @@
 
 **Project ID:** aia-core-001
 **Date:** 2026-03-09
-**Total Tasks:** 50
+**Total Tasks:** 57
 **Status:** Draft
 
 ---
@@ -61,6 +61,13 @@
 | T-048 | Fix: Add NOT NULL enforcement tests for `card_1`, `card_2`, `hand_id`, `player_id` | bug | none | S-1.4 |
 | T-049 | Fix: Add `back_populates` to `PlayerHand.player` relationship | bug | T-044 | S-1.4 |
 | T-050 | Fix: Enable SQLite FK enforcement (`PRAGMA foreign_keys = ON`) in test fixtures | bug | none | S-1.4 |
+| T-051 | Fix: Catch `IntegrityError` on `create_player` and return 409 | bug | none | S-1.1 |
+| T-052 | Fix: Add input validation and whitespace strip on `PlayerCreate.name` | bug | none | S-1.1 |
+| T-053 | Fix: Remove duplicate DB setup in `test_player_api.py` | bug | none | — |
+| T-054 | Fix: Add pagination to `GET /players` | bug | none | S-1.1 |
+| T-055 | Fix: Add case-insensitive unique constraint on `Player.name` | bug | none | S-1.1 |
+| T-056 | Fix: Deduplicate `player_names` before `GamePlayer` inserts | bug | none | S-2.1 |
+| T-057 | Fix: Wrap player auto-creation in `try/except IntegrityError` with re-query fallback | bug | none | S-2.1 |
 
 ---
 
@@ -906,6 +913,220 @@ If individual test files create their own engines (rather than using the shared 
 
 ---
 
+### T-051 — Fix: Catch `IntegrityError` on `create_player` and return 409
+
+**Category:** bug
+**Severity:** HIGH
+**Priority:** 1
+**Discovered-from:** aia-core-abj (T-011)
+**Dependencies:** none
+**Story Ref:** S-1.1
+
+TOCTOU race condition: `create_player` reads for an existing player with `func.lower(name)`, then inserts. Two concurrent requests can both pass the duplicate guard before either commits. On PostgreSQL, `Player.name` `unique=True` is case-sensitive, so `"Adam"` and `"adam"` are distinct rows — the application-level guard is the only protection. The second insert raises an unhandled `sqlalchemy.exc.IntegrityError`, returning HTTP 500 instead of 409.
+
+**Fix:**
+In `src/app/routes/players.py`, wrap `session.commit()` in a try/except and handle `IntegrityError`:
+```python
+from sqlalchemy.exc import IntegrityError
+
+try:
+    session.commit()
+    session.refresh(player)
+except IntegrityError:
+    session.rollback()
+    raise HTTPException(status_code=409, detail="Player already exists")
+```
+The existing pre-commit `func.lower()` check may be retained as a fast-path for sequential requests.
+
+**Acceptance Criteria:**
+1. A duplicate `POST /players` (same name, any case variation) returns 409, not 500
+2. The session is rolled back before raising 409
+3. A concurrent duplicate blocked only by the DB constraint also returns 409
+4. All existing Player CRUD tests pass
+
+---
+
+### T-052 — Fix: Add input validation and whitespace strip on `PlayerCreate.name`
+
+**Category:** bug
+**Severity:** MEDIUM
+**Priority:** 2
+**Discovered-from:** aia-core-abj (T-011)
+**Dependencies:** none
+**Story Ref:** S-1.1
+
+`PlayerCreate.name` is declared as `name: str` with no constraints. Empty strings, all-whitespace strings, and arbitrarily long names pass validation silently, potentially inserting junk rows or causing unexpected query behaviour.
+
+**Fix:**
+In `src/pydantic_models/app_models.py`, update `PlayerCreate`:
+```python
+from pydantic import BaseModel, Field, field_validator
+
+class PlayerCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+
+    @field_validator('name')
+    @classmethod
+    def strip_name(cls, v: str) -> str:
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError('name must not be blank')
+        return stripped
+```
+
+**Acceptance Criteria:**
+1. `PlayerCreate(name='')` raises a validation error
+2. `PlayerCreate(name='   ')` raises a validation error
+3. `PlayerCreate(name='  Alice  ')` normalises to `'Alice'`
+4. `PlayerCreate(name='x' * 101)` raises a validation error
+5. Existing valid-input tests pass without modification
+
+---
+
+### T-053 — Fix: Remove duplicate DB setup in `test_player_api.py`
+
+**Category:** bug
+**Severity:** MEDIUM
+**Priority:** 2
+**Discovered-from:** aia-core-abj (T-011)
+**Dependencies:** none
+**Story Ref:** —
+
+`test/test_player_api.py` declares its own module-level `engine`, `SessionLocal`, `override_get_db`, and an `autouse` `setup_db` fixture, duplicating `conftest.py`. This creates a second independent in-memory engine with its own `create_all`/`drop_all` cycle. If any `conftest.py` fixture is also used in these tests, the two engines are out of sync and test isolation is fragile.
+
+**Fix:**
+Delete the module-level `engine`, `SessionLocal`, `override_get_db`, and `setup_db` declarations from `test/test_player_api.py`. Replace all local references with the shared `client` and `db_session` fixtures from `conftest.py`.
+
+**Acceptance Criteria:**
+1. `test_player_api.py` contains no module-level `create_engine`, `SessionLocal`, `override_get_db`, or `autouse` DB-setup fixture
+2. All tests in the file pass using the shared `conftest.py` fixtures
+3. `pytest test/test_player_api.py -v` shows no new failures
+
+---
+
+### T-054 — Fix: Add pagination to `GET /players`
+
+**Category:** bug
+**Severity:** LOW
+**Priority:** 3
+**Discovered-from:** aia-core-abj (T-011)
+**Dependencies:** none
+**Story Ref:** S-1.1
+
+`list_players` issues `SELECT *` with no `LIMIT` or `OFFSET`. A production table with thousands of players returns all rows in a single response, causing unbounded memory usage and slow response times.
+
+**Fix:**
+In `src/app/routes/players.py`, add `skip` and `limit` query parameters:
+```python
+@router.get('/players')
+def list_players(skip: int = 0, limit: int = 100, session: Session = Depends(get_db)):
+    return session.query(Player).offset(skip).limit(limit).all()
+```
+
+**Acceptance Criteria:**
+1. `GET /players` accepts optional `skip` (default 0) and `limit` (default 100) query params
+2. The underlying query applies `.offset(skip).limit(limit)`
+3. `GET /players?skip=0&limit=2` returns at most 2 players
+4. Existing list-players tests pass; a new test verifies the limit is applied
+
+---
+
+### T-055 — Fix: Add case-insensitive unique constraint on `Player.name`
+
+**Category:** bug
+**Severity:** LOW
+**Priority:** 3
+**Discovered-from:** aia-core-abj (T-011)
+**Dependencies:** none
+**Story Ref:** S-1.1
+
+`Player.name` carries a standard `unique=True` constraint, which is case-sensitive on PostgreSQL. This allows `"Alice"` and `"alice"` to coexist as separate rows. The application-layer `func.lower()` guard is the sole protection and is subject to the TOCTOU race in T-051.
+
+**Fix:**
+Remove `unique=True` from `Player.name` and introduce a functional unique index on `lower(name)`:
+```python
+# In Player model — Column definition
+name = Column(String, nullable=False)
+# In __table_args__:
+__table_args__ = (
+    Index('ix_player_name_lower', func.lower(name), unique=True),
+)
+```
+Generate an Alembic migration to apply this change.
+
+**Acceptance Criteria:**
+1. `Player.name` column definition no longer carries `unique=True`
+2. A functional unique index on `lower(name)` exists in the migration
+3. Attempting to insert `"Alice"` when `"alice"` already exists raises `IntegrityError`
+4. A new test verifies case-insensitive uniqueness is enforced at the DB level
+5. Existing Player model tests pass
+
+---
+
+### T-056 — Fix: Deduplicate `player_names` before `GamePlayer` inserts
+
+**Category:** bug
+**Severity:** HIGH
+**Priority:** 1
+**Discovered-from:** aia-core-9cv (T-013)
+**Dependencies:** none
+**Story Ref:** S-2.1
+
+`POST /games` accepts a `player_names` list with no deduplication. If `player_names` contains duplicates (e.g. `['Adam', 'Adam']`), the loop in `src/app/routes/games.py` (lines 25–33) finds or creates a single `Player` record but then attempts to insert two `GamePlayer` rows with identical composite primary key `(game_id, player_id)`. The second insert raises an unhandled `sqlalchemy.exc.IntegrityError`, returning HTTP 500 instead of 422.
+
+**Fix:**
+In `src/app/routes/games.py`, deduplicate `player_names` before the loop:
+```python
+unique_names = list(dict.fromkeys(payload.player_names))  # preserves insertion order
+for name in unique_names:
+    ...
+```
+Alternatively, catch `IntegrityError` on the `GamePlayer` insert and re-query, but input deduplication at the entry point is simpler and avoids the exception path entirely.
+
+**Acceptance Criteria:**
+1. `POST /games` with `player_names: ['Adam', 'Adam']` returns 201 with Adam listed once, not 500
+2. A test asserts the deduplicated behaviour
+3. Existing game session creation tests continue to pass
+
+---
+
+### T-057 — Fix: Wrap player auto-creation in `try/except IntegrityError` with re-query fallback
+
+**Category:** bug
+**Severity:** HIGH
+**Priority:** 1
+**Discovered-from:** aia-core-9cv (T-013)
+**Dependencies:** none
+**Story Ref:** S-2.1
+
+Two concurrent `POST /games` requests with the same new player name will both reach the `if player is None` branch (`src/app/routes/games.py` lines 25–30) before either flush completes. Both then attempt `INSERT INTO players`; the second hits the `Player.name` unique constraint and raises an unhandled `IntegrityError`, returning HTTP 500. This is the same TOCTOU class as T-051 / F-020 but in the player auto-creation path inside `create_game_session`.
+
+**Fix:**
+In `src/app/routes/games.py`, wrap the auto-creation block in a `try/except IntegrityError` with a re-query fallback:
+```python
+from sqlalchemy.exc import IntegrityError
+
+if player is None:
+    try:
+        player = Player(name=name)
+        db.add(player)
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        player = (
+            db.query(Player)
+            .filter(func.lower(Player.name) == func.lower(name))
+            .first()
+        )
+```
+
+**Acceptance Criteria:**
+1. A concurrent duplicate player-name insertion returns 201 for both callers, not 500
+2. The re-queried player is correctly linked to the new game session via `GamePlayer`
+3. Existing game session creation tests continue to pass
+
+---
+
 ## Bugs / Findings
 
 ### F-001 — Single-record-only traversal test (T-044)
@@ -1126,3 +1347,215 @@ Assertions using `Path('src/...')` are fragile when pytest is invoked from a dir
 The `DATABASE_URL` env-var branch is executed at module import time. Once the module is cached in `sys.modules`, setting the env var in a test has no effect, making the branch untestable without explicit test isolation (e.g. `importlib.reload` or `monkeypatch` + module reload).
 
 **Suggested fix:** Wrap engine creation in a factory function or lazy-initializer so the env var is read at call time, enabling proper test isolation.
+
+---
+
+### F-018 — .clear() vs targeted key removal in conftest fixture (T-049)
+
+**Source Task:** aia-core-med (T-049: Fix: client fixture in conftest.py must yield and clear dependency_overrides)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** test/conftest.py (line 37)
+
+`app.dependency_overrides.clear()` removes all overrides, but the fixture only owns the `get_db` entry. If a future test registers additional overrides before this fixture tears down, they will be silently wiped. The more precise pattern is `app.dependency_overrides.pop(get_db, None)`, which removes only the entry this fixture installed.
+
+No active bug since only one override exists today.
+
+**Suggested fix:** Replace `app.dependency_overrides.clear()` with `app.dependency_overrides.pop(get_db, None)`.
+
+---
+
+### F-019 — TestClient not used as context manager (T-049)
+
+**Source Task:** aia-core-med (T-049: Fix: client fixture in conftest.py must yield and clear dependency_overrides)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** test/conftest.py
+
+`yield TestClient(app)` (bare) skips app startup and shutdown lifespan events. FastAPI recommends using `TestClient` as a context manager so that lifespan handlers are exercised: `with TestClient(app) as client: yield client`. No current impact since no lifespan handlers are registered, but the pattern should be adopted before any are added.
+
+**Suggested fix:** Replace `yield TestClient(app)` with `with TestClient(app) as client: yield client`.
+
+---
+
+### F-020 — TOCTOU race condition on duplicate detection (T-011)
+
+**Source Task:** aia-core-abj (T-011: Implement Player CRUD endpoints)
+**Review Date:** 2026-03-11
+**Severity:** HIGH
+**File:** src/app/routes/players.py — `create_player` (lines 20–31)
+
+The handler reads for an existing player with `func.lower(name)`, then inserts. Two concurrent requests can both pass the guard before either commits. On PostgreSQL, `Player.name unique=True` is case-sensitive, so `"Adam"` and `"adam"` are distinct rows — the application-level guard is the sole protection. The second insert raises an unhandled `IntegrityError`, returning HTTP 500 instead of 409. **Tracked as T-051.**
+
+**Suggested follow-up:** Catch `sqlalchemy.exc.IntegrityError` after commit and raise 409; see also T-055 / F-024 for the complementary DB-level fix.
+
+---
+
+### F-021 — No input validation on `PlayerCreate.name` (T-011)
+
+**Source Task:** aia-core-abj (T-011: Implement Player CRUD endpoints)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/pydantic_models/app_models.py — `PlayerCreate.name`
+
+`name: str` has no `min_length`, no `strip()`, and no max length. Empty strings and all-whitespace values pass validation silently. **Tracked as T-052.**
+
+**Suggested follow-up:** Use `name: str = Field(min_length=1, max_length=100)` and add a `field_validator` that strips whitespace and rejects blank strings.
+
+---
+
+### F-022 — Test file reinvents conftest infrastructure (T-011)
+
+**Source Task:** aia-core-abj (T-011: Implement Player CRUD endpoints)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** test/test_player_api.py — module-level setup
+
+Module-level `engine`, `SessionLocal`, `override_get_db`, and `setup_db` (autouse) duplicate `conftest.py`, creating two independent `create_all`/`drop_all` cycles on separate engines. **Tracked as T-053.**
+
+**Suggested follow-up:** Remove the module-level DB setup from `test_player_api.py` and rely on the shared `client` and `db_session` fixtures from `conftest.py`.
+
+---
+
+### F-023 — No pagination on `GET /players` (T-011)
+
+**Source Task:** aia-core-abj (T-011: Implement Player CRUD endpoints)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** src/app/routes/players.py — `list_players`
+
+`SELECT *` with no `LIMIT`/`OFFSET`. A large player table returns all rows in a single response. **Tracked as T-054.**
+
+**Suggested follow-up:** Add `skip: int = 0` and `limit: int = 100` query params; apply `.offset(skip).limit(limit)` to the query.
+
+---
+
+### F-024 — `Player.name` unique constraint is case-sensitive at DB level (T-011)
+
+**Source Task:** aia-core-abj (T-011: Implement Player CRUD endpoints)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** src/app/database/models.py — `Player.name`
+
+`unique=True` is case-sensitive in PostgreSQL, allowing `"Alice"` and `"alice"` to coexist as separate rows. The application layer's `func.lower()` guard is the sole protection and is subject to the TOCTOU race in F-020. **Tracked as T-055.**
+
+**Suggested follow-up:** Add a functional unique index on `lower(name)` or use a case-insensitive collation (`CITEXT` on PostgreSQL).
+
+---
+
+### F-025 — Unused fixture parameter in `test_integrity_error_on_commit_rolls_back` (T-051)
+
+**Source Task:** aia-core-m41 (T-051: Fix: Catch IntegrityError on create_player and return 409)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** test/test_player_api.py — `test_integrity_error_on_commit_rolls_back`
+
+The test declares `client_with_racy_db` in its parameter list but never references it inside the body. The fixture's patched session setup is silently discarded; the test then rebuilds its own `MagicMock` session and `TestClient` inline. The intent of the test is indeterminate — either the fixture was added by mistake and the inline setup is what's actually under test, or the fixture was meant to drive the test and the inline duplication should be removed. Either way, the fixture parameter creates false documentation: a reader assumes the fixture is doing work it is not.
+
+**Suggested fix:** If the inline mock approach is intentional, remove `client_with_racy_db` from the function signature. If the fixture is meant to own the setup, delete the inline `MagicMock`/`TestClient` block and use `client_with_racy_db` directly.
+
+---
+
+### F-026 — `raise HTTPException from None` suppresses IntegrityError context (T-051)
+
+**Source Task:** aia-core-m41 (T-051: Fix: Catch IntegrityError on create_player and return 409)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** src/app/routes/players.py — `create_player` (line 33)
+
+`raise HTTPException(status_code=409, ...) from None` explicitly suppresses the original `IntegrityError` as the exception context. For HTTP responses this is invisible, but structured logging middleware and APM tools (Sentry, OpenTelemetry) inspect `__cause__` and `__context__` to capture root-cause detail. Suppressing the cause means the DB constraint name, violation detail, and stack frame are all lost at the tracing layer, making production diagnosis harder.
+
+**Suggested fix:** Replace `from None` with `from exc` (where `exc` is the caught `IntegrityError`) so the original exception is preserved as the explicit cause while still raising the 409 response.
+
+---
+
+### F-027 — Unhandled `IntegrityError` on duplicate `player_names` in request payload (T-013)
+
+**Source Task:** aia-core-9cv (T-013: Implement Create Game Session endpoint)
+**Review Date:** 2026-03-11
+**Severity:** HIGH
+**File:** src/app/routes/games.py — lines 25–33
+**Tracked as:** T-056
+
+If `player_names` contains duplicates (e.g. `['Adam', 'Adam']`), the first iteration finds or creates a `Player` and flushes a `GamePlayer`. The second iteration resolves the same player and attempts a second `db.add(GamePlayer(game_id=..., player_id=...))` with the identical composite PK `(game_id, player_id)`. The unhandled `IntegrityError` surfaces as HTTP 500 instead of 422.
+
+**Suggested follow-up:** Implement T-056 — deduplicate `player_names` before the loop using `list(dict.fromkeys(payload.player_names))`.
+
+---
+
+### F-028 — TOCTOU race during player auto-creation in `create_game_session` (T-013)
+
+**Source Task:** aia-core-9cv (T-013: Implement Create Game Session endpoint)
+**Review Date:** 2026-03-11
+**Severity:** HIGH
+**File:** src/app/routes/games.py — lines 25–30
+**Tracked as:** T-057
+
+Two concurrent `POST /games` requests with the same new player name both pass the `if player is None` guard before either flush completes. Both attempt `INSERT INTO players`; the second hits the `Player.name` unique constraint and raises an unhandled `IntegrityError` (HTTP 500). Same TOCTOU class as T-051 / F-020, but in the auto-creation path inside `create_game_session`.
+
+**Suggested follow-up:** Implement T-057 — wrap the `db.add(player)` / `db.flush()` block in a `try/except IntegrityError` with a re-query fallback.
+
+---
+
+### F-029 — No input validation on individual `player_names` entries (T-013)
+
+**Source Task:** aia-core-9cv (T-013: Implement Create Game Session endpoint)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/pydantic_models/app_models.py — `GameSessionCreate.player_names` (line 216)
+
+`GameSessionCreate.player_names` is `list[str] = Field(..., min_length=1)`, which validates only that the list is non-empty. Individual entries are unconstrained: blank strings (`''`), all-whitespace strings (`'   '`), and arbitrarily long names pass validation silently and are forwarded directly to `Player(name=name)`, creating malformed rows.
+
+**Suggested follow-up:** Add a `@field_validator('player_names')` that strips each entry, rejects blanks, and enforces a `max_length` (e.g. 100 characters) consistent with the planned T-052 fix for `PlayerCreate.name`.
+
+---
+
+### F-030 — `GameSession.status` is an unconstrained `String` — no Enum or CHECK constraint (T-013)
+
+**Source Task:** aia-core-9cv (T-013: Implement Create Game Session endpoint)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/database/models.py — `GameSession.status` (line 36)
+
+`status` is `Column(String, nullable=False, default='active')` with no DB-level constraint. Any string (e.g. `'Active'`, `'DONE'`, `'foo'`) persists without error. The planned `PATCH /games/{game_id}/complete` endpoint (T-016) will compare against the literal `'completed'`; inconsistent capitalisation or typos will defeat that check silently.
+
+**Suggested follow-up:** Replace with `Column(Enum('active', 'completed', name='game_status'), nullable=False, default='active')`, mirroring the T-046 fix for `PlayerHand.result`, with a corresponding Alembic migration.
+
+---
+
+### F-031 — No test for duplicate entries in `player_names` (T-013)
+
+**Source Task:** aia-core-9cv (T-013: Implement Create Game Session endpoint)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** test/test_create_game_session_api.py
+
+The bug tracked in F-027 / T-056 has zero test coverage. No existing test calls `POST /games` with a `player_names` list containing repeated entries, leaving the duplicate-`GamePlayer` `IntegrityError` path entirely unexercised.
+
+**Suggested follow-up:** Add a test `test_create_game_session_with_duplicate_player_names` that POSTs `player_names: ['Adam', 'Adam']` and asserts a 201 response with Adam appearing exactly once in the returned player list.
+
+---
+
+### F-032 — No test for S-2.1 AC4 — same-date duplicate sessions (T-013)
+
+**Source Task:** aia-core-9cv (T-013: Implement Create Game Session endpoint)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** test/test_create_game_session_api.py
+
+S-2.1 AC4 ("two game sessions on the same date return different `game_id`s") is not covered. `test_create_two_games_get_different_ids` uses two different dates (`2025-01-01` and `2025-01-02`) and does not exercise the same-date path.
+
+**Suggested follow-up:** Add a test that creates two sessions with identical `game_date` values and asserts the returned `game_id` values are distinct.
+
+---
+
+### F-033 — Response built from lazy-loaded relationships after commit — `DetachedInstanceError` risk (T-013)
+
+**Source Task:** aia-core-9cv (T-013: Implement Create Game Session endpoint)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** src/app/routes/games.py — lines 36–44
+
+After `db.commit()` and `db.refresh(game)`, the handler accesses `game.players` and `game.hands` to build `GameSessionResponse`. With the current session strategy these lazy loads succeed. If the strategy changes — e.g. `expire_on_commit=True` without an explicit refresh of the relationships, or an object passed to a background task outside the session scope — accessing these attributes raises `DetachedInstanceError`.
+
+**Suggested follow-up:** Eagerly load `players` and `hands` before commit using `options(selectinload(...))`, or explicitly refresh the required relationships after `db.refresh(game)`, to make response-building independent of the session's post-commit expiry behaviour.

@@ -84,7 +84,13 @@ class TestAlembicConfiguration:
 class TestAlembicMigrations:
     """T-006: Migration creates and drops all 5 new tables."""
 
-    EXPECTED_TABLES = {'players', 'game_sessions', 'game_players', 'hands', 'player_hands'}
+    EXPECTED_TABLES = {
+        'players',
+        'game_sessions',
+        'game_players',
+        'hands',
+        'player_hands',
+    }
 
     def _run_alembic(self, command_name, revision, db_url):
         from alembic.config import Config
@@ -132,6 +138,4 @@ class TestAlembicMigrations:
         engine.dispose()
 
         remaining = self.EXPECTED_TABLES & tables
-        assert not remaining, (
-            f'Tables still exist after downgrade: {remaining}'
-        )
+        assert not remaining, f'Tables still exist after downgrade: {remaining}'
