@@ -34,7 +34,8 @@ def setup_and_teardown_db():
 def client():
     """Provides a test client for FastAPI with overridden database."""
     app.dependency_overrides[get_db] = override_get_db
-    return TestClient(app)
+    yield TestClient(app)
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture
