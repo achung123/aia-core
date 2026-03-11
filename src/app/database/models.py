@@ -83,3 +83,13 @@ class PlayerHand(Base):
 
     hand = relationship('Hand', back_populates='player_hands')
     player = relationship('Player', back_populates='hands_played')
+
+
+class ImageUpload(Base):
+    __tablename__ = 'image_uploads'
+
+    upload_id = Column(Integer, primary_key=True, autoincrement=True)
+    game_id = Column(Integer, ForeignKey('game_sessions.game_id'), nullable=False)
+    file_path = Column(String, nullable=False)
+    status = Column(String, nullable=False, default='processing')
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

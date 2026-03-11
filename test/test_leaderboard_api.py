@@ -62,87 +62,145 @@ def seeded_client(client):
       hands_played = 1
     """
     # Session 1: Alice, Bob
-    g1 = client.post('/games', json={'game_date': '2026-01-01', 'player_names': ['Alice', 'Bob']})
+    g1 = client.post(
+        '/games', json={'game_date': '2026-01-01', 'player_names': ['Alice', 'Bob']}
+    )
     assert g1.status_code == 201
     gid1 = g1.json()['game_id']
 
-    h1 = client.post(f'/games/{gid1}/hands', json={
-        'flop_1': {'rank': 'A', 'suit': 'S'},
-        'flop_2': {'rank': 'K', 'suit': 'H'},
-        'flop_3': {'rank': '2', 'suit': 'D'},
-        'player_entries': [
-            {'player_name': 'Alice', 'card_1': {'rank': '7', 'suit': 'S'}, 'card_2': {'rank': '8', 'suit': 'S'}},
-            {'player_name': 'Bob',   'card_1': {'rank': '9', 'suit': 'H'}, 'card_2': {'rank': '10', 'suit': 'H'}},
-        ],
-    })
+    h1 = client.post(
+        f'/games/{gid1}/hands',
+        json={
+            'flop_1': {'rank': 'A', 'suit': 'S'},
+            'flop_2': {'rank': 'K', 'suit': 'H'},
+            'flop_3': {'rank': '2', 'suit': 'D'},
+            'player_entries': [
+                {
+                    'player_name': 'Alice',
+                    'card_1': {'rank': '7', 'suit': 'S'},
+                    'card_2': {'rank': '8', 'suit': 'S'},
+                },
+                {
+                    'player_name': 'Bob',
+                    'card_1': {'rank': '9', 'suit': 'H'},
+                    'card_2': {'rank': '10', 'suit': 'H'},
+                },
+            ],
+        },
+    )
     assert h1.status_code == 201
     hn1 = h1.json()['hand_number']
-    r1 = client.patch(f'/games/{gid1}/hands/{hn1}/results', json=[
-        {'player_name': 'Alice', 'result': 'win',  'profit_loss': 30.0},
-        {'player_name': 'Bob',   'result': 'loss', 'profit_loss': -30.0},
-    ])
+    r1 = client.patch(
+        f'/games/{gid1}/hands/{hn1}/results',
+        json=[
+            {'player_name': 'Alice', 'result': 'win', 'profit_loss': 30.0},
+            {'player_name': 'Bob', 'result': 'loss', 'profit_loss': -30.0},
+        ],
+    )
     assert r1.status_code == 200
 
-    h2 = client.post(f'/games/{gid1}/hands', json={
-        'flop_1': {'rank': '3', 'suit': 'S'},
-        'flop_2': {'rank': '4', 'suit': 'H'},
-        'flop_3': {'rank': '5', 'suit': 'D'},
-        'turn': {'rank': '6', 'suit': 'C'},
-        'player_entries': [
-            {'player_name': 'Alice', 'card_1': {'rank': 'J', 'suit': 'S'}, 'card_2': {'rank': 'Q', 'suit': 'S'}},
-            {'player_name': 'Bob',   'card_1': {'rank': 'K', 'suit': 'D'}, 'card_2': {'rank': 'A', 'suit': 'D'}},
-        ],
-    })
+    h2 = client.post(
+        f'/games/{gid1}/hands',
+        json={
+            'flop_1': {'rank': '3', 'suit': 'S'},
+            'flop_2': {'rank': '4', 'suit': 'H'},
+            'flop_3': {'rank': '5', 'suit': 'D'},
+            'turn': {'rank': '6', 'suit': 'C'},
+            'player_entries': [
+                {
+                    'player_name': 'Alice',
+                    'card_1': {'rank': 'J', 'suit': 'S'},
+                    'card_2': {'rank': 'Q', 'suit': 'S'},
+                },
+                {
+                    'player_name': 'Bob',
+                    'card_1': {'rank': 'K', 'suit': 'D'},
+                    'card_2': {'rank': 'A', 'suit': 'D'},
+                },
+            ],
+        },
+    )
     assert h2.status_code == 201
     hn2 = h2.json()['hand_number']
-    r2 = client.patch(f'/games/{gid1}/hands/{hn2}/results', json=[
-        {'player_name': 'Alice', 'result': 'fold', 'profit_loss': 0.0},
-        {'player_name': 'Bob',   'result': 'win',  'profit_loss': 10.0},
-    ])
+    r2 = client.patch(
+        f'/games/{gid1}/hands/{hn2}/results',
+        json=[
+            {'player_name': 'Alice', 'result': 'fold', 'profit_loss': 0.0},
+            {'player_name': 'Bob', 'result': 'win', 'profit_loss': 10.0},
+        ],
+    )
     assert r2.status_code == 200
 
     # Session 2: Alice, Bob
-    g2 = client.post('/games', json={'game_date': '2026-01-08', 'player_names': ['Alice', 'Bob']})
+    g2 = client.post(
+        '/games', json={'game_date': '2026-01-08', 'player_names': ['Alice', 'Bob']}
+    )
     assert g2.status_code == 201
     gid2 = g2.json()['game_id']
 
-    h3 = client.post(f'/games/{gid2}/hands', json={
-        'flop_1': {'rank': '2', 'suit': 'S'},
-        'flop_2': {'rank': '3', 'suit': 'H'},
-        'flop_3': {'rank': '4', 'suit': 'D'},
-        'turn':  {'rank': '5', 'suit': 'C'},
-        'river': {'rank': '6', 'suit': 'S'},
-        'player_entries': [
-            {'player_name': 'Alice', 'card_1': {'rank': '9', 'suit': 'S'}, 'card_2': {'rank': '10', 'suit': 'S'}},
-            {'player_name': 'Bob',   'card_1': {'rank': 'J', 'suit': 'H'}, 'card_2': {'rank': 'Q', 'suit': 'H'}},
-        ],
-    })
+    h3 = client.post(
+        f'/games/{gid2}/hands',
+        json={
+            'flop_1': {'rank': '2', 'suit': 'S'},
+            'flop_2': {'rank': '3', 'suit': 'H'},
+            'flop_3': {'rank': '4', 'suit': 'D'},
+            'turn': {'rank': '5', 'suit': 'C'},
+            'river': {'rank': '6', 'suit': 'S'},
+            'player_entries': [
+                {
+                    'player_name': 'Alice',
+                    'card_1': {'rank': '9', 'suit': 'S'},
+                    'card_2': {'rank': '10', 'suit': 'S'},
+                },
+                {
+                    'player_name': 'Bob',
+                    'card_1': {'rank': 'J', 'suit': 'H'},
+                    'card_2': {'rank': 'Q', 'suit': 'H'},
+                },
+            ],
+        },
+    )
     assert h3.status_code == 201
     hn3 = h3.json()['hand_number']
-    r3 = client.patch(f'/games/{gid2}/hands/{hn3}/results', json=[
-        {'player_name': 'Alice', 'result': 'win',  'profit_loss': 50.0},
-        {'player_name': 'Bob',   'result': 'loss', 'profit_loss': -50.0},
-    ])
+    r3 = client.patch(
+        f'/games/{gid2}/hands/{hn3}/results',
+        json=[
+            {'player_name': 'Alice', 'result': 'win', 'profit_loss': 50.0},
+            {'player_name': 'Bob', 'result': 'loss', 'profit_loss': -50.0},
+        ],
+    )
     assert r3.status_code == 200
 
     # Session 3: Charlie (1 hand, big win)
-    g3 = client.post('/games', json={'game_date': '2026-01-15', 'player_names': ['Charlie']})
+    g3 = client.post(
+        '/games', json={'game_date': '2026-01-15', 'player_names': ['Charlie']}
+    )
     assert g3.status_code == 201
     gid3 = g3.json()['game_id']
 
-    h4 = client.post(f'/games/{gid3}/hands', json={
-        'flop_1': {'rank': '7', 'suit': 'S'},
-        'flop_2': {'rank': '8', 'suit': 'H'},
-        'flop_3': {'rank': '9', 'suit': 'D'},
-        'player_entries': [
-            {'player_name': 'Charlie', 'card_1': {'rank': 'A', 'suit': 'C'}, 'card_2': {'rank': 'K', 'suit': 'C'}},
-        ],
-    })
+    h4 = client.post(
+        f'/games/{gid3}/hands',
+        json={
+            'flop_1': {'rank': '7', 'suit': 'S'},
+            'flop_2': {'rank': '8', 'suit': 'H'},
+            'flop_3': {'rank': '9', 'suit': 'D'},
+            'player_entries': [
+                {
+                    'player_name': 'Charlie',
+                    'card_1': {'rank': 'A', 'suit': 'C'},
+                    'card_2': {'rank': 'K', 'suit': 'C'},
+                },
+            ],
+        },
+    )
     assert h4.status_code == 201
     hn4 = h4.json()['hand_number']
-    r4 = client.patch(f'/games/{gid3}/hands/{hn4}/results', json=[
-        {'player_name': 'Charlie', 'result': 'win', 'profit_loss': 100.0},
-    ])
+    r4 = client.patch(
+        f'/games/{gid3}/hands/{hn4}/results',
+        json=[
+            {'player_name': 'Charlie', 'result': 'win', 'profit_loss': 100.0},
+        ],
+    )
     assert r4.status_code == 200
 
     return client
@@ -306,17 +364,26 @@ class TestLeaderboardExcludesPlayersWithNoResults:
 
     def test_player_without_results_excluded(self, client):
         # Create a player with a hand but no results
-        g = client.post('/games', json={'game_date': '2026-02-01', 'player_names': ['Ghost']})
+        g = client.post(
+            '/games', json={'game_date': '2026-02-01', 'player_names': ['Ghost']}
+        )
         assert g.status_code == 201
         gid = g.json()['game_id']
-        h = client.post(f'/games/{gid}/hands', json={
-            'flop_1': {'rank': 'A', 'suit': 'S'},
-            'flop_2': {'rank': 'K', 'suit': 'H'},
-            'flop_3': {'rank': '2', 'suit': 'D'},
-            'player_entries': [
-                {'player_name': 'Ghost', 'card_1': {'rank': '7', 'suit': 'S'}, 'card_2': {'rank': '8', 'suit': 'S'}},
-            ],
-        })
+        h = client.post(
+            f'/games/{gid}/hands',
+            json={
+                'flop_1': {'rank': 'A', 'suit': 'S'},
+                'flop_2': {'rank': 'K', 'suit': 'H'},
+                'flop_3': {'rank': '2', 'suit': 'D'},
+                'player_entries': [
+                    {
+                        'player_name': 'Ghost',
+                        'card_1': {'rank': '7', 'suit': 'S'},
+                        'card_2': {'rank': '8', 'suit': 'S'},
+                    },
+                ],
+            },
+        )
         assert h.status_code == 201
 
         resp = client.get('/stats/leaderboard')

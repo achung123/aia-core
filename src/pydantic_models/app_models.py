@@ -394,3 +394,10 @@ class PaginatedHandSearchResponse(BaseModel):
     page: int
     per_page: int
     results: list[HandSearchResult]
+
+
+class CSVCommitSummary(BaseModel):
+    games_created: int
+    hands_created: int
+    players_created: int
+    players_matched: int

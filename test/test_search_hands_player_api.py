@@ -112,7 +112,9 @@ class TestSearchHandsByPlayer:
         response = client.get('/hands', params={'player': 'Alice'})
         assert response.status_code == 200
 
-    def test_search_returns_paginated_shape(self, client, game_with_players, recorded_hand):
+    def test_search_returns_paginated_shape(
+        self, client, game_with_players, recorded_hand
+    ):
         response = client.get('/hands', params={'player': 'Alice'})
         data = response.json()
         assert 'total' in data
@@ -120,7 +122,9 @@ class TestSearchHandsByPlayer:
         assert 'per_page' in data
         assert 'results' in data
 
-    def test_search_default_pagination_values(self, client, game_with_players, recorded_hand):
+    def test_search_default_pagination_values(
+        self, client, game_with_players, recorded_hand
+    ):
         response = client.get('/hands', params={'player': 'Alice'})
         data = response.json()
         assert data['page'] == 1
@@ -132,7 +136,9 @@ class TestSearchHandsByPlayer:
         assert data['total'] == 1
         assert len(data['results']) == 1
 
-    def test_search_result_includes_community_cards(self, client, game_with_players, recorded_hand):
+    def test_search_result_includes_community_cards(
+        self, client, game_with_players, recorded_hand
+    ):
         response = client.get('/hands', params={'player': 'Alice'})
         result = response.json()['results'][0]
         assert result['flop_1'] == 'AS'
@@ -141,7 +147,9 @@ class TestSearchHandsByPlayer:
         assert result['turn'] == '5C'
         assert result['river'] == 'JD'
 
-    def test_search_result_includes_player_hole_cards(self, client, game_with_players, recorded_hand):
+    def test_search_result_includes_player_hole_cards(
+        self, client, game_with_players, recorded_hand
+    ):
         response = client.get('/hands', params={'player': 'Alice'})
         result = response.json()['results'][0]
         assert 'player_hand' in result
@@ -149,30 +157,40 @@ class TestSearchHandsByPlayer:
         assert ph['card_1'] == '7S'
         assert ph['card_2'] == '8S'
 
-    def test_search_result_includes_result_field(self, client, game_with_players, recorded_hand):
+    def test_search_result_includes_result_field(
+        self, client, game_with_players, recorded_hand
+    ):
         response = client.get('/hands', params={'player': 'Alice'})
         ph = response.json()['results'][0]['player_hand']
         assert ph['result'] == 'win'
 
-    def test_search_result_includes_game_date(self, client, game_with_players, recorded_hand):
+    def test_search_result_includes_game_date(
+        self, client, game_with_players, recorded_hand
+    ):
         response = client.get('/hands', params={'player': 'Alice'})
         result = response.json()['results'][0]
         assert 'game_date' in result
         assert result['game_date'] == '2026-03-11'
 
-    def test_search_result_includes_hand_number(self, client, game_with_players, recorded_hand):
+    def test_search_result_includes_hand_number(
+        self, client, game_with_players, recorded_hand
+    ):
         response = client.get('/hands', params={'player': 'Alice'})
         result = response.json()['results'][0]
         assert 'hand_number' in result
         assert result['hand_number'] == 1
 
-    def test_search_result_includes_game_id(self, client, game_with_players, recorded_hand):
+    def test_search_result_includes_game_id(
+        self, client, game_with_players, recorded_hand
+    ):
         response = client.get('/hands', params={'player': 'Alice'})
         result = response.json()['results'][0]
         assert 'game_id' in result
         assert result['game_id'] == game_with_players
 
-    def test_search_returns_only_players_own_hole_cards(self, client, game_with_players, recorded_hand):
+    def test_search_returns_only_players_own_hole_cards(
+        self, client, game_with_players, recorded_hand
+    ):
         """Alice's result has Alice's cards; Bob's result has Bob's cards."""
         resp_alice = client.get('/hands', params={'player': 'Alice'})
         ph_alice = resp_alice.json()['results'][0]['player_hand']
@@ -184,17 +202,22 @@ class TestSearchHandsByPlayer:
         assert ph_bob['card_1'] == '9H'
         assert ph_bob['card_2'] == '10H'
 
-    def test_search_empty_results_for_nonexistent_player(self, client, game_with_players, recorded_hand):
+    def test_search_empty_results_for_nonexistent_player(
+        self, client, game_with_players, recorded_hand
+    ):
         response = client.get('/hands', params={'player': 'NonExistent'})
         data = response.json()
         assert data['total'] == 0
         assert data['results'] == []
 
-    def test_search_player_param_required(self, client):
+    def test_search_no_params_returns_200(self, client):
+        """GET /hands with no params is valid — all filters are optional."""
         response = client.get('/hands')
-        assert response.status_code == 422
+        assert response.status_code == 200
 
-    def test_search_case_insensitive_player_name(self, client, game_with_players, recorded_hand):
+    def test_search_case_insensitive_player_name(
+        self, client, game_with_players, recorded_hand
+    ):
         response = client.get('/hands', params={'player': 'alice'})
         data = response.json()
         assert data['total'] == 1
@@ -207,7 +230,9 @@ class TestSearchHandsByPlayer:
             )
             assert resp.status_code == 201
 
-        response = client.get('/hands', params={'player': 'Alice', 'page': 1, 'per_page': 2})
+        response = client.get(
+            '/hands', params={'player': 'Alice', 'page': 1, 'per_page': 2}
+        )
         data = response.json()
         assert data['total'] == 3
         assert len(data['results']) == 2
@@ -222,7 +247,9 @@ class TestSearchHandsByPlayer:
             )
             assert resp.status_code == 201
 
-        response = client.get('/hands', params={'player': 'Alice', 'page': 2, 'per_page': 2})
+        response = client.get(
+            '/hands', params={'player': 'Alice', 'page': 2, 'per_page': 2}
+        )
         data = response.json()
         assert data['total'] == 3
         assert len(data['results']) == 1

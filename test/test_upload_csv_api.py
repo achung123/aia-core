@@ -3,7 +3,6 @@
 import csv
 import io
 
-import pytest
 
 from pydantic_models.csv_schema import CSV_COLUMNS
 
@@ -19,10 +18,32 @@ def _make_csv(rows: list[list[str]], headers: list[str] | None = None) -> bytes:
 
 
 VALID_ROW_ADAM = [
-    '03-09-2026', '1', 'Adam', 'AS', 'KH', '2C', '3D', '4S', '5H', '6C', 'win', '50.0'
+    '03-09-2026',
+    '1',
+    'Adam',
+    'AS',
+    'KH',
+    '2C',
+    '3D',
+    '4S',
+    '5H',
+    '6C',
+    'win',
+    '50.0',
 ]
 VALID_ROW_GIL = [
-    '03-09-2026', '1', 'Gil', 'JH', 'QD', '2C', '3D', '4S', '5H', '6C', 'loss', '-50.0'
+    '03-09-2026',
+    '1',
+    'Gil',
+    'JH',
+    'QD',
+    '2C',
+    '3D',
+    '4S',
+    '5H',
+    '6C',
+    'loss',
+    '-50.0',
 ]
 
 
@@ -51,7 +72,20 @@ class TestValidCSVUpload:
         assert data['total_rows'] == 2
 
     def test_valid_csv_with_empty_turn_river(self, client):
-        row = ['03-09-2026', '1', 'Adam', 'AS', 'KH', '2C', '3D', '4S', '', '', 'fold', '-10.0']
+        row = [
+            '03-09-2026',
+            '1',
+            'Adam',
+            'AS',
+            'KH',
+            '2C',
+            '3D',
+            '4S',
+            '',
+            '',
+            'fold',
+            '-10.0',
+        ]
         csv_bytes = _make_csv([row])
         response = client.post(
             '/upload/csv',
@@ -84,7 +118,20 @@ class TestInvalidHeaders:
 
 class TestInvalidCardValues:
     def test_invalid_hole_card_1_reported_in_errors(self, client):
-        row = ['03-09-2026', '1', 'Adam', 'XX', 'KH', '2C', '3D', '4S', '5H', '6C', 'win', '0']
+        row = [
+            '03-09-2026',
+            '1',
+            'Adam',
+            'XX',
+            'KH',
+            '2C',
+            '3D',
+            '4S',
+            '5H',
+            '6C',
+            'win',
+            '0',
+        ]
         csv_bytes = _make_csv([row])
         response = client.post(
             '/upload/csv',
@@ -98,7 +145,20 @@ class TestInvalidCardValues:
         assert 'hole_card_1' in fields
 
     def test_invalid_flop_card_reported(self, client):
-        row = ['03-09-2026', '1', 'Adam', 'AS', 'KH', 'ZZ', '3D', '4S', '5H', '6C', 'win', '0']
+        row = [
+            '03-09-2026',
+            '1',
+            'Adam',
+            'AS',
+            'KH',
+            'ZZ',
+            '3D',
+            '4S',
+            '5H',
+            '6C',
+            'win',
+            '0',
+        ]
         csv_bytes = _make_csv([row])
         response = client.post(
             '/upload/csv',
@@ -111,7 +171,20 @@ class TestInvalidCardValues:
         assert 'flop_1' in fields
 
     def test_multiple_invalid_cards_all_reported(self, client):
-        row = ['03-09-2026', '1', 'Adam', 'XX', 'YY', '2C', '3D', '4S', '5H', '6C', 'win', '0']
+        row = [
+            '03-09-2026',
+            '1',
+            'Adam',
+            'XX',
+            'YY',
+            '2C',
+            '3D',
+            '4S',
+            '5H',
+            '6C',
+            'win',
+            '0',
+        ]
         csv_bytes = _make_csv([row])
         response = client.post(
             '/upload/csv',
@@ -125,7 +198,20 @@ class TestInvalidCardValues:
         assert 'hole_card_2' in fields
 
     def test_invalid_optional_turn_card_reported(self, client):
-        row = ['03-09-2026', '1', 'Adam', 'AS', 'KH', '2C', '3D', '4S', 'ZZ', '6C', 'win', '0']
+        row = [
+            '03-09-2026',
+            '1',
+            'Adam',
+            'AS',
+            'KH',
+            '2C',
+            '3D',
+            '4S',
+            'ZZ',
+            '6C',
+            'win',
+            '0',
+        ]
         csv_bytes = _make_csv([row])
         response = client.post(
             '/upload/csv',
@@ -138,7 +224,20 @@ class TestInvalidCardValues:
         assert 'turn' in fields
 
     def test_error_includes_row_number(self, client):
-        row = ['03-09-2026', '1', 'Adam', 'XX', 'KH', '2C', '3D', '4S', '5H', '6C', 'win', '0']
+        row = [
+            '03-09-2026',
+            '1',
+            'Adam',
+            'XX',
+            'KH',
+            '2C',
+            '3D',
+            '4S',
+            '5H',
+            '6C',
+            'win',
+            '0',
+        ]
         csv_bytes = _make_csv([row])
         response = client.post(
             '/upload/csv',
@@ -151,7 +250,20 @@ class TestInvalidCardValues:
         assert isinstance(error['row'], int)
 
     def test_error_includes_field_and_value(self, client):
-        row = ['03-09-2026', '1', 'Adam', 'XX', 'KH', '2C', '3D', '4S', '5H', '6C', 'win', '0']
+        row = [
+            '03-09-2026',
+            '1',
+            'Adam',
+            'XX',
+            'KH',
+            '2C',
+            '3D',
+            '4S',
+            '5H',
+            '6C',
+            'win',
+            '0',
+        ]
         csv_bytes = _make_csv([row])
         response = client.post(
             '/upload/csv',
@@ -167,7 +279,20 @@ class TestInvalidCardValues:
 class TestDuplicateCardDetection:
     def test_duplicate_hole_cards_within_hand_reported(self, client):
         # Player has AS, AS — duplicate hole cards
-        row = ['03-09-2026', '1', 'Adam', 'AS', 'AS', '2C', '3D', '4S', '5H', '6C', 'win', '0']
+        row = [
+            '03-09-2026',
+            '1',
+            'Adam',
+            'AS',
+            'AS',
+            '2C',
+            '3D',
+            '4S',
+            '5H',
+            '6C',
+            'win',
+            '0',
+        ]
         csv_bytes = _make_csv([row])
         response = client.post(
             '/upload/csv',
@@ -180,7 +305,20 @@ class TestDuplicateCardDetection:
 
     def test_hole_card_duplicates_community_card(self, client):
         # Player's hole card AS matches flop_1 AS
-        row = ['03-09-2026', '1', 'Adam', 'AS', 'KH', 'AS', '3D', '4S', '5H', '6C', 'win', '0']
+        row = [
+            '03-09-2026',
+            '1',
+            'Adam',
+            'AS',
+            'KH',
+            'AS',
+            '3D',
+            '4S',
+            '5H',
+            '6C',
+            'win',
+            '0',
+        ]
         csv_bytes = _make_csv([row])
         response = client.post(
             '/upload/csv',
@@ -192,8 +330,34 @@ class TestDuplicateCardDetection:
 
     def test_two_players_same_hole_card_in_hand(self, client):
         # Both Adam and Gil have AS as hole_card_1 — duplicate across players in same hand
-        row1 = ['03-09-2026', '1', 'Adam', 'AS', 'KH', '2C', '3D', '4S', '5H', '6C', 'win', '50.0']
-        row2 = ['03-09-2026', '1', 'Gil', 'AS', 'QD', '2C', '3D', '4S', '5H', '6C', 'loss', '-50.0']
+        row1 = [
+            '03-09-2026',
+            '1',
+            'Adam',
+            'AS',
+            'KH',
+            '2C',
+            '3D',
+            '4S',
+            '5H',
+            '6C',
+            'win',
+            '50.0',
+        ]
+        row2 = [
+            '03-09-2026',
+            '1',
+            'Gil',
+            'AS',
+            'QD',
+            '2C',
+            '3D',
+            '4S',
+            '5H',
+            '6C',
+            'loss',
+            '-50.0',
+        ]
         csv_bytes = _make_csv([row1, row2])
         response = client.post(
             '/upload/csv',
@@ -205,8 +369,34 @@ class TestDuplicateCardDetection:
 
     def test_no_false_positive_same_card_different_hands(self, client):
         # AS appears in hand 1 and hand 2 — that's allowed
-        row1 = ['03-09-2026', '1', 'Adam', 'AS', 'KH', '2C', '3D', '4S', '5H', '6C', 'win', '50.0']
-        row2 = ['03-09-2026', '2', 'Adam', 'AS', 'JH', '7C', '8D', '9S', '10H', 'JC', 'loss', '-30.0']
+        row1 = [
+            '03-09-2026',
+            '1',
+            'Adam',
+            'AS',
+            'KH',
+            '2C',
+            '3D',
+            '4S',
+            '5H',
+            '6C',
+            'win',
+            '50.0',
+        ]
+        row2 = [
+            '03-09-2026',
+            '2',
+            'Adam',
+            'AS',
+            'JH',
+            '7C',
+            '8D',
+            '9S',
+            '10H',
+            'JC',
+            'loss',
+            '-30.0',
+        ]
         csv_bytes = _make_csv([row1, row2])
         response = client.post(
             '/upload/csv',

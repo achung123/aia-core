@@ -2,7 +2,7 @@
 
 **Project ID:** aia-core-001
 **Date:** 2026-03-09
-**Total Tasks:** 65
+**Total Tasks:** 74
 **Status:** Draft
 
 ---
@@ -76,6 +76,15 @@
 | T-063 | Cleanup: Remove unnecessary db.refresh(hand) after commit in record_hand() | task | T-018 | S-3.1 |
 | T-064 | Perf: Use selectinload on Hand.player_hands in get_hand() | task | T-020 | S-3.2 |
 | T-065 | Fix: Add explicit guard on Game query before Hand query in get_hand() | bug | T-020 | S-3.2 |
+| T-066 | Fix: Wrap CSV `file.read().decode()` in `try/except` and return 400 on `UnicodeDecodeError` | bug | T-025 | S-4.2 |
+| T-067 | Fix: Add file size limit (10 MB) to CSV upload endpoint and return 413 if exceeded | bug | T-025 | S-4.2 |
+| T-068 | Fix: Validate non-card fields (game_date, hand_number, profit_loss) before CSV commit | bug | T-025 | S-4.3 |
+| T-069 | Perf: Replace per-row GamePlayer existence check in CSV commit with pre-loaded pair set | task | T-026 | S-4.3 |
+| T-070 | Fix: Add community card consistency check across CSV rows for the same hand group | bug | T-026 | S-4.3 |
+| T-071 | Perf: Add GamePlayer existence cache in CSV commit to eliminate redundant reads for cached players | task | T-026 | S-4.3 |
+| T-072 | Fix: Sanitize uploaded filename to prevent path traversal | bug | T-039 | S-8.1 |
+| T-073 | Fix: Replace Content-Type-only validation with magic byte inspection for image uploads | bug | T-039 | S-8.1 |
+| T-074 | Fix: Prevent silent overwrite of uploaded files with same game_id and filename | bug | T-039, T-072 | S-8.1 |
 
 ---
 
@@ -1382,6 +1391,329 @@ if hand is None:
 2. A request where the game exists but the hand does not returns 404 with a message containing `"Hand"`
 3. A valid request returns 200 with the full hand data
 4. Existing tests continue to pass; a new test covers the game-not-found 404 path
+
+---
+
+### T-066 — Fix: Wrap CSV `file.read().decode()` in `try/except` and return 400 on `UnicodeDecodeError`
+
+**Category:** bug
+**Severity:** MEDIUM
+**Priority:** 2
+**Discovered-from:** aia-core-pk6 (T-025)
+**Dependencies:** T-025
+**Story Ref:** S-4.2
+
+`POST /upload/csv` calls `await file.read()` and immediately calls `.decode('utf-8')` on the raw bytes. If the uploaded file is not valid UTF-8 (e.g. a Latin-1 or Windows-1252 CSV), `.decode('utf-8')` raises an unhandled `UnicodeDecodeError`, which propagates to FastAPI's default exception handler and returns HTTP 500. The caller receives no actionable information; since the error is caused by a bad client input (a non-UTF-8 file), the correct response is HTTP 400 with a descriptive error message.
+
+**Fix:**
+In `src/app/routes/upload.py`, wrap the decode call in a `try/except`:
+```python
+try:
+    content = (await file.read()).decode('utf-8')
+except UnicodeDecodeError:
+    raise HTTPException(
+        status_code=400,
+        detail="CSV file must be UTF-8 encoded. Re-save the file as UTF-8 and retry.",
+    )
+```
+
+**Acceptance Criteria:**
+1. Uploading a non-UTF-8 CSV file (e.g. Latin-1 or Windows-1252 encoded) returns HTTP 400, not 500
+2. The 400 response body contains a `detail` message indicating the file must be UTF-8 encoded
+3. A valid UTF-8 CSV continues to be processed normally
+4. A test covers the non-UTF-8 path: upload a bytes payload that is valid Latin-1 but raises `UnicodeDecodeError` under UTF-8, and assert HTTP 400
+
+---
+
+### T-067 — Fix: Add file size limit (10 MB) to CSV upload endpoint and return 413 if exceeded
+
+**Category:** bug
+**Severity:** MEDIUM
+**Priority:** 2
+**Discovered-from:** aia-core-pk6 (T-025)
+**Dependencies:** T-025
+**Story Ref:** S-4.2
+
+`POST /upload/csv` calls `await file.read()` with no size limit, buffering the entire multipart file body into memory before any validation occurs. A malicious or accidental large upload (hundreds of MB) will consume heap memory until the server exhausts available RAM, causing OOM errors or degrading service for concurrent requests. This is a memory-exhaustion denial-of-service vector. A 10 MB cap is consistent with the image upload limit applied in T-039 and is sufficient for any realistic poker session CSV file.
+
+**Fix:**
+In `src/app/routes/upload.py`, read only up to the size cap and reject if exceeded:
+```python
+MAX_CSV_SIZE = 10 * 1024 * 1024  # 10 MB
+
+raw = await file.read(MAX_CSV_SIZE + 1)
+if len(raw) > MAX_CSV_SIZE:
+    raise HTTPException(
+        status_code=413,
+        detail="CSV file exceeds the maximum allowed size of 10 MB.",
+    )
+```
+Reading `MAX_CSV_SIZE + 1` bytes allows detection of oversized files without loading the full body: if `len(raw) > MAX_CSV_SIZE`, the file was larger than the cap.
+
+**Acceptance Criteria:**
+1. An upload whose body exceeds 10 MB returns HTTP 413, not 200 or 500
+2. The 413 response body contains a `detail` message stating the 10 MB limit
+3. An upload of exactly 10 MB (or under) is processed normally
+4. A test sends a payload of `MAX_CSV_SIZE + 1` bytes and asserts HTTP 413
+5. The in-memory buffer never holds more than `MAX_CSV_SIZE + 1` bytes for any single request
+
+---
+
+### T-068 — Fix: Validate non-card fields (game_date, hand_number, profit_loss) before CSV commit
+
+**Category:** bug
+**Severity:** MEDIUM
+**Priority:** 2
+**Discovered-from:** aia-core-chy (T-026)
+**Dependencies:** T-025
+**Story Ref:** S-4.3
+
+`validate_csv_rows` validates card values (hole cards, community cards) but does not validate non-card scalar fields. An invalid `game_date` format (e.g. `"not-a-date"`), a non-integer `hand_number` (e.g. `"two"`), or a non-numeric `profit_loss` (e.g. `"abc"`) all pass the validation step without error. When `POST /upload/csv/commit` subsequently coerces these values (e.g. `datetime.strptime(row['game_date'], ...)` or `int(row['hand_number'])`), an unhandled `ValueError` or `TypeError` propagates through FastAPI's exception handler as HTTP 500. The caller received a clean validation report, making the crash on commit surprising and providing no actionable information about which row caused the failure.
+
+**Fix:**
+Extend `validate_csv_rows` (or add a `validate_commit_fields` step invoked from the same validation pass) to coerce and check non-card fields during upload:
+```python
+from datetime import datetime
+
+# game_date: must be parseable as YYYY-MM-DD
+try:
+    datetime.strptime(row['game_date'], '%Y-%m-%d')
+except ValueError:
+    errors.append(f"Row {i}: invalid game_date '{row['game_date']}' — expected YYYY-MM-DD")
+
+# hand_number: must be a positive integer
+if not str(row['hand_number']).isdigit() or int(row['hand_number']) < 1:
+    errors.append(f"Row {i}: hand_number must be a positive integer, got '{row['hand_number']}'")
+
+# profit_loss: if present, must be parseable as a float
+if row.get('profit_loss') not in (None, ''):
+    try:
+        float(row['profit_loss'])
+    except ValueError:
+        errors.append(f"Row {i}: profit_loss must be a number, got '{row['profit_loss']}'")
+```
+
+**Acceptance Criteria:**
+1. A CSV row with `game_date` not matching `YYYY-MM-DD` returns HTTP 400 with a per-row error from `POST /upload/csv`, not a 500 from `POST /upload/csv/commit`
+2. A CSV row with a non-integer `hand_number` (e.g. `"two"`) returns HTTP 400 with a per-row error
+3. A CSV row with a non-numeric `profit_loss` (e.g. `"abc"`) returns HTTP 400 with a per-row error
+4. A CSV with valid non-card fields continues to commit successfully
+5. The error detail includes the row index and the field name
+
+---
+
+### T-069 — Perf: Replace per-row GamePlayer existence check in CSV commit with pre-loaded pair set
+
+**Category:** task
+**Severity:** MEDIUM
+**Priority:** 2
+**Discovered-from:** aia-core-chy (T-026)
+**Dependencies:** T-026
+**Story Ref:** S-4.3
+
+`POST /upload/csv/commit` checks whether each `(game_id, player_id)` pair already exists as a `GamePlayer` row before inserting it. The check is issued inside the per-row processing loop: `db.query(GamePlayer).filter(GamePlayer.game_id == ..., GamePlayer.player_id == ...).first()` is called for every player row in the CSV. A CSV with 10 players and 100 hands generates up to 1 000 individual SQL queries for membership checks alone. The pattern is structurally identical to the N+1 issue in F-062 / F-042, but occurs in a bulk write path where transaction overhead amplifies the cost. A single commit of a moderately sized session CSV can degrade performance and exhaust the database connection pool under concurrent load.
+
+**Fix:**
+Pre-load the complete set of existing `(game_id, player_id)` pairs for all relevant games in a single query before the loop, then use in-memory set membership to decide whether each insert is needed:
+```python
+relevant_game_ids = {row['_game_id'] for row in processed_rows}
+existing_pairs: set[tuple[int, int]] = set(
+    db.query(GamePlayer.game_id, GamePlayer.player_id)
+    .filter(GamePlayer.game_id.in_(relevant_game_ids))
+    .all()
+)
+
+for row in processed_rows:
+    pair = (row['_game_id'], row['_player_id'])
+    if pair not in existing_pairs:
+        db.add(GamePlayer(game_id=pair[0], player_id=pair[1]))
+        existing_pairs.add(pair)  # guard against duplicate inserts within this commit
+```
+Alternatively, use a bulk `INSERT ... ON CONFLICT DO NOTHING` (`insert().prefix_with('OR IGNORE')` on SQLite, or `on_conflict_do_nothing()` on PostgreSQL).
+
+**Acceptance Criteria:**
+1. `db.query(GamePlayer)` is not called inside the per-row or per-player-entry loop
+2. A single pre-load query retrieves all existing `(game_id, player_id)` pairs for the CSV's games before processing begins
+3. Total `GamePlayer`-related DB round-trips scale O(G) where G = number of distinct game IDs in the CSV, not O(N) where N = total player-row count
+4. Existing CSV commit tests continue to pass
+5. A CSV with 10 players × 100 hands does not issue more than O(10) `GamePlayer` queries
+
+---
+
+### T-070 — Fix: Add community card consistency check across CSV rows for the same hand group
+
+**Category:** bug
+**Severity:** LOW
+**Priority:** 3
+**Discovered-from:** aia-core-chy (T-026)
+**Dependencies:** T-026
+**Story Ref:** S-4.3
+
+The CSV commit handler groups rows by `(game_date, hand_number)` and takes `first_row = rows[0]` to obtain community card values for the `Hand` record. No check verifies that all rows in the group carry identical community card values. If two rows for the same hand differ on any community card field — for example, one row has `flop_1 = 'AS'` and another has `flop_1 = 'KH'` — the discrepancy is silently ignored: `first_row`'s values are used and the conflicting value is discarded without warning. The committed `Hand` record may therefore not reflect the actual game state, and the data loss is undetectable after commit.
+
+**Fix:**
+During the validation pass, compare every row in each hand group against `first_row` for the five community card fields and collect errors for any mismatch:
+```python
+COMMUNITY_FIELDS = ('flop_1', 'flop_2', 'flop_3', 'turn', 'river')
+
+for (game_date, hand_number), rows in hand_groups.items():
+    first = rows[0]
+    for i, row in enumerate(rows[1:], start=2):
+        for field in COMMUNITY_FIELDS:
+            if row.get(field) != first.get(field):
+                errors.append(
+                    f"Hand {hand_number} on {game_date}: conflicting '{field}' values "
+                    f"(row 1: '{first.get(field)}', row {i}: '{row.get(field)}')"
+                )
+```
+This check should run during `POST /upload/csv` (the validation-only endpoint) so that errors surface as HTTP 400 before any writes occur.
+
+**Acceptance Criteria:**
+1. A CSV where two rows for the same hand have different `flop_1` values returns HTTP 400 with a per-hand error during the upload/validation step
+2. The error message identifies the hand (`game_date` + `hand_number`), the conflicting field name, and both differing values
+3. A CSV with consistent community card values across all rows for each hand continues to commit successfully
+4. The consistency check covers all five community card fields: `flop_1`, `flop_2`, `flop_3`, `turn`, and `river`
+5. The check runs during the validation pass (pre-commit), not inside the commit transaction
+
+---
+
+### T-071 — Perf: Add GamePlayer existence cache in CSV commit to eliminate redundant reads for cached players
+
+**Category:** task
+**Severity:** LOW
+**Priority:** 3
+**Discovered-from:** aia-core-chy (T-026)
+**Dependencies:** T-026
+**Story Ref:** S-4.3
+
+The CSV commit handler caches resolved `Player` objects in `player_by_name` to avoid re-querying the `players` table on every row. No equivalent cache exists for the `GamePlayer` existence check. For a player appearing in 50 hands of the same game, the `Player` lookup is issued once and reused from cache — but `db.query(GamePlayer).filter(...).first()` is re-issued for the same `(game_id, player_id)` pair on every one of those 50 rows. The `player_by_name` optimisation reduces player lookups from O(N) to O(P) while `GamePlayer` checks remain O(N), where N = total player-row count and P = distinct player count.
+
+Note: T-069 addresses this concern at a broader level by pre-loading all `(game_id, player_id)` pairs before the loop. T-071 is retained as an independent task to document the cache asymmetry and ensure it is not re-introduced if T-069 is partially applied (e.g. the pre-load covers existing pairs from prior commits but not pairs inserted during the current commit).
+
+**Fix:**
+Add a `game_player_seen` set that tracks `(game_id, player_id)` pairs already checked or inserted during the current commit request:
+```python
+game_player_seen: set[tuple[int, int]] = set()
+
+for row in processed_rows:
+    pair = (row['_game_id'], row['_player_id'])
+    if pair not in game_player_seen:
+        exists = db.query(GamePlayer).filter(
+            GamePlayer.game_id == pair[0],
+            GamePlayer.player_id == pair[1],
+        ).first()
+        if not exists:
+            db.add(GamePlayer(game_id=pair[0], player_id=pair[1]))
+        game_player_seen.add(pair)  # within-request cache only
+```
+This reduces `GamePlayer` queries from O(N) to O(P × G), matching the effective complexity of the `player_by_name` cache for player lookups.
+
+**Acceptance Criteria:**
+1. `db.query(GamePlayer)` is called at most once per distinct `(game_id, player_id)` pair within a single commit request
+2. A player appearing in 50 hands of the same game triggers at most one `GamePlayer` DB query, not 50
+3. All required `GamePlayer` rows are still created correctly for new player-game pairs
+4. Existing CSV commit tests continue to pass
+5. The `game_player_seen` variable (or equivalent) is scoped to the request handler, not the module, to prevent cross-request state leakage
+
+---
+
+### T-072 — Fix: Sanitize uploaded filename to prevent path traversal
+
+**Category:** bug
+**Severity:** CRITICAL
+**Priority:** 0
+**Discovered-from:** aia-core-tk6 (T-039)
+**Dependencies:** T-039
+**Story Ref:** S-8.1
+
+The image upload handler passes `file.filename` directly to `os.path.join(upload_dir, file.filename)` without any sanitization. An attacker supplying a crafted filename such as `../../etc/cron.d/evil` or `../app/main.py` bypasses the intended `uploads/{game_id}/` isolation and writes arbitrary content to any path the server process can access. This is a path traversal vulnerability (OWASP A01 — Broken Access Control / CWE-22). A single POST request to any valid `game_id` is sufficient to exploit this.
+
+**Fix:**
+```python
+safe_name = os.path.basename(file.filename)
+file_path = os.path.join(upload_dir, safe_name)
+```
+`os.path.basename` returns only the terminal component (e.g. `evil` from `../../etc/cron.d/evil`), confining all writes to `upload_dir`.
+
+**Acceptance Criteria:**
+1. `POST /games/{game_id}/hands/image` with `filename='../../etc/cron.d/evil'` does NOT write outside `uploads/`
+2. The stored `file_path` value begins with `uploads/{game_id}/`
+3. Filenames containing `/`, `..`, or absolute paths are safely reduced to their basename only
+4. Existing upload tests continue to pass with valid filenames
+
+---
+
+### T-073 — Fix: Replace Content-Type-only validation with magic byte inspection for image uploads
+
+**Category:** bug
+**Severity:** HIGH
+**Priority:** 1
+**Discovered-from:** aia-core-tk6 (T-039)
+**Dependencies:** T-039
+**Story Ref:** S-8.1
+
+The upload handler validates the file type solely by checking `file.content_type` against `ALLOWED_CONTENT_TYPES`. The `Content-Type` header is fully client-controlled: any client can submit a shell script, binary executable, or PHP file with `Content-Type: image/jpeg` and the check will pass. The file is then written to disk, where it may be served or executed depending on server configuration. Magic byte (file signature) inspection of the actual file content is the accepted mitigation for this class of attack. JPEG files begin with `\xff\xd8\xff`; PNG files begin with `\x89PNG\r\n\x1a\n`.
+
+**Fix:**
+```python
+JPEG_MAGIC = b'\xff\xd8\xff'
+PNG_MAGIC = b'\x89PNG\r\n\x1a\n'
+
+if not (content.startswith(JPEG_MAGIC) or content.startswith(PNG_MAGIC)):
+    raise HTTPException(
+        status_code=415,
+        detail='File content does not match a recognized JPEG or PNG signature.',
+    )
+```
+The existing `content_type` check may be retained as a cheap first-pass filter, but the magic byte check is the authoritative gate.
+
+**Acceptance Criteria:**
+1. Uploading a text file with `Content-Type: image/jpeg` returns HTTP 415
+2. Uploading a valid JPEG with `Content-Type: image/jpeg` returns HTTP 201
+3. Uploading a valid PNG with `Content-Type: image/png` returns HTTP 201
+4. Magic byte check runs after `await file.read()` — no second read is needed
+5. The JPEG check uses the three-byte prefix `\xff\xd8\xff`; the PNG check uses the eight-byte signature `\x89PNG\r\n\x1a\n`
+
+---
+
+### T-074 — Fix: Prevent silent overwrite of uploaded files with same game_id and filename
+
+**Category:** bug
+**Severity:** HIGH
+**Priority:** 1
+**Discovered-from:** aia-core-tk6 (T-039)
+**Dependencies:** T-039, T-072
+**Story Ref:** S-8.1
+
+The upload handler constructs the file path as `uploads/{game_id}/{filename}`. A second upload for the same `game_id` with an identical filename causes `open(file_path, 'wb')` to silently overwrite the existing file on disk. The DB insert creates a second `ImageUpload` record pointing to the same path, the first record's data is destroyed without error, and any downstream detection workflow operating on the first `upload_id` will process incorrect (overwritten) image data. The API returns HTTP 201 for both requests with no indication of the data loss.
+
+**Fix:** Incorporate `upload_id` into the stored filename so every upload writes to a unique path. This requires a two-step DB interaction — flush to obtain the primary key, then rename the file and update the record:
+```python
+import uuid
+# Write to a temporary path to avoid contention before upload_id is known
+tmp_path = os.path.join(upload_dir, f'tmp_{uuid.uuid4().hex}')
+with open(tmp_path, 'wb') as f:
+    f.write(content)
+
+record = ImageUpload(game_id=game_id, file_path=tmp_path, status='processing')
+db.add(record)
+db.flush()  # assigns upload_id without committing
+
+safe_name = os.path.basename(file.filename)  # T-072 prerequisite
+final_name = f'{record.upload_id}_{safe_name}'
+final_path = os.path.join(upload_dir, final_name)
+os.rename(tmp_path, final_path)
+record.file_path = final_path
+db.commit()
+db.refresh(record)
+```
+Note: apply T-072 first so that `safe_name` is already sanitized before being incorporated into `final_path`.
+
+**Acceptance Criteria:**
+1. Two uploads for the same `game_id` with identical filenames produce two distinct files on disk (e.g. `1_photo.jpg` and `2_photo.jpg`)
+2. Each `ImageUpload` DB record's `file_path` is unique and matches a file that exists on disk
+3. Files from prior uploads are not overwritten on subsequent uploads with the same filename
+4. If `db.commit()` fails after the disk write, the temporary file is deleted and no orphaned file is left in `uploads/`
 
 ---
 
@@ -3058,3 +3390,468 @@ per_page: Annotated[
 1. The `per_page` `Query` annotation includes a `description` that mentions the 200-result maximum
 2. The OpenAPI spec (e.g. `GET /openapi.json`) reflects the description on `per_page`
 3. No functional change to the endpoint's validation behaviour
+
+---
+
+### F-088 — Non-UTF-8 CSV upload raises unhandled `UnicodeDecodeError` → HTTP 500
+
+**Source Task:** aia-core-pk6 (T-025: Implement CSV upload and validation endpoint)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/routes/upload.py — CSV decode path
+**Tracked as:** T-066
+
+`POST /upload/csv` reads the uploaded file bytes and calls `.decode('utf-8')` without a `try/except`. Any file that is not valid UTF-8 (e.g. Latin-1, Windows-1252, or binary data) raises an unhandled `UnicodeDecodeError`, propagating through FastAPI's default exception handler as HTTP 500. The root cause is a client-supplied input error, so the correct response is HTTP 400 with an actionable message. The current behaviour exposes an internal server error to the caller and provides no guidance on how to correct the upload.
+
+**Suggested follow-up:** Implement T-066 — wrap `.decode('utf-8')` in a `try/except UnicodeDecodeError` and raise `HTTPException(status_code=400, detail="CSV file must be UTF-8 encoded...")`.
+
+---
+
+### F-089 — No file size cap on CSV upload — memory exhaustion DoS vector
+
+**Source Task:** aia-core-pk6 (T-025: Implement CSV upload and validation endpoint)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/routes/upload.py — `await file.read()` call
+**Tracked as:** T-067
+
+`POST /upload/csv` calls `await file.read()` with no size argument, buffering the entire multipart file body into memory before any validation occurs. An attacker (or misconfigured client) submitting a multi-hundred-megabyte file will consume heap memory until the server exhausts available RAM, causing OOM errors or degrading concurrent request handling. This is a memory-exhaustion denial-of-service vector that can be triggered by any unauthenticated caller. The image upload endpoint (T-039) applies a 10 MB cap; the CSV endpoint should apply an equivalent or stricter limit given that CSV data is text and any legitimate session CSV will be well under 1 MB.
+
+**Suggested follow-up:** Implement T-067 — read at most `MAX_CSV_SIZE + 1` bytes and raise `HTTPException(status_code=413)` if the read buffer exceeds the cap.
+
+---
+
+### F-090 — Invalid non-card fields crash CSV commit as HTTP 500, not HTTP 400
+
+**Source Task:** aia-core-chy (T-026: Implement CSV commit endpoint)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/routes/upload.py — `validate_csv_rows` and CSV commit handler
+**Tracked as:** T-068
+
+`validate_csv_rows` validates card fields (hole cards, community cards) but does not validate non-card scalar fields. An invalid `game_date` format (e.g. `"not-a-date"`), a non-integer `hand_number` (e.g. `"two"`), or a non-numeric `profit_loss` (e.g. `"abc"`) all pass the validation step without error. When the commit handler subsequently coerces these values (e.g. `datetime.strptime(row['game_date'], ...)` or `int(row['hand_number'])`), an unhandled `ValueError` or `TypeError` propagates through FastAPI's exception handler as HTTP 500. The caller has already been told the CSV is valid (the validation pass returned no errors), making the 500 on commit surprising and providing no actionable information about which row caused the failure.
+
+**Suggested follow-up:** Implement T-068 — extend `validate_csv_rows` (or add a `validate_commit_fields` step) to coerce and check `game_date`, `hand_number`, and `profit_loss` during the upload/validation pass, returning per-row HTTP 400 errors for any format violation.
+
+---
+
+### F-091 — N+1 GamePlayer existence checks in CSV commit — up to O(players × hands) queries
+
+**Source Task:** aia-core-chy (T-026: Implement CSV commit endpoint)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/routes/upload.py — CSV commit loop
+**Tracked as:** T-069
+
+For every player row in the CSV, `POST /upload/csv/commit` issues `db.query(GamePlayer).filter(GamePlayer.game_id == ..., GamePlayer.player_id == ...).first()` to check whether the association already exists before inserting it. With a CSV containing 10 players and 100 hands, this generates up to 1 000 individual SQL queries for membership checks alone — before accounting for player lookups or inserts. The pattern is structurally identical to the N+1 issue in F-062 / F-042, but occurs in a bulk write path where transaction overhead amplifies the cost. A single commit of a moderately sized session CSV can degrade performance and exhaust the database connection pool under concurrent load.
+
+**Suggested follow-up:** Implement T-069 — pre-load the complete set of existing `(game_id, player_id)` pairs in a single query before the loop and use in-memory set membership to determine whether each `GamePlayer` row needs to be inserted.
+
+---
+
+### F-092 — Conflicting community card values for the same hand group silently discarded — first row wins
+
+**Source Task:** aia-core-chy (T-026: Implement CSV commit endpoint)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** src/app/routes/upload.py — hand-group processing in CSV commit handler
+**Tracked as:** T-070
+
+The CSV commit handler groups rows by `(game_date, hand_number)` and takes `first_row = rows[0]` to populate community card values for the `Hand` record. No consistency check verifies that all rows in the group carry identical community card values. If two rows for the same hand have different values for any community card field — for example, `flop_1 = 'AS'` in one row and `flop_1 = 'KH'` in another — the discrepancy is silently ignored: the first row's values are used and the conflicting value is discarded without warning. The committed `Hand` record may not reflect the actual game state, and the data loss is undetectable after commit.
+
+**Suggested follow-up:** Implement T-070 — add a group-consistency check during the validation pass that compares all rows within each hand group against the first row for all five community card fields (`flop_1`, `flop_2`, `flop_3`, `turn`, `river`), returning a per-hand HTTP 400 error on any mismatch.
+
+---
+
+### F-093 — Asymmetric caching: player_by_name cached, GamePlayer existence uncached — O(N) reads for repeated player-game pairs
+
+**Source Task:** aia-core-chy (T-026: Implement CSV commit endpoint)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** src/app/routes/upload.py — CSV commit loop
+**Tracked as:** T-071
+
+The CSV commit handler caches resolved `Player` objects in `player_by_name` to avoid re-querying the `players` table on every row. No equivalent cache exists for the `GamePlayer` existence check. For a player appearing in 50 hands of the same game, the `Player` lookup is issued once and reused from cache — but `db.query(GamePlayer).filter(...).first()` is re-issued for the same `(game_id, player_id)` pair on every one of those 50 rows. The `player_by_name` optimisation reduces player lookups from O(N) to O(P) while `GamePlayer` checks remain O(N), where N = total player-row count and P = distinct player count.
+
+Note: T-069 addresses this concern at a broader level by pre-loading all `(game_id, player_id)` pairs before the loop. T-071 tracks the narrower in-loop cache fix to ensure the asymmetry is not re-introduced if T-069 covers only the pre-load path.
+
+**Suggested follow-up:** Implement T-071 — add a `game_player_seen` set (scoped to the request handler, not the module) that tracks `(game_id, player_id)` pairs already checked or inserted during the current commit request, skipping the DB query for any pair that has been seen.
+
+---
+
+### F-094 — No format validation on `card` query parameter — invalid values silently return 0 results (aia-core-slu / T-037)
+
+**Source Task:** aia-core-slu (T-037: Implement Search Hands by Date Range and Card endpoints)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/routes/search.py — `card` parameter definition (line 32–34)
+
+The `card` query parameter is declared as `str | None` with only a human-readable `description`. No regex pattern constraint is applied, so any arbitrary string passes FastAPI/Pydantic validation without error. A request such as `GET /hands?card=as` (lowercase suit) or `GET /hands?card=Ace` silently returns zero results — the value fails to match any `Hand` or `PlayerHand` column value, but the response is `200 OK` with an empty `results` list and `total=0`. The caller receives no indication that the parameter value is malformed. Per the card format used throughout the system (rank + suit, e.g. `AS`, `10H`, `KD`), the correct response for an invalid card string is HTTP 422.
+
+**Fix:**
+In `src/app/routes/search.py`, add a `pattern` constraint to the `card` `Query` annotation:
+```python
+card: Annotated[
+    str | None,
+    Query(
+        description='Card to search for, e.g. AS or KH',
+        pattern=r'^(A|2|3|4|5|6|7|8|9|10|J|Q|K)(S|H|D|C)$',
+    ),
+] = None,
+```
+FastAPI will automatically return HTTP 422 for any value that does not match the pattern.
+
+**Acceptance Criteria:**
+1. `GET /hands?card=as` returns HTTP 422 (lowercase suit fails the pattern)
+2. `GET /hands?card=Ace` returns HTTP 422 (invalid format)
+3. `GET /hands?card=AS` returns HTTP 200 (valid format, results may be empty)
+4. `GET /hands?card=10H` returns HTTP 200 (ten of hearts — valid two-character rank)
+5. The OpenAPI schema for the `card` parameter reflects the regex pattern
+6. Existing card-search tests with valid card values continue to pass
+
+---
+
+### F-095 — `location` param silently discarded when `card` is absent — undocumented no-op (aia-core-slu / T-037)
+
+**Source Task:** aia-core-slu (T-037: Implement Search Hands by Date Range and Card endpoints)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** src/app/routes/search.py — `search_hands` (lines 62–77)
+
+The `location` filter is applied only inside the `if card is not None:` block (lines 62–77). When a caller supplies `location=community` without a `card` value, the parameter is silently ignored and the full unfiltered result set is returned — as if `location` were never sent. This is an undocumented no-op: the API accepts the parameter, returns HTTP 200 with no error, and discards the caller's intent without notification. A consumer who passes `GET /hands?location=community` expecting only community-card hands will receive all hands with no indication that their filter had no effect.
+
+Two valid resolutions exist:
+
+1. **Return 422** if `location` is supplied without `card` — enforcing the documented dependency and preventing silent discards.
+2. **Document the no-op** in the OpenAPI endpoint description and in S-7.3 acceptance criteria so the behaviour is an explicit, testable contract rather than an undocumented side-effect.
+
+**Suggested follow-up:**
+Either add a validation guard at the top of `search_hands`:
+```python
+if location is not None and card is None:
+    raise HTTPException(
+        status_code=422,
+        detail="'location' requires 'card' to be specified.",
+    )
+```
+Or add the following note to the route decorator and to the spec (S-7.3):
+> `location` is ignored when `card` is not specified; all results are returned regardless of card position.
+
+Whichever is chosen, add a test `test_location_without_card_returns_422_or_all_hands` to `test/test_search_hands_date_card_api.py` that asserts the documented behaviour.
+
+**Acceptance Criteria:**
+1. `GET /hands?location=community` (no `card`) either returns 422 with a descriptive message, or returns 200 with all hands (no location filtering applied)
+2. The chosen behaviour is documented in the OpenAPI endpoint description
+3. S-7.3 acceptance criteria in `specs/aia-core-001/spec.md` are updated to describe the `location`-without-`card` behaviour
+4. A test asserts the documented response
+
+---
+
+### F-096 — Non-deterministic row ordering within a hand — no tie-breaker on PlayerHand (aia-core-slu / T-037)
+
+**Source Task:** aia-core-slu (T-037: Implement Search Hands by Date Range and Card endpoints)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** src/app/routes/search.py — `search_hands` (line 78)
+
+`.order_by(GameSession.game_date, Hand.hand_number)` sorts the result rows by date and hand number, but provides no secondary sort key to distinguish multiple `PlayerHand` rows belonging to the same hand. For a hand with N players, the query returns N rows — one per `(Hand, PlayerHand, Player, GameSession)` tuple — whose relative order is determined by whatever the database returns after exhausting the two declared sort keys. This order is unspecified, may vary between query plans, and is not reproducible across paginated requests. A caller fetching page 1 and page 2 separately may see different player orderings for the same hand, or may miss or duplicate a player row at a page boundary.
+
+This finding is the same class as F-084 (non-deterministic ordering in `search_hands_by_player` on same-date games), but the tie condition is narrower: it applies *within* a single hand across its player rows.
+
+**Fix:**
+In `src/app/routes/search.py`, add `PlayerHand.player_id` as a tertiary tie-breaker:
+```python
+query = query.order_by(GameSession.game_date, Hand.hand_number, PlayerHand.player_id)
+```
+`PlayerHand.player_id` is a `NOT NULL` FK column with an implicit column-level index on most DB engines, providing a stable, indexed secondary key that is cheaper than a name-based alphabetical sort.
+
+**Acceptance Criteria:**
+1. The `order_by` clause in `search_hands` includes `PlayerHand.player_id` as a tertiary sort key after `hand_number`
+2. Two identical `GET /hands` requests for a hand with multiple players always return those player rows in the same order
+3. Paginated results (page 1 then page 2) produce no duplicate or missing rows at a page boundary for multi-player hands
+4. Existing search tests continue to pass; a test with two players on the same hand asserts a consistent player row ordering across two sequential requests
+
+---
+
+### F-097 — `total` in `PaginatedHandSearchResponse` counts player-hand rows, not unique hands — valid but undocumented (aia-core-slu / T-037)
+
+**Source Task:** aia-core-slu (T-037: Implement Search Hands by Date Range and Card endpoints)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** src/app/routes/search.py — `total = query.count()` (line 80); src/pydantic_models/app_models.py — `PaginatedHandSearchResponse`
+
+`total = query.count()` counts rows in the four-table join — one row per `(Hand, PlayerHand, Player, GameSession)` tuple. For a result set containing 2 hands each with 2 enrolled players, `total` is `4`, not `2`. A caller expecting `total` to represent the number of distinct hands (as would be natural for a "search hands" endpoint) will compute incorrect pagination logic — for example, inferring `ceil(4 / per_page)` pages when only `ceil(2 / per_page)` unique hands exist. The last page will also appear non-empty at `total / per_page` but return no new hands, confusing pagination clients.
+
+The behaviour is a valid design choice: each player-hand row is an independently addressable record, and the `results` list returns one entry per row (including the specific `PlayerHandResponse` for the matching player). However, neither the field description in `PaginatedHandSearchResponse` nor the OpenAPI endpoint documentation mentions this semantics. Without documentation, callers will routinely misinterpret `total` as a unique-hand count.
+
+**Suggested follow-up:** Two options:
+
+1. **Document the existing semantics:** Add a `description` to `PaginatedHandSearchResponse.total` and a note in the OpenAPI endpoint description:
+   > `total` counts the number of player-hand result rows returned, not the number of unique hands. A hand with N enrolled players contributes N rows to the total. Use `total / per_page` to compute page count only if each page is consumed row-by-row.
+
+2. **Split the count:** Expose both `total_rows` (current `query.count()`) and `total_hands` (a separate `SELECT COUNT(DISTINCT hand_id)` over the same filter) in the response. This is a larger response-schema change and should be weighed against whether callers actually need the distinct-hand count.
+
+Option 1 is lower-risk and sufficient to prevent misuse.
+
+**Acceptance Criteria:**
+1. `PaginatedHandSearchResponse.total` carries a `Field(description=...)` value that explicitly states it counts player-hand rows (not unique hands)
+2. The OpenAPI endpoint description for `GET /hands` notes the row-counting semantics
+3. No functional change to the response values or query is required
+4. A test comment or assertion in `test/test_search_hands_date_card_api.py` confirms the expected `total` value for a 2-hand × 2-player fixture is `4`, not `2`
+
+---
+
+## Review Findings — aia-core-tk6 (T-039: Implement Image Upload endpoint)
+
+*Review Date: 2026-03-11*
+
+---
+
+### F-098 — Path traversal via unsanitized `file.filename` in image upload (CRITICAL) (aia-core-tk6 / T-039)
+
+**Source Task:** aia-core-tk6 (T-039: Implement Image Upload endpoint)
+**Review Date:** 2026-03-11
+**Severity:** CRITICAL
+**OWASP:** A01 Broken Access Control / CWE-22 Path Traversal
+**File:** src/app/routes/images.py — line 43
+**Tracked as:** T-072
+
+`file.filename` is passed directly to `os.path.join(upload_dir, file.filename)` with no sanitization. An attacker supplying `../../etc/cron.d/evil` as the multipart filename component will cause the server to write the uploaded bytes to a path outside the intended `uploads/` directory — to any location the server process has write permission. This is exploitable with a single POST request to any valid `game_id` and requires no authentication bypass. The attacker can overwrite application source files, cron jobs, SSH `authorized_keys`, or other sensitive filesystem locations.
+
+**Fix:**
+```python
+safe_name = os.path.basename(file.filename)
+file_path = os.path.join(upload_dir, safe_name)
+```
+
+**Suggested follow-up:** Implement T-072 — apply `os.path.basename()` to `file.filename` before constructing `file_path`.
+
+---
+
+### F-099 — Content-Type-only image validation — any file passes with a spoofed MIME type (HIGH) (aia-core-tk6 / T-039)
+
+**Source Task:** aia-core-tk6 (T-039: Implement Image Upload endpoint)
+**Review Date:** 2026-03-11
+**Severity:** HIGH
+**File:** src/app/routes/images.py — lines 28–33
+**Tracked as:** T-073
+
+`file.content_type` is client-supplied and trivially spoofable. The guard at lines 28–33 does not inspect the actual file bytes, so any file — binary, script, or executable — passes with `Content-Type: image/jpeg`. Without magic byte inspection the endpoint provides no real content-type enforcement; an attacker can upload arbitrary data to the server filesystem under a `.jpg` extension.
+
+JPEG signature: `\xff\xd8\xff` (3 bytes). PNG signature: `\x89PNG\r\n\x1a\n` (8 bytes). Both signatures can be checked against `content` which is already buffered in memory after `await file.read()`.
+
+**Suggested follow-up:** Implement T-073 — add magic byte inspection on `content` and reject uploads whose bytes do not match a known JPEG or PNG header.
+
+---
+
+### F-100 — Silent file overwrite on duplicate game_id + filename — prior upload data destroyed (HIGH) (aia-core-tk6 / T-039)
+
+**Source Task:** aia-core-tk6 (T-039: Implement Image Upload endpoint)
+**Review Date:** 2026-03-11
+**Severity:** HIGH
+**File:** src/app/routes/images.py — lines 44–47
+**Tracked as:** T-074
+
+`open(file_path, 'wb')` is called with a path constructed solely from `upload_dir` and `file.filename`. A second upload to the same `game_id` with the same filename silently overwrites the existing file on disk while inserting a second `ImageUpload` DB record pointing to the same path. The first record's image data is permanently destroyed without error; the API returns HTTP 201 for both requests. Any downstream detection pipeline operating on the first `upload_id` will silently process incorrect (overwritten) image data.
+
+**Suggested follow-up:** Implement T-074 — write to a temporary UUID-named path, flush to obtain `upload_id`, rename to `{upload_id}_{safe_name}`, then commit.
+
+---
+
+### F-101 — Full file buffered into memory before size check — chunked early exit not possible (MEDIUM) (aia-core-tk6 / T-039)
+
+**Source Task:** aia-core-tk6 (T-039: Implement Image Upload endpoint)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/routes/images.py — lines 35–40
+**Tracked as:** none
+
+`await file.read()` at line 35 buffers the entire multipart body into memory before the 10 MB size check at line 36. A client submitting a 500 MB file fully saturates available heap before the 413 response is sent. Although `MAX_FILE_SIZE` is defined, the cap is enforced after the memory is already allocated. A chunked read with early exit would cap memory consumption to at most `MAX_FILE_SIZE + chunk_size` bytes regardless of upload size.
+
+**Fix:**
+```python
+CHUNK_SIZE = 64 * 1024  # 64 KB
+content = b''
+async for chunk in file:
+    content += chunk
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail='File too large. Maximum allowed size is 10 MB.')
+```
+
+**Acceptance Criteria:**
+1. A 50 MB upload is rejected with HTTP 413 without buffering more than `MAX_FILE_SIZE + 64 KB` into memory
+2. Valid ≤10 MB uploads continue to be accepted with HTTP 201
+
+---
+
+### F-102 — File written to disk before `db.commit()` — orphaned file on commit failure (MEDIUM) (aia-core-tk6 / T-039)
+
+**Source Task:** aia-core-tk6 (T-039: Implement Image Upload endpoint)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/routes/images.py — lines 44–52
+**Tracked as:** none
+
+The file is written to disk (lines 44–47) before `db.commit()` (line 51). If the commit fails — due to a constraint violation, lost DB connection, or SQLAlchemy error — the file persists on disk with no corresponding `ImageUpload` record. These orphaned files accumulate indefinitely, cannot be associated with any game session, and require manual cleanup.
+
+**Fix:** Wrap the disk write and DB commit together and delete the file if the commit fails:
+```python
+try:
+    with open(file_path, 'wb') as f:
+        f.write(content)
+    record = ImageUpload(game_id=game_id, file_path=file_path, status='processing')
+    db.add(record)
+    db.commit()
+except Exception:
+    if os.path.exists(file_path):
+        os.remove(file_path)
+    raise
+```
+Note: T-074 addresses this more comprehensively via the tmp-path-then-rename pattern; if T-074 is implemented the cleanup logic should target the temporary path.
+
+**Acceptance Criteria:**
+1. If `db.commit()` raises, no file is left on disk for that upload attempt
+2. If the disk write raises, the exception propagates with no DB record created
+3. Successful uploads are unaffected
+
+---
+
+### F-103 — `file.filename` can be `None` — unguarded `os.path.join` raises `TypeError` → HTTP 500 (LOW) (aia-core-tk6 / T-039)
+
+**Source Task:** aia-core-tk6 (T-039: Implement Image Upload endpoint)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** src/app/routes/images.py — line 43
+**Tracked as:** none
+
+FastAPI's `UploadFile.filename` is typed `Optional[str]` and is `None` when the multipart part carries no `filename` parameter. When `filename` is `None`, `os.path.join(upload_dir, file.filename)` raises `TypeError: expected str, bytes or os.PathLike object, not NoneType`, which propagates as an unhandled exception and returns HTTP 500. A malformed or programmatically-generated multipart request with no filename is sufficient to trigger this.
+
+**Fix:** Add an explicit guard after the content-type check:
+```python
+if not file.filename:
+    raise HTTPException(status_code=400, detail='Upload must include a filename.')
+```
+
+**Acceptance Criteria:**
+1. A multipart upload with no `filename` field returns HTTP 400 with a descriptive message
+2. The guard is placed before the `os.path.basename` / `os.path.join` calls to prevent the `TypeError`
+3. A test `test_upload_image_no_filename_returns_400` covers this path
+
+---
+
+### F-104 — No path traversal test — CRITICAL-1 (T-072) can regress undetected (LOW) (aia-core-tk6 / T-039)
+
+**Source Task:** aia-core-tk6 (T-039: Implement Image Upload endpoint)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** test/test_image_upload_api.py
+**Tracked as:** none
+
+There is no test that supplies a path-traversal filename (e.g. `../../etc/passwd`) and asserts the file is not written outside `uploads/`. Once T-072 is implemented, a regression test should be added to prevent the `os.path.basename` sanitization from being inadvertently removed in future refactors.
+
+**Suggested follow-up:** After T-072 is implemented, add a test that:
+1. Posts a multipart upload with `filename='../../evil.txt'`
+2. Asserts HTTP 201 is returned (the upload succeeds but the path is sanitized)
+3. Asserts the stored `file_path` starts with `uploads/` and contains no `..` component
+4. Asserts no file was written outside the `uploads/` directory tree
+
+**Acceptance Criteria:**
+1. Test added to `test/test_image_upload_api.py` (or a dedicated `test_image_upload_security_api.py`)
+2. Test passes after T-072 is applied
+3. Test fails if `os.path.basename` sanitization is removed — providing regression protection
+
+---
+
+### F-105 — Disk write not verified in tests — response `file_path` not checked against filesystem (LOW) (aia-core-tk6 / T-039)
+
+**Source Task:** aia-core-tk6 (T-039: Implement Image Upload endpoint)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** test/test_image_upload_api.py
+**Tracked as:** none
+
+Existing upload tests assert on the JSON response fields (`upload_id`, `file_path`, `status`) but do not verify that a file was actually written to the path indicated by `file_path`. A bug that sets `file_path` correctly in the DB record but fails the disk write — e.g. a wrong directory, a permissions error, or an incorrect `open` mode — would not be caught by the current test suite.
+
+**Suggested follow-up:** Add an assertion to the happy-path upload test that calls `os.path.isfile(response.json()['file_path'])` after a successful upload. Scope the upload directory to a temporary directory fixture to ensure cleanup.
+
+**Acceptance Criteria:**
+1. At least one test asserts `os.path.isfile(file_path)` is `True` for a successful upload, using the path from the response body
+2. The test cleans up the written file after the assertion, or uses a temporary upload directory scoped to the test session
+
+---
+
+## Cycle 1 — aia-core-6il Findings (2026-03-11)
+
+*Source task: aia-core-6il (T-039: Implement Image Upload endpoint — fix cycle)*
+*Review Date: 2026-03-11*
+
+---
+
+### H-1 — No cleanup of disk files on error paths (HIGH) (aia-core-6il / T-039)
+
+**Source Task:** aia-core-6il (T-039: Implement Image Upload endpoint)
+**Review Date:** 2026-03-11
+**Severity:** HIGH
+**File:** src/app/routes/images.py — [lines 48–62](src/app/routes/images.py#L48-L62)
+
+If `os.rename` raises or `db.commit()` fails after the rename, the renamed file is left on disk with no corresponding DB record. Over time, failed uploads accumulate as orphaned files that consume disk space and cannot be reclaimed automatically.
+
+**Suggested fix:** Wrap the rename-and-commit block in a `try/finally` (or `try/except`) that deletes the destination file if an exception is raised after the rename succeeds.
+
+**Acceptance Criteria:**
+1. A simulated `db.commit()` failure after `os.rename` leaves no file on disk
+2. A simulated `os.rename` failure leaves no file under the final path on disk
+3. The endpoint returns an appropriate 5xx response in both failure scenarios
+
+---
+
+### M-1 — `file.filename` can be `None` → unhandled `TypeError` (MEDIUM) (aia-core-6il / T-039)
+
+**Source Task:** aia-core-6il (T-039: Implement Image Upload endpoint)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/routes/images.py
+
+`os.path.basename(file.filename)` raises `TypeError` when `file.filename` is `None`, which is a valid state for multipart uploads that omit the `filename` parameter. The unhandled exception propagates as an HTTP 500 instead of a descriptive client error.
+
+**Suggested fix:** Add an explicit guard before the `os.path.basename` call and return HTTP 400 with a descriptive message when `file.filename is None`.
+
+**Acceptance Criteria:**
+1. A multipart upload with no `filename` field returns HTTP 400 (not 500)
+2. The 400 response body contains a message indicating the filename is required
+3. A test covers this path
+
+---
+
+### M-2 — No DB-level uniqueness constraint on `file_path` in `image_uploads` table (MEDIUM) (aia-core-6il / T-039)
+
+**Source Task:** aia-core-6il (T-039: Implement Image Upload endpoint)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/database/ (model and migration for `image_uploads`)
+
+The `file_path` column on the `image_uploads` table has no `UNIQUE` constraint. Application logic prevents duplicate paths under normal operation, but a race condition or a future code path that bypasses the check could insert two records pointing to the same file, breaking the invariant that each DB record maps to a distinct file.
+
+**Suggested fix:** Add `unique=True` to the `file_path` column in the SQLAlchemy model and generate an Alembic migration to add the constraint.
+
+**Acceptance Criteria:**
+1. The `image_uploads.file_path` column carries a `UNIQUE` constraint in the SQLAlchemy model
+2. An Alembic migration applies the constraint to the table
+3. Attempting to insert a duplicate `file_path` raises an `IntegrityError` (verified by test)
+
+---
+
+### L-1 — Relative `upload_dir` path is process-cwd dependent (LOW) (aia-core-6il / T-039)
+
+**Source Task:** aia-core-6il (T-039: Implement Image Upload endpoint)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** src/app/routes/images.py
+
+`upload_dir` is constructed from a relative path, meaning the actual upload directory changes depending on the working directory from which the server process is launched. Running the server from a different directory (e.g. `uvicorn src.app.main:app` from `/`) silently writes files to an unexpected location.
+
+**Suggested fix:** Anchor the path to the project root using `Path(__file__).resolve().parent` or an environment variable so the directory is consistent regardless of cwd.
+
+**Acceptance Criteria:**
+1. The resolved `upload_dir` is identical whether `uvicorn` is launched from the project root, from `src/`, or from `/`
+2. No existing tests break after the path anchoring change

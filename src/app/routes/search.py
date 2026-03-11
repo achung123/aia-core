@@ -1,9 +1,10 @@
 """Search router - handles search endpoints."""
 
-from typing import Annotated
+from datetime import date as date_type
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.database.models import GameSession, Hand, Player, PlayerHand
@@ -18,8 +19,23 @@ router = APIRouter(prefix='/hands', tags=['search'])
 
 
 @router.get('', response_model=PaginatedHandSearchResponse)
-def search_hands_by_player(
-    player: Annotated[str, Query(description='Player name to filter by')],
+def search_hands(
+    player: Annotated[str | None, Query(description='Player name to filter by')] = None,
+    date_from: Annotated[
+        date_type | None,
+        Query(description='Filter hands from this date inclusive (YYYY-MM-DD)'),
+    ] = None,
+    date_to: Annotated[
+        date_type | None,
+        Query(description='Filter hands to this date inclusive (YYYY-MM-DD)'),
+    ] = None,
+    card: Annotated[
+        str | None, Query(description='Card to search for, e.g. AS or KH')
+    ] = None,
+    location: Annotated[
+        Literal['community', 'hole'] | None,
+        Query(description='Narrow card search to community or hole cards'),
+    ] = None,
     page: Annotated[int, Query(ge=1)] = 1,
     per_page: Annotated[int, Query(ge=1, le=200)] = 50,
     db: Annotated[Session, Depends(get_db)] = None,
@@ -29,9 +45,37 @@ def search_hands_by_player(
         .join(PlayerHand, PlayerHand.hand_id == Hand.hand_id)
         .join(Player, Player.player_id == PlayerHand.player_id)
         .join(GameSession, GameSession.game_id == Hand.game_id)
-        .filter(func.lower(Player.name) == player.lower())
-        .order_by(GameSession.game_date, Hand.hand_number)
     )
+
+    if player is not None:
+        query = query.filter(func.lower(Player.name) == player.lower())
+
+    if date_from is not None:
+        query = query.filter(GameSession.game_date >= date_from)
+
+    if date_to is not None:
+        query = query.filter(GameSession.game_date <= date_to)
+
+    if card is not None:
+        community_match = or_(
+            Hand.flop_1 == card,
+            Hand.flop_2 == card,
+            Hand.flop_3 == card,
+            Hand.turn == card,
+            Hand.river == card,
+        )
+        hole_match = or_(
+            PlayerHand.card_1 == card,
+            PlayerHand.card_2 == card,
+        )
+        if location == 'community':
+            query = query.filter(community_match)
+        elif location == 'hole':
+            query = query.filter(hole_match)
+        else:
+            query = query.filter(or_(community_match, hole_match))
+
+    query = query.order_by(GameSession.game_date, Hand.hand_number)
 
     total = query.count()
     rows = query.offset((page - 1) * per_page).limit(per_page).all()
