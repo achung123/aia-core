@@ -1762,3 +1762,90 @@ players = relationship('Player', secondary='game_players', order_by='Player.name
 ```
 
 **Suggested follow-up (spec):** Update S-2.2 acceptance criteria to document the ordering guarantee (alphabetical, insertion order, or explicitly unordered) so it is testable and contractual.
+
+---
+
+### F-042 — N+1 query problem on `game.players` and `game.hands` in `GET /games`
+
+**Source Task:** aia-core-bzj (T-015: Implement List Game Sessions endpoint)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/routes/games.py — `list_game_sessions` response construction
+
+`len(game.players)` and `len(game.hands)` are evaluated inside the list-comprehension that builds the response for `GET /games`. Both are lazy-loaded relationships, so accessing them triggers two additional `SELECT` statements per game row — `2N + 1` total queries for a result set of N games. On a table with 100 sessions this generates 201 round-trips; the pattern worsens linearly as data grows. The problem is structurally the same as F-038 on `get_game_session`, but the impact is higher because it applies to the full result set rather than a single record.
+
+**Suggested fix:** Replace the lazy-load path with aggregated SQL using `func.count` and `GROUP BY` so player and hand counts are retrieved in the initial query, eliminating all per-row subqueries:
+```python
+from sqlalchemy import func
+
+results = (
+    db.query(
+        GameSession,
+        func.count(GamePlayer.player_id.distinct()).label('player_count'),
+        func.count(Hand.hand_id.distinct()).label('hand_count'),
+    )
+    .outerjoin(GamePlayer, GameSession.game_id == GamePlayer.game_id)
+    .outerjoin(Hand, GameSession.game_id == Hand.game_id)
+    .filter(...)
+    .group_by(GameSession.game_id)
+    .order_by(GameSession.game_date.desc())
+    .all()
+)
+```
+Alternatively, use `subqueryload` or `selectinload` on both relationships before accessing them — but the aggregated-SQL approach avoids loading full ORM objects for the counts at all.
+
+---
+
+### F-043 — No pagination on `GET /games`
+
+**Source Task:** aia-core-bzj (T-015: Implement List Game Sessions endpoint)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** src/app/routes/games.py — `list_game_sessions`
+
+`list_game_sessions` issues a `SELECT` with no `LIMIT` or `OFFSET`. All rows matching the date filter are returned in a single response. On a production instance recording daily sessions over multiple years, this can return hundreds of rows with their full relationship payloads in one unbounded response, causing memory pressure and slow response times. This is the same class of issue as F-023 / T-054 on `GET /players`, which was tracked and resolved.
+
+**Suggested fix:** Add `skip` and `limit` query parameters with sensible defaults:
+```python
+@router.get('/games')
+def list_game_sessions(
+    date_from: date | None = None,
+    date_to: date | None = None,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200),
+    db: Session = Depends(get_db),
+):
+    ...
+    return query.offset(skip).limit(limit).all()
+```
+The response should also include pagination metadata (`total`, `skip`, `limit`) so clients can page through results.
+
+---
+
+### F-044 — No test for invalid date format in `GET /games` query params
+
+**Source Task:** aia-core-bzj (T-015: Implement List Game Sessions endpoint)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** test/test_list_game_sessions_api.py
+
+`GET /games?date_from=not-a-date` should return 422 (FastAPI/Pydantic automatically rejects non-`date` values at the routing layer), but no explicit test asserts this behaviour. If the parameter type were ever changed from `date` to `str` during a refactor, automatic validation would silently degrade and no test would catch the regression.
+
+**Suggested follow-up:** Add a test `test_list_game_sessions_invalid_date_format` that calls `GET /games?date_from=not-a-date` and asserts a 422 response. A companion test for `date_to=not-a-date` provides symmetrical coverage.
+
+---
+
+### F-045 — No test for inverted date range (`date_from > date_to`) — behaviour undocumented
+
+**Source Task:** aia-core-bzj (T-015: Implement List Game Sessions endpoint)
+**Review Date:** 2026-03-11
+**Severity:** LOW
+**File:** src/app/routes/games.py — `list_game_sessions`; test/test_list_game_sessions_api.py
+
+When `date_from > date_to`, the current implementation silently applies both filter predicates to the query, which produces an impossible range and returns an empty list. No test asserts this outcome and the API spec (S-2.3) does not document the expected behaviour. A consumer supplying an inverted range may assume the endpoint is malfunctioning or the database is empty.
+
+**Suggested follow-up:** Decide and document the contract — two reasonable options:
+1. **Return 422** with a descriptive message (`"date_from must not be later than date_to"`). This is explicit and self-documenting. Add a `@field_validator` or request-level guard.
+2. **Return empty list** (current behaviour) and document this in the spec (S-2.3 AC) and the OpenAPI description for the endpoint.
+
+Whichever is chosen, add a test `test_list_game_sessions_inverted_date_range` that calls `GET /games?date_from=2025-12-31&date_to=2025-01-01` and asserts the documented response (422 or `[]`).

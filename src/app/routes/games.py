@@ -105,3 +105,26 @@ def get_game_session(
         player_names=[p.name for p in game.players],
         hand_count=len(game.hands),
     )
+
+
+@router.patch('/{game_id}/complete', response_model=GameSessionResponse)
+def complete_game_session(
+    game_id: int,
+    db: Annotated[Session, Depends(get_db)],
+):
+    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
+    if game is None:
+        raise HTTPException(status_code=404, detail='Game session not found')
+    if game.status == 'completed':
+        raise HTTPException(status_code=400, detail='Game session already completed')
+    game.status = 'completed'
+    db.commit()
+    db.refresh(game)
+    return GameSessionResponse(
+        game_id=game.game_id,
+        game_date=game.game_date,
+        status=game.status,
+        created_at=game.created_at,
+        player_names=[p.name for p in game.players],
+        hand_count=len(game.hands),
+    )
