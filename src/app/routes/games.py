@@ -22,14 +22,18 @@ def create_game_session(
     db.add(game)
     db.flush()  # populate game_id without committing
 
-    for name in list(dict.fromkeys(payload.player_names)):
+    seen_player_ids: set[int] = set()
+    for name in payload.player_names:
         player = (
-            db.query(Player).filter(func.lower(Player.name) == func.lower(name)).first()
+            db.query(Player).filter(func.lower(Player.name) == name.lower()).first()
         )
         if player is None:
             player = Player(name=name)
             db.add(player)
             db.flush()
+        if player.player_id in seen_player_ids:
+            continue
+        seen_player_ids.add(player.player_id)
         db.add(GamePlayer(game_id=game.game_id, player_id=player.player_id))
 
     db.commit()

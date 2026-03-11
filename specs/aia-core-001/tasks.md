@@ -2,7 +2,7 @@
 
 **Project ID:** aia-core-001
 **Date:** 2026-03-09
-**Total Tasks:** 57
+**Total Tasks:** 58
 **Status:** Draft
 
 ---
@@ -68,6 +68,7 @@
 | T-055 | Fix: Add case-insensitive unique constraint on `Player.name` | bug | none | S-1.1 |
 | T-056 | Fix: Deduplicate `player_names` before `GamePlayer` inserts | bug | none | S-2.1 |
 | T-057 | Fix: Wrap player auto-creation in `try/except IntegrityError` with re-query fallback | bug | none | S-2.1 |
+| T-058 | Fix: Deduplicate resolved `player_id` set after lookup for case-variant `player_names` | bug | T-056 | S-2.1 |
 
 ---
 
@@ -1127,6 +1128,42 @@ if player is None:
 
 ---
 
+### T-058 — Fix: Deduplicate resolved `player_id` set after lookup for case-variant `player_names`
+
+**Category:** bug
+**Severity:** HIGH
+**Priority:** 1
+**Discovered-from:** aia-core-y3f (T-056)
+**Beads:** aia-core-z9f
+**Dependencies:** T-056
+**Story Ref:** S-2.1
+
+T-056 introduced `list(dict.fromkeys(payload.player_names))` to deduplicate the `player_names` list before the `GamePlayer` insert loop. However, `dict.fromkeys()` is case-sensitive: `["Adam", "adam"]` produces two distinct loop iterations. Both resolve to the same `Player` record via the case-insensitive lookup (`func.lower(Player.name) == func.lower(name)`), yielding the same `player_id`. The second `db.add(GamePlayer(game_id=..., player_id=...))` then attempts to insert a duplicate composite PK `(game_id, player_id)`, raising an unhandled `sqlalchemy.exc.IntegrityError` and returning HTTP 500.
+
+**Fix:**
+In `src/app/routes/games.py`, track already-inserted player IDs and skip any duplicate after resolution:
+```python
+seen_player_ids: set[int] = set()
+for name in list(dict.fromkeys(payload.player_names)):
+    player = db.query(Player).filter(func.lower(Player.name) == func.lower(name)).first()
+    if player is None:
+        player = Player(name=name)
+        db.add(player)
+        db.flush()
+    if player.player_id in seen_player_ids:
+        continue
+    seen_player_ids.add(player.player_id)
+    db.add(GamePlayer(game_id=game.game_id, player_id=player.player_id))
+```
+
+**Acceptance Criteria:**
+1. `POST /games` with `player_names: ['Adam', 'adam']` returns 201 with Adam listed exactly once, not 500
+2. A test asserts the case-variant deduplicated behaviour end-to-end
+3. The exact-duplicate test added by T-056 (`['Adam', 'Adam']`) continues to pass
+4. All existing game session creation tests continue to pass
+
+---
+
 ## Bugs / Findings
 
 ### F-001 — Single-record-only traversal test (T-044)
@@ -1559,3 +1596,30 @@ S-2.1 AC4 ("two game sessions on the same date return different `game_id`s") is 
 After `db.commit()` and `db.refresh(game)`, the handler accesses `game.players` and `game.hands` to build `GameSessionResponse`. With the current session strategy these lazy loads succeed. If the strategy changes — e.g. `expire_on_commit=True` without an explicit refresh of the relationships, or an object passed to a background task outside the session scope — accessing these attributes raises `DetachedInstanceError`.
 
 **Suggested follow-up:** Eagerly load `players` and `hands` before commit using `options(selectinload(...))`, or explicitly refresh the required relationships after `db.refresh(game)`, to make response-building independent of the session's post-commit expiry behaviour.
+
+---
+
+### F-034 — Case-variant duplicates in `player_names` still produce `IntegrityError` after T-056 fix
+
+**Source Task:** aia-core-y3f (T-056: Fix: Deduplicate `player_names` before `GamePlayer` inserts)
+**Review Date:** 2026-03-11
+**Severity:** HIGH
+**File:** src/app/routes/games.py — player loop
+**Tracked as:** T-058 (tasks.md) / aia-core-z9f (beads)
+
+`dict.fromkeys()` is case-sensitive, so `["Adam", "adam"]` passes through as two distinct loop iterations. Both resolve to the same `Player` record via the case-insensitive lookup (`func.lower(Player.name) == func.lower(name)`), yielding the same `player_id`. The second `db.add(GamePlayer(game_id=..., player_id=...))` then attempts to insert a duplicate composite PK `(game_id, player_id)`, raising an unhandled `sqlalchemy.exc.IntegrityError` and returning HTTP 500. The T-056 fix handles only exact-string duplicates; case-variant duplicates remain unhandled.
+
+**Suggested follow-up:** Implement T-058 — deduplicate the resolved `player_id` set after lookup using a `seen_player_ids` set, and skip the `GamePlayer` insert for any already-seen ID.
+
+---
+
+### F-035 — No test coverage for case-variant duplicates in `player_names`
+
+**Source Task:** aia-core-y3f (T-056: Fix: Deduplicate `player_names` before `GamePlayer` inserts)
+**Review Date:** 2026-03-11
+**Severity:** MEDIUM
+**File:** test/test_create_game_session_api.py
+
+The T-056 fix deduplicates exact-string entries via `dict.fromkeys()`, but no test covers case-variant duplicates such as `['Adam', 'adam']`. This gap means the regression tracked in F-034 / T-058 will not be caught by the test suite until it surfaces in production.
+
+**Suggested follow-up:** Add `test_create_game_session_with_case_variant_duplicate_player_names` that POSTs `player_names: ['Adam', 'adam']` and asserts a 201 response with the player appearing exactly once. The test should be authored alongside the T-058 fix so it fails before the fix is applied and passes after.

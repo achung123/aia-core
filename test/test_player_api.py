@@ -160,6 +160,7 @@ class TestCreatePlayerConcurrencyGuard:
     def test_integrity_error_on_commit_rolls_back(self, client_with_racy_db):
         """When db.commit raises IntegrityError, the session must be rolled back."""
         from unittest.mock import MagicMock as _MM
+
         # Extract the mock_db from the override to inspect it after the call
         captured = {}
 

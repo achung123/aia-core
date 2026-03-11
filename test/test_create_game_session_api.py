@@ -105,7 +105,10 @@ class TestCreateGameSession:
         """Players that don't exist yet are auto-created."""
         response = client.post(
             '/games',
-            json={'game_date': '2026-03-11', 'player_names': ['NewPlayer1', 'NewPlayer2']},
+            json={
+                'game_date': '2026-03-11',
+                'player_names': ['NewPlayer1', 'NewPlayer2'],
+            },
         )
         assert response.status_code == 201
         assert set(response.json()['player_names']) == {'NewPlayer1', 'NewPlayer2'}
@@ -132,7 +135,8 @@ class TestCreateGameSession:
 
     def test_create_game_links_players_via_game_player(self, client):
         """Created game session is linked to players in the DB."""
-        from app.database.models import GameSession, GamePlayer
+        from app.database.models import GamePlayer
+
         resp = client.post(
             '/games',
             json={'game_date': '2026-03-11', 'player_names': ['Adam', 'Gil']},
@@ -182,6 +186,7 @@ class TestCreateGameSession:
     def test_create_game_duplicate_player_names_deduplicates(self, client):
         """Duplicate player_names result in each player linked once."""
         from app.database.models import GamePlayer
+
         response = client.post(
             '/games',
             json={'game_date': '2026-03-11', 'player_names': ['Adam', 'Adam', 'Gil']},
@@ -190,7 +195,37 @@ class TestCreateGameSession:
         assert set(data['player_names']) == {'Adam', 'Gil'}
         db = SessionLocal()
         try:
-            links = db.query(GamePlayer).filter(GamePlayer.game_id == data['game_id']).all()
+            links = (
+                db.query(GamePlayer).filter(GamePlayer.game_id == data['game_id']).all()
+            )
+            assert len(links) == 2
+        finally:
+            db.close()
+
+    def test_create_game_case_variant_duplicates_returns_201(self, client):
+        """Case-variant duplicate player_names must not cause IntegrityError (500)."""
+        response = client.post(
+            '/games',
+            json={'game_date': '2026-03-11', 'player_names': ['Adam', 'adam', 'Gil']},
+        )
+        assert response.status_code == 201
+
+    def test_create_game_case_variant_duplicates_deduplicates(self, client):
+        """Case-variant duplicates result in each unique player linked once."""
+        from app.database.models import GamePlayer
+
+        response = client.post(
+            '/games',
+            json={'game_date': '2026-03-11', 'player_names': ['Adam', 'adam', 'Gil']},
+        )
+        data = response.json()
+        assert response.status_code == 201
+        assert len(data['player_names']) == 2
+        db = SessionLocal()
+        try:
+            links = (
+                db.query(GamePlayer).filter(GamePlayer.game_id == data['game_id']).all()
+            )
             assert len(links) == 2
         finally:
             db.close()
