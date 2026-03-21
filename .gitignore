@@ -5,6 +5,9 @@ __pycache__/
 # Dataset and model artifacts
 data/
 
+# Training runs
+runs/
+
 # Dolt database files (added by bd init)
 .dolt/
 *.db
