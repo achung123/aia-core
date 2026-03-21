@@ -1,6 +1,6 @@
 # `src/app/database` — Documentation
 
-**Generated:** 2026-03-11
+**Generated:** 2026-03-11 (updated 2026-03-21 — `ImageUpload` + `CardDetection` enrichment)
 **Artifacts:** 10 ORM model classes · 2 utility modules · 12 public symbols
 
 ---
@@ -283,7 +283,9 @@ Tracks image files uploaded for computer-vision card detection. Each upload is a
 | `upload_id` | `Integer` | PK, autoincrement | Surrogate primary key |
 | `game_id` | `Integer` | FK → `game_sessions.game_id`, `not null` | The session this image was uploaded for |
 | `file_path` | `String` | `not null` | Server-side filesystem path where the uploaded file is stored |
-| `status` | `String` | `not null`, default `"processing"` | Processing lifecycle state. Known values: `"processing"`, `"complete"`, `"failed"`. No DB-level CHECK constraint. |
+| `status` | `String` | `not null`, default `"processing"` | Processing lifecycle state. Known values: `"processing"`, `"detected"`, `"failed"`, `"confirmed"`. No DB-level CHECK constraint. |
+| `image_width` | `Integer` | nullable | Source image width in pixels, populated when detection runs. `NULL` until first detection attempt. |
+| `image_height` | `Integer` | nullable | Source image height in pixels, populated when detection runs. `NULL` until first detection attempt. |
 | `created_at` | `DateTime` | default `utcnow` | Row creation timestamp (UTC) |
 
 #### Relationships
@@ -318,6 +320,7 @@ One computer-vision detection result for a single card position within an upload
 | `bbox_y` | `Float` | nullable | Bounding box top edge |
 | `bbox_width` | `Float` | nullable | Bounding box width |
 | `bbox_height` | `Float` | nullable | Bounding box height |
+| `position_confidence` | `String` | nullable | Confidence in the spatial position assignment. Values: `"high"` (well within spatial region), `"low"` (near community/hole boundary), `"unassigned"` (fallback — fewer than 3 community cards detected). `NULL` if position assignment was not run. Set by `PositionAssigner.assign()` during the detection pipeline. |
 | `created_at` | `DateTime` | default `utcnow` | Row creation timestamp (UTC) |
 
 #### Relationships

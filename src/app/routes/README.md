@@ -1,7 +1,7 @@
 # Routes — API Reference
 
 **Directory:** `src/app/routes/`
-**Generated:** 2026-03-21
+**Generated:** 2026-03-21 (updated 2026-03-21 — enriched detection results)
 **Artifacts found:** 10 (8 API routers, 1 utility module, 1 skipped) · **Endpoints:** 30
 
 ---
@@ -177,6 +177,9 @@ Multipart file upload. The field name is `file`.
 | `upload_id` | integer | Yes | Upload record ID |
 | `game_id` | integer | Yes | Game session ID |
 | `status` | string | Yes | One of `"processing"`, `"detected"`, `"failed"`, `"confirmed"` |
+| `card_count` | integer | Yes | Number of cards detected in the image (0 if failed) |
+| `image_width` | integer | Yes | Source image width in pixels (0 if unavailable) |
+| `image_height` | integer | Yes | Source image height in pixels (0 if unavailable) |
 | `detections` | array | Yes | List of detection results (empty if status is `"failed"`) |
 
 Each detection object:
@@ -191,6 +194,7 @@ Each detection object:
 | `bbox_y` | float | Bounding box top-left Y coordinate |
 | `bbox_width` | float | Bounding box width |
 | `bbox_height` | float | Bounding box height |
+| `position_confidence` | string or null | Confidence in position assignment: `"high"` (well within spatial region), `"low"` (near the community/hole boundary), or `"unassigned"` (fallback when fewer than 3 community cards detected). `null` only if position assignment was not run. |
 
 **Example:**
 ```json
@@ -198,6 +202,9 @@ Each detection object:
   "upload_id": 1,
   "game_id": 5,
   "status": "detected",
+  "card_count": 7,
+  "image_width": 1920,
+  "image_height": 1080,
   "detections": [
     {
       "detection_id": 1,
@@ -207,7 +214,8 @@ Each detection object:
       "bbox_x": 120.5,
       "bbox_y": 80.0,
       "bbox_width": 60.0,
-      "bbox_height": 90.0
+      "bbox_height": 90.0,
+      "position_confidence": "high"
     }
   ]
 }
@@ -220,13 +228,25 @@ Each detection object:
 | `404 Not Found` | Upload does not exist or wrong game | `"Upload not found"` |
 | `500 Internal Server Error` | Detection processing failed | `"Card detection failed"` |
 
+#### Detection Pipeline
+
+On the first `GET` call (when `status == "processing"`), the endpoint runs the full **detect → assign** pipeline:
+
+1. **Detect** — `CardDetector.detect(file_path)` returns raw `DetectionResult` objects with bounding boxes and detected card values.
+2. **Image dimensions** — `PIL.Image.open()` reads the source image to obtain `image_width` and `image_height` (pixels). These are persisted on the `ImageUpload` row.
+3. **Position assignment** — `PositionAssigner.assign(detections, image_width, image_height)` classifies each detection as community or hole based on bounding-box Y-coordinate. Cards with a vertical center in `[community_y_min, community_y_max]` (default `[0.0, 0.4]` of the image height) are treated as community cards, sorted left-to-right, and labeled `flop_1`…`river`. Remaining cards are labeled `hole_1`, `hole_2`, … left-to-right. Each detection receives a `position_confidence` value:
+   - `"high"` — card is well within its spatial region (distance from community/hole boundary > 5% of image height)
+   - `"low"` — card is near the boundary between community and hole regions
+   - `"unassigned"` — fewer than 3 cards fell in the community region, so the heuristic could not confidently distinguish community from hole cards; all cards are labeled `card_1`, `card_2`, … as a fallback
+4. **Persist** — Each assigned `DetectionResult` is stored as a `CardDetection` row with all bounding-box fields, `position_confidence`, and `card_position`. The upload status is set to `"detected"`.
+
 #### Behavior Notes
 
 - Detection runs lazily on the first `GET` call when `status == "processing"`.
 - The detector is resolved via `get_card_detector()` and injected through FastAPI `Depends()`. The backend is selected by the `CARD_DETECTOR_BACKEND` environment variable (`"mock"` or `"yolo"`); see [Detector Configuration & Dependency Injection](#detector-configuration--dependency-injection) above.
-- If detection was already completed (status `"detected"` or `"confirmed"`), cached results are returned.
-- If detection previously failed, returns an empty detections array with `status: "failed"`.
-- `card_position` values are assigned by the detector or by `PositionAssigner` downstream, using the format: `flop_1`..`flop_3`, `turn`, `river` for community cards; `hole_1`, `hole_2`, … for player hole cards.
+- If detection was already completed (status `"detected"` or `"confirmed"`), cached results are returned from the database without re-running detection.
+- If detection previously failed, returns an empty detections array with `status: "failed"`, `card_count: 0`, and the stored `image_width`/`image_height`.
+- `card_position` values are assigned by `PositionAssigner` using the format: `flop_1`..`flop_3`, `turn`, `river` for community cards; `hole_1`, `hole_2`, … for hole cards; `card_N` for fallback when position assignment is uncertain.
 
 ---
 
