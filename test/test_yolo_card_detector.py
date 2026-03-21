@@ -231,3 +231,102 @@ class TestYOLOCardDetectorDetect:
             detector.detect('my_image.jpg')
 
         mock_model.predict.assert_called_once_with('my_image.jpg', verbose=False)
+
+    def test_detect_includes_detection_at_exact_confidence_threshold(self):
+        """Detection with confidence == threshold should be included (not filtered)."""
+        mock_result = self._make_mock_result([(10, 20, 110, 160, 0.5, 0)])
+
+        with patch('app.services.card_detector.YOLO') as mock_yolo_cls:
+            mock_model = MagicMock()
+            mock_model.predict.return_value = [mock_result]
+            mock_yolo_cls.return_value = mock_model
+
+            detector = YOLOCardDetector(
+                model_path='/fake/model.pt', confidence_threshold=0.5
+            )
+            results = detector.detect('test_image.jpg')
+
+        assert len(results) == 1
+
+    def test_detect_filters_all_below_threshold_returns_empty(self):
+        """When every detection is below threshold, return empty list."""
+        mock_result = self._make_mock_result(
+            [
+                (10, 20, 110, 160, 0.20, 0),
+                (50, 60, 150, 200, 0.10, 4),
+            ]
+        )
+
+        with patch('app.services.card_detector.YOLO') as mock_yolo_cls:
+            mock_model = MagicMock()
+            mock_model.predict.return_value = [mock_result]
+            mock_yolo_cls.return_value = mock_model
+
+            detector = YOLOCardDetector(
+                model_path='/fake/model.pt', confidence_threshold=0.5
+            )
+            results = detector.detect('test_image.jpg')
+
+        assert results == []
+
+    def test_detect_with_custom_threshold_filters_correctly(self):
+        """Non-default threshold (0.9) filters detections below it."""
+        mock_result = self._make_mock_result(
+            [
+                (10, 20, 110, 160, 0.85, 0),  # below 0.9
+                (50, 60, 150, 200, 0.95, 21),  # above 0.9
+            ]
+        )
+
+        with patch('app.services.card_detector.YOLO') as mock_yolo_cls:
+            mock_model = MagicMock()
+            mock_model.predict.return_value = [mock_result]
+            mock_yolo_cls.return_value = mock_model
+
+            detector = YOLOCardDetector(
+                model_path='/fake/model.pt', confidence_threshold=0.9
+            )
+            results = detector.detect('test_image.jpg')
+
+        assert len(results) == 1
+        assert results[0].confidence == pytest.approx(0.95, abs=0.01)
+
+    def test_detect_aggregates_multiple_prediction_batches(self):
+        """When predict() returns multiple result objects, all are processed."""
+        result1 = self._make_mock_result([(10, 20, 110, 160, 0.95, 0)])
+        result2 = self._make_mock_result([(200, 50, 300, 200, 0.80, 21)])
+
+        with patch('app.services.card_detector.YOLO') as mock_yolo_cls:
+            mock_model = MagicMock()
+            mock_model.predict.return_value = [result1, result2]
+            mock_yolo_cls.return_value = mock_model
+
+            detector = YOLOCardDetector(model_path='/fake/model.pt')
+            results = detector.detect('test_image.jpg')
+
+        assert len(results) == 2
+
+    def test_detect_position_confidence_is_none(self):
+        """position_confidence is not set by the detector."""
+        mock_result = self._make_mock_result([(10, 20, 110, 160, 0.95, 0)])
+
+        with patch('app.services.card_detector.YOLO') as mock_yolo_cls:
+            mock_model = MagicMock()
+            mock_model.predict.return_value = [mock_result]
+            mock_yolo_cls.return_value = mock_model
+
+            detector = YOLOCardDetector(model_path='/fake/model.pt')
+            results = detector.detect('test_image.jpg')
+
+        assert results[0].position_confidence is None
+
+    def test_detect_value_error_includes_image_path(self):
+        """ValueError message should reference the problematic image path."""
+        with patch('app.services.card_detector.YOLO') as mock_yolo_cls:
+            mock_model = MagicMock()
+            mock_model.predict.side_effect = RuntimeError('corrupt file')
+            mock_yolo_cls.return_value = mock_model
+
+            detector = YOLOCardDetector(model_path='/fake/model.pt')
+            with pytest.raises(ValueError, match='bad_image.jpg'):
+                detector.detect('bad_image.jpg')
