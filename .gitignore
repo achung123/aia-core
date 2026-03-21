@@ -2,6 +2,9 @@
 .idea/
 __pycache__/
 
+# Dataset and model artifacts
+data/
+
 # Dolt database files (added by bd init)
 .dolt/
 *.db
