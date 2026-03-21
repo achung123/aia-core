@@ -30,6 +30,15 @@ class TestNormalize:
         with pytest.raises(ValueError):
             normalizer.normalize(bad_id)
 
+    def test_normalize_boundary_values(self):
+        normalizer = CardNormalizer()
+        assert normalizer.normalize(0) == '10C'
+        assert normalizer.normalize(51) == 'QS'
+
+    def test_normalize_returns_string(self):
+        normalizer = CardNormalizer()
+        assert isinstance(normalizer.normalize(0), str)
+
 
 class TestNormalizeResults:
     """Tests for CardNormalizer.normalize_results()."""
@@ -116,3 +125,36 @@ class TestNormalizeResults:
         results = normalizer.normalize_results(detections)
         assert isinstance(results, list)
         assert all(isinstance(r, DetectionResult) for r in results)
+
+    def test_normalize_results_propagates_value_error_for_invalid_class_id(self):
+        normalizer = CardNormalizer()
+        detections = [
+            DetectionResult(
+                detected_value='99',
+                confidence=0.5,
+                bbox_x=0.0,
+                bbox_y=0.0,
+                bbox_width=10.0,
+                bbox_height=10.0,
+            ),
+        ]
+        with pytest.raises(ValueError):
+            normalizer.normalize_results(detections)
+
+    def test_normalize_results_many_detections(self):
+        normalizer = CardNormalizer()
+        detections = [
+            DetectionResult(
+                detected_value=str(i),
+                confidence=0.9,
+                bbox_x=float(i),
+                bbox_y=0.0,
+                bbox_width=10.0,
+                bbox_height=10.0,
+            )
+            for i in range(52)
+        ]
+        results = normalizer.normalize_results(detections)
+        assert len(results) == 52
+        for i, r in enumerate(results):
+            assert r.detected_value == class_id_to_card(i)
