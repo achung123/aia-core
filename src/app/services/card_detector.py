@@ -7,6 +7,13 @@ from typing import Protocol, runtime_checkable
 
 from pydantic_models.app_models import DetectionResult
 
+from app.services.card_normalizer import CardNormalizer
+
+try:
+    from ultralytics import YOLO
+except ImportError:  # pragma: no cover
+    YOLO = None  # type: ignore[assignment,misc]
+
 
 @runtime_checkable
 class CardDetector(Protocol):
@@ -44,3 +51,53 @@ class MockCardDetector:
             )
             for card in chosen
         ]
+
+
+class YOLOCardDetector:
+    """Card detector backed by a YOLOv8 model."""
+
+    def __init__(self, model_path: str, confidence_threshold: float = 0.5) -> None:
+        if YOLO is None:  # pragma: no cover
+            raise RuntimeError('ultralytics is not installed')
+        self.confidence_threshold = confidence_threshold
+        self._model = YOLO(model_path)
+        self._normalizer = CardNormalizer()
+
+    def detect(self, image_path: str) -> list[DetectionResult]:
+        """Run YOLO inference and return normalized DetectionResult list."""
+        try:
+            predictions = self._model.predict(image_path, verbose=False)
+        except Exception as exc:
+            raise ValueError(
+                f'Image unreadable or prediction failed: {image_path}'
+            ) from exc
+
+        results: list[DetectionResult] = []
+        for pred in predictions:
+            boxes = pred.boxes
+            for i in range(len(boxes.xyxy)):
+                conf = float(boxes.conf[i])
+                if conf < self.confidence_threshold:
+                    continue
+
+                x1, y1, x2, y2 = (
+                    float(boxes.xyxy[i][0]),
+                    float(boxes.xyxy[i][1]),
+                    float(boxes.xyxy[i][2]),
+                    float(boxes.xyxy[i][3]),
+                )
+                class_id = int(boxes.cls[i])
+                card_notation = self._normalizer.normalize(class_id)
+
+                results.append(
+                    DetectionResult(
+                        detected_value=card_notation,
+                        confidence=conf,
+                        bbox_x=x1,
+                        bbox_y=y1,
+                        bbox_width=x2 - x1,
+                        bbox_height=y2 - y1,
+                    )
+                )
+
+        return results
