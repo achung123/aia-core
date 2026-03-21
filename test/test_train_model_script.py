@@ -44,6 +44,7 @@ class TestTrainScriptCLIArgs:
         sys.path.insert(0, SCRIPTS_DIR)
         try:
             import train_model
+
             return train_model.parse_args
         finally:
             sys.path.pop(0)
@@ -122,8 +123,11 @@ class TestTrainScriptSmokeTest:
 
     def _make_args(self, **overrides):
         defaults = dict(
-            epochs=1, batch=2, imgsz=320,
-            model='yolov8n.pt', data='data/cards/data.yaml',
+            epochs=1,
+            batch=2,
+            imgsz=320,
+            model='yolov8n.pt',
+            data='data/cards/data.yaml',
         )
         defaults.update(overrides)
         return argparse.Namespace(**defaults)
@@ -140,7 +144,9 @@ class TestTrainScriptSmokeTest:
 
     def test_train_calls_yolo_train(self):
         mock_model = self._mock_yolo()
-        with patch.object(self.train_model, 'YOLO', return_value=mock_model) as mock_cls:
+        with patch.object(
+            self.train_model, 'YOLO', return_value=mock_model
+        ) as mock_cls:
             self.train_model.train(self._make_args())
 
             mock_cls.assert_called_once_with('yolov8n.pt')

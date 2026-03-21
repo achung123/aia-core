@@ -27,7 +27,10 @@ def parse_args(argv=None):
         '--imgsz', type=int, default=640, help='Image size (default: 640)'
     )
     parser.add_argument(
-        '--model', type=str, default='yolov8n.pt', help='Base model (default: yolov8n.pt)'
+        '--model',
+        type=str,
+        default='yolov8n.pt',
+        help='Base model (default: yolov8n.pt)',
     )
     parser.add_argument(
         '--data',
