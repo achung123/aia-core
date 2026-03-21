@@ -26,7 +26,7 @@ class CardNormalizer:
         """
         return [
             detection.model_copy(
-                update={"detected_value": self.normalize(int(detection.detected_value))}
+                update={'detected_value': self.normalize(int(detection.detected_value))}
             )
             for detection in detections
         ]

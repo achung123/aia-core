@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -15,9 +14,9 @@ class TestYOLOCardDetectorProtocol:
     """YOLOCardDetector must satisfy the CardDetector protocol."""
 
     def test_implements_card_detector_protocol(self):
-        with patch("app.services.card_detector.YOLO") as mock_yolo_cls:
+        with patch('app.services.card_detector.YOLO') as mock_yolo_cls:
             mock_yolo_cls.return_value = MagicMock()
-            detector = YOLOCardDetector(model_path="/fake/model.pt")
+            detector = YOLOCardDetector(model_path='/fake/model.pt')
             assert isinstance(detector, CardDetector)
 
 
@@ -25,37 +24,39 @@ class TestYOLOCardDetectorConstructor:
     """Constructor behavior."""
 
     def test_default_confidence_threshold(self):
-        with patch("app.services.card_detector.YOLO") as mock_yolo_cls:
+        with patch('app.services.card_detector.YOLO') as mock_yolo_cls:
             mock_yolo_cls.return_value = MagicMock()
-            detector = YOLOCardDetector(model_path="/fake/model.pt")
+            detector = YOLOCardDetector(model_path='/fake/model.pt')
             assert detector.confidence_threshold == 0.5
 
     def test_custom_confidence_threshold(self):
-        with patch("app.services.card_detector.YOLO") as mock_yolo_cls:
+        with patch('app.services.card_detector.YOLO') as mock_yolo_cls:
             mock_yolo_cls.return_value = MagicMock()
             detector = YOLOCardDetector(
-                model_path="/fake/model.pt", confidence_threshold=0.8
+                model_path='/fake/model.pt', confidence_threshold=0.8
             )
             assert detector.confidence_threshold == 0.8
 
     def test_loads_model_via_ultralytics(self):
-        with patch("app.services.card_detector.YOLO") as mock_yolo_cls:
+        with patch('app.services.card_detector.YOLO') as mock_yolo_cls:
             mock_yolo_cls.return_value = MagicMock()
-            YOLOCardDetector(model_path="/fake/model.pt")
-            mock_yolo_cls.assert_called_once_with("/fake/model.pt")
+            YOLOCardDetector(model_path='/fake/model.pt')
+            mock_yolo_cls.assert_called_once_with('/fake/model.pt')
 
     def test_file_not_found_error_when_model_missing(self):
-        with patch("app.services.card_detector.YOLO") as mock_yolo_cls:
-            mock_yolo_cls.side_effect = FileNotFoundError("model not found")
+        with patch('app.services.card_detector.YOLO') as mock_yolo_cls:
+            mock_yolo_cls.side_effect = FileNotFoundError('model not found')
             with pytest.raises(FileNotFoundError):
-                YOLOCardDetector(model_path="/nonexistent/model.pt")
+                YOLOCardDetector(model_path='/nonexistent/model.pt')
 
 
 class TestYOLOCardDetectorDetect:
     """detect() method behavior."""
 
     @staticmethod
-    def _make_mock_result(boxes_data: list[tuple[float, float, float, float, float, int]]):
+    def _make_mock_result(
+        boxes_data: list[tuple[float, float, float, float, float, int]],
+    ):
         """Build a mock YOLO Results object.
 
         Each tuple: (x1, y1, x2, y2, confidence, class_id)
@@ -83,13 +84,13 @@ class TestYOLOCardDetectorDetect:
         # class_id 0 = "10 of clubs" -> "10C"
         mock_result = self._make_mock_result([(10, 20, 110, 160, 0.95, 0)])
 
-        with patch("app.services.card_detector.YOLO") as mock_yolo_cls:
+        with patch('app.services.card_detector.YOLO') as mock_yolo_cls:
             mock_model = MagicMock()
             mock_model.predict.return_value = [mock_result]
             mock_yolo_cls.return_value = mock_model
 
-            detector = YOLOCardDetector(model_path="/fake/model.pt")
-            results = detector.detect("test_image.jpg")
+            detector = YOLOCardDetector(model_path='/fake/model.pt')
+            results = detector.detect('test_image.jpg')
 
         assert isinstance(results, list)
         assert len(results) == 1
@@ -99,13 +100,13 @@ class TestYOLOCardDetectorDetect:
         # xyxy: (10, 20, 110, 160) -> x=10, y=20, w=100, h=140
         mock_result = self._make_mock_result([(10.0, 20.0, 110.0, 160.0, 0.95, 0)])
 
-        with patch("app.services.card_detector.YOLO") as mock_yolo_cls:
+        with patch('app.services.card_detector.YOLO') as mock_yolo_cls:
             mock_model = MagicMock()
             mock_model.predict.return_value = [mock_result]
             mock_yolo_cls.return_value = mock_model
 
-            detector = YOLOCardDetector(model_path="/fake/model.pt")
-            results = detector.detect("test_image.jpg")
+            detector = YOLOCardDetector(model_path='/fake/model.pt')
+            results = detector.detect('test_image.jpg')
 
         r = results[0]
         assert r.bbox_x == pytest.approx(10.0)
@@ -117,112 +118,116 @@ class TestYOLOCardDetectorDetect:
         # class_id 0 = "10 of clubs" -> "10C"
         mock_result = self._make_mock_result([(10, 20, 110, 160, 0.95, 0)])
 
-        with patch("app.services.card_detector.YOLO") as mock_yolo_cls:
+        with patch('app.services.card_detector.YOLO') as mock_yolo_cls:
             mock_model = MagicMock()
             mock_model.predict.return_value = [mock_result]
             mock_yolo_cls.return_value = mock_model
 
-            detector = YOLOCardDetector(model_path="/fake/model.pt")
-            results = detector.detect("test_image.jpg")
+            detector = YOLOCardDetector(model_path='/fake/model.pt')
+            results = detector.detect('test_image.jpg')
 
-        assert results[0].detected_value == "10C"
+        assert results[0].detected_value == '10C'
 
     def test_detect_extracts_confidence(self):
         mock_result = self._make_mock_result([(10, 20, 110, 160, 0.87, 0)])
 
-        with patch("app.services.card_detector.YOLO") as mock_yolo_cls:
+        with patch('app.services.card_detector.YOLO') as mock_yolo_cls:
             mock_model = MagicMock()
             mock_model.predict.return_value = [mock_result]
             mock_yolo_cls.return_value = mock_model
 
-            detector = YOLOCardDetector(model_path="/fake/model.pt")
-            results = detector.detect("test_image.jpg")
+            detector = YOLOCardDetector(model_path='/fake/model.pt')
+            results = detector.detect('test_image.jpg')
 
         assert results[0].confidence == pytest.approx(0.87, abs=0.01)
 
     def test_detect_filters_by_confidence_threshold(self):
-        mock_result = self._make_mock_result([
-            (10, 20, 110, 160, 0.95, 0),   # above threshold
-            (50, 60, 150, 200, 0.30, 4),   # below threshold
-        ])
+        mock_result = self._make_mock_result(
+            [
+                (10, 20, 110, 160, 0.95, 0),  # above threshold
+                (50, 60, 150, 200, 0.30, 4),  # below threshold
+            ]
+        )
 
-        with patch("app.services.card_detector.YOLO") as mock_yolo_cls:
+        with patch('app.services.card_detector.YOLO') as mock_yolo_cls:
             mock_model = MagicMock()
             mock_model.predict.return_value = [mock_result]
             mock_yolo_cls.return_value = mock_model
 
             detector = YOLOCardDetector(
-                model_path="/fake/model.pt", confidence_threshold=0.5
+                model_path='/fake/model.pt', confidence_threshold=0.5
             )
-            results = detector.detect("test_image.jpg")
+            results = detector.detect('test_image.jpg')
 
         assert len(results) == 1
-        assert results[0].detected_value == "10C"
+        assert results[0].detected_value == '10C'
 
     def test_detect_multiple_cards(self):
         # class_id 0 = "10C", class_id 21 = "ace of diamonds" = "AD"
-        mock_result = self._make_mock_result([
-            (10, 20, 110, 160, 0.95, 0),
-            (200, 50, 300, 200, 0.80, 21),
-        ])
+        mock_result = self._make_mock_result(
+            [
+                (10, 20, 110, 160, 0.95, 0),
+                (200, 50, 300, 200, 0.80, 21),
+            ]
+        )
 
-        with patch("app.services.card_detector.YOLO") as mock_yolo_cls:
+        with patch('app.services.card_detector.YOLO') as mock_yolo_cls:
             mock_model = MagicMock()
             mock_model.predict.return_value = [mock_result]
             mock_yolo_cls.return_value = mock_model
 
-            detector = YOLOCardDetector(model_path="/fake/model.pt")
-            results = detector.detect("test_image.jpg")
+            detector = YOLOCardDetector(model_path='/fake/model.pt')
+            results = detector.detect('test_image.jpg')
 
         assert len(results) == 2
         values = {r.detected_value for r in results}
-        assert "10C" in values
+        assert '10C' in values
 
     def test_detect_empty_results(self):
         mock_result = self._make_mock_result([])
 
-        with patch("app.services.card_detector.YOLO") as mock_yolo_cls:
+        with patch('app.services.card_detector.YOLO') as mock_yolo_cls:
             mock_model = MagicMock()
             mock_model.predict.return_value = [mock_result]
             mock_yolo_cls.return_value = mock_model
 
-            detector = YOLOCardDetector(model_path="/fake/model.pt")
-            results = detector.detect("test_image.jpg")
+            detector = YOLOCardDetector(model_path='/fake/model.pt')
+            results = detector.detect('test_image.jpg')
 
         assert results == []
 
     def test_detect_card_position_is_none(self):
         mock_result = self._make_mock_result([(10, 20, 110, 160, 0.95, 0)])
 
-        with patch("app.services.card_detector.YOLO") as mock_yolo_cls:
+        with patch('app.services.card_detector.YOLO') as mock_yolo_cls:
             mock_model = MagicMock()
             mock_model.predict.return_value = [mock_result]
             mock_yolo_cls.return_value = mock_model
 
-            detector = YOLOCardDetector(model_path="/fake/model.pt")
-            results = detector.detect("test_image.jpg")
+            detector = YOLOCardDetector(model_path='/fake/model.pt')
+            results = detector.detect('test_image.jpg')
 
         assert results[0].card_position is None
 
     def test_detect_raises_value_error_for_unreadable_image(self):
-        with patch("app.services.card_detector.YOLO") as mock_yolo_cls:
+        with patch('app.services.card_detector.YOLO') as mock_yolo_cls:
             mock_model = MagicMock()
-            mock_model.predict.side_effect = Exception("cannot read image")
+            mock_model.predict.side_effect = Exception('cannot read image')
             mock_yolo_cls.return_value = mock_model
 
-            detector = YOLOCardDetector(model_path="/fake/model.pt")
-            with pytest.raises(ValueError, match="unreadable"):
-                detector.detect("bad_image.jpg")
+            detector = YOLOCardDetector(model_path='/fake/model.pt')
+            with pytest.raises(ValueError, match='unreadable'):
+                detector.detect('bad_image.jpg')
 
     def test_detect_passes_image_path_to_predict(self):
         mock_result = self._make_mock_result([])
 
-        with patch("app.services.card_detector.YOLO") as mock_yolo_cls:
+        with patch('app.services.card_detector.YOLO') as mock_yolo_cls:
             mock_model = MagicMock()
             mock_model.predict.return_value = [mock_result]
             mock_yolo_cls.return_value = mock_model
 
-            detector = YOLOCardDetector(model_path="/fake/model.pt")
-            detector.detect("my_image.jpg")
+            detector = YOLOCardDetector(model_path='/fake/model.pt')
+            detector.detect('my_image.jpg')
 
-        mock_model.predict.assert_called_once_with("my_image.jpg", verbose=False)
+        mock_model.predict.assert_called_once_with('my_image.jpg', verbose=False)
