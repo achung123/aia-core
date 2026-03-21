@@ -1,6 +1,5 @@
 """Tests for T-013: Detector configuration and dependency injection."""
 
-import os
 from unittest.mock import patch, MagicMock
 
 import pytest
@@ -13,7 +12,7 @@ from app.database.models import Base as ModelsBase
 from app.database.session import get_db
 from app.main import app
 from app.routes.images import get_card_detector
-from app.services.card_detector import CardDetector, MockCardDetector, YOLOCardDetector
+from app.services.card_detector import MockCardDetector, YOLOCardDetector
 from pydantic_models.app_models import DetectionResult
 
 DATABASE_URL = 'sqlite:///:memory:'
@@ -101,7 +100,7 @@ class TestDetectorEnvVars:
         get_card_detector.cache_clear()
         with patch('app.routes.images.YOLOCardDetector') as mock_yolo:
             mock_yolo.return_value = MagicMock(spec=YOLOCardDetector)
-            detector = get_card_detector()
+            get_card_detector()
             mock_yolo.assert_called_once_with(
                 model_path=str(model_file), confidence_threshold=0.7
             )

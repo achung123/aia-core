@@ -684,3 +684,238 @@ class TestConcurrentDetectionRaceCondition:
             assert data['status'] == 'detected'
         finally:
             app.dependency_overrides.clear()
+
+
+# ── T-014: Enriched Detection Response Tests ───────────────────────────
+
+
+def _make_fixed_detector():
+    """Return a detector with deterministic results for T-014 tests."""
+
+    class FixedDetector:
+        def detect(self, image_path: str) -> list[DetectionResult]:
+            return [
+                DetectionResult(
+                    detected_value='AS',
+                    confidence=0.95,
+                    bbox_x=100.0,
+                    bbox_y=50.0,
+                    bbox_width=60.0,
+                    bbox_height=80.0,
+                ),
+                DetectionResult(
+                    detected_value='KH',
+                    confidence=0.90,
+                    bbox_x=200.0,
+                    bbox_y=55.0,
+                    bbox_width=60.0,
+                    bbox_height=80.0,
+                ),
+                DetectionResult(
+                    detected_value='QD',
+                    confidence=0.85,
+                    bbox_x=300.0,
+                    bbox_y=60.0,
+                    bbox_width=60.0,
+                    bbox_height=80.0,
+                ),
+            ]
+
+    return FixedDetector()
+
+
+def _make_valid_jpeg(width: int = 640, height: int = 480) -> bytes:
+    """Create a minimal valid JPEG with known dimensions."""
+    from io import BytesIO
+
+    from PIL import Image
+
+    img = Image.new('RGB', (width, height), color=(0, 128, 0))
+    buf = BytesIO()
+    img.save(buf, format='JPEG')
+    return buf.getvalue()
+
+
+def _upload_valid_image(client, game_id, width=640, height=480):
+    """Upload a valid JPEG with known dimensions and return the response JSON."""
+    data = _make_valid_jpeg(width, height)
+    response = client.post(
+        f'/games/{game_id}/hands/image',
+        files={'file': ('hand.jpg', data, 'image/jpeg')},
+    )
+    assert response.status_code == 201
+    return response.json()
+
+
+class TestEnrichedDetectionResponse:
+    """T-014: Updated detection results endpoint response with bbox, position, dimensions."""
+
+    def _setup_client(self, detector=None):
+        app.dependency_overrides[get_db] = override_get_db
+        if detector is not None:
+            app.dependency_overrides[get_card_detector] = lambda: detector
+        return TestClient(app)
+
+    # ── AC-1: Handler calls detector.detect() then PositionAssigner.assign() ──
+
+    def test_position_assigner_called_card_positions_assigned(self, game_id):
+        """After detection, card_position values should come from PositionAssigner."""
+        client = self._setup_client(_make_fixed_detector())
+        try:
+            upload = _upload_valid_image(client, game_id)
+            r = client.get(f'/games/{game_id}/hands/image/{upload["upload_id"]}')
+            data = r.json()
+            positions = [d['card_position'] for d in data['detections']]
+            # PositionAssigner assigns positions (not just fallback card_1 from index)
+            for pos in positions:
+                assert pos is not None
+                assert len(pos) > 0
+        finally:
+            app.dependency_overrides.clear()
+
+    # ── AC-2: CardDetection rows stored with bbox and card_position ──
+
+    def test_db_stores_bbox_fields(self, game_id):
+        """CardDetection rows must have bbox_x, bbox_y, bbox_width, bbox_height."""
+        client = self._setup_client(_make_fixed_detector())
+        try:
+            upload = _upload_valid_image(client, game_id)
+            client.get(f'/games/{game_id}/hands/image/{upload["upload_id"]}')
+            with SessionLocal() as db:
+                detections = (
+                    db.query(CardDetection)
+                    .filter(CardDetection.upload_id == upload['upload_id'])
+                    .all()
+                )
+                assert len(detections) == 3
+                for d in detections:
+                    assert d.bbox_x is not None
+                    assert d.bbox_y is not None
+                    assert d.bbox_width is not None
+                    assert d.bbox_height is not None
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_db_stores_position_confidence(self, game_id):
+        """CardDetection rows must have position_confidence stored."""
+        client = self._setup_client(_make_fixed_detector())
+        try:
+            upload = _upload_valid_image(client, game_id)
+            client.get(f'/games/{game_id}/hands/image/{upload["upload_id"]}')
+            with SessionLocal() as db:
+                detections = (
+                    db.query(CardDetection)
+                    .filter(CardDetection.upload_id == upload['upload_id'])
+                    .all()
+                )
+                for d in detections:
+                    assert d.position_confidence is not None
+                    assert d.position_confidence in ('high', 'low', 'unassigned')
+        finally:
+            app.dependency_overrides.clear()
+
+    # ── AC-3: Response includes bbox per detection ──
+
+    def test_response_detections_have_bbox_fields(self, game_id):
+        """Each detection in response must include bbox_x/y/width/height."""
+        client = self._setup_client(_make_fixed_detector())
+        try:
+            upload = _upload_valid_image(client, game_id)
+            r = client.get(f'/games/{game_id}/hands/image/{upload["upload_id"]}')
+            for d in r.json()['detections']:
+                assert 'bbox_x' in d
+                assert 'bbox_y' in d
+                assert 'bbox_width' in d
+                assert 'bbox_height' in d
+        finally:
+            app.dependency_overrides.clear()
+
+    # ── AC-4: Response includes position_confidence per detection ──
+
+    def test_response_detections_have_position_confidence(self, game_id):
+        """Each detection in response must include position_confidence."""
+        client = self._setup_client(_make_fixed_detector())
+        try:
+            upload = _upload_valid_image(client, game_id)
+            r = client.get(f'/games/{game_id}/hands/image/{upload["upload_id"]}')
+            for d in r.json()['detections']:
+                assert 'position_confidence' in d
+                assert d['position_confidence'] in ('high', 'low', 'unassigned')
+        finally:
+            app.dependency_overrides.clear()
+
+    # ── AC-5: Response includes card_count, image_width, image_height ──
+
+    def test_response_includes_card_count(self, game_id):
+        """Top-level response must include card_count."""
+        client = self._setup_client(_make_fixed_detector())
+        try:
+            upload = _upload_valid_image(client, game_id)
+            r = client.get(f'/games/{game_id}/hands/image/{upload["upload_id"]}')
+            data = r.json()
+            assert 'card_count' in data
+            assert data['card_count'] == 3
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_response_includes_image_width(self, game_id):
+        """Top-level response must include image_width."""
+        client = self._setup_client(_make_fixed_detector())
+        try:
+            upload = _upload_valid_image(client, game_id, width=800, height=600)
+            r = client.get(f'/games/{game_id}/hands/image/{upload["upload_id"]}')
+            data = r.json()
+            assert 'image_width' in data
+            assert data['image_width'] == 800
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_response_includes_image_height(self, game_id):
+        """Top-level response must include image_height."""
+        client = self._setup_client(_make_fixed_detector())
+        try:
+            upload = _upload_valid_image(client, game_id, width=800, height=600)
+            r = client.get(f'/games/{game_id}/hands/image/{upload["upload_id"]}')
+            data = r.json()
+            assert 'image_height' in data
+            assert data['image_height'] == 600
+        finally:
+            app.dependency_overrides.clear()
+
+    # ── AC-6: Bbox in pixel units ──
+
+    def test_bbox_values_match_detector_output(self, game_id):
+        """Bbox coordinates should be the exact pixel values from DetectionResult."""
+        client = self._setup_client(_make_fixed_detector())
+        try:
+            upload = _upload_valid_image(client, game_id)
+            r = client.get(f'/games/{game_id}/hands/image/{upload["upload_id"]}')
+            detections = r.json()['detections']
+            # Find the AS detection
+            as_det = [d for d in detections if d['detected_value'] == 'AS']
+            assert len(as_det) == 1
+            assert as_det[0]['bbox_x'] == 100.0
+            assert as_det[0]['bbox_y'] == 50.0
+            assert as_det[0]['bbox_width'] == 60.0
+            assert as_det[0]['bbox_height'] == 80.0
+        finally:
+            app.dependency_overrides.clear()
+
+    # ── Re-detection idempotency with enriched fields ──
+
+    def test_second_get_still_returns_enriched_fields(self, game_id):
+        """Second GET (no re-detection) should still include enriched fields."""
+        client = self._setup_client(_make_fixed_detector())
+        try:
+            upload = _upload_valid_image(client, game_id)
+            uid = upload['upload_id']
+            client.get(f'/games/{game_id}/hands/image/{uid}')
+            r2 = client.get(f'/games/{game_id}/hands/image/{uid}')
+            data = r2.json()
+            assert 'card_count' in data
+            assert 'image_width' in data
+            assert 'image_height' in data
+            for d in data['detections']:
+                assert 'position_confidence' in d
+        finally:
+            app.dependency_overrides.clear()

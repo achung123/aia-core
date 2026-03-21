@@ -95,6 +95,8 @@ class ImageUpload(Base):
     game_id = Column(Integer, ForeignKey('game_sessions.game_id'), nullable=False)
     file_path = Column(String, nullable=False)
     status = Column(String, nullable=False, default='processing')
+    image_width = Column(Integer, nullable=True)
+    image_height = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     detections = relationship('CardDetection', back_populates='image_upload')
@@ -117,6 +119,7 @@ class CardDetection(Base):
     bbox_y = Column(Float, nullable=True)
     bbox_width = Column(Float, nullable=True)
     bbox_height = Column(Float, nullable=True)
+    position_confidence = Column(String, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     image_upload = relationship('ImageUpload', back_populates='detections')

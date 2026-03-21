@@ -6,6 +6,7 @@ from functools import lru_cache
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from PIL import Image
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -21,6 +22,7 @@ from app.database.models import (
 )
 from app.database.session import get_db
 from app.services.card_detector import CardDetector, MockCardDetector, YOLOCardDetector
+from app.services.position_assigner import PositionAssigner
 from pydantic_models.app_models import (
     ConfirmDetectionRequest,
     HandResponse,
@@ -64,6 +66,15 @@ def get_card_detector() -> CardDetector:
 
 def _has_valid_image_magic(data: bytes) -> bool:
     return data[:3] == JPEG_MAGIC or data[:8] == PNG_MAGIC
+
+
+def _get_image_dimensions(file_path: str) -> tuple[int, int]:
+    """Read image dimensions from file. Returns (width, height) or (0, 0) on failure."""
+    try:
+        with Image.open(file_path) as img:
+            return img.size
+    except Exception:
+        return (0, 0)
 
 
 @router.post('/{game_id}/hands/image', status_code=201)
@@ -175,24 +186,35 @@ def get_detection_results(
                 'upload_id': upload.upload_id,
                 'game_id': upload.game_id,
                 'status': upload.status,
+                'card_count': 0,
+                'image_width': upload.image_width or 0,
+                'image_height': upload.image_height or 0,
                 'detections': [],
             }
         try:
             results = detector.detect(upload.file_path)
-            for i, r in enumerate(results, 1):
-                position = r.card_position if r.card_position else f'card_{i}'
+
+            # Get image dimensions and run position assignment
+            img_w, img_h = _get_image_dimensions(upload.file_path)
+            assigner = PositionAssigner()
+            assigned = assigner.assign(results, img_w, img_h)
+
+            for r in assigned:
                 detection = CardDetection(
                     upload_id=upload_id,
-                    card_position=position,
+                    card_position=r.card_position,
                     detected_value=r.detected_value,
                     confidence=r.confidence,
                     bbox_x=r.bbox_x,
                     bbox_y=r.bbox_y,
                     bbox_width=r.bbox_width,
                     bbox_height=r.bbox_height,
+                    position_confidence=r.position_confidence,
                 )
                 db.add(detection)
             upload.status = 'detected'
+            upload.image_width = img_w
+            upload.image_height = img_h
             db.commit()
             db.refresh(upload)
         except IntegrityError:
@@ -214,6 +236,9 @@ def get_detection_results(
         'upload_id': upload.upload_id,
         'game_id': upload.game_id,
         'status': upload.status,
+        'card_count': len(detections),
+        'image_width': upload.image_width or 0,
+        'image_height': upload.image_height or 0,
         'detections': [
             {
                 'detection_id': d.detection_id,
@@ -224,6 +249,7 @@ def get_detection_results(
                 'bbox_y': d.bbox_y,
                 'bbox_width': d.bbox_width,
                 'bbox_height': d.bbox_height,
+                'position_confidence': d.position_confidence,
             }
             for d in detections
         ],

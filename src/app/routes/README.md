@@ -1,7 +1,7 @@
 # Routes — API Reference
 
 **Directory:** `src/app/routes/`
-**Generated:** 2026-03-20
+**Generated:** 2026-03-21
 **Artifacts found:** 10 (8 API routers, 1 utility module, 1 skipped) · **Endpoints:** 30
 
 ---
@@ -55,6 +55,40 @@ This directory contains all FastAPI route handlers — the HTTP API surface of *
 **Tags:** `images`
 
 This module implements the **image-based card detection pipeline** — the core feature of the AIA Card Recognition system (project `aia-card-recognition-002`). It covers the full workflow: uploading a poker table photo, running card detection, presenting results for human review, confirming/correcting detections, and persisting the resulting hand data. Detection corrections are tracked separately for future model retraining.
+
+### Detector Configuration & Dependency Injection
+
+Card detection is abstracted behind the `CardDetector` protocol (`src/app/services/card_detector.py`). The concrete implementation is selected at runtime by the `get_card_detector()` factory function defined in this module (`src/app/routes/images.py:43–59`). It reads environment variables, instantiates the appropriate backend, and caches the result as a process-wide singleton via `@lru_cache(maxsize=1)`.
+
+**Environment variables:**
+
+| Variable | Default | Description |
+|---|---|---|
+| `CARD_DETECTOR_BACKEND` | `"mock"` | Which detector implementation to use. `"mock"` → `MockCardDetector`, `"yolo"` → `YOLOCardDetector`. Any other value raises `ValueError`. |
+| `CARD_DETECTOR_MODEL_PATH` | `"models/card_detector_v1.pt"` | File path to the YOLOv8 model weights. Only used when `CARD_DETECTOR_BACKEND=yolo`. If the file does not exist, raises `FileNotFoundError` at startup. |
+| `CARD_DETECTOR_CONFIDENCE` | `"0.5"` | Minimum confidence threshold (0.0–1.0). Parsed as `float`. Only used when `CARD_DETECTOR_BACKEND=yolo`. Detections below this score are discarded. |
+
+**Backend implementations:**
+
+| Backend | Class | Behavior |
+|---|---|---|
+| `mock` | `MockCardDetector` | Returns 5–9 random cards from a standard 52-card deck with random confidence scores (0.75–0.99) and random bounding boxes. No model file required. Suitable for development and testing. |
+| `yolo` | `YOLOCardDetector` | Runs YOLOv8 inference via `ultralytics.YOLO`. Normalizes class IDs to rank+suit notation through `CardNormalizer`. Requires `ultralytics` package and a valid model file at `CARD_DETECTOR_MODEL_PATH`. |
+
+**Dependency injection:** The `get_card_detector()` function is wired into endpoint handlers via FastAPI's `Depends()` mechanism. The `GET /games/{game_id}/hands/image/{upload_id}` endpoint declares `detector: Annotated[CardDetector, Depends(get_card_detector)]` as a parameter, so FastAPI resolves the detector once per process lifecycle (thanks to `@lru_cache`) and injects it into each request.
+
+**Example configuration (production):**
+```bash
+export CARD_DETECTOR_BACKEND=yolo
+export CARD_DETECTOR_MODEL_PATH=/app/models/card_detector_v1.pt
+export CARD_DETECTOR_CONFIDENCE=0.6
+```
+
+**Example configuration (development/testing):**
+```bash
+export CARD_DETECTOR_BACKEND=mock
+# CARD_DETECTOR_MODEL_PATH and CARD_DETECTOR_CONFIDENCE are ignored
+```
 
 ### Endpoints
 
@@ -189,7 +223,7 @@ Each detection object:
 #### Behavior Notes
 
 - Detection runs lazily on the first `GET` call when `status == "processing"`.
-- The detector dependency is injected via `get_card_detector()` (currently returns `MockCardDetector`).
+- The detector is resolved via `get_card_detector()` and injected through FastAPI `Depends()`. The backend is selected by the `CARD_DETECTOR_BACKEND` environment variable (`"mock"` or `"yolo"`); see [Detector Configuration & Dependency Injection](#detector-configuration--dependency-injection) above.
 - If detection was already completed (status `"detected"` or `"confirmed"`), cached results are returned.
 - If detection previously failed, returns an empty detections array with `status: "failed"`.
 - `card_position` values are assigned by the detector or by `PositionAssigner` downstream, using the format: `flop_1`..`flop_3`, `turn`, `river` for community cards; `hole_1`, `hole_2`, … for player hole cards.
