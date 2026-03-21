@@ -2,6 +2,7 @@
 
 import os
 import uuid
+from functools import lru_cache
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
@@ -19,7 +20,7 @@ from app.database.models import (
     PlayerHand,
 )
 from app.database.session import get_db
-from app.services.card_detector import CardDetector, MockCardDetector
+from app.services.card_detector import CardDetector, MockCardDetector, YOLOCardDetector
 from pydantic_models.app_models import (
     ConfirmDetectionRequest,
     HandResponse,
@@ -38,8 +39,27 @@ JPEG_MAGIC = b'\xff\xd8\xff'
 PNG_MAGIC = b'\x89PNG\r\n\x1a\n'
 
 
+@lru_cache(maxsize=1)
 def get_card_detector() -> CardDetector:
-    return MockCardDetector()
+    backend = os.environ.get('CARD_DETECTOR_BACKEND', 'mock')
+    model_path = os.environ.get(
+        'CARD_DETECTOR_MODEL_PATH', 'models/card_detector_v1.pt'
+    )
+    confidence = float(os.environ.get('CARD_DETECTOR_CONFIDENCE', '0.5'))
+
+    if backend == 'mock':
+        return MockCardDetector()
+    elif backend == 'yolo':
+        if not os.path.isfile(model_path):
+            raise FileNotFoundError(
+                f'YOLO model file not found: {model_path}. '
+                f'Set CARD_DETECTOR_MODEL_PATH to a valid model file.'
+            )
+        return YOLOCardDetector(model_path=model_path, confidence_threshold=confidence)
+    else:
+        raise ValueError(
+            f'Unknown CARD_DETECTOR_BACKEND: {backend!r}. Use "mock" or "yolo".'
+        )
 
 
 def _has_valid_image_magic(data: bytes) -> bool:
