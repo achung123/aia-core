@@ -59,7 +59,10 @@ Review both existing code and newly generated code with equal rigor.
    - **NOT SATISFIED** — implementation does not meet the criterion
    - **NOT APPLICABLE** — criterion doesn't relate to the reviewed code
 9. Classify each finding by severity: CRITICAL, HIGH, MEDIUM, LOW
-10. Write the report to `specs/<project-id>/reports/code-review-report-YYYY-MM-DD.md` using the companion template. Include the Task/Beads ID and AC Verification section when reviewing a task
+10. Write the report to `specs/<project-id>/reports/code-review-report-<ticket>-YYYY-MM-DD.md` using the companion template, where `<ticket>` is the beads ID (e.g. `aia-core-8sn`), task ID (e.g. `T-003`), or `adhoc` for file/folder reviews. The report **must** include:
+    - The ticket number prominently in the header
+    - A **Code Description** section (2-4 sentences: what the code does, which modules/endpoints/models it touches, and why it exists)
+    - The AC Verification section when reviewing a task
 
 # Output Format
 

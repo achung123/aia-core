@@ -18,9 +18,9 @@ PLACEHOLDER LEGEND
 
 # {{ROUTE_NAME}} API Reference
 
-**Module:** `{{MODULE_PATH}}`  
-**Router prefix:** `{{ROUTER_PREFIX}}`  
-**Tags:** `{{ROUTER_TAGS}}`  
+**Module:** `{{MODULE_PATH}}`
+**Router prefix:** `{{ROUTER_PREFIX}}`
+**Tags:** `{{ROUTER_TAGS}}`
 **Generated:** {{DATE}}
 
 {{ROUTE_DESCRIPTION}}
@@ -78,7 +78,7 @@ PLACEHOLDER LEGEND
 
 ### Response
 
-**Status:** `200 OK`  
+**Status:** `200 OK`
 **Schema:** `{{RESPONSE_SCHEMA_NAME}}`
 
 | Field | Type | Always Present | Description |

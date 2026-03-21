@@ -7,6 +7,17 @@ from dateutil.parser import parse
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 
+class DetectionResult(BaseModel):
+    detected_value: str
+    confidence: float = Field(..., ge=0.0, le=1.0)
+    bbox_x: float
+    bbox_y: float
+    bbox_width: float = Field(..., gt=0)
+    bbox_height: float = Field(..., gt=0)
+    card_position: str | None = None
+    position_confidence: str | None = None
+
+
 class GameState(str, Enum):
     """
     Enumeration for the state of the game.

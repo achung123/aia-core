@@ -21,8 +21,8 @@ PLACEHOLDER LEGEND
 
 # Data Model: `{{MODEL_NAME}}`
 
-**Table:** `{{TABLE_NAME}}`  
-**Module:** `{{MODULE_PATH}}`  
+**Table:** `{{TABLE_NAME}}`
+**Module:** `{{MODULE_PATH}}`
 **Generated:** {{DATE}}
 
 {{MODEL_DESCRIPTION}}

@@ -11,6 +11,7 @@ from app.database.session import get_db
 from app.main import app
 from app.routes.images import get_card_detector
 from app.services.card_detector import CardDetector, MockCardDetector
+from pydantic_models.app_models import DetectionResult
 
 DATABASE_URL = 'sqlite:///:memory:'
 engine = create_engine(
@@ -133,39 +134,48 @@ class TestMockCardDetector:
         results = detector.detect('fake/path.jpg')
         assert isinstance(results, list)
 
-    def test_mock_returns_seven_cards(self):
-        """5 community + 2 hole cards = 7 total."""
+    def test_mock_returns_variable_card_count(self):
+        """Mock generates 5-9 cards per call, not a fixed 7."""
         detector = MockCardDetector()
         results = detector.detect('fake/path.jpg')
-        assert len(results) == 7
+        assert 5 <= len(results) <= 9
 
-    def test_mock_has_community_positions(self):
+    def test_mock_returns_detection_result_instances(self):
+        """Each result should be a DetectionResult instance."""
         detector = MockCardDetector()
         results = detector.detect('fake/path.jpg')
-        positions = [r['card_position'] for r in results]
-        for i in range(1, 6):
-            assert f'community_{i}' in positions
+        for r in results:
+            assert isinstance(r, DetectionResult)
 
-    def test_mock_has_hole_positions(self):
+    def test_mock_card_position_is_none(self):
+        """Detector does not set card_position — remains None."""
         detector = MockCardDetector()
         results = detector.detect('fake/path.jpg')
-        positions = [r['card_position'] for r in results]
-        assert 'hole_1' in positions
-        assert 'hole_2' in positions
+        for r in results:
+            assert r.card_position is None
+
+    def test_mock_has_bounding_boxes(self):
+        """Each result has positive bounding box values."""
+        detector = MockCardDetector()
+        results = detector.detect('fake/path.jpg')
+        for r in results:
+            assert r.bbox_x >= 0
+            assert r.bbox_y >= 0
+            assert r.bbox_width > 0
+            assert r.bbox_height > 0
 
     def test_mock_has_detected_value(self):
         detector = MockCardDetector()
         results = detector.detect('fake/path.jpg')
         for r in results:
-            assert 'detected_value' in r
-            assert len(r['detected_value']) >= 2
+            assert r.detected_value is not None
+            assert len(r.detected_value) >= 2
 
     def test_mock_has_confidence_scores(self):
         detector = MockCardDetector()
         results = detector.detect('fake/path.jpg')
         for r in results:
-            assert 'confidence' in r
-            assert 0.0 <= r['confidence'] <= 1.0
+            assert 0.75 <= r.confidence <= 0.99
 
     def test_mock_values_are_valid_cards(self):
         """Every detected_value should be a valid card string like 'AS', 'KH'."""
@@ -174,7 +184,7 @@ class TestMockCardDetector:
         detector = MockCardDetector()
         results = detector.detect('fake/path.jpg')
         for r in results:
-            val = r['detected_value']
+            val = r.detected_value
             rank = val[:-1]
             suit = val[-1]
             assert rank in valid_ranks, f'Invalid rank: {rank}'
@@ -184,7 +194,7 @@ class TestMockCardDetector:
         """Stub results should not contain duplicate cards."""
         detector = MockCardDetector()
         results = detector.detect('fake/path.jpg')
-        values = [r['detected_value'] for r in results]
+        values = [r.detected_value for r in results]
         assert len(values) == len(set(values))
 
     def test_mock_implements_protocol(self):
@@ -212,12 +222,12 @@ class TestGetDetectionResults:
         data = response.json()
         assert 'detections' in data
 
-    def test_get_detection_results_has_seven_detections(self, client, game_id):
+    def test_get_detection_results_has_variable_detections(self, client, game_id):
         upload = _upload_image(client, game_id)
         upload_id = upload['upload_id']
         response = client.get(f'/games/{game_id}/hands/image/{upload_id}')
         data = response.json()
-        assert len(data['detections']) == 7
+        assert 5 <= len(data['detections']) <= 9
 
     def test_get_detection_results_has_upload_id(self, client, game_id):
         upload = _upload_image(client, game_id)
@@ -294,7 +304,7 @@ class TestUploadStatusUpdate:
                 .filter(CardDetection.upload_id == upload_id)
                 .all()
             )
-            assert len(detections) == 7
+            assert 5 <= len(detections) <= 9
 
     def test_second_get_returns_same_results(self, client, game_id):
         """Idempotent: second GET should return same stored detections, not re-detect."""
@@ -307,7 +317,8 @@ class TestUploadStatusUpdate:
     def test_second_get_does_not_duplicate_detections(self, client, game_id):
         upload = _upload_image(client, game_id)
         upload_id = upload['upload_id']
-        client.get(f'/games/{game_id}/hands/image/{upload_id}')
+        r1 = client.get(f'/games/{game_id}/hands/image/{upload_id}')
+        first_count = len(r1.json()['detections'])
         client.get(f'/games/{game_id}/hands/image/{upload_id}')
         with SessionLocal() as db:
             count = (
@@ -315,7 +326,7 @@ class TestUploadStatusUpdate:
                 .filter(CardDetection.upload_id == upload_id)
                 .count()
             )
-            assert count == 7
+            assert count == first_count
 
 
 # ── Dependency Injection Tests ──────────────────────────────────────────
@@ -338,13 +349,16 @@ class TestCardDetectorDependencyInjection:
         """Tests can inject a custom detector via dependency_overrides."""
 
         class FixedDetector:
-            def detect(self, image_path: str) -> list[dict]:
+            def detect(self, image_path: str) -> list[DetectionResult]:
                 return [
-                    {
-                        'card_position': 'community_1',
-                        'detected_value': 'AS',
-                        'confidence': 0.99,
-                    },
+                    DetectionResult(
+                        detected_value='AS',
+                        confidence=0.99,
+                        bbox_x=100.0,
+                        bbox_y=50.0,
+                        bbox_width=60.0,
+                        bbox_height=80.0,
+                    ),
                 ]
 
         app.dependency_overrides[get_card_detector] = lambda: FixedDetector()
@@ -378,7 +392,7 @@ class TestDetectErrorHandling:
         """Return a detector whose detect() always raises RuntimeError."""
 
         class FailingDetector:
-            def detect(self, image_path: str) -> list[dict]:
+            def detect(self, image_path: str) -> list[DetectionResult]:
                 raise RuntimeError('Simulated detection failure')
 
         return FailingDetector()
@@ -388,7 +402,7 @@ class TestDetectErrorHandling:
         since detect returns all-at-once, but guards against future streaming changes)."""
 
         class PartialFailDetector:
-            def detect(self, image_path: str) -> list[dict]:
+            def detect(self, image_path: str) -> list[DetectionResult]:
                 raise OSError('Corrupt image file')
 
         return PartialFailDetector()
@@ -602,13 +616,13 @@ class TestConcurrentDetectionRaceCondition:
             with SessionLocal() as db:
                 detector = MockCardDetector()
                 results = detector.detect('fake/path.jpg')
-                for r in results:
+                for i, r in enumerate(results, 1):
                     db.add(
                         CardDetection(
                             upload_id=upload_id,
-                            card_position=r['card_position'],
-                            detected_value=r['detected_value'],
-                            confidence=r['confidence'],
+                            card_position=f'card_{i}',
+                            detected_value=r.detected_value,
+                            confidence=r.confidence,
                         )
                     )
                 upload_rec = (
@@ -623,7 +637,7 @@ class TestConcurrentDetectionRaceCondition:
             response = test_client.get(f'/games/{game_id}/hands/image/{upload_id}')
             assert response.status_code == 200
             data = response.json()
-            assert len(data['detections']) == 7
+            assert 5 <= len(data['detections']) <= 9
         finally:
             app.dependency_overrides.clear()
 
@@ -637,20 +651,20 @@ class TestConcurrentDetectionRaceCondition:
             """A detector that inserts duplicate rows via a side-channel to trigger
             IntegrityError when the endpoint tries to commit."""
 
-            def detect(self, image_path: str) -> list[dict]:
+            def detect(self, image_path: str) -> list[DetectionResult]:
                 nonlocal call_count
                 call_count += 1
                 base_results = MockCardDetector().detect(image_path)
                 # Side-channel: insert detections directly, simulating concurrent request
                 with SessionLocal() as side_db:
                     upload = side_db.query(ImageUpload).first()
-                    for r in base_results:
+                    for i, r in enumerate(base_results, 1):
                         side_db.add(
                             CardDetection(
                                 upload_id=upload.upload_id,
-                                card_position=r['card_position'],
-                                detected_value=r['detected_value'],
-                                confidence=r['confidence'],
+                                card_position=f'card_{i}',
+                                detected_value=r.detected_value,
+                                confidence=r.confidence,
                             )
                         )
                     upload.status = 'detected'
@@ -666,7 +680,7 @@ class TestConcurrentDetectionRaceCondition:
             response = test_client.get(f'/games/{game_id}/hands/image/{upload_id}')
             assert response.status_code == 200
             data = response.json()
-            assert len(data['detections']) == 7
+            assert 5 <= len(data['detections']) <= 9
             assert data['status'] == 'detected'
         finally:
             app.dependency_overrides.clear()

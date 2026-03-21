@@ -18,7 +18,7 @@ PLACEHOLDER LEGEND
 
 # Concept: {{CONCEPT_NAME}}
 
-**Type:** {{CONCEPT_TYPE}}  
+**Type:** {{CONCEPT_TYPE}}
 **Generated:** {{DATE}}
 
 ---

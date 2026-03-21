@@ -17,7 +17,7 @@ PLACEHOLDER LEGEND
 
 # Documentation Index: `{{DIRECTORY_PATH}}`
 
-**Generated:** {{DATE}}  
+**Generated:** {{DATE}}
 **Artifacts found:** {{TOTAL_ARTIFACTS}} · **Documents generated:** {{TOTAL_DOCS}}
 
 ---

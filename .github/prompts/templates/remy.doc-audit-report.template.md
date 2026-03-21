@@ -23,7 +23,7 @@ PLACEHOLDER LEGEND
 
 # Documentation Audit Report
 
-**Date:** {{DATE}}  
+**Date:** {{DATE}}
 **Auditor:** Remy (automated)
 
 ---

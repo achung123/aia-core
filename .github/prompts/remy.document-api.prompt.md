@@ -66,7 +66,7 @@ Produce an accurate, audience-complete API reference document for a FastAPI rout
 
 ## Output Format
 
-`docs/api/<route-name>.md` — Markdown API reference following `remy.api-reference.template.md`.  
+`docs/api/<route-name>.md` — Markdown API reference following `remy.api-reference.template.md`.
 Optionally `docs/api/<route-name>.openapi.yaml` — OpenAPI 3.0 path definitions when `--openapi` is specified.
 
 ---

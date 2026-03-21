@@ -26,6 +26,10 @@ dev = [
     "ruff",
     "pre-commit",
 ]
+ml = [
+    "ultralytics",
+    "Pillow",
+]
 
 [build-system]
 requires = ["hatchling"]

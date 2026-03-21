@@ -22,9 +22,9 @@ PLACEHOLDER LEGEND
 
 # Schema Reference: `{{SCHEMA_NAME}}`
 
-**Base:** `{{BASE_CLASS}}`  
-**Module:** `{{MODULE_PATH}}`  
-**Role:** {{SCHEMA_PURPOSE}}  
+**Base:** `{{BASE_CLASS}}`
+**Module:** `{{MODULE_PATH}}`
+**Role:** {{SCHEMA_PURPOSE}}
 **Generated:** {{DATE}}
 
 {{SCHEMA_DESCRIPTION}}

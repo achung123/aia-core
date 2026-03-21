@@ -159,12 +159,17 @@ def get_detection_results(
             }
         try:
             results = detector.detect(upload.file_path)
-            for r in results:
+            for i, r in enumerate(results, 1):
+                position = r.card_position if r.card_position else f'card_{i}'
                 detection = CardDetection(
                     upload_id=upload_id,
-                    card_position=r['card_position'],
-                    detected_value=r['detected_value'],
-                    confidence=r['confidence'],
+                    card_position=position,
+                    detected_value=r.detected_value,
+                    confidence=r.confidence,
+                    bbox_x=r.bbox_x,
+                    bbox_y=r.bbox_y,
+                    bbox_width=r.bbox_width,
+                    bbox_height=r.bbox_height,
                 )
                 db.add(detection)
             upload.status = 'detected'
