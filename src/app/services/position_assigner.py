@@ -13,7 +13,7 @@ from pydantic_models.app_models import DetectionResult
 _BOUNDARY_MARGIN = 0.05
 
 # Texas Hold'em community card position labels in dealing order (left-to-right)
-_COMMUNITY_LABELS = ["flop_1", "flop_2", "flop_3", "turn", "river"]
+_COMMUNITY_LABELS = ['flop_1', 'flop_2', 'flop_3', 'turn', 'river']
 _MAX_COMMUNITY = len(_COMMUNITY_LABELS)  # 5
 
 
@@ -66,8 +66,8 @@ class PositionAssigner:
             return [
                 det.model_copy(
                     update={
-                        "card_position": f"card_{i + 1}",
-                        "position_confidence": "unassigned",
+                        'card_position': f'card_{i + 1}',
+                        'position_confidence': 'unassigned',
                     }
                 )
                 for i, (_cx, det) in enumerate(all_sorted)
@@ -88,8 +88,8 @@ class PositionAssigner:
             results.append(
                 det.model_copy(
                     update={
-                        "card_position": _COMMUNITY_LABELS[i],
-                        "position_confidence": self._confidence(det, is_community=True),
+                        'card_position': _COMMUNITY_LABELS[i],
+                        'position_confidence': self._confidence(det, is_community=True),
                     }
                 )
             )
@@ -97,8 +97,10 @@ class PositionAssigner:
             results.append(
                 det.model_copy(
                     update={
-                        "card_position": f"hole_{i + 1}",
-                        "position_confidence": self._confidence(det, is_community=False),
+                        'card_position': f'hole_{i + 1}',
+                        'position_confidence': self._confidence(
+                            det, is_community=False
+                        ),
                     }
                 )
             )
@@ -109,5 +111,5 @@ class PositionAssigner:
         cy = det.bbox_y + det.bbox_height / 2
         distance = abs(cy - self.community_y_max)
         if distance < _BOUNDARY_MARGIN:
-            return "low"
-        return "high"
+            return 'low'
+        return 'high'

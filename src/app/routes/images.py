@@ -330,21 +330,18 @@ def confirm_detection(
     )
     detection_map = {d.card_position: d.detected_value for d in detections}
 
-    # Build confirmed values map using the same position keys as detections
-    confirmed_map = {}
-    cc_positions = [
-        ('community_1', str(cc.flop_1)),
-        ('community_2', str(cc.flop_2)),
-        ('community_3', str(cc.flop_3)),
-    ]
+    # Build confirmed values map using position keys that match detection positions
+    confirmed_map = {
+        'flop_1': str(cc.flop_1),
+        'flop_2': str(cc.flop_2),
+        'flop_3': str(cc.flop_3),
+    }
     if cc.turn is not None:
-        cc_positions.append(('community_4', str(cc.turn)))
+        confirmed_map['turn'] = str(cc.turn)
     if cc.river is not None:
-        cc_positions.append(('community_5', str(cc.river)))
-    for pos, val in cc_positions:
-        confirmed_map[pos] = val
+        confirmed_map['river'] = str(cc.river)
 
-    # Map player hole cards — use hole_1/hole_2 for first player,
+    # Map player hole cards — hole_1/hole_2 for first player,
     # hole_3/hole_4 for second, etc.
     for i, entry in enumerate(payload.player_hands):
         confirmed_map[f'hole_{i * 2 + 1}'] = str(entry.card_1)

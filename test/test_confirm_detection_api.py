@@ -9,7 +9,12 @@ from sqlalchemy import create_engine, StaticPool
 from sqlalchemy.orm import sessionmaker
 
 from app.database.database_models import Base as LegacyBase
-from app.database.models import Base as ModelsBase, Hand
+from app.database.models import (
+    Base as ModelsBase,
+    CardDetection,
+    DetectionCorrection,
+    Hand,
+)
 from app.database.session import get_db
 from app.main import app
 
@@ -365,7 +370,8 @@ class TestConfirmEndpointErrors:
         )
         assert resp.status_code == 422
 
-    def test_empty_player_hands_returns_422(self, client, game_id):
+    def test_empty_player_hands_accepted(self, client, game_id):
+        """AC-1 (T-015): 0 player_hands entries are now accepted."""
         upload_id = _upload_and_detect(client, game_id)
         payload = _valid_confirm_payload()
         payload['player_hands'] = []
@@ -373,7 +379,9 @@ class TestConfirmEndpointErrors:
             f'/games/{game_id}/hands/image/{upload_id}/confirm',
             json=payload,
         )
-        assert resp.status_code == 422
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data['player_hands'] == []
 
     def test_duplicate_player_name_returns_400(self, client, game_id):
         """Same player_name appearing twice should be rejected with 400."""
@@ -397,3 +405,582 @@ class TestConfirmEndpointErrors:
         )
         assert resp.status_code == 400
         assert 'duplicate' in resp.json()['detail'].lower()
+
+
+# ── T-015: Dynamic Card Count ──────────────────────────────────────────
+
+
+class TestConfirmDynamicCardCount:
+    """T-015: Confirm endpoint handles variable number of detected cards."""
+
+    def test_confirm_with_zero_player_hands(self, client, game_id):
+        """AC-1: Accepts 0 player_hands entries."""
+        upload_id = _upload_and_detect(client, game_id)
+        payload = {
+            'community_cards': {
+                'flop_1': {'rank': 'A', 'suit': 'S'},
+                'flop_2': {'rank': 'K', 'suit': 'H'},
+                'flop_3': {'rank': 'Q', 'suit': 'D'},
+            },
+            'player_hands': [],
+        }
+        resp = client.post(
+            f'/games/{game_id}/hands/image/{upload_id}/confirm',
+            json=payload,
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data['flop_1'] == 'AS'
+        assert data['flop_2'] == 'KH'
+        assert data['flop_3'] == 'QD'
+        assert data['player_hands'] == []
+
+    def test_confirm_community_only_flop(self, client, game_id):
+        """AC-2: flop_1/2/3 required, turn/river optional."""
+        upload_id = _upload_and_detect(client, game_id)
+        payload = {
+            'community_cards': {
+                'flop_1': {'rank': '9', 'suit': 'S'},
+                'flop_2': {'rank': '8', 'suit': 'H'},
+                'flop_3': {'rank': '7', 'suit': 'D'},
+            },
+            'player_hands': [],
+        }
+        resp = client.post(
+            f'/games/{game_id}/hands/image/{upload_id}/confirm',
+            json=payload,
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data['turn'] is None
+        assert data['river'] is None
+
+    def test_confirm_three_players(self, client):
+        """AC-1: Accepts multiple player_hands entries."""
+        # Create a game with 3 players
+        resp = client.post(
+            '/games',
+            json={
+                'game_date': '2026-03-15',
+                'player_names': ['Alice', 'Bob', 'Charlie'],
+            },
+        )
+        gid = resp.json()['game_id']
+        upload_id = _upload_and_detect(client, gid)
+        payload = {
+            'community_cards': {
+                'flop_1': {'rank': 'A', 'suit': 'S'},
+                'flop_2': {'rank': 'K', 'suit': 'H'},
+                'flop_3': {'rank': 'Q', 'suit': 'D'},
+            },
+            'player_hands': [
+                {
+                    'player_name': 'Alice',
+                    'card_1': {'rank': '2', 'suit': 'H'},
+                    'card_2': {'rank': '3', 'suit': 'D'},
+                },
+                {
+                    'player_name': 'Bob',
+                    'card_1': {'rank': '4', 'suit': 'C'},
+                    'card_2': {'rank': '5', 'suit': 'S'},
+                },
+                {
+                    'player_name': 'Charlie',
+                    'card_1': {'rank': '6', 'suit': 'H'},
+                    'card_2': {'rank': '7', 'suit': 'C'},
+                },
+            ],
+        }
+        resp = client.post(
+            f'/games/{gid}/hands/image/{upload_id}/confirm',
+            json=payload,
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert len(data['player_hands']) == 3
+
+    def test_confirm_duplicate_across_all_players(self, client):
+        """AC-4: Duplicate validation on full confirmed set."""
+        resp = client.post(
+            '/games',
+            json={
+                'game_date': '2026-03-15',
+                'player_names': ['Alice', 'Bob', 'Charlie'],
+            },
+        )
+        gid = resp.json()['game_id']
+        upload_id = _upload_and_detect(client, gid)
+        payload = {
+            'community_cards': {
+                'flop_1': {'rank': 'A', 'suit': 'S'},
+                'flop_2': {'rank': 'K', 'suit': 'H'},
+                'flop_3': {'rank': 'Q', 'suit': 'D'},
+            },
+            'player_hands': [
+                {
+                    'player_name': 'Alice',
+                    'card_1': {'rank': '2', 'suit': 'H'},
+                    'card_2': {'rank': '3', 'suit': 'D'},
+                },
+                {
+                    'player_name': 'Bob',
+                    'card_1': {'rank': '4', 'suit': 'C'},
+                    'card_2': {'rank': '5', 'suit': 'S'},
+                },
+                {
+                    'player_name': 'Charlie',
+                    'card_1': {'rank': '6', 'suit': 'H'},
+                    # Duplicate of Alice's card_1
+                    'card_2': {'rank': '2', 'suit': 'H'},
+                },
+            ],
+        }
+        resp = client.post(
+            f'/games/{gid}/hands/image/{upload_id}/confirm',
+            json=payload,
+        )
+        assert resp.status_code == 400
+        assert 'Duplicate' in resp.json()['detail']
+
+    def test_unmapped_detections_not_in_hand(self, client, game_id):
+        """AC-3: Only explicitly confirmed cards appear in the Hand record."""
+        upload_id = _upload_and_detect(client, game_id)
+        # Confirm only community + 1 player (fewer than detected)
+        payload = {
+            'community_cards': {
+                'flop_1': {'rank': 'A', 'suit': 'S'},
+                'flop_2': {'rank': 'K', 'suit': 'H'},
+                'flop_3': {'rank': 'Q', 'suit': 'D'},
+            },
+            'player_hands': [
+                {
+                    'player_name': 'Alice',
+                    'card_1': {'rank': '2', 'suit': 'H'},
+                    'card_2': {'rank': '3', 'suit': 'D'},
+                },
+            ],
+        }
+        resp = client.post(
+            f'/games/{game_id}/hands/image/{upload_id}/confirm',
+            json=payload,
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        # Hand only has community + 1 player's cards
+        assert data['flop_1'] == 'AS'
+        assert len(data['player_hands']) == 1
+
+
+class TestConfirmCorrectionRecords:
+    """T-015 AC-5: Corrections created for changed detections using DetectionResult format."""
+
+    def _seed_detections(self, client, game_id, upload_id, detections):
+        """Directly insert CardDetection rows for a controlled test."""
+        db = SessionLocal()
+        try:
+            for det in detections:
+                db.add(CardDetection(upload_id=upload_id, **det))
+            db.commit()
+        finally:
+            db.close()
+
+    def test_correction_created_when_confirmed_differs(self, client, game_id):
+        """Correction record created when confirmed value != detected value."""
+        upload_id = _upload_and_detect(client, game_id)
+
+        # Overwrite detections with known positions/values
+        db = SessionLocal()
+        try:
+            db.query(CardDetection).filter(
+                CardDetection.upload_id == upload_id
+            ).delete()
+            db.add(
+                CardDetection(
+                    upload_id=upload_id,
+                    card_position='flop_1',
+                    detected_value='AS',
+                    confidence=0.95,
+                    bbox_x=100.0,
+                    bbox_y=50.0,
+                    bbox_width=60.0,
+                    bbox_height=80.0,
+                )
+            )
+            db.add(
+                CardDetection(
+                    upload_id=upload_id,
+                    card_position='flop_2',
+                    detected_value='KH',
+                    confidence=0.90,
+                    bbox_x=200.0,
+                    bbox_y=50.0,
+                    bbox_width=60.0,
+                    bbox_height=80.0,
+                )
+            )
+            db.add(
+                CardDetection(
+                    upload_id=upload_id,
+                    card_position='flop_3',
+                    detected_value='QD',
+                    confidence=0.85,
+                    bbox_x=300.0,
+                    bbox_y=50.0,
+                    bbox_width=60.0,
+                    bbox_height=80.0,
+                )
+            )
+            db.add(
+                CardDetection(
+                    upload_id=upload_id,
+                    card_position='hole_1',
+                    detected_value='2H',
+                    confidence=0.88,
+                    bbox_x=100.0,
+                    bbox_y=300.0,
+                    bbox_width=60.0,
+                    bbox_height=80.0,
+                )
+            )
+            db.add(
+                CardDetection(
+                    upload_id=upload_id,
+                    card_position='hole_2',
+                    detected_value='3D',
+                    confidence=0.82,
+                    bbox_x=200.0,
+                    bbox_y=300.0,
+                    bbox_width=60.0,
+                    bbox_height=80.0,
+                )
+            )
+            db.commit()
+        finally:
+            db.close()
+
+        # Confirm with flop_1 changed from AS to 9S
+        payload = {
+            'community_cards': {
+                'flop_1': {'rank': '9', 'suit': 'S'},  # Changed from AS
+                'flop_2': {'rank': 'K', 'suit': 'H'},  # Same
+                'flop_3': {'rank': 'Q', 'suit': 'D'},  # Same
+            },
+            'player_hands': [
+                {
+                    'player_name': 'Alice',
+                    'card_1': {'rank': '2', 'suit': 'H'},  # Same
+                    'card_2': {'rank': '3', 'suit': 'D'},  # Same
+                },
+            ],
+        }
+        resp = client.post(
+            f'/games/{game_id}/hands/image/{upload_id}/confirm',
+            json=payload,
+        )
+        assert resp.status_code == 201
+
+        # Check correction records
+        db = SessionLocal()
+        try:
+            corrections = (
+                db.query(DetectionCorrection)
+                .filter(DetectionCorrection.upload_id == upload_id)
+                .all()
+            )
+            assert len(corrections) == 1
+            c = corrections[0]
+            assert c.card_position == 'flop_1'
+            assert c.detected_value == 'AS'
+            assert c.corrected_value == '9S'
+        finally:
+            db.close()
+
+    def test_no_corrections_when_all_match(self, client, game_id):
+        """No corrections when confirmed values match detected values."""
+        upload_id = _upload_and_detect(client, game_id)
+
+        # Overwrite detections with exact values we'll confirm
+        db = SessionLocal()
+        try:
+            db.query(CardDetection).filter(
+                CardDetection.upload_id == upload_id
+            ).delete()
+            db.add(
+                CardDetection(
+                    upload_id=upload_id,
+                    card_position='flop_1',
+                    detected_value='AS',
+                    confidence=0.95,
+                    bbox_x=100.0,
+                    bbox_y=50.0,
+                    bbox_width=60.0,
+                    bbox_height=80.0,
+                )
+            )
+            db.add(
+                CardDetection(
+                    upload_id=upload_id,
+                    card_position='flop_2',
+                    detected_value='KH',
+                    confidence=0.90,
+                    bbox_x=200.0,
+                    bbox_y=50.0,
+                    bbox_width=60.0,
+                    bbox_height=80.0,
+                )
+            )
+            db.add(
+                CardDetection(
+                    upload_id=upload_id,
+                    card_position='flop_3',
+                    detected_value='QD',
+                    confidence=0.85,
+                    bbox_x=300.0,
+                    bbox_y=50.0,
+                    bbox_width=60.0,
+                    bbox_height=80.0,
+                )
+            )
+            db.commit()
+        finally:
+            db.close()
+
+        payload = {
+            'community_cards': {
+                'flop_1': {'rank': 'A', 'suit': 'S'},
+                'flop_2': {'rank': 'K', 'suit': 'H'},
+                'flop_3': {'rank': 'Q', 'suit': 'D'},
+            },
+            'player_hands': [],
+        }
+        resp = client.post(
+            f'/games/{game_id}/hands/image/{upload_id}/confirm',
+            json=payload,
+        )
+        assert resp.status_code == 201
+
+        db = SessionLocal()
+        try:
+            corrections = (
+                db.query(DetectionCorrection)
+                .filter(DetectionCorrection.upload_id == upload_id)
+                .all()
+            )
+            assert len(corrections) == 0
+        finally:
+            db.close()
+
+    def test_corrections_for_hole_cards(self, client, game_id):
+        """Corrections created for changed hole cards."""
+        upload_id = _upload_and_detect(client, game_id)
+
+        db = SessionLocal()
+        try:
+            db.query(CardDetection).filter(
+                CardDetection.upload_id == upload_id
+            ).delete()
+            db.add(
+                CardDetection(
+                    upload_id=upload_id,
+                    card_position='flop_1',
+                    detected_value='AS',
+                    confidence=0.95,
+                    bbox_x=100.0,
+                    bbox_y=50.0,
+                    bbox_width=60.0,
+                    bbox_height=80.0,
+                )
+            )
+            db.add(
+                CardDetection(
+                    upload_id=upload_id,
+                    card_position='flop_2',
+                    detected_value='KH',
+                    confidence=0.90,
+                    bbox_x=200.0,
+                    bbox_y=50.0,
+                    bbox_width=60.0,
+                    bbox_height=80.0,
+                )
+            )
+            db.add(
+                CardDetection(
+                    upload_id=upload_id,
+                    card_position='flop_3',
+                    detected_value='QD',
+                    confidence=0.85,
+                    bbox_x=300.0,
+                    bbox_y=50.0,
+                    bbox_width=60.0,
+                    bbox_height=80.0,
+                )
+            )
+            db.add(
+                CardDetection(
+                    upload_id=upload_id,
+                    card_position='hole_1',
+                    detected_value='2H',
+                    confidence=0.88,
+                    bbox_x=100.0,
+                    bbox_y=300.0,
+                    bbox_width=60.0,
+                    bbox_height=80.0,
+                )
+            )
+            db.add(
+                CardDetection(
+                    upload_id=upload_id,
+                    card_position='hole_2',
+                    detected_value='3D',
+                    confidence=0.82,
+                    bbox_x=200.0,
+                    bbox_y=300.0,
+                    bbox_width=60.0,
+                    bbox_height=80.0,
+                )
+            )
+            db.commit()
+        finally:
+            db.close()
+
+        # Confirm with hole cards changed
+        payload = {
+            'community_cards': {
+                'flop_1': {'rank': 'A', 'suit': 'S'},
+                'flop_2': {'rank': 'K', 'suit': 'H'},
+                'flop_3': {'rank': 'Q', 'suit': 'D'},
+            },
+            'player_hands': [
+                {
+                    'player_name': 'Alice',
+                    'card_1': {'rank': '9', 'suit': 'H'},  # Changed from 2H
+                    'card_2': {'rank': '8', 'suit': 'D'},  # Changed from 3D
+                },
+            ],
+        }
+        resp = client.post(
+            f'/games/{game_id}/hands/image/{upload_id}/confirm',
+            json=payload,
+        )
+        assert resp.status_code == 201
+
+        db = SessionLocal()
+        try:
+            corrections = (
+                db.query(DetectionCorrection)
+                .filter(DetectionCorrection.upload_id == upload_id)
+                .all()
+            )
+            assert len(corrections) == 2
+            positions = {c.card_position for c in corrections}
+            assert positions == {'hole_1', 'hole_2'}
+        finally:
+            db.close()
+
+    def test_correction_uses_detection_position_keys(self, client, game_id):
+        """AC-5: Correction position keys match flop_1, turn, hole_1, etc."""
+        upload_id = _upload_and_detect(client, game_id)
+
+        db = SessionLocal()
+        try:
+            db.query(CardDetection).filter(
+                CardDetection.upload_id == upload_id
+            ).delete()
+            db.add(
+                CardDetection(
+                    upload_id=upload_id,
+                    card_position='flop_1',
+                    detected_value='AS',
+                    confidence=0.95,
+                    bbox_x=100.0,
+                    bbox_y=50.0,
+                    bbox_width=60.0,
+                    bbox_height=80.0,
+                )
+            )
+            db.add(
+                CardDetection(
+                    upload_id=upload_id,
+                    card_position='flop_2',
+                    detected_value='KH',
+                    confidence=0.90,
+                    bbox_x=200.0,
+                    bbox_y=50.0,
+                    bbox_width=60.0,
+                    bbox_height=80.0,
+                )
+            )
+            db.add(
+                CardDetection(
+                    upload_id=upload_id,
+                    card_position='flop_3',
+                    detected_value='QD',
+                    confidence=0.85,
+                    bbox_x=300.0,
+                    bbox_y=50.0,
+                    bbox_width=60.0,
+                    bbox_height=80.0,
+                )
+            )
+            db.add(
+                CardDetection(
+                    upload_id=upload_id,
+                    card_position='turn',
+                    detected_value='JC',
+                    confidence=0.80,
+                    bbox_x=400.0,
+                    bbox_y=50.0,
+                    bbox_width=60.0,
+                    bbox_height=80.0,
+                )
+            )
+            db.add(
+                CardDetection(
+                    upload_id=upload_id,
+                    card_position='river',
+                    detected_value='10S',
+                    confidence=0.78,
+                    bbox_x=500.0,
+                    bbox_y=50.0,
+                    bbox_width=60.0,
+                    bbox_height=80.0,
+                )
+            )
+            db.commit()
+        finally:
+            db.close()
+
+        # Confirm with turn and river changed
+        payload = {
+            'community_cards': {
+                'flop_1': {'rank': 'A', 'suit': 'S'},
+                'flop_2': {'rank': 'K', 'suit': 'H'},
+                'flop_3': {'rank': 'Q', 'suit': 'D'},
+                'turn': {'rank': '2', 'suit': 'C'},  # Changed from JC
+                'river': {'rank': '3', 'suit': 'S'},  # Changed from 10S
+            },
+            'player_hands': [],
+        }
+        resp = client.post(
+            f'/games/{game_id}/hands/image/{upload_id}/confirm',
+            json=payload,
+        )
+        assert resp.status_code == 201
+
+        db = SessionLocal()
+        try:
+            corrections = (
+                db.query(DetectionCorrection)
+                .filter(DetectionCorrection.upload_id == upload_id)
+                .all()
+            )
+            assert len(corrections) == 2
+            by_pos = {c.card_position: c for c in corrections}
+            assert 'turn' in by_pos
+            assert 'river' in by_pos
+            assert by_pos['turn'].detected_value == 'JC'
+            assert by_pos['turn'].corrected_value == '2C'
+            assert by_pos['river'].detected_value == '10S'
+            assert by_pos['river'].corrected_value == '3S'
+        finally:
+            db.close()

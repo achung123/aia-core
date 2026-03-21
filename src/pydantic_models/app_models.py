@@ -428,7 +428,7 @@ class ConfirmPlayerEntry(BaseModel):
 
 class ConfirmDetectionRequest(BaseModel):
     community_cards: ConfirmCommunityCards
-    player_hands: list[ConfirmPlayerEntry] = Field(..., min_length=1)
+    player_hands: list[ConfirmPlayerEntry] = Field(default_factory=list)
 
 
 class CSVCommitSummary(BaseModel):

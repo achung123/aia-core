@@ -72,17 +72,17 @@ def _make_jpeg(size_bytes: int = 100) -> bytes:
 def _seed_detections(upload_id: int):
     """Insert deterministic CardDetection rows for an upload.
 
-    Positions and values matching MockCardDetector format:
-        community_1=AS, community_2=KH, community_3=QD,
-        community_4=JC, community_5=10S, hole_1=2H, hole_2=3D
+    Positions and values matching position-assigned detection format:
+        flop_1=AS, flop_2=KH, flop_3=QD,
+        turn=JC, river=10S, hole_1=2H, hole_2=3D
     """
     with SessionLocal() as db:
         detections = [
-            ('community_1', 'AS', 0.95),
-            ('community_2', 'KH', 0.93),
-            ('community_3', 'QD', 0.91),
-            ('community_4', 'JC', 0.89),
-            ('community_5', '10S', 0.87),
+            ('flop_1', 'AS', 0.95),
+            ('flop_2', 'KH', 0.93),
+            ('flop_3', 'QD', 0.91),
+            ('turn', 'JC', 0.89),
+            ('river', '10S', 0.87),
             ('hole_1', '2H', 0.85),
             ('hole_2', '3D', 0.83),
         ]
@@ -137,11 +137,11 @@ def _confirm_different_payload():
     """Payload where some confirmed values differ from _seed_detections values.
 
     Changes from seeded detections:
-        community_1: AS -> 9S  (corrected)
-        community_2: KH -> KH  (unchanged)
-        community_3: QD -> QD  (unchanged)
-        community_4: JC -> JC  (unchanged)
-        community_5: 10S -> 10S (unchanged)
+        flop_1: AS -> 9S  (corrected)
+        flop_2: KH -> KH  (unchanged)
+        flop_3: QD -> QD  (unchanged)
+        turn: JC -> JC  (unchanged)
+        river: 10S -> 10S (unchanged)
         hole_1 (Alice card_1): 2H -> 7H (corrected)
         hole_2 (Alice card_2): 3D -> 3D (unchanged)
     """
@@ -247,7 +247,7 @@ class TestCorrectionsStoredOnMismatch:
                 db.query(DetectionCorrection)
                 .filter(
                     DetectionCorrection.upload_id == upload_id,
-                    DetectionCorrection.card_position == 'community_1',
+                    DetectionCorrection.card_position == 'flop_1',
                 )
                 .first()
             )
@@ -266,7 +266,7 @@ class TestCorrectionsStoredOnMismatch:
                 db.query(DetectionCorrection)
                 .filter(
                     DetectionCorrection.upload_id == upload_id,
-                    DetectionCorrection.card_position == 'community_1',
+                    DetectionCorrection.card_position == 'flop_1',
                 )
                 .first()
             )
@@ -387,7 +387,7 @@ class TestGetCorrections:
             db.add(
                 CardDetection(
                     upload_id=upload_id_2,
-                    card_position='community_1',
+                    card_position='flop_1',
                     detected_value='5C',
                     confidence=0.90,
                 )
@@ -395,7 +395,7 @@ class TestGetCorrections:
             db.add(
                 CardDetection(
                     upload_id=upload_id_2,
-                    card_position='community_2',
+                    card_position='flop_2',
                     detected_value='6D',
                     confidence=0.88,
                 )
@@ -403,7 +403,7 @@ class TestGetCorrections:
             db.add(
                 CardDetection(
                     upload_id=upload_id_2,
-                    card_position='community_3',
+                    card_position='flop_3',
                     detected_value='8S',
                     confidence=0.86,
                 )
@@ -472,11 +472,9 @@ class TestFullPipeline:
                 .all()
             )
             assert len(corrections) == 2
-            community_corr = next(
-                c for c in corrections if c.card_position == 'community_1'
-            )
-            assert community_corr.detected_value == 'AS'
-            assert community_corr.corrected_value == '9S'
+            flop_corr = next(c for c in corrections if c.card_position == 'flop_1')
+            assert flop_corr.detected_value == 'AS'
+            assert flop_corr.corrected_value == '9S'
             hole_corr = next(c for c in corrections if c.card_position == 'hole_1')
             assert hole_corr.detected_value == '2H'
             assert hole_corr.corrected_value == '7H'
@@ -487,4 +485,4 @@ class TestFullPipeline:
         api_corrections = resp.json()
         assert len(api_corrections) == 2
         positions = {c['card_position'] for c in api_corrections}
-        assert positions == {'community_1', 'hole_1'}
+        assert positions == {'flop_1', 'hole_1'}
