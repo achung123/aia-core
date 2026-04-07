@@ -17,7 +17,7 @@ Conduct a structured intake interview with the user to clarify an abstract idea 
 
 ## Context
 
-Jean uses intake as a gating step. Not every idea arrives fully formed — most need 5–10 minutes of targeted questioning to become actionable. The intake phase prevents wasted effort by catching ambiguities, missing scope, and unstated assumptions before any documents are written.
+Jean uses intake as a **mandatory** gating step for every planning session. Even well-specified input contains implicit assumptions, unstated priorities, and scope boundaries that benefit from explicit confirmation. The intake phase prevents wasted effort by catching ambiguities, missing scope, and unstated assumptions before any documents are written.
 
 ---
 

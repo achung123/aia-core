@@ -25,7 +25,8 @@ The tasks file is the **engineering execution plan**. It converts the *what* (sp
 
 1. **Read the input.** Parse the idea or design doc. Also read any existing `spec.md` and `plan.md` in the project folder — they are the primary input for task decomposition.
 2. **Scan the workspace.** Understand existing code structure, modules, and conventions.
-3. **Decompose into tasks.** For each user story in `spec.md` and component in `plan.md`:
+3. **Run intake (unless already completed).** If confirmed requirements from a prior `@jean intake` or `@jean plan` session exist in the project folder or conversation, reference those and proceed. Otherwise, run intake: present up to 7 focused questions grouped by theme and wait for answers before generating anything.
+4. **Decompose into tasks.** For each user story in `spec.md` and component in `plan.md`:
    - Break work into the smallest meaningful unit
    - Each task must be completable in **one focused agent interaction** (roughly one premium request)
    - If a task requires multiple files or concepts, it's too big — split it
@@ -92,6 +93,7 @@ Create SQLAlchemy models for PokerTable and Player entities with all fields from
 
 ## Anti-patterns
 
+- **Do NOT skip intake** unless confirmed requirements already exist from a prior intake session. When in doubt, ask.
 - **Do NOT create tasks that require multiple agent sessions.** If it takes more than one premium request, split it.
 - **Do NOT leave dependencies implicit.** Every task must explicitly declare its dependencies or `none`.
 - **Do NOT group unrelated work** into a single task for convenience.
