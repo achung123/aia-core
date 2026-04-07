@@ -47,7 +47,7 @@ export function createCard(rank, suit, faceUp = true) {
   const geom = new THREE.BoxGeometry(0.7, 1.0, 0.02);
 
   const faceTex = renderCardFace(rank, suit);
-  const faceMat = new THREE.MeshBasicMaterial({ map: faceTex });
+  const faceMat = new THREE.MeshLambertMaterial({ map: faceTex });
   const backMat = createBackMaterial();
 
   // BoxGeometry face order: +x, -x, +y, -y, +z (front), -z (back of box)
@@ -61,14 +61,17 @@ export function createCard(rank, suit, faceUp = true) {
 
   let isFlipping = false;
   let isFaceUp = faceUp;
+  let flipCancelled = false;
 
   mesh.flip = function () {
     if (isFlipping || isFaceUp) return;
+    flipCancelled = false;
     isFlipping = true;
     const startTime = performance.now();
     const duration = 300; // 0.3s
 
     function animate(now) {
+      if (flipCancelled) return;
       const t = Math.min((now - startTime) / duration, 1);
       mesh.rotation.y = t * Math.PI;
       if (t < 0.5) {
@@ -86,6 +89,8 @@ export function createCard(rank, suit, faceUp = true) {
     }
     requestAnimationFrame(animate);
   };
+
+  mesh.cancelFlip = function () { flipCancelled = true; };
 
   return mesh;
 }

@@ -31,11 +31,13 @@ function createFoldSprite() {
 export function createHoleCards(scene, seatPositions) {
   // Map<seatIndex, { cards: Mesh[], sprite: Sprite|null, playerHand: object|null }>
   const seatData = new Map();
+  let winnerGlowTimer = null;
 
   function disposeCards(seatIndex) {
     const data = seatData.get(seatIndex);
     if (!data) return;
     for (const card of data.cards) {
+      card.cancelFlip();
       scene.remove(card);
       card.geometry.dispose();
       if (Array.isArray(card.material)) {
@@ -51,6 +53,7 @@ export function createHoleCards(scene, seatPositions) {
     const data = seatData.get(seatIndex);
     if (!data || !data.sprite) return;
     scene.remove(data.sprite);
+    if (data.sprite.material.map) data.sprite.material.map.dispose();
     data.sprite.material.dispose();
     data.sprite = null;
   }
@@ -116,6 +119,7 @@ export function createHoleCards(scene, seatPositions) {
      * @param {object} seatPlayerMap - { seatIndex: playerName }
      */
     initHand(handData, seatPlayerMap) {
+      if (winnerGlowTimer !== null) { clearTimeout(winnerGlowTimer); winnerGlowTimer = null; }
       // Clean up any previous state
       for (const [seatIndex] of seatData) {
         disposeCards(seatIndex);
@@ -126,7 +130,7 @@ export function createHoleCards(scene, seatPositions) {
       // Build seat entries from seatPlayerMap
       for (const [seatIdx, playerName] of Object.entries(seatPlayerMap)) {
         const idx = parseInt(seatIdx, 10);
-        const playerHand = handData.player_hands.find(ph => ph.player_name === playerName) || null;
+        const playerHand = (handData?.player_hands ?? []).find(ph => ph.player_name === playerName) || null;
         seatData.set(idx, { cards: [], sprite: null, playerHand });
       }
 
@@ -163,7 +167,7 @@ export function createHoleCards(scene, seatPositions) {
         // AC4: Winner glow — apply after flip animation completes (300ms)
         if (playerHand && playerHand.result === 'win') {
           const capturedIdx = seatIndex;
-          setTimeout(() => glowWinnerCards(capturedIdx), 350);
+          winnerGlowTimer = setTimeout(() => glowWinnerCards(capturedIdx), 350);
         }
       }
     },
@@ -180,6 +184,7 @@ export function createHoleCards(scene, seatPositions) {
     },
 
     dispose() {
+      if (winnerGlowTimer !== null) { clearTimeout(winnerGlowTimer); winnerGlowTimer = null; }
       for (const [seatIndex] of seatData) {
         disposeCards(seatIndex);
         removeSprite(seatIndex);
