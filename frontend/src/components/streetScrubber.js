@@ -71,8 +71,8 @@ export function createStreetScrubber(container, handData, onStreetChange) {
   });
 
   // Fire initial state
-  onStreetChange(STREETS[currentIndex], handData);
   updateUI();
+  onStreetChange(STREETS[currentIndex], handData);
 
   return {
     getCurrentStreet: () => STREETS[currentIndex],
@@ -81,8 +81,16 @@ export function createStreetScrubber(container, handData, onStreetChange) {
       if (idx !== -1) goToStreet(idx);
     },
     updateHandData: (newHandData) => {
-      Object.assign(handData, newHandData);
+      handData = { ...handData, ...newHandData };
       updateUI();
+      if (isDisabled(currentIndex)) {
+        let fallback = currentIndex - 1;
+        while (fallback >= 0 && isDisabled(fallback)) fallback--;
+        if (fallback < 0) fallback = 0; // Pre-Flop is never disabled
+        currentIndex = fallback;
+        updateUI(); // re-run to apply active highlight on fallback
+        onStreetChange(STREETS[currentIndex], handData);
+      }
     },
     dispose: () => wrapper.remove(),
   };
