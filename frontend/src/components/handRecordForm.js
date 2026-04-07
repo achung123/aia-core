@@ -342,7 +342,7 @@ export function createHandRecordForm(container, sessionId, playerNames, onSucces
     try {
       const handResp = await createHand(sessionId, postBody);
       const handNumber = handResp.hand_number;
-      onSuccess();
+      try { onSuccess(); } catch (cbErr) { console.warn('onSuccess callback error:', cbErr); }
 
       // Best-effort PATCH hole cards (non-fatal — hand already saved via POST)
       try {
