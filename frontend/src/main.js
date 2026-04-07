@@ -1,6 +1,7 @@
 import './style.css';
 import * as THREE from 'three';
 import { initRouter } from './router.js';
+import { renderDataView } from './views/dataView.js';
 
 console.log('Three.js r' + THREE.REVISION);
 
@@ -10,11 +11,7 @@ function renderPlayback(container) {
   container.appendChild(canvas);
 }
 
-function renderData(container) {
-  container.innerHTML = '<h1>Data</h1>';
-}
-
 initRouter({
   '#/playback': renderPlayback,
-  '#/data': renderData,
+  '#/data': container => renderDataView(container),
 });
