@@ -265,6 +265,12 @@ code {
   }
 }
 
+nav a.active {
+  font-weight: 600;
+  border-bottom: 2px solid currentColor;
+  opacity: 1;
+}
+
 #spacer {
   height: 88px;
   border-top: 1px solid var(--border);
