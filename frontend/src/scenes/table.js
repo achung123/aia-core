@@ -36,11 +36,17 @@ export function initScene(canvasElement) {
   window.addEventListener('resize', onResize);
 
   // Animation loop
+  let rafId;
   function animate() {
-    requestAnimationFrame(animate);
+    rafId = requestAnimationFrame(animate);
     renderer.render(scene, camera);
   }
   animate();
 
-  return { renderer, scene, camera };
+  function dispose() {
+    cancelAnimationFrame(rafId);
+    window.removeEventListener('resize', onResize);
+  }
+
+  return { renderer, scene, camera, dispose };
 }
