@@ -2,6 +2,7 @@ import { fetchSessions, fetchHands } from '../api/client.js';
 import { initScene } from '../scenes/table.js';
 import { addPokerTable, computeSeatPositions, createSeatLabels, loadSession, updateSeatLabelPositions } from '../scenes/tableGeometry.js';
 import { createChipStacks } from '../scenes/chipStacks.js';
+import { createSessionScrubber } from '../components/sessionScrubber.js';
 
 export function renderPlaybackView(container) {
   container.innerHTML = `
@@ -10,10 +11,13 @@ export function renderPlaybackView(container) {
         <h2 style="color:#fff;font-size:14px;">Sessions</h2>
         <div id="session-list"><p style="color:#aaa;">Loading...</p></div>
       </div>
-      <div id="canvas-area" style="flex:1;position:relative;">
-        <canvas id="three-canvas" style="display:block;width:100%;height:100%;"></canvas>
-        <div id="spinner" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;display:none;">Loading...</div>
-        <div id="error-banner" style="display:none;position:absolute;top:0;left:0;right:0;background:#c00;color:#fff;padding:8px;"></div>
+      <div style="flex:1;display:flex;flex-direction:column;">
+        <div id="canvas-area" style="flex:1;position:relative;">
+          <canvas id="three-canvas" style="display:block;width:100%;height:100%;"></canvas>
+          <div id="spinner" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;display:none;">Loading...</div>
+          <div id="error-banner" style="display:none;position:absolute;top:0;left:0;right:0;background:#c00;color:#fff;padding:8px;"></div>
+        </div>
+        <div id="scrubber-container"></div>
       </div>
     </div>
   `;
@@ -28,12 +32,29 @@ export function renderPlaybackView(container) {
     const labels = createSeatLabels(canvasArea);
     updateSeatLabelPositions(labels, seatPositions, camera, renderer);
 
-    window.__onSessionLoaded = ({ playerNames }) => {
+    function computeCumulativePL(hands, handIndex) {
+      const plMap = {};
+      for (let i = 0; i <= handIndex; i++) {
+        (hands[i].player_hands || []).forEach(ph => {
+          const pl = ph.profit_loss ?? 0;
+          plMap[ph.player_name] = (plMap[ph.player_name] || 0) + pl;
+        });
+      }
+      return plMap;
+    }
+
+    window.__onSessionLoaded = ({ hands, playerNames }) => {
       loadSession(labels, playerNames);
       updateSeatLabelPositions(labels, seatPositions, camera, renderer);
       const seatPlayerMap = {};
       playerNames.forEach((name, i) => { seatPlayerMap[i] = name; });
       chipStacksCtrl.updateChipStacks({}, seatPlayerMap);
+
+      const scrubberContainer = container.querySelector('#scrubber-container');
+      createSessionScrubber(scrubberContainer, hands.length, (handNumber) => {
+        const plMap = computeCumulativePL(hands, handNumber - 1);
+        chipStacksCtrl.updateChipStacks(plMap);
+      });
     };
   });
 
