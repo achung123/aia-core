@@ -17,16 +17,16 @@ export function fetchHands(sessionId) {
   return request(`/games/${sessionId}/hands`);
 }
 
-export function fetchPlayerStats(sessionId) {
-  return request(`/games/${sessionId}/stats/players`);
+export function fetchPlayerStats(playerName) {
+  return request(`/stats/players/${playerName}`);
 }
 
-export function fetchGameStats(sessionId) {
-  return request(`/games/${sessionId}/stats/game`);
+export function fetchGameStats(gameId) {
+  return request(`/stats/games/${gameId}`);
 }
 
 export function fetchLeaderboard() {
-  return request('/leaderboard');
+  return request('/stats/leaderboard');
 }
 
 export function createSession(data) {
@@ -53,17 +53,17 @@ export function createHand(sessionId, data) {
   });
 }
 
-export function updateHolecards(handId, data) {
-  return request(`/hands/${handId}/hole-cards`, {
-    method: 'PUT',
+export function updateHolecards(gameId, handNumber, playerName, data) {
+  return request(`/games/${gameId}/hands/${handNumber}/players/${playerName}`, {
+    method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
 }
 
-export function updateCommunityCards(handId, data) {
-  return request(`/hands/${handId}/community-cards`, {
-    method: 'PUT',
+export function updateCommunityCards(gameId, handNumber, data) {
+  return request(`/games/${gameId}/hands/${handNumber}`, {
+    method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
