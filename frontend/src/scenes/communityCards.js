@@ -73,6 +73,7 @@ export function createCommunityCards(scene, handData) {
   }
 
   function addCard(slotIndex) {
+    if (cancelHandles[slotIndex]) { cancelHandles[slotIndex](); cancelHandles[slotIndex] = null; }
     const data = slotCardData(slotIndex);
     if (!data) return;
 
