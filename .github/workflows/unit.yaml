@@ -9,41 +9,19 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      #----------------------------------------------
-      #       check-out repo and set-up python
-      #----------------------------------------------
       - name: Check out repository
         uses: actions/checkout@v4
-      - name: Set up python
-        id: setup-python
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      #----------------------------------------------
-      #  -----  install & configure poetry  -----
-      #----------------------------------------------
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
-        with:
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-          virtualenvs-path: .venv
-          installer-parallel: true
 
-      #----------------------------------------------
-      # install dependencies if cache does not exist
-      #----------------------------------------------
       - name: Install dependencies
-        run: poetry install --no-interaction --no-root --with test
-      #----------------------------------------------
-      # install your root project, if required
-      #----------------------------------------------
-      - name: Install project
-        run: poetry install --no-interaction --no-root --with test
-      #----------------------------------------------
-      #              run test suite
-      #----------------------------------------------
+        run: uv sync --frozen --group test
+
       - name: Run tests
-        run: |
-          source .venv/bin/activate
-          PYTHONPATH=src/ pytest test/ -vv
+        run: PYTHONPATH=src/ uv run pytest test/ -vv
