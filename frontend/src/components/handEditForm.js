@@ -118,6 +118,7 @@ function createPlayerEditRow(playerHand, handNumber) {
   const resultSelect = document.createElement('select');
   resultSelect.id = `edit-result-${idBase}`;
   resultSelect.name = `edit-result-${idBase}`;
+  resultSelect.disabled = true;
   for (const [val, text] of [
     ['', '-- select --'],
     ['win', 'Win'],
@@ -143,6 +144,7 @@ function createPlayerEditRow(playerHand, handNumber) {
   profitInput.name = `edit-profit-${idBase}`;
   profitInput.step = '0.01';
   profitInput.placeholder = '0.00';
+  profitInput.readOnly = true;
   if (playerHand.profit_loss != null) profitInput.value = String(playerHand.profit_loss);
   rowContainer.appendChild(profitInput);
 
@@ -375,11 +377,7 @@ export function createHandEditForm(container, sessionId, handData, onSave, onCan
             card2 = resp.card_2;
           }
 
-          const result = row.resultSelect.value || null;
-          const profitRaw = parseFloat(row.profitInput.value);
-          const profitLoss = Number.isNaN(profitRaw) ? orig.profit_loss : profitRaw;
-
-          return { ...orig, card_1: card1, card_2: card2, result, profit_loss: profitLoss };
+          return { ...orig, card_1: card1, card_2: card2 };
         })
       );
 

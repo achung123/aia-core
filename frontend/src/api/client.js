@@ -18,7 +18,7 @@ export function fetchHands(sessionId) {
 }
 
 export function fetchPlayerStats(playerName) {
-  return request(`/stats/players/${playerName}`);
+  return request(`/stats/players/${encodeURIComponent(playerName)}`);
 }
 
 export function fetchGameStats(gameId) {
@@ -58,7 +58,7 @@ export function createHand(sessionId, data) {
 }
 
 export function updateHolecards(gameId, handNumber, playerName, data) {
-  return request(`/games/${gameId}/hands/${handNumber}/players/${playerName}`, {
+  return request(`/games/${gameId}/hands/${handNumber}/players/${encodeURIComponent(playerName)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
