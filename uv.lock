@@ -36,6 +36,8 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "pre-commit" },
+    { name = "pytest" },
+    { name = "pytest-mock" },
     { name = "ruff" },
 ]
 test = [
@@ -51,7 +53,7 @@ requires-dist = [
     { name = "ipython", specifier = ">=9.0.1" },
     { name = "pydantic" },
     { name = "python-dateutil" },
-    { name = "python-multipart", specifier = ">=0.0.22" },
+    { name = "python-multipart" },
     { name = "pytz" },
     { name = "sqlalchemy" },
     { name = "uvicorn" },
@@ -60,6 +62,8 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "pre-commit" },
+    { name = "pytest", specifier = ">=9.0.2" },
+    { name = "pytest-mock", specifier = ">=3.15.1" },
     { name = "ruff" },
 ]
 test = [

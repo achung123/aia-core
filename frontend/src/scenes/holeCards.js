@@ -2,9 +2,9 @@ import * as THREE from 'three';
 import { createCard } from './cards.js';
 
 // Card layout per seat: 2 cards, slightly offset from each other
-const CARD_OFFSET_X = 0.22;   // left/right spread
-const CARD_OFFSET_Y = 0.02;   // above table
-const CARD_OFFSET_Z = 0.15;   // toward viewer from seat position
+const CARD_OFFSET_X = 0.25;   // left/right spread
+const CARD_OFFSET_Y = 0.01;   // above table surface
+const CARD_OFFSET_Z = -0.30;  // inward toward table center from seat
 
 function createFoldSprite() {
   const canvas = document.createElement('canvas');
@@ -40,12 +40,9 @@ export function createHoleCards(scene, seatPositions) {
       card.cancelFlip();
       scene.remove(card);
       card.geometry.dispose();
-      if (Array.isArray(card.material)) {
-        card.material.forEach(m => { if (m.map) m.map.dispose(); m.dispose(); });
-      } else {
-        if (card.material.map) card.material.map.dispose();
-        card.material.dispose();
-      }
+      const mat = card.material;
+      if (mat.map) mat.map.dispose();
+      mat.dispose();
     }
     data.cards = [];
   }
@@ -64,15 +61,29 @@ export function createHoleCards(scene, seatPositions) {
     const card0 = createCard(rank0, suit0, faceUp);
     const card1 = createCard(rank1, suit1, faceUp);
 
+    // Direction from seat toward table center (origin)
+    const dirX = -seatPos.x;
+    const dirZ = -seatPos.z;
+    const len = Math.sqrt(dirX * dirX + dirZ * dirZ) || 1;
+    const nx = dirX / len;
+    const nz = dirZ / len;
+    // Perpendicular for left/right spread
+    const px = -nz;
+    const pz = nx;
+
+    const inwardDist = 0.45; // how far inward from seat toward center
+    const baseX = seatPos.x + nx * inwardDist;
+    const baseZ = seatPos.z + nz * inwardDist;
+
     card0.position.set(
-      seatPos.x - CARD_OFFSET_X,
+      baseX - px * CARD_OFFSET_X,
       CARD_OFFSET_Y,
-      seatPos.z + CARD_OFFSET_Z
+      baseZ - pz * CARD_OFFSET_X
     );
     card1.position.set(
-      seatPos.x + CARD_OFFSET_X,
+      baseX + px * CARD_OFFSET_X,
       CARD_OFFSET_Y,
-      seatPos.z + CARD_OFFSET_Z
+      baseZ + pz * CARD_OFFSET_X
     );
 
     scene.add(card0);
@@ -86,10 +97,8 @@ export function createHoleCards(scene, seatPositions) {
     const data = seatData.get(seatIndex);
     if (!data) return;
     for (const card of data.cards) {
-      for (const mat of card.material) {
-        mat.opacity = 0.5;
-        mat.transparent = true;
-      }
+      card.material.opacity = 0.5;
+      card.material.transparent = true;
     }
   }
 
@@ -97,10 +106,8 @@ export function createHoleCards(scene, seatPositions) {
     const data = seatData.get(seatIndex);
     if (!data) return;
     for (const card of data.cards) {
-      // Front face is material index 4 (post-flip it holds faceMat)
-      const frontMat = card.material[4];
-      frontMat.emissive = new THREE.Color(0xffd700);
-      frontMat.emissiveIntensity = 0.4;
+      card.material.emissive = new THREE.Color(0xffd700);
+      card.material.emissiveIntensity = 0.4;
     }
   }
 
@@ -109,7 +116,7 @@ export function createHoleCards(scene, seatPositions) {
     if (!data) return;
     const seatPos = seatPositions[seatIndex];
     const sprite = createFoldSprite();
-    sprite.position.set(seatPos.x, seatPos.y + 0.6, seatPos.z);
+    sprite.position.set(seatPos.x, 0.5, seatPos.z);
     scene.add(sprite);
     data.sprite = sprite;
   }
@@ -137,46 +144,36 @@ export function createHoleCards(scene, seatPositions) {
         seatData.set(idx, { cards: [], sprite: null, playerHand });
       }
 
-      // AC1: Two face-down cards at each active seat (Pre-Flop display)
-      for (const [seatIndex] of seatData) {
-        placeCards(seatIndex, 'A', 'S', 'A', 'S', false);
+      // Place real hole cards face-up at each active seat
+      for (const [seatIndex, data] of seatData) {
+        const ph = data.playerHand;
+        if (ph && ph.hole_cards) {
+          const [c0, c1] = ph.hole_cards;
+          placeCards(seatIndex, c0.rank, c0.suit, c1.rank, c1.suit, true);
+        } else {
+          // No hole card data — show face-down placeholders
+          placeCards(seatIndex, 'A', 'S', 'A', 'S', false);
+        }
       }
     },
 
     /**
-     * AC2-4: Reveal cards at showdown. Flip all, dim folds, glow winner.
+     * AC2-4: Showdown — dim folds with FOLD sprite, glow winners.
+     * Cards are already face-up from initHand.
      */
     goToShowdown() {
       for (const [seatIndex, data] of seatData) {
         const playerHand = data.playerHand;
 
-        if (playerHand && playerHand.hole_cards) {
-          // Replace placeholder with real cards (face-down), then flip to reveal
-          disposeCards(seatIndex);
-          const [c0, c1] = playerHand.hole_cards;
-          placeCards(seatIndex, c0.rank, c0.suit, c1.rank, c1.suit, false);
-          for (const card of data.cards) {
-            card.flip();
-          }
-        }
-        // AC5: null hole_cards — leave face-down placeholder cards as-is
-
         // AC3: Fold dimming + FOLD sprite
         if (playerHand && playerHand.result === 'fold') {
-          const foldIdx = seatIndex;
-          const foldTimerId = setTimeout(() => {
-            winnerGlowTimers.delete(foldTimerId);
-            dimCards(foldIdx);
-            addFoldSprite(foldIdx);
-          }, 350);
-          winnerGlowTimers.add(foldTimerId);
+          dimCards(seatIndex);
+          addFoldSprite(seatIndex);
         }
 
-        // AC4: Winner glow — apply after flip animation completes (300ms)
+        // AC4: Winner glow
         if (playerHand && playerHand.result === 'win') {
-          const capturedIdx = seatIndex;
-          const timerId = setTimeout(() => { glowWinnerCards(capturedIdx); winnerGlowTimers.delete(timerId); }, 350);
-          winnerGlowTimers.add(timerId);
+          glowWinnerCards(seatIndex);
         }
       }
     },

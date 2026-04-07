@@ -50,8 +50,9 @@
   }
 }
 
-body {
+html, body, #app {
   margin: 0;
+  height: 100%;
 }
 
 h1,

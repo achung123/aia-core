@@ -1,0 +1,32 @@
+services:
+  backend:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./src:/app/src
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
+      - ./pyproject.toml:/app/pyproject.toml
+      - ./uv.lock:/app/uv.lock
+      - ./docker-entrypoint.sh:/app/docker-entrypoint.sh
+      - ./scripts:/app/scripts
+    environment:
+      - PYTHONPATH=/app/src
+      - DATABASE_URL=sqlite:///./poker.db
+      - SEED_DATA=1
+      - ALLOWED_ORIGINS=http://localhost:5173,http://0.0.0.0:5173,http://127.0.0.1:5173
+    working_dir: /app
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/index.html:/app/index.html
+      - ./frontend/public:/app/public
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000
+    depends_on:
+      - backend

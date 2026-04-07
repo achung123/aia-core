@@ -2,7 +2,68 @@ import { fetchSessions, fetchHands } from '../api/client.js';
 import { initScene } from '../scenes/table.js';
 import { addPokerTable, computeSeatPositions, createSeatLabels, loadSession, updateSeatLabelPositions } from '../scenes/tableGeometry.js';
 import { createChipStacks } from '../scenes/chipStacks.js';
+import { createCommunityCards } from '../scenes/communityCards.js';
+import { createHoleCards } from '../scenes/holeCards.js';
 import { createSessionScrubber } from '../components/sessionScrubber.js';
+import { createStreetScrubber } from '../components/streetScrubber.js';
+import { calculateEquity } from '../poker/evaluator.js';
+import { createEquityOverlay } from '../components/equityOverlay.js';
+
+const SUIT_SYMBOL = { h: '♥', d: '♦', c: '♣', s: '♠', H: '♥', D: '♦', C: '♣', S: '♠' };
+
+function parseCard(cardStr) {
+  if (!cardStr) return null;
+  const rank = cardStr.slice(0, -1);
+  const suitChar = cardStr.slice(-1);
+  return { rank, suit: SUIT_SYMBOL[suitChar] || suitChar };
+}
+
+function handToCardData(hand) {
+  return {
+    flop: [parseCard(hand.flop_1), parseCard(hand.flop_2), parseCard(hand.flop_3)],
+    turn: parseCard(hand.turn),
+    river: parseCard(hand.river),
+    player_hands: (hand.player_hands || []).map(ph => ({
+      player_name: ph.player_name,
+      hole_cards: ph.card_1 && ph.card_2 ? [parseCard(ph.card_1), parseCard(ph.card_2)] : null,
+      result: ph.result,
+      profit_loss: ph.profit_loss,
+    })),
+  };
+}
+
+function communityForStreet(cardData, streetName) {
+  const cards = [];
+  if (streetName !== 'Pre-Flop' && cardData.flop) {
+    cards.push(...cardData.flop.filter(Boolean));
+  }
+  if ((streetName === 'Turn' || streetName === 'River' || streetName === 'Showdown') && cardData.turn) {
+    cards.push(cardData.turn);
+  }
+  if ((streetName === 'River' || streetName === 'Showdown') && cardData.river) {
+    cards.push(cardData.river);
+  }
+  return cards;
+}
+
+function updateEquity(cardData, streetName, seatPlayerMap, equityOverlay) {
+  const community = communityForStreet(cardData, streetName);
+  const active = cardData.player_hands.filter(ph => ph.hole_cards);
+
+  if (active.length < 2) {
+    equityOverlay.hide();
+    return;
+  }
+
+  const results = calculateEquity(
+    active.map(ph => ph.hole_cards),
+    community,
+  );
+
+  const eqMap = {};
+  active.forEach((ph, i) => { eqMap[ph.player_name] = results[i].equity; });
+  equityOverlay.update(eqMap, seatPlayerMap);
+}
 
 export function renderPlaybackView(container) {
   container.innerHTML = `
@@ -23,7 +84,13 @@ export function renderPlaybackView(container) {
   `;
 
   const canvas = container.querySelector('#three-canvas');
-  requestAnimationFrame(() => {
+  // Wait until the canvas has real dimensions before initialising the 3D scene
+  function waitForLayout(cb, tries = 30) {
+    if (tries <= 0) { cb(); return; }
+    if (canvas.clientWidth > 0 && canvas.clientHeight > 0) { cb(); return; }
+    requestAnimationFrame(() => waitForLayout(cb, tries - 1));
+  }
+  waitForLayout(() => {
     const { renderer, scene, camera, dispose } = initScene(canvas);
     addPokerTable(scene);
     const seatPositions = computeSeatPositions();
@@ -31,6 +98,14 @@ export function renderPlaybackView(container) {
     const canvasArea = container.querySelector('#canvas-area');
     const labels = createSeatLabels(canvasArea);
     updateSeatLabelPositions(labels, seatPositions, camera, renderer);
+    const equityOverlay = createEquityOverlay(canvasArea, 10);
+    equityOverlay.updatePositions(seatPositions, camera, renderer);
+
+    // Keep overlays positioned on resize
+    window.addEventListener('resize', () => {
+      updateSeatLabelPositions(labels, seatPositions, camera, renderer);
+      equityOverlay.updatePositions(seatPositions, camera, renderer);
+    });
 
     function computeCumulativePL(hands, handIndex) {
       const plMap = {};
@@ -44,31 +119,77 @@ export function renderPlaybackView(container) {
     }
 
     let activeScrubber = null;
+    let activeStreetScrubber = null;
+    let activeCommunityCards = null;
+    const holeCardsCtrl = createHoleCards(scene, seatPositions);
 
     window.__onSessionLoaded = ({ hands, playerNames }) => {
       loadSession(labels, playerNames);
       updateSeatLabelPositions(labels, seatPositions, camera, renderer);
+      equityOverlay.updatePositions(seatPositions, camera, renderer);
+      equityOverlay.hide();
 
-      if (activeScrubber) {
-        activeScrubber.dispose();
-        activeScrubber = null;
-      }
+      if (activeScrubber) { activeScrubber.dispose(); activeScrubber = null; }
+      if (activeStreetScrubber) { activeStreetScrubber.dispose(); activeStreetScrubber = null; }
+      if (activeCommunityCards) { activeCommunityCards.dispose(); activeCommunityCards = null; }
+
       const scrubberContainer = container.querySelector('#scrubber-container');
-      scrubberContainer.innerHTML = '';  // clear any residual DOM
+      scrubberContainer.innerHTML = '';
 
       if (!hands.length) return;
 
       const seatPlayerMap = {};
       playerNames.forEach((name, i) => { seatPlayerMap[i] = name; });
       chipStacksCtrl.updateChipStacks({}, seatPlayerMap);
-      activeScrubber = createSessionScrubber(scrubberContainer, hands.length, (handNumber) => {
-        const plMap = computeCumulativePL(hands, handNumber - 1);
+
+      function showHand(handIndex) {
+        const hand = hands[handIndex];
+        const cardData = handToCardData(hand);
+
+        // Community cards — recreate per hand
+        if (activeCommunityCards) { activeCommunityCards.dispose(); activeCommunityCards = null; }
+        activeCommunityCards = createCommunityCards(scene, cardData);
+
+        // Hole cards
+        holeCardsCtrl.initHand(cardData, seatPlayerMap);
+
+        // Street scrubber
+        if (activeStreetScrubber) { activeStreetScrubber.dispose(); activeStreetScrubber = null; }
+        const streetContainer = scrubberContainer.querySelector('#street-scrubber-area') ||
+          (() => { const d = document.createElement('div'); d.id = 'street-scrubber-area'; scrubberContainer.appendChild(d); return d; })();
+        streetContainer.innerHTML = '';
+        activeStreetScrubber = createStreetScrubber(streetContainer, cardData, (streetName) => {
+          const streetMap = { 'Pre-Flop': 0, 'Flop': 1, 'Turn': 2, 'River': 3, 'Showdown': 4 };
+          const streetIdx = streetMap[streetName] ?? 0;
+          activeCommunityCards.goToStreet(streetIdx);
+          if (streetName === 'Showdown') {
+            holeCardsCtrl.goToShowdown();
+          } else {
+            holeCardsCtrl.initHand(cardData, seatPlayerMap);
+          }
+          // Update equity display for current street
+          updateEquity(cardData, streetName, seatPlayerMap, equityOverlay);
+        });
+
+        // Chip stacks
+        const plMap = computeCumulativePL(hands, handIndex);
         chipStacksCtrl.updateChipStacks(plMap);
+      }
+
+      activeScrubber = createSessionScrubber(scrubberContainer, hands.length, (handNumber) => {
+        showHand(handNumber - 1);
       });
     };
   });
 
   loadSessionList();
+
+  // Allow data view to load a session by ID
+  window.__loadSessionById = async (gameId) => {
+    const allSessions = await fetchSessions();
+    const match = allSessions.find(s => s.game_id === gameId);
+    if (match) loadSession_(match);
+  };
 }
 
 async function loadSessionList() {
@@ -130,7 +251,7 @@ async function loadSession_(session) {
 
     // Initialize scene seat labels (dummy — real scene integration done in T-011+)
     console.log('Session loaded:', session.game_id, 'players:', playerNames, 'hands:', hands.length);
-    
+
     // Signal session loaded — stub for T-010 scrubber integration
     if (window.__onSessionLoaded) {
       window.__onSessionLoaded({ session, hands, playerNames });

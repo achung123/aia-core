@@ -72,3 +72,32 @@ export function updateCommunityCards(gameId, handNumber, data) {
     body: JSON.stringify(data),
   });
 }
+
+export function uploadCsvValidate(file) {
+  const form = new FormData();
+  form.append('file', file);
+  return fetch(`${BASE_URL}/upload/csv`, { method: 'POST', body: form })
+    .then(async r => {
+      const body = await r.json();
+      if (!r.ok) throw new Error(body.detail || `HTTP ${r.status}`);
+      return body;
+    });
+}
+
+export function uploadCsvCommit(file) {
+  const form = new FormData();
+  form.append('file', file);
+  return fetch(`${BASE_URL}/upload/csv/commit`, { method: 'POST', body: form })
+    .then(async r => {
+      const body = await r.json();
+      if (!r.ok) {
+        const detail = typeof body.detail === 'object' ? JSON.stringify(body.detail) : (body.detail || `HTTP ${r.status}`);
+        throw new Error(detail);
+      }
+      return body;
+    });
+}
+
+export function fetchCsvSchema() {
+  return request('/upload/csv/schema');
+}

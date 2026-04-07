@@ -2,16 +2,11 @@ import './style.css';
 import * as THREE from 'three';
 import { initRouter } from './router.js';
 import { renderDataView } from './views/dataView.js';
+import { renderPlaybackView } from './views/playbackView.js';
 
 console.log('Three.js r' + THREE.REVISION);
 
-function renderPlayback(container) {
-  const canvas = document.createElement('canvas');
-  canvas.id = 'three-canvas';
-  container.appendChild(canvas);
-}
-
 initRouter({
-  '#/playback': renderPlayback,
+  '#/playback': container => renderPlaybackView(container),
   '#/data': container => renderDataView(container),
 });

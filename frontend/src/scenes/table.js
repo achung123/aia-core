@@ -3,14 +3,16 @@ import * as THREE from 'three';
 export function initScene(canvasElement) {
   const renderer = new THREE.WebGLRenderer({ canvas: canvasElement, antialias: true });
   renderer.setPixelRatio(window.devicePixelRatio);
-  renderer.setSize(canvasElement.clientWidth, canvasElement.clientHeight);
+  const w = canvasElement.clientWidth || canvasElement.parentElement.clientWidth || 800;
+  const h = canvasElement.clientHeight || canvasElement.parentElement.clientHeight || 600;
+  renderer.setSize(w, h);
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x1a1a2e);
 
   const camera = new THREE.PerspectiveCamera(
     45,
-    canvasElement.clientWidth / canvasElement.clientHeight,
+    w / h,
     0.1,
     1000,
   );
@@ -18,10 +20,10 @@ export function initScene(canvasElement) {
   camera.lookAt(0, 0, 0);
 
   // Lighting
-  const ambientLight = new THREE.AmbientLight(0x404040);
+  const ambientLight = new THREE.AmbientLight(0x606060);
   scene.add(ambientLight);
 
-  const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+  const dirLight = new THREE.DirectionalLight(0xffffff, 1.4);
   dirLight.position.set(5, 10, 7.5);
   scene.add(dirLight);
 

@@ -1,16 +1,17 @@
+import * as THREE from 'three';
 import { createCard } from './cards.js';
 
-const CARD_SPACING = 0.85;
+const CARD_SPACING = 0.52;
 const START_OFFSET = -2 * CARD_SPACING; // leftmost card x offset from center
 const OFF_TABLE_Z = 5;
 const ANIM_DURATION = 500; // ms
 
 function cardPosition(slotIndex) {
-  return {
-    x: START_OFFSET + slotIndex * CARD_SPACING,
-    y: 0.02,
-    z: 0,
-  };
+  return new THREE.Vector3(
+    START_OFFSET + slotIndex * CARD_SPACING,
+    0.01,
+    0,
+  );
 }
 
 function animateCard(mesh, targetPos, duration, onComplete) {
@@ -97,7 +98,7 @@ export function createCommunityCards(scene, handData) {
     if (cancelHandles[slotIndex]) { cancelHandles[slotIndex](); cancelHandles[slotIndex] = null; }
     inflightRemovals.add(mesh);
 
-    const stagingPos = { x: mesh.position.x, y: mesh.position.y, z: OFF_TABLE_Z };
+    const stagingPos = new THREE.Vector3(mesh.position.x, mesh.position.y, OFF_TABLE_Z);
     cancelHandles[slotIndex] = animateCard(mesh, stagingPos, ANIM_DURATION, () => {
       inflightRemovals.delete(mesh);
       scene.remove(mesh);
