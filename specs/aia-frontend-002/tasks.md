@@ -443,3 +443,268 @@ Write `frontend/README.md` documenting how to install dependencies, run the dev 
 | MEDIUM | test_cors_multi_origin_parsing validates parsing only | The reload test asserts `_allowed_origins` list but never makes a preflight HTTP request against the reloaded app. Regression to broken middleware initialization would go undetected. | No |
 | LOW | Two pre-existing B905 ruff errors in unrelated files | `src/app/services/card_detector.py:48` and `src/pydantic_models/csv_schema.py:175` have `zip()` without `strict=`. Pre-existing but violate ruff baseline. | No |
 | LOW | No test for mixed wildcard `ALLOWED_ORIGINS=http://foo.com,*` | Only bare `ALLOWED_ORIGINS=*` tested. Mixed wildcard regression would go undetected. | No |
+
+### Cycle 5 — aia-core-pf3 (Commit all outstanding implementation changes to git)
+
+| Severity | Title | Description | Filed to beads |
+|---|---|---|---|
+| MEDIUM | Uncommitted agent and prompt files in working tree | 9 `.github/agents/` and `.github/prompts/` files remain uncommitted, including untracked `scott.loop-review.prompt.md` and `scott.agent.md` (+24 lines for loop-review command). Task AC partially unmet. | No |
+| MEDIUM | `importlib.reload()` in CORS tests — fragile module state restoration | If an unexpected import error occurs during the first reload in test_cors_middleware.py, the finally block's second reload may also fail, leaving module state dirty. | No |
+| LOW | Unused Vite boilerplate in frontend scaffold | `counter.js`, `hero.png`, `javascript.svg`, `vite.svg` are unreferenced template leftovers adding noise. | No |
+| LOW | Generic `<title>frontend</title>` in index.html | Default Vite template title not updated to reflect product name. | No |
+
+### Cycle 6 — aia-core-dbp (Implement API client module) — CRITICAL FAILURES
+
+| Severity | Title | Description | Filed to beads |
+|---|---|---|---|
+| CRITICAL | `fetchPlayerStats` — wrong URL and parameter | Calls `GET /games/${sessionId}/stats/players`. Actual route: `GET /stats/players/{player_name}`. Wrong URL structure and wrong parameter type. Every call returns 404. | Yes — priority 0 |
+| CRITICAL | `fetchGameStats` — reversed URL path segments | Calls `GET /games/${sessionId}/stats/game`. Actual route: `GET /stats/games/{game_id}`. Path segments in wrong order. Every call returns 404. | Yes — priority 0 |
+| CRITICAL | `fetchLeaderboard` — missing `/stats` prefix | Calls `GET /leaderboard`. Actual route: `GET /stats/leaderboard`. Every call returns 404. | Yes — priority 0 |
+| CRITICAL | `updateHolecards` — wrong method and URL | Calls `PUT /hands/${handId}/hole-cards`. Actual route: `PATCH /games/{game_id}/hands/{hand_number}/players/{player_name}`. Wrong HTTP method (405) and path. | Yes — priority 0 |
+| CRITICAL | `updateCommunityCards` — wrong method and URL | Calls `PUT /hands/${handId}/community-cards`. Actual route: `PATCH /games/{game_id}/hands/{hand_number}`. Wrong HTTP method (405) and path. | Yes — priority 0 |
+| MEDIUM | Raw server response body exposed in thrown errors | `throw new Error(\`HTTP ${response.status}: ${text}\`)` passes raw FastAPI response body into error message, visible in browser console. | No |
+| LOW | Exported functions not `async` — implicit Promise return | All 10 exported functions omit `async`. Functionally correct but stylistically inconsistent. | No |
+
+### Cycle 6b — aia-core-4av (Fix: API client wrong routes — re-review)
+
+All 5 corrected routes verified. All mutating functions include Content-Type: application/json. All 10 exports present.
+
+| Severity | Title | Description | Filed to beads |
+|---|---|---|---|
+| MEDIUM | Missing `encodeURIComponent` for playerName URL parameter | `fetchPlayerStats` and `updateHolecards` interpolate `playerName` directly. Names with spaces produce invalid URLs; names with `/` split path segments. Fix: `encodeURIComponent(playerName)`. | No |
+| LOW | BASE_URL not normalized — trailing slash causes double-slash paths | If `VITE_API_BASE_URL` is set with trailing slash, all requests get double slashes (`//games`). Fix: `.replace(/\/$/, '')`. | No |
+| LOW | `response.json()` called unconditionally on success path | If any 2xx returns no body or non-JSON, a SyntaxError surfaces with no meaningful message. | No |
+
+### Cycle 7 — aia-core-puw (Build base Three.js scene)
+
+| Severity | Title | Description | Filed to beads |
+|---|---|---|---|
+| HIGH | RAF loop not cancellable — double-loop on re-initialisation | `requestAnimationFrame` handle discarded; every `initScene` call starts a permanent additional loop. Fix: store `rafId` and return `dispose()` with `cancelAnimationFrame`. | Yes — priority 1 |
+| HIGH | Resize event listener leaks on re-initialisation | `window.addEventListener('resize', onResize)` never removable by caller. Every `initScene` call adds a stale listener. Fix: include `window.removeEventListener` in `dispose()`. | Yes — priority 1 (combined with above) |
+| MEDIUM | No cleanup/dispose mechanism returned from `initScene` | `initScene` returns `{renderer, scene, camera}` but no `dispose()`. Root cause of both HIGH findings. | No |
+
+### Cycle 7b — aia-core-7sv (Fix: Table scene lifecycle — re-review)
+
+All 5 ACs satisfied. RAF cancellable, resize listener removable.
+
+| Severity | Title | Description | Filed to beads |
+|---|---|---|---|
+| MEDIUM | `renderer.dispose()` not called in `dispose()` | `dispose()` cancels RAF and removes resize listener but never calls `renderer.dispose()`. WebGLRenderer holds GPU resources that will leak on re-mount. Fix: add `renderer.dispose()` call. | No |
+| LOW | Initial size computed before layout may be stable | `clientWidth/clientHeight` read at call time; if called before canvas is painted, size is 0. Fix: call `onResize()` once at end of `initScene`. | No |
+
+### Cycle 8 — aia-core-cpw (Implement hash-based SPA router and nav bar)
+
+| Severity | Title | Description | Filed to beads |
+|---|---|---|---|
+| HIGH | `style.css` not imported — page completely unstyled | `import './style.css'` dropped when main.js was rewritten. Vite never bundles the stylesheet. AC4 unmet. Fix: add import to main.js. | Yes — priority 1 |
+| HIGH | No `nav a.active` CSS rule — active highlighting absent | router.js correctly toggles `.active` class but no CSS rule targets `nav a.active`. AC4 doubly unmet. Fix: add rule to style.css. | Yes — priority 1 (combined) |
+| MEDIUM | `dispose()` return value discarded — Vite HMR double-render risk | `initRouter(...)` return value ignored. On HMR, old hashchange listener persists causing double-render. | No |
+| LOW | `renderData` uses innerHTML string vs DOM API in renderPlayback | Inconsistent approach, no XSS risk. | No |
+
+### Cycle 8b — aia-core-em7 (Fix: SPA router stylesheet and active state — re-review)
+
+All 5 ACs satisfied. Active link styling confirmed.
+
+| Severity | Title | Description | Filed to beads |
+|---|---|---|---|
+| LOW | `opacity: 1` in `nav a.active` is a no-op | No base `nav a { opacity: ... }` rule to dim inactive links, so `opacity: 1` has zero visual effect. | No |
+
+### Cycle 9 — aia-core-4nn (Build oval poker table geometry and seat positions)
+
+| Severity | Title | Description | Filed to beads |
+|---|---|---|---|
+| HIGH | Missing `projected.z` guard in seat label projection | When a seat is behind the camera (`projected.z > 1`), NDC values are garbage and the label renders at a mirrored position. Fix: `if (projected.z > 1) { label.style.display = 'none'; return; }` | Yes — priority 1 |
+| MEDIUM | No DOM cleanup in `createSeatLabels` | Every call appends 10 new div.seat-label nodes with no teardown. Re-initialization accumulates stale labels. | No |
+| LOW | `style.transform` set every frame | `translate(-50%, -50%)` never changes but is set in the per-frame forEach loop. Move to initial cssText in createSeatLabels. | No |
+| LOW | `BufferGeometry.scale()` behavior clarified | `.scale()` calls `applyMatrix4()` internally, transforming vertex data in-place — no side effects. | No |
+
+### Cycle 10 — aia-core-bpn (Build session list panel and session loading flow)
+
+| Severity | Title | Description | Filed to beads |
+|---|---|---|---|
+| CRITICAL | AC5 not implemented — `table.loadSession` never called | `table.loadSession(playerNames)` and scrubber initialization deferred to stub. AC5 unmet. | Yes — priority 0 |
+| HIGH | AC2 broken: player count always 0 | Session rows use `(s.players || []).length` but API returns `player_count: int`. Every row shows "0 players". | Yes — priority 1 (combined) |
+| HIGH | XSS: `err.message` injected via `innerHTML` in session list catch | `list.innerHTML = \`Error: ${err.message}\`` where err.message is from raw server response body. Arbitrary HTML/script injection possible. | Yes — priority 0 (combined) |
+| HIGH | XSS: API string fields interpolated via `innerHTML` in session rows | `row.innerHTML` interpolates `s.game_date` without escaping. | Yes — priority 0 (combined) |
+| MEDIUM | Race condition on rapid session clicks | No AbortController or monotonic fetch ID. Two in-flight fetchHands can resolve out of order. | No |
+| LOW | Four unused imports from tableGeometry.js | loadSession, createSeatLabels, computeSeatPositions, updateSeatLabelPositions imported but never used. | No |
+| LOW | fetchSessions error bypasses #error-banner | Error renders inline in panel instead of using shared error-banner overlay. | No |
+
+### Cycle 10b — aia-core-gwl (Session panel fixes — re-review)
+
+All 5 ACs verified. XSS fixes confirmed. No innerHTML with user-controlled content.
+
+| Severity | Title | Description | Filed to beads |
+|---|---|---|---|
+| HIGH | Canvas is 0×0 when `initScene` is called | `initScene(canvas)` called synchronously after `container.innerHTML=...`. Browser layout hasn't run — canvas.clientWidth/Height are 0. Renderer 0×0, camera aspect NaN. Fix: defer initScene by one RAF tick. | Yes — priority 1 |
+| MEDIUM | `dispose` from `initScene` discarded | Only renderer/scene/camera destructured. Each renderPlaybackView call leaks RAF loop and resize listener. | No |
+| MEDIUM | `window.__onSessionLoaded` is a mutable global | Any script can overwrite it. Stale closures on double-call. | No |
+| MEDIUM | Seat labels not repositioned on window resize | table.js onResize updates renderer/camera but never calls updateSeatLabelPositions. Labels drift after resize. | No |
+| LOW | `loadSession_` underscore suffix is non-idiomatic | Rename to loadHandsForSession. | No |
+| LOW | `loadSessionList` uses global document.getElementById | Should use scoped container reference to prevent stale writes on unmount. | No |
+
+### Cycle 11 — aia-core-30y (Create card mesh factory with canvas-rendered faces)
+
+All 5 ACs satisfied. isFlipping guard correct. Face index +z correct.
+
+| Severity | Title | Description | Filed to beads |
+|---|---|---|---|
+| MEDIUM | No `dispose()` — GPU memory leak | `renderCardFace` allocates CanvasTexture, `createCard` allocates BoxGeometry. Neither freed on scene removal. Expose `mesh.dispose()` calling dispose on geom/faceTex/faceMat/backMat. | No |
+| LOW | `rotation.y` snaps from π→0 on final flip frame | At t=1, rotation.y=π then immediately set to 0. One-frame mirrored face visible. | No |
+| LOW | `ctx.roundRect()` no fallback | Not available in Chromium < 99. Feature-detect and fall back to `ctx.fillRect`. | No |
+
+### Cycle 12 — aia-core-3gu (Implement session-level scrubber component)
+
+| Severity | Title | Description | Filed to beads |
+|---|---|---|---|
+| HIGH | `onChange` not fired on construction | `updateLabel()` not called during init. Scenes driven by onChange callback display nothing on load. Fix: call updateLabel() after container.appendChild(wrapper). | Yes — priority 1 |
+| MEDIUM | Tick marks misalign with slider thumb at min/max | Browser range inputs have native thumb inset. Ticks at 0%/100% float outside thumb travel zone. | No |
+| MEDIUM | No guard against `handCount=0` | range.min=1 > range.max=0 — invalid HTML. Browser behavior undefined. Fix: throw RangeError for handCount < 1. | No |
+| LOW | Last tick at x1="100%" clips on right edge | 0.5px outside SVG viewport — half-width rightmost tick. | No |
+| LOW | `dispose()` does not remove event listeners | wrapper.remove() called but removeEventListener not invoked. GC of detached nodes delayed. | No |
+| LOW | `setIndex` fires onChange unconditionally | Triggers redundant downstream renders when value unchanged. | No |
+
+### Cycle 13 — aia-core-3ra (Implement hand-level street scrubber component)
+
+All 5 ACs satisfied. Edge case (both Turn+River null → Showdown reachable) confirmed correct.
+
+| Severity | Title | Description | Filed to beads |
+|---|---|---|---|
+| HIGH | `updateHandData` — active+disabled contradiction, parent out of sync | When user is on Turn and updateHandData({turn:null}) is called, button is simultaneously disabled and highlighted. onStreetChange not fired. User stuck on invalid street. Fix: walk back to nearest enabled street and fire onStreetChange. | Yes — priority 1 |
+| MEDIUM | `Object.assign(handData, newHandData)` mutates caller's object | Silently modifies the caller's reference. Use `handData = { ...handData, ...newHandData }` with let-scoped local. | No |
+| LOW | `onStreetChange` fires before `updateUI` on initial mount | Constructor: fires callback then updates UI. Inconsistent with goToStreet order. | No |
+
+### Cycle 14 — aia-core-ahl (Build chip stack visualization at each seat)
+
+All 5 ACs verified at the module level. Module is not yet wired into playbackView.js.
+
+| Severity | Title | Description | Filed to beads |
+|---|---|---|---|
+| HIGH | chipStacks module not wired into scene | createChipStacks never imported or called from playbackView.js or table.js. Chip stacks are not rendered. downstream b62 has nothing to connect to. | Yes — priority 1 |
+| HIGH | No frontend unit test infrastructure | Zero frontend tests exist. lerp timing, P/L scaling, null-neutral, and negative-branch verified by inspection only. Systemic gap across all frontend modules — single chore task filed. | Yes (chore) |
+| MEDIUM | Color change is instant, not lerped | setHeight calls m.color.set() synchronously before the height animation starts. Players crossing 0 P/L flash on scrubber drag. | No |
+| MEDIUM | Post-dispose updateChipStacks leaks RAF callbacks | No disposed flag guard. After dispose(), updateChipStacks still schedules RAF loops. | No |
+| MEDIUM | DISC_COUNT hardcoded to 5 | AC 1 says 3–8 discs implying configurable range. | No |
+| LOW | Dispose order: dispose before scene.remove | Should be remove-then-dispose per idiomatic THREE.js. | No |
+| LOW | dispose() not idempotent | No guard against double-dispose. | No |
+
+### Cycle 15 — aia-core-5b9 (Implement community card deal animations)
+
+All 5 ACs satisfied at module level.
+
+| Severity | Title | Description | Filed to beads |
+|---|---|---|---|
+| HIGH | Orphaned scene meshes after dispose() mid-animation | removeCard nulls cards[slot] immediately for state consistency, but dispose() iterates cards[] and skips nulls — in-flight removal meshes stay in the scene graph permanently. Fix: maintain inflightRemovals Set. | Yes — priority 1 |
+| HIGH | Concurrent RAF loops on same mesh during rapid goToStreet | animateCard returns no cancel handle. Rapid street changes create competing RAF loops on the same mesh, producing jitter. Fix: return cancel closure, store per-slot, cancel before new animation. | Yes — priority 1 |
+| MEDIUM | addCard RAF loop retains disposed mesh ~500ms post-dispose | Side-effect of HIGH-2 fix. | No |
+| LOW | Shared backMat disposed multiple times per mesh | disposeMesh iterates all 6 slots; same backMat disposed 5×. Deduplicate with Set. | No |
+| LOW | Linear interpolation — abrupt animation feel | No ease-in/out applied. ACs don't mandate easing. | No |
+
+### Cycle 16 — aia-core-2pg (Implement hole card display and showdown reveal)
+
+| Severity | Title | Description | Filed to beads |
+|---|---|---|---|
+| CRITICAL | MeshBasicMaterial has no emissive — winner glow invisible | glowWinnerCards sets .emissive on MeshBasicMaterial which silently ignores it. Fix: switch faceMat to MeshStandardMaterial or MeshLambertMaterial. | Yes — priority 0 |
+| HIGH | Stale setTimeout not cancellable — glow fires on wrong hand | 350ms timeout for glowWinnerCards has no handle. Rapid hand advance causes glow to apply to new hand's cards. Fix: store timer ID, clearTimeout on initHand/dispose. | Yes — priority 1 |
+| HIGH | RAF flip animation untracked — runs on disposed materials | card.flip() starts RAF with no cancel mechanism. dispose() can free GPU resources while flip RAF continues writing to them. Fix: expose cancelFlip() method. | Yes — priority 1 |
+| MEDIUM | Texture leak in disposeCards — CanvasTexture not disposed | m.dispose() doesn't auto-dispose m.map. 2 GPU textures leaked per seat per hand transition. Fix: dispose m.map before m. | No |
+| MEDIUM | Texture leak in removeSprite — canvas texture not disposed | sprite.material.dispose() misses material.map. Fix: dispose map before material. | No |
+| MEDIUM | Dim-then-flip race — folded players face renders at full opacity | dimCards runs before flip completes; faceMat never gets opacity:0.5. Delay dim by 350ms. | No |
+| MEDIUM | No null guard on handData.player_hands | .find() crashes on null/malformed API data. Fix: player_hands ?? []. | No |
+| LOW | seatPos.y undefined in addFoldSprite | y ?? 0 guard. | No |
+| LOW | backMat disposed 5× per card | Deduplicate with Set. | No |
+
+### Cycle 17 — aia-core-829 (Build hand result overlay panel)
+
+All 5 ACs satisfied. No CRITICAL or HIGH findings.
+
+| Severity | Title | Description | Filed to beads |
+|---|---|---|---|
+| MEDIUM | dispose() does not remove dismiss button event listener | overlay.remove() without explicit removeEventListener. No real leak in modern GC but violates release contract. | No |
+| LOW | Winner result string 'win' is undocumented API contract | Silent breakage if backend changes vocabulary. | No |
+| LOW | Winner gold background #b8860b is dark amber, not gold | May not match product intent. | No |
+| LOW | All styles inlined | No CSS classes — makes theming harder. | No |
+
+### Cycle 18 — aia-core-1w8 (Implement stats sidebar with cumulative P/L)
+
+All 5 ACs satisfied. No CRITICAL or HIGH findings.
+
+| Severity | Title | Description | Filed to beads |
+|---|---|---|---|
+| MEDIUM | dispose() throws NotFoundError on double-call | container.removeChild(sidebar) without checking parentNode. | No |
+| LOW | Dead null guard in formatPL | Unreachable branch. | No |
+| LOW | Misleading comment: "inclusive slice" with exclusive-end loop | Off-by-one comment, math is correct. | No |
+| LOW | formatPL(0) returns +$0.00 | Should display $0.00 for breakeven. | No |
+
+### Cycle 19 — aia-core-3fo (Build data interface: session list table)
+
+All 5 ACs satisfied.
+
+| Severity | Title | Description | Filed to beads |
+|---|---|---|---|
+| HIGH | Race condition in handleRowClick — ghost-insert on fast click | After await fetchHands() resolves, no check that expandedSessionId still matches. Double-click or rapid row change inserts ghost detail rows. Fix: guard after await. | Yes — priority 1 |
+| MEDIUM | Date sort is lexicographic not date-aware | Uses string comparison on date strings. Safe only for ISO 8601. Harden with new Date().getTime(). | No |
+| LOW | tbody.id set but never queried | Dead code. | No |
+| LOW | No CSS class on expanded row | Missing UX affordance. | No |
+| LOW | #/data route uses redundant arrow wrapper | Minor style inconsistency. | No |
+
+### Cycle 20 — aia-core-pys (Build data interface: player management UI)
+
+| Severity | Title | Description | Filed to beads |
+|---|---|---|---|
+| CRITICAL | AC1 not satisfied — wrong data source | fetchLeaderboard() inner-joins Player→PlayerHand, filtering players with zero hands. Must use GET /players instead. Need to add fetchPlayers() to client.js. | Yes — priority 0 |
+| MEDIUM | Inline error below Submit button, not below input | AC4 requires duplicate-name error below input field. | No |
+| MEDIUM | Fragile 409 detection via string prefix | err.message.startsWith('HTTP 409') couples to client.js string format. | No |
+| LOW | Raw server error body rendered in UI | err.message includes HTTP status and raw response body. | No |
+
+### Cycle 21 — aia-core-0v4 (Build data interface: session creation form)
+
+All 5 ACs satisfied. No CRITICAL or HIGH findings.
+
+| Severity | Title | Description | Filed to beads |
+|---|---|---|---|
+| MEDIUM | Stale date on post-midnight reset | yyyy/mm/dd captured at construction, not reset time. Fix: compute YYYY-MM-DD at reset with new Date(). | No |
+| LOW | 409 detection string-coupled to client.js error format | err.message.startsWith('HTTP 409'). | No |
+| LOW | Submit not disabled during fetchPlayers() in-flight | User can submit empty player list while player select is loading. | No |
+
+### Cycle 22 — aia-core-b62 (Wire chip stack animations to session scrubber)
+
+| Severity | Title | Description | Filed to beads |
+|---|---|---|---|
+| HIGH | Scrubber DOM nodes accumulate on repeated session loads | createSessionScrubber appended without clearing; dispose() discarded. Multiple scrubbers fire simultaneously causing visual corruption. Fix: let activeScrubber track and dispose before re-create. | Yes — priority 1 |
+| MEDIUM | Zero-hand session throws TypeError in computeCumulativePL | hands[0].player_hands on empty array. Guard with if (!hands.length) return. | No |
+| LOW | Double updateChipStacks call on load | neutral + scrubber onChange(1) queued in same frame. Minor waste. | No |
+| LOW | null player_name creates plMap["undefined"] key | Guard with if (!ph.player_name) return. | No |
+
+### Cycle 23 — aia-core-b0k (Build data interface: hand recording form)
+
+All 5 ACs partial on PATCH path.
+
+| Severity | Title | Description | Filed to beads |
+|---|---|---|---|
+| HIGH | POST success + PATCH fail blocks onSuccess, re-submit makes duplicate hand | createHand already saves hand+players via player_entries. PATCH failures block onSuccess(). User re-submits → duplicate hands created. Fix: make PATCH non-fatal; call onSuccess() after POST. | Yes — priority 1 |
+| MEDIUM | No min/max on profit_loss input | Extreme values reach API silently; 422 errors surface as opaque form errors. | No |
+| MEDIUM | toFieldId slug collision for similar player names | Alice-Bob and Alice Bob both slug to Alice_Bob → duplicate element IDs. | No |
+| LOW | Player name not URL-encoded in PATCH URL | Missing encodeURIComponent. | No |
+| LOW | onSuccess() called inside try block — callback errors show as API errors | Move onSuccess after try/catch. | No |
+
+### Cycle 24 — aia-core-vj6 (Build data interface: hand edit/correction form)
+
+| Severity | Title | Description | Filed to beads |
+|---|---|---|---|
+| HIGH | Silent data loss — `result`/`profit_loss` edits not persisted | Form renders both fields as editable inputs and populates `updatedHandData`, but neither value is sent to any PATCH endpoint. Changes appear to save, then revert on the next backend fetch. Fix: add a backend PATCH for `result`/`profit_loss` and call it on change, or make the fields readonly. | Yes — priority 1 |
+| HIGH | `playerName` not URL-encoded in `/players/${playerName}` path | `client.js` interpolates `playerName` raw in `/games/${gameId}/hands/${handNumber}/players/${playerName}`. Names containing spaces, `/`, `?`, or `#` produce malformed or mis-routed requests. Fix: `encodeURIComponent(playerName)`. | Yes — priority 1 |
+| MEDIUM | Buttons permanently disabled if `onSave` throws | On an `onSave` exception the submit and cancel buttons remain disabled with no recovery path — the user cannot retry or cancel. Fix: re-enable buttons in a `finally` block. | No |
+| MEDIUM | `dispose()` not called on successful save | The form's `dispose()` is never invoked after `onSave` resolves, leaving a DOM orphan if the caller does not clean up. Fix: call `dispose()` inside the success branch, or document that the caller is responsible. | No |
+| LOW | `.card-field-error` spans lack `aria-live="polite"` | Validation error messages injected into `.card-field-error` spans are invisible to screen readers because no live-region attribute is present. Fix: add `aria-live="polite"` to each error span. | No |
+| LOW | Slug collisions for names with special characters produce duplicate HTML IDs | The `toFieldId` helper strips non-alphanumeric characters; names that differ only in punctuation (e.g. `O'Brien` and `OBrien`) map to the same ID, violating HTML uniqueness. Fix: append a disambiguation suffix or use a counter. | No |
+| LOW | `step="0.01"` on profit input does not prevent overly-precise floats | HTML `step` constrains the stepper UI only; user can type arbitrary precision. Fix: validate or round the value before submission. | No |
+
+### Cycle 25 — aia-core-c6a (Frontend README)
+
+| Severity | Title | Description | Filed to beads |
+|---|---|---|---|
+| HIGH | H-1: Deployment guide omits `@app.get('/')` conflict | `main.py` registers `@app.get('/')` which FastAPI resolves before `StaticFiles`. Since the app uses hash-based routing (browser always sends `GET /`), the welcome JSON is returned instead of `index.html`. README must note that `@app.get('/')` must be removed or moved to `/api/` before mounting `StaticFiles` at `"/"`. | Yes |
+| MEDIUM | M-1: "Brief glow animation" description is inaccurate | `glowWinnerCards()` sets a static `emissiveIntensity = 0.4` after `setTimeout` — no time-based fade or pulse exists. The README description should reflect reality. | No |
+| MEDIUM | M-2: Node.js prerequisites unanchored | `package.json` has no `engines` field, so the prerequisite version range `^20.19.0 \|\| >=22.12.0` stated in the README cannot be validated from the project. Fix: add an `engines` field to `package.json` or remove the version constraint from the README. | No |
+| LOW | L-1: "npm 10 (bundled with Node.js 22)" is imprecise | npm 10 ships with Node.js 20+, not exclusively Node.js 22. Reword to "npm 10 (bundled with Node.js 20 and later)". | No |

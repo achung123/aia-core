@@ -1,5 +1,5 @@
 ---
-mode: agent
+mode: plan
 tools:
   - codebase
   - readFile

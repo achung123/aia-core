@@ -1,5 +1,5 @@
 ---
-mode: agent
+mode: plan
 tools:
   - codebase
   - readFile
@@ -32,8 +32,8 @@ Before generating anything, Jean must understand the workspace's existing tech s
 
 1. **Read the input.** If the user provided a file path, read it. If a URL, fetch it. If inline text, parse it carefully.
 2. **Scan the workspace.** Use `codebase`, `listDirectory`, and `readFile` to understand the existing project structure, tech stack (check `pyproject.toml`, `package.json`, `Dockerfile`, etc.), and conventions.
-3. **Run intake — always.** Even if the input appears detailed, there are implicit choices and assumptions worth confirming. Present up to 7 focused questions grouped by theme (Scope, Users, Technical, Constraints). For well-specified input, focus questions on confirming priorities, scope boundaries, and unstated constraints rather than basic requirements.
-4. **Wait for answers.** Do not proceed until the user responds. One follow-up round of max 3 questions if answers introduce new ambiguity.
+3. **Run intake — always.** Even if the input appears detailed, there are implicit choices and assumptions worth confirming. Present up to 7 focused questions grouped by theme (Scope, Users, Technical, Constraints). **Format every question as multiple choice** with 3–4 lettered options (`A)`, `B)`, `C)`, `D)`) covering likely answers, plus `Other: ___`. Keep questions short — 1 line of text, options below. No paragraph prose per question. End the block with a reminder like `Reply with just the letters, e.g. 1:A, 2:B`.
+4. **Wait for answers.** Do not proceed until the user responds. One follow-up round of max 3 questions (same multiple-choice format) if answers introduce new ambiguity.
 5. **Announce.** State the project name and ID you'll use, confirm the output folder path, and proceed.
 6. **Generate `spec.md`.** Write user stories grouped by epic. Each story has a title, narrative ("As a… I want… So that…"), and acceptance criteria. Follow `jean.spec.template.md`.
 7. **Generate `plan.md`.** Write the high-level plan: tech stack decisions, architecture components, project phases, risks, and external dependencies. Follow `jean.plan.template.md`.

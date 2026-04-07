@@ -1,6 +1,6 @@
 # All In Analytics — Frontend
 
-A browser-based poker session playback viewer and data dashboard.  
+A browser-based poker session playback viewer and data dashboard.
 Built with [Vite](https://vitejs.dev/) + [Three.js](https://threejs.org/).
 
 ---

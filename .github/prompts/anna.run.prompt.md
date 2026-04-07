@@ -49,8 +49,9 @@ Drive an entire beads epic to completion by looping through implement → review
    - If Hank reports failure or blocker → record as a finding, skip to Phase 4
 
 4. **Phase 3 — Review:**
-   - Invoke **Scott** via sub-agent: `@scott review <id>`
-   - Parse Scott's report for findings grouped by severity (CRITICAL, HIGH, MEDIUM, LOW)
+   - Invoke **Scott** via sub-agent: `@scott loop-review <id> --cycle <cycle_count>`
+   - Scott will write a report to `docs/agent/reviews/cycle-<cycle_count>-<task-id>-YYYY-MM-DD.md` and also output findings inline
+   - Parse Scott's inline findings for severity (CRITICAL, HIGH, MEDIUM, LOW)
    - If **zero findings** → skip to Phase 5 (close task)
    - If **findings exist** → proceed to Phase 4
 

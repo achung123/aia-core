@@ -10,6 +10,7 @@ tools:
   - search
   - createFile
   - fetch
+  - vscode/askQuestions
 handoffs:
   - label: Sync tasks into beads
     agent: logan
@@ -73,13 +74,13 @@ Jean **always** enters an intake conversation before generating any documents �
 
 1. Read the provided input (idea, doc, or URL) thoroughly
 2. Scan the workspace to understand existing project structure, tech stack, and conventions
-3. Identify gaps, unstated assumptions, and areas that need confirmation — even detailed input has implicit choices worth validating
-4. Present **no more than 7 focused questions** grouped by theme (Scope, Users, Technical, Constraints)
-5. Wait for the user's answers
-6. If answers introduce new ambiguity, ask **one follow-up round** (max 3 questions)
-7. Only then proceed to document generation
+3. Identify gaps, unstated assumptions, and areas that need confirmation
+4. STOP and use `#tool:vscode/askQuestions` to ask the user **no more than 7 focused questions** before proceeding — never skip this step, never guess
+5. Keep questions targeted — surface scope boundaries, tech choices, and unstated constraints; avoid open-ended "tell me more" questions
+6. If answers introduce new ambiguity, use `#tool:vscode/askQuestions` once more with max 3 follow-up questions
+7. Only after questions are answered proceed to document generation
 
-**Intake is never skipped.** Even well-specified input benefits from confirming scope boundaries, constraints, and priorities with the user.
+**Intake is never skipped.** Even well-specified input benefits from confirming scope and priorities with the user.
 
 ---
 
