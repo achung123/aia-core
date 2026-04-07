@@ -1,6 +1,7 @@
 import { fetchSessions, fetchHands } from '../api/client.js';
 import { initScene } from '../scenes/table.js';
 import { addPokerTable, computeSeatPositions, createSeatLabels, loadSession, updateSeatLabelPositions } from '../scenes/tableGeometry.js';
+import { createChipStacks } from '../scenes/chipStacks.js';
 
 export function renderPlaybackView(container) {
   container.innerHTML = `
@@ -22,6 +23,7 @@ export function renderPlaybackView(container) {
     const { renderer, scene, camera, dispose } = initScene(canvas);
     addPokerTable(scene);
     const seatPositions = computeSeatPositions();
+    const chipStacksCtrl = createChipStacks(scene, seatPositions, {});
     const canvasArea = container.querySelector('#canvas-area');
     const labels = createSeatLabels(canvasArea);
     updateSeatLabelPositions(labels, seatPositions, camera, renderer);
@@ -29,6 +31,9 @@ export function renderPlaybackView(container) {
     window.__onSessionLoaded = ({ playerNames }) => {
       loadSession(labels, playerNames);
       updateSeatLabelPositions(labels, seatPositions, camera, renderer);
+      const seatPlayerMap = {};
+      playerNames.forEach((name, i) => { seatPlayerMap[i] = name; });
+      chipStacksCtrl.updateChipStacks({}, seatPlayerMap);
     };
   });
 
