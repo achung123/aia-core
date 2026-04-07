@@ -1,5 +1,6 @@
 import { fetchSessions, fetchHands } from '../api/client.js';
-import { loadSession, createSeatLabels, computeSeatPositions, updateSeatLabelPositions } from '../scenes/tableGeometry.js';
+import { initScene } from '../scenes/table.js';
+import { addPokerTable, computeSeatPositions, createSeatLabels, loadSession, updateSeatLabelPositions } from '../scenes/tableGeometry.js';
 
 export function renderPlaybackView(container) {
   container.innerHTML = `
@@ -15,6 +16,19 @@ export function renderPlaybackView(container) {
       </div>
     </div>
   `;
+
+  const canvas = container.querySelector('#three-canvas');
+  const { renderer, scene, camera } = initScene(canvas);
+  addPokerTable(scene);
+  const seatPositions = computeSeatPositions();
+  const canvasArea = container.querySelector('#canvas-area');
+  const labels = createSeatLabels(canvasArea);
+  updateSeatLabelPositions(labels, seatPositions, camera, renderer);
+
+  window.__onSessionLoaded = ({ playerNames }) => {
+    loadSession(labels, playerNames);
+    updateSeatLabelPositions(labels, seatPositions, camera, renderer);
+  };
 
   loadSessionList();
 }
@@ -32,15 +46,25 @@ async function loadSessionList() {
       const row = document.createElement('div');
       row.className = 'session-row';
       row.style.cssText = 'padding:8px;cursor:pointer;color:#ddd;border-bottom:1px solid #333;';
-      row.innerHTML = `
-        <div style="font-weight:600;">${s.game_date || s.date || 'Unknown date'}</div>
-        <div style="font-size:11px;color:#999;">${s.hand_count ?? '?'} hands · ${(s.players || []).length} players</div>
-      `;
+      const nameEl = document.createElement('div');
+      nameEl.style.fontWeight = '600';
+      nameEl.textContent = s.game_date || s.date || 'Unknown date';
+
+      const infoEl = document.createElement('div');
+      infoEl.style.cssText = 'font-size:11px;color:#999;';
+      infoEl.textContent = `${s.hand_count ?? '?'} hands · ${s.player_count ?? '?'} players`;
+
+      row.appendChild(nameEl);
+      row.appendChild(infoEl);
       row.addEventListener('click', () => loadSession_(s));
       list.appendChild(row);
     });
   } catch (err) {
-    list.innerHTML = `<p style="color:#f55;">Error: ${err.message}</p>`;
+    const p = document.createElement('p');
+    p.style.color = '#f55';
+    p.textContent = `Error: ${err.message}`;
+    list.innerHTML = '';
+    list.appendChild(p);
   }
 }
 
