@@ -73,6 +73,9 @@ export function createSessionScrubber(container, handCount, onChange) {
     }
   });
 
+  // Fire onChange with initial state
+  updateLabel();
+
   return {
     getIndex: () => parseInt(range.value, 10),
     setIndex: (i) => { range.value = Math.max(1, Math.min(handCount, i)); updateLabel(); },
