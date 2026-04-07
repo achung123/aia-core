@@ -48,5 +48,8 @@ export function initScene(canvasElement) {
     window.removeEventListener('resize', onResize);
   }
 
+  // Self-heal initial size in case canvas wasn't laid out yet
+  onResize();
+
   return { renderer, scene, camera, dispose };
 }

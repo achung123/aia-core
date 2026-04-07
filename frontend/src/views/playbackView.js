@@ -18,17 +18,19 @@ export function renderPlaybackView(container) {
   `;
 
   const canvas = container.querySelector('#three-canvas');
-  const { renderer, scene, camera } = initScene(canvas);
-  addPokerTable(scene);
-  const seatPositions = computeSeatPositions();
-  const canvasArea = container.querySelector('#canvas-area');
-  const labels = createSeatLabels(canvasArea);
-  updateSeatLabelPositions(labels, seatPositions, camera, renderer);
-
-  window.__onSessionLoaded = ({ playerNames }) => {
-    loadSession(labels, playerNames);
+  requestAnimationFrame(() => {
+    const { renderer, scene, camera, dispose } = initScene(canvas);
+    addPokerTable(scene);
+    const seatPositions = computeSeatPositions();
+    const canvasArea = container.querySelector('#canvas-area');
+    const labels = createSeatLabels(canvasArea);
     updateSeatLabelPositions(labels, seatPositions, camera, renderer);
-  };
+
+    window.__onSessionLoaded = ({ playerNames }) => {
+      loadSession(labels, playerNames);
+      updateSeatLabelPositions(labels, seatPositions, camera, renderer);
+    };
+  });
 
   loadSessionList();
 }
