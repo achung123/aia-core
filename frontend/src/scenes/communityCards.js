@@ -13,26 +13,23 @@ function cardPosition(slotIndex) {
   };
 }
 
-function animateCard(card, targetPos, duration, onComplete) {
-  const startPos = {
-    x: card.position.x,
-    y: card.position.y,
-    z: card.position.z,
-  };
+function animateCard(mesh, targetPos, duration, onComplete) {
+  let cancelled = false;
+  const startPos = mesh.position.clone();
   const startTime = performance.now();
 
   function step(now) {
+    if (cancelled) return;
     const t = Math.min((now - startTime) / duration, 1);
-    card.position.x = startPos.x + (targetPos.x - startPos.x) * t;
-    card.position.y = startPos.y + (targetPos.y - startPos.y) * t;
-    card.position.z = startPos.z + (targetPos.z - startPos.z) * t;
+    mesh.position.lerpVectors(startPos, targetPos, t);
     if (t < 1) {
       requestAnimationFrame(step);
     } else {
-      if (onComplete) onComplete();
+      onComplete && onComplete();
     }
   }
   requestAnimationFrame(step);
+  return () => { cancelled = true; };
 }
 
 function disposeMesh(mesh) {
@@ -55,6 +52,8 @@ export function createCommunityCards(scene, handData) {
 
   const cards = [null, null, null, null, null];
   const visibleSlots = new Set();
+  const inflightRemovals = new Set();
+  const cancelHandles = {};
 
   function slotCardData(slotIndex) {
     if (slotIndex <= 2) {
@@ -83,7 +82,7 @@ export function createCommunityCards(scene, handData) {
     scene.add(mesh);
     cards[slotIndex] = mesh;
     visibleSlots.add(slotIndex);
-    animateCard(mesh, target, ANIM_DURATION, null);
+    cancelHandles[slotIndex] = animateCard(mesh, target, ANIM_DURATION, null);
   }
 
   function removeCard(slotIndex) {
@@ -94,8 +93,12 @@ export function createCommunityCards(scene, handData) {
     cards[slotIndex] = null;
     visibleSlots.delete(slotIndex);
 
+    if (cancelHandles[slotIndex]) { cancelHandles[slotIndex](); cancelHandles[slotIndex] = null; }
+    inflightRemovals.add(mesh);
+
     const stagingPos = { x: mesh.position.x, y: mesh.position.y, z: OFF_TABLE_Z };
-    animateCard(mesh, stagingPos, ANIM_DURATION, () => {
+    cancelHandles[slotIndex] = animateCard(mesh, stagingPos, ANIM_DURATION, () => {
+      inflightRemovals.delete(mesh);
       scene.remove(mesh);
       disposeMesh(mesh);
     });
@@ -117,6 +120,7 @@ export function createCommunityCards(scene, handData) {
   }
 
   function dispose() {
+    Object.keys(cancelHandles).forEach(k => { if (cancelHandles[k]) cancelHandles[k](); });
     for (let i = 0; i < 5; i++) {
       const mesh = cards[i];
       if (mesh) {
@@ -125,6 +129,11 @@ export function createCommunityCards(scene, handData) {
         cards[i] = null;
       }
     }
+    inflightRemovals.forEach(mesh => {
+      scene.remove(mesh);
+      disposeMesh(mesh);
+    });
+    inflightRemovals.clear();
     visibleSlots.clear();
   }
 
