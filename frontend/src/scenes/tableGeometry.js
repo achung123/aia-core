@@ -45,6 +45,11 @@ export function updateSeatLabelPositions(labels, seatPositions, camera, renderer
 
   seatPositions.forEach((pos, i) => {
     const projected = pos.clone().project(camera);
+    if (projected.z > 1) {
+      labels[i].style.display = 'none';
+      return;
+    }
+    labels[i].style.display = '';
     const x = (projected.x * 0.5 + 0.5) * width;
     const y = (1 - (projected.y * 0.5 + 0.5)) * height;
     labels[i].style.left = `${x}px`;
