@@ -105,11 +105,12 @@ export function createHoleCards(scene, seatPositions) {
   }
 
   function addFoldSprite(seatIndex) {
+    const data = seatData.get(seatIndex);
+    if (!data) return;
     const seatPos = seatPositions[seatIndex];
     const sprite = createFoldSprite();
     sprite.position.set(seatPos.x, seatPos.y + 0.6, seatPos.z);
     scene.add(sprite);
-    const data = seatData.get(seatIndex);
     data.sprite = sprite;
   }
 
@@ -163,7 +164,12 @@ export function createHoleCards(scene, seatPositions) {
         // AC3: Fold dimming + FOLD sprite
         if (playerHand && playerHand.result === 'fold') {
           const foldIdx = seatIndex;
-          setTimeout(() => { dimCards(foldIdx); addFoldSprite(foldIdx); }, 350);
+          const foldTimerId = setTimeout(() => {
+            winnerGlowTimers.delete(foldTimerId);
+            dimCards(foldIdx);
+            addFoldSprite(foldIdx);
+          }, 350);
+          winnerGlowTimers.add(foldTimerId);
         }
 
         // AC4: Winner glow — apply after flip animation completes (300ms)
@@ -179,6 +185,8 @@ export function createHoleCards(scene, seatPositions) {
      * Scrub back to Pre-Flop: restore face-down placeholder cards.
      */
     goToPreFlop() {
+      winnerGlowTimers.forEach(id => clearTimeout(id));
+      winnerGlowTimers.clear();
       for (const [seatIndex, data] of seatData) {
         removeSprite(seatIndex);
         disposeCards(seatIndex);
