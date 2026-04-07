@@ -56,8 +56,8 @@ try {
 
 ### [MEDIUM] `onSuccess()` fires before supplementary PATCH calls complete
 
-**File:** `frontend/src/components/handRecordForm.js`  
-**Line(s):** 352–362  
+**File:** `frontend/src/components/handRecordForm.js`
+**Line(s):** 352–362
 **Category:** design
 
 **Problem:**
@@ -93,8 +93,8 @@ Await the PATCH calls before invoking `onSuccess()`, or — if early notificatio
 
 ### [MEDIUM] No null/callable guard on `onSuccess` before invocation
 
-**File:** `frontend/src/components/handRecordForm.js`  
-**Line(s):** 352  
+**File:** `frontend/src/components/handRecordForm.js`
+**Line(s):** 352
 **Category:** correctness
 
 **Problem:**
@@ -118,8 +118,8 @@ if (typeof onSuccess === 'function') {
 
 ### [LOW] `profit_loss` has no client-side bounds check
 
-**File:** `frontend/src/components/handRecordForm.js`  
-**Line(s):** 323–325  
+**File:** `frontend/src/components/handRecordForm.js`
+**Line(s):** 323–325
 **Category:** correctness
 
 **Problem:**

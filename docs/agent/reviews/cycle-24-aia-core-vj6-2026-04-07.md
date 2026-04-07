@@ -3,7 +3,7 @@
 ## Task
 **aia-core-vj6** — Build data interface: hand edit/correction form
 
-**File reviewed:** `frontend/src/components/handEditForm.js`  
+**File reviewed:** `frontend/src/components/handEditForm.js`
 **Supporting files read:** `frontend/src/api/client.js`, `frontend/src/components/handRecordForm.js`, `src/pydantic_models/app_models.py`, `src/app/routes/hands.py`
 
 ---
@@ -30,7 +30,7 @@
 
 **File:** `frontend/src/components/handEditForm.js` — lines 362–382
 
-**Description:**  
+**Description:**
 The form renders fully interactive `<select>` (result) and `<input type="number">` (profit_loss) fields for every player row, pre-populated with the current database values. When the user edits them and clicks Save, those changes are folded into the `updatedHandData` object passed to `onSave`, but they are **never sent to the backend**. `updateHolecards` only accepts `card_1` and `card_2` (see `HoleCardsUpdate` in `app_models.py`), and there is no separate PATCH for result/profit_loss.
 
 The consequence: the UI briefly reflects the user's change (via the `onSave` callback), but on the next data fetch the original values return. This is silent, unsalvageable data loss with no error shown to the user.
@@ -44,8 +44,8 @@ const profitLoss = Number.isNaN(profitRaw) ? orig.profit_loss : profitRaw;
 return { ...orig, card_1: card1, card_2: card2, result, profit_loss: profitLoss };
 ```
 
-**Fix options:**  
-a) Add a PATCH endpoint for result/profit_loss and call it when those fields change, OR  
+**Fix options:**
+a) Add a PATCH endpoint for result/profit_loss and call it when those fields change, OR
 b) Make the result/profit_loss fields `readonly` and add a visible "read-only" label so users aren't misled.
 
 ---
@@ -54,7 +54,7 @@ b) Make the result/profit_loss fields `readonly` and add a visible "read-only" l
 
 **File:** `frontend/src/api/client.js` — lines 64–68 (called from `handEditForm.js` line ~363)
 
-**Description:**  
+**Description:**
 ```js
 export function updateHolecards(gameId, handNumber, playerName, data) {
   return request(`/games/${gameId}/hands/${handNumber}/players/${playerName}`, {
@@ -82,7 +82,7 @@ return request(
 
 **File:** `frontend/src/components/handEditForm.js` — lines 383–388
 
-**Description:**  
+**Description:**
 After all PATCH calls succeed, `saveBtn` and `cancelBtn` are never re-enabled before the `onSave` call. The inner try/catch isolates the `onSave` error (correct), but if `onSave` throws and the error is only logged, the `dispose()` path is never taken and the form is left rendered with both buttons permanently disabled — the user cannot retry, cancel, or escape the form without a full page reload.
 
 ```js
@@ -106,7 +106,7 @@ try { onSave(updatedHandData); } catch (cbErr) {
 
 **File:** `frontend/src/components/handEditForm.js` — lines 398–403
 
-**Description:**  
+**Description:**
 `createHandEditForm` returns `{ dispose() { ... } }` to let the caller remove the wrapper element, but the form itself never calls `dispose()` after a successful save. The `onSave` callback is the only point where the caller can trigger removal. If the callback's author doesn't know to call `dispose()`, the edit form persists in the DOM alongside whatever fresh UI `onSave` renders — creating a duplicate view.
 
 This is a leaky API contract: the responsibility of cleaning up the form should not lie entirely with an external callback.
@@ -123,7 +123,7 @@ This is a leaky API contract: the responsibility of cleaning up the form should 
 
 **File:** `frontend/src/components/handEditForm.js` — lines 89–93
 
-**Description:**  
+**Description:**
 The `.card-field-error` spans are unhidden dynamically when errors are set, but they have no `aria-live="polite"` (or `role="alert"`) attribute. Screen reader users will not be notified when format or duplicate errors appear on blur or on submit.
 
 ---
@@ -132,7 +132,7 @@ The `.card-field-error` spans are unhidden dynamically when errors are set, but 
 
 **File:** `frontend/src/components/handEditForm.js` — lines 97–98
 
-**Description:**  
+**Description:**
 ```js
 const slug = toFieldId(playerHand.player_name);  // /[^a-zA-Z0-9]/ → '_'
 const idBase = `edit-h${handNumber}-${slug}`;
@@ -146,7 +146,7 @@ const idBase = `edit-h${handNumber}-${slug}`;
 
 **File:** `frontend/src/components/handEditForm.js` — line 147
 
-**Description:**  
+**Description:**
 HTML `step` is a browser UI hint; a user can still type `1.234567`. `parseFloat('1.234567')` succeeds and the full-precision value is sent to the backend as a float. The database schema accepts float, so no crash occurs, but the value persists with unintended precision. A `Math.round(...* 100) / 100` before serialization would align with poker's two-decimal-place convention.
 
 ---

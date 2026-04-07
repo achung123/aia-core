@@ -76,7 +76,7 @@ _None._
 ### MEDIUM
 
 #### M1 — `placeCards` unchecked `data` dereference (pre-existing, not introduced by this commit)
-**File:** `frontend/src/scenes/holeCards.js` — line 82  
+**File:** `frontend/src/scenes/holeCards.js` — line 82
 **Code:**
 ```js
 function placeCards(seatIndex, rank0, suit0, rank1, suit1, faceUp) {
@@ -91,7 +91,7 @@ function placeCards(seatIndex, rank0, suit0, rank1, suit1, faceUp) {
 ### LOW
 
 #### L1 — `seatPositions[seatIndex]` not null-guarded in `addFoldSprite` (pre-existing, consistent with rest of file)
-**File:** `frontend/src/scenes/holeCards.js` — line 110  
+**File:** `frontend/src/scenes/holeCards.js` — line 110
 `seatPositions[seatIndex]` is accessed without verifying the index is in range. This is consistent with the identical pattern in `placeCards` (line 63) and carries the same low practical risk (seat indices are controlled by `initHand`). Flagged for awareness; not a regression.
 
 ---

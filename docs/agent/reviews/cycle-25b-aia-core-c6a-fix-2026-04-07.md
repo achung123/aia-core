@@ -1,10 +1,10 @@
 # Code Review Report — Cycle 25b Fix Verification
 
-**Date:** 2026-04-07  
-**Reviewer:** Scott  
-**Scope:** Fix verification for `aia-core-d3c` — re-review of `frontend/README.md` deployment section  
-**Parent task:** `aia-core-c6a` (Write frontend README with dev setup and deployment guide)  
-**Fix task:** `aia-core-d3c` (Fix: README deployment guide omits `@app.get('/')` conflict with StaticFiles)  
+**Date:** 2026-04-07
+**Reviewer:** Scott
+**Scope:** Fix verification for `aia-core-d3c` — re-review of `frontend/README.md` deployment section
+**Parent task:** `aia-core-c6a` (Write frontend README with dev setup and deployment guide)
+**Fix task:** `aia-core-d3c` (Fix: README deployment guide omits `@app.get('/')` conflict with StaticFiles)
 **Target file:** `frontend/README.md` (lines 95–145)
 
 ---
@@ -62,14 +62,14 @@ _None._
 
 ### LOW
 
-**L-1 — Snippet function name diverges from production code**  
-File: `frontend/README.md`, line 122  
-The Option B snippet defines `def root()` while the current `src/app/main.py` uses `def home()`. A developer doing a search-and-replace guided by the snippet would look for `root` and not find it.  
+**L-1 — Snippet function name diverges from production code**
+File: `frontend/README.md`, line 122
+The Option B snippet defines `def root()` while the current `src/app/main.py` uses `def home()`. A developer doing a search-and-replace guided by the snippet would look for `root` and not find it.
 Suggestion: Use `def home()` in the snippet to match the actual symbol, or add a comment noting the name is illustrative.
 
-**L-2 — Snippet welcome message diverges from production code**  
-File: `frontend/README.md`, line 123  
-Option B returns `{"message": "All In Analytics API"}` while `main.py` returns `{'message': 'Welcome to the All In Analytics Core Backend!'}`. The divergence is harmless (it is a simplified example) but could confuse a developer trying to match the snippet to the file.  
+**L-2 — Snippet welcome message diverges from production code**
+File: `frontend/README.md`, line 123
+Option B returns `{"message": "All In Analytics API"}` while `main.py` returns `{'message': 'Welcome to the All In Analytics Core Backend!'}`. The divergence is harmless (it is a simplified example) but could confuse a developer trying to match the snippet to the file.
 Suggestion: Either match the production string or add a `# rename/update message as needed` comment.
 
 ---

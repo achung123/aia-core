@@ -1,7 +1,7 @@
 # Code Review — cycle-19b · aia-core-5g9 · 2026-04-07
 
-**Reviewer:** Scott  
-**Target:** `frontend/src/views/dataView.js` — stale-check fix for `aia-core-5g9`  
+**Reviewer:** Scott
+**Target:** `frontend/src/views/dataView.js` — stale-check fix for `aia-core-5g9`
 **Scope:** Spot-check post-fix correctness; full pass for new CRITICAL/HIGH regressions
 
 ---
@@ -28,8 +28,8 @@ The guard fires after `loadingRow.remove()`. Removing the loading row before the
 
 ### HIGH — H-1: `catch` block is missing a stale check
 
-**File:** `frontend/src/views/dataView.js`  
-**Lines:** 143–155  
+**File:** `frontend/src/views/dataView.js`
+**Lines:** 143–155
 
 ```js
 } catch (err) {
@@ -49,10 +49,10 @@ The guard fires after `loadingRow.remove()`. Removing the loading row before the
 
 **Scenario that reproduces the bug:**
 
-1. User clicks session A → `expandedSessionId = A`, fetch A begins.  
-2. User clicks session B → A's loading row removed, `expandedSessionId = B`, fetch B begins.  
-3. Fetch A throws → `loadingRow.remove()` no-op, then error row is inserted after **A's** `<tr>` in the DOM (A's row is still present as a session row), and `expandedSessionId` is set to `null`, silently discarding B's expanded state.  
-4. If fetch B later completes successfully, B's detail row is inserted → the DOM now contains two `.hand-details-row` elements simultaneously.  
+1. User clicks session A → `expandedSessionId = A`, fetch A begins.
+2. User clicks session B → A's loading row removed, `expandedSessionId = B`, fetch B begins.
+3. Fetch A throws → `loadingRow.remove()` no-op, then error row is inserted after **A's** `<tr>` in the DOM (A's row is still present as a session row), and `expandedSessionId` is set to `null`, silently discarding B's expanded state.
+4. If fetch B later completes successfully, B's detail row is inserted → the DOM now contains two `.hand-details-row` elements simultaneously.
 5. The next click on B queries `tbody.querySelector('.hand-details-row')`, finds the **error row under A** first, removes it, and then adds a second loading row on top of the existing detail row — visually broken.
 
 **Fix:** Mirror the success-path stale guard:
@@ -70,8 +70,8 @@ The guard fires after `loadingRow.remove()`. Removing the loading row before the
 
 ### LOW — L-1: Expandable rows have no keyboard support
 
-**File:** `frontend/src/views/dataView.js`  
-**Lines:** 169–172  
+**File:** `frontend/src/views/dataView.js`
+**Lines:** 169–172
 
 ```js
 tr.style.cursor = 'pointer';

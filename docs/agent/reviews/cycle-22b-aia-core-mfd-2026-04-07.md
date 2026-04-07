@@ -1,8 +1,8 @@
 # Code Review — Cycle 22b · aia-core-mfd · 2026-04-07
 
-**Reviewer:** Scott  
-**Target:** `frontend/src/views/playbackView.js` — focused re-review of the `activeScrubber` dispose fix  
-**Scope:** Verify five checklist items; flag any new CRITICAL or HIGH issues  
+**Reviewer:** Scott
+**Target:** `frontend/src/views/playbackView.js` — focused re-review of the `activeScrubber` dispose fix
+**Scope:** Verify five checklist items; flag any new CRITICAL or HIGH issues
 **Companion file reviewed:** `frontend/src/components/sessionScrubber.js`
 
 ---
@@ -23,7 +23,7 @@
 
 ### [HIGH] H-01 — Zero-hands guard fires before dispose; stale scrubber leaks on empty sessions
 
-**File:** `frontend/src/views/playbackView.js`  
+**File:** `frontend/src/views/playbackView.js`
 **Lines:** 54–62
 
 ```js
@@ -41,8 +41,8 @@ activeScrubber = createSessionScrubber(…);
 
 **Impact:** If the user loads a non-empty session (scrubber A is created), then loads a second session that has zero hands, the function returns at line 54. `activeScrubber.dispose()` is never called, so:
 
-1. `scrubberA`'s DOM wrapper (`<div class="session-scrubber">`) remains visible in `#scrubber-container`, showing the previous session's hand count and range state.  
-2. `activeScrubber` still references `scrubberA`; a third session load will correctly dispose it, but only then — so the leak persists for the entire zero-hand-session view.  
+1. `scrubberA`'s DOM wrapper (`<div class="session-scrubber">`) remains visible in `#scrubber-container`, showing the previous session's hand count and range state.
+2. `activeScrubber` still references `scrubberA`; a third session load will correctly dispose it, but only then — so the leak persists for the entire zero-hand-session view.
 3. `scrubberA`'s three event listeners (`input`, `click` × 2) remain active on orphaned DOM nodes.
 
 This is a visible UI regression introduced by ordering the guard above the dispose block.
@@ -67,8 +67,8 @@ activeScrubber = createSessionScrubber(scrubberContainer, hands.length, …);
 
 ### [MEDIUM] M-01 — `scrubberContainer.innerHTML = ''` is redundant after `dispose()`
 
-**File:** `frontend/src/views/playbackView.js` L61  
-**Context:** `dispose()` in `sessionScrubber.js` L82 is implemented as `wrapper.remove()`, which immediately detaches the wrapper element from the DOM.  Calling `innerHTML = ''` immediately after is harmless but unnecessary noise; it would only be needed if `dispose()` did not remove the DOM node.  
+**File:** `frontend/src/views/playbackView.js` L61
+**Context:** `dispose()` in `sessionScrubber.js` L82 is implemented as `wrapper.remove()`, which immediately detaches the wrapper element from the DOM.  Calling `innerHTML = ''` immediately after is harmless but unnecessary noise; it would only be needed if `dispose()` did not remove the DOM node.
 **Recommendation:** Either document why the belt-and-suspenders clear is kept (e.g., "guards against future scrubber implementations that skip DOM removal"), or remove the line and rely solely on `dispose()`.  Not a blocking concern.
 
 ---
@@ -86,7 +86,7 @@ activeScrubber = createSessionScrubber(scrubberContainer, hands.length, …);
 
 ## Commit Guidance
 
-Zero CRITICAL findings; one HIGH finding that must be addressed before this fix is considered complete.  
+Zero CRITICAL findings; one HIGH finding that must be addressed before this fix is considered complete.
 **Do not commit as-is.** Resolve H-01 (reorder the guard below the dispose block), rerun tests, then re-review.
 
 ---

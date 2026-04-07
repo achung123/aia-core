@@ -1,11 +1,11 @@
 # Code Review Report — Cycle 10
 
-**Task:** aia-core-bpn — Build session list panel and session loading flow  
-**Jean Task:** T-009 (aia-frontend-002)  
-**Stories:** S-3.1, S-3.2  
-**Reviewer:** Scott  
-**Date:** 2026-04-06  
-**Cycle:** 10  
+**Task:** aia-core-bpn — Build session list panel and session loading flow
+**Jean Task:** T-009 (aia-frontend-002)
+**Stories:** S-3.1, S-3.2
+**Reviewer:** Scott
+**Date:** 2026-04-06
+**Cycle:** 10
 **Commit:** 995fbf2
 
 ---
@@ -39,7 +39,7 @@
 
 #### C-1 — AC5: `table.loadSession(playerNames)` not called; scrubber not initialized
 
-**File:** [frontend/src/views/playbackView.js](../../frontend/src/views/playbackView.js#L72-L76)  
+**File:** [frontend/src/views/playbackView.js](../../frontend/src/views/playbackView.js#L72-L76)
 **Lines:** 72–76
 
 ```js
@@ -66,7 +66,7 @@ The beads task description itself restates this: _"On success: table.loadSession
 
 #### H-1 — AC2 Bug: wrong field name; player count always 0
 
-**File:** [frontend/src/views/playbackView.js](../../frontend/src/views/playbackView.js#L39)  
+**File:** [frontend/src/views/playbackView.js](../../frontend/src/views/playbackView.js#L39)
 **Line:** 39
 
 ```js
@@ -84,7 +84,7 @@ ${s.player_count ?? '?'} players
 
 #### H-2 — XSS: `err.message` injected via `innerHTML` in session list error handler
 
-**File:** [frontend/src/views/playbackView.js](../../frontend/src/views/playbackView.js#L47)  
+**File:** [frontend/src/views/playbackView.js](../../frontend/src/views/playbackView.js#L47)
 **Line:** 47
 
 ```js
@@ -114,7 +114,7 @@ list.appendChild(p);
 
 #### H-3 — XSS: API-sourced string fields interpolated via `innerHTML` in session row
 
-**File:** [frontend/src/views/playbackView.js](../../frontend/src/views/playbackView.js#L35-L40)  
+**File:** [frontend/src/views/playbackView.js](../../frontend/src/views/playbackView.js#L35-L40)
 **Lines:** 35–40
 
 ```js
@@ -148,7 +148,7 @@ row.appendChild(metaDiv);
 
 #### M-1 — Race condition: no AbortController on concurrent session clicks
 
-**File:** [frontend/src/views/playbackView.js](../../frontend/src/views/playbackView.js#L51-L81)  
+**File:** [frontend/src/views/playbackView.js](../../frontend/src/views/playbackView.js#L51-L81)
 **Lines:** 51–81
 
 `loadSession_` is invoked directly by click event listeners with no guard. If a user clicks session A then immediately clicks session B, both `fetchHands` calls are in flight simultaneously. Whichever resolves last will determine the final state, which may be session A even though session B was clicked most recently. The spinner will also be hidden after the first resolution, misrepresenting loading state.
@@ -182,7 +182,7 @@ async function loadSession_(session) {
 
 #### L-1 — All four imported tableGeometry functions are unused
 
-**File:** [frontend/src/views/playbackView.js](../../frontend/src/views/playbackView.js#L2)  
+**File:** [frontend/src/views/playbackView.js](../../frontend/src/views/playbackView.js#L2)
 **Line:** 2
 
 ```js
@@ -197,7 +197,7 @@ None of the four symbols are referenced anywhere in the module body. `loadSessio
 
 #### L-2 — Session list fetch error does not use the `#error-banner` element
 
-**File:** [frontend/src/views/playbackView.js](../../frontend/src/views/playbackView.js#L46-L48)  
+**File:** [frontend/src/views/playbackView.js](../../frontend/src/views/playbackView.js#L46-L48)
 **Lines:** 46–48
 
 ```js

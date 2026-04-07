@@ -1,8 +1,8 @@
 # Code Review Report — cycle-22c · aia-core-mfd · 2026-04-07
 
-**Reviewer:** Scott  
-**Target:** `frontend/src/views/playbackView.js` — `window.__onSessionLoaded` handler  
-**Cycle:** 22c (spot-check after dispose-before-guard fix)  
+**Reviewer:** Scott
+**Target:** `frontend/src/views/playbackView.js` — `window.__onSessionLoaded` handler
+**Cycle:** 22c (spot-check after dispose-before-guard fix)
 **Date:** 2026-04-07
 
 ---
@@ -32,7 +32,7 @@ Dispose and DOM clear both occur unconditionally before the early-return guard. 
 
 ### MEDIUM — Global `window` communication channel
 
-**File:** `frontend/src/views/playbackView.js`  
+**File:** `frontend/src/views/playbackView.js`
 **Lines:** 48, 135–136
 
 `renderPlaybackView` writes to `window.__onSessionLoaded` and `loadSession_` reads from it. This couples two independent module scopes through the global namespace rather than through a closure, callback argument, or event bus. If `renderPlaybackView` is ever called for two different containers (e.g., split-view or tab-based navigation), the second call silently overwrites the handler from the first, and the first container becomes unresponsive to session selection without any error.
@@ -43,7 +43,7 @@ Dispose and DOM clear both occur unconditionally before the early-return guard. 
 
 ### MEDIUM — Handler not cleared on view teardown
 
-**File:** `frontend/src/views/playbackView.js`  
+**File:** `frontend/src/views/playbackView.js`
 **Line:** 48
 
 `window.__onSessionLoaded` is assigned inside the `requestAnimationFrame` callback but is never set to `null` when the view is unmounted or replaced. The closure captures `labels`, `activeScrubber`, `chipStacksCtrl`, `renderer`, `scene`, and `container` — all scene resources that are presumably disposed when the view is destroyed. If the view is torn down and a new view is rendered in the same container, a stale `window.__onSessionLoaded` pointing at the old scene's closure remains alive until the next RAF overwrites it. During that window, a click on a session row would invoke the dead closure.
@@ -54,7 +54,7 @@ Dispose and DOM clear both occur unconditionally before the early-return guard. 
 
 ### LOW — Theoretical RAF timing gap
 
-**File:** `frontend/src/views/playbackView.js`  
+**File:** `frontend/src/views/playbackView.js`
 **Lines:** 26, 134–136
 
 `window.__onSessionLoaded` is set inside `requestAnimationFrame`, which fires ~16 ms after `renderPlaybackView` returns. `loadSessionList()` is called immediately after `renderPlaybackView` returns (line 68). If the session list API responded instantly (e.g., from cache) and the user had a pre-selected session, `loadSession_` could theoretically call `window.__onSessionLoaded` before the RAF fires — the guard `if (window.__onSessionLoaded)` in `loadSession_` would silently skip the handler with no visual feedback. In practice network latency makes this unreachable, but it is a latent race.
@@ -65,7 +65,7 @@ Dispose and DOM clear both occur unconditionally before the early-return guard. 
 
 ### LOW — `session` property passed but ignored
 
-**File:** `frontend/src/views/playbackView.js`  
+**File:** `frontend/src/views/playbackView.js`
 **Lines:** 48, 135–136
 
 `loadSession_` calls `window.__onSessionLoaded({ session, hands, playerNames })`, but the handler destructures only `{ hands, playerNames }`. The `session` object (game_id, game_date, etc.) is silently dropped. This is harmless today but creates a misleading contract — callers may assume session metadata is consumed.

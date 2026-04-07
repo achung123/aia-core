@@ -48,7 +48,7 @@
 **Problem:**
 Winner-glow timers are correctly tracked in `winnerGlowTimers` and cancelled in `initHand` / `dispose`. Fold timers are not tracked anywhere. If `dispose()` or `initHand()` is called within 350 ms of `goToShowdown()` (e.g., the user navigates to the next hand quickly), the fold timer fires while `seatData` has already been cleared by `seatData.clear()`.
 
-Inside the callback, `dimCards(foldIdx)` is safe — it has a `if (!data) return` guard.  
+Inside the callback, `dimCards(foldIdx)` is safe — it has a `if (!data) return` guard.
 `addFoldSprite(foldIdx)` is **not** safe: it calls `scene.add(sprite)` unconditionally, then retrieves `data = seatData.get(seatIndex)` (returns `undefined` after `seatData.clear()`), then immediately does `data.sprite = sprite` — throwing:
 
 ```

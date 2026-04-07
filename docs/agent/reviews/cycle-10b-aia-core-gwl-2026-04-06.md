@@ -1,10 +1,10 @@
 # Code Review Report — Cycle 10b
 
-**Task:** aia-core-gwl  
-**Commit:** e169f72  
-**Reviewer:** Scott  
-**Date:** 2026-04-06  
-**Cycle:** 10b (re-review after critical fix)  
+**Task:** aia-core-gwl
+**Commit:** e169f72
+**Reviewer:** Scott
+**Date:** 2026-04-06
+**Cycle:** 10b (re-review after critical fix)
 **Target file:** `frontend/src/views/playbackView.js`
 
 ---
@@ -39,8 +39,8 @@ All four XSS vectors identified in the initial review are correctly resolved. No
 
 ### HIGH
 
-**H1 — Canvas dimensions are zero when `initScene` is called**  
-**File:** `frontend/src/views/playbackView.js` line 22  
+**H1 — Canvas dimensions are zero when `initScene` is called**
+**File:** `frontend/src/views/playbackView.js` line 22
 `initScene(canvas)` is called synchronously immediately after `container.innerHTML = \`...\``. At this point the browser has not performed layout, so `canvas.clientWidth` and `canvas.clientHeight` are both `0`.
 
 In `table.js` `initScene`:
@@ -48,15 +48,15 @@ In `table.js` `initScene`:
 renderer.setSize(canvasElement.clientWidth, canvasElement.clientHeight); // 0×0
 camera.aspect = canvasElement.clientWidth / canvasElement.clientHeight;   // NaN → broken projection matrix
 ```
-The renderer enters a broken state: nothing renders until a `resize` event fires and `onResize()` corrects the dimensions. On a typical page load there is no guaranteed resize event, so the Three.js canvas may remain blank until the user physically resizes the browser window.  
+The renderer enters a broken state: nothing renders until a `resize` event fires and `onResize()` corrects the dimensions. On a typical page load there is no guaranteed resize event, so the Three.js canvas may remain blank until the user physically resizes the browser window.
 **Suggested fix:** Call `renderer.setSize` (and `camera.aspect`) via `requestAnimationFrame` or a `ResizeObserver` on the canvas element after first layout. Alternatively: `const w = canvasArea.clientWidth || 800; const h = canvasArea.clientHeight || 600;` as a safe fallback with a post-layout correction.
 
 ---
 
 ### MEDIUM
 
-**M1 — `dispose` return value from `initScene` is discarded**  
-**File:** `frontend/src/views/playbackView.js` line 22  
+**M1 — `dispose` return value from `initScene` is discarded**
+**File:** `frontend/src/views/playbackView.js` line 22
 ```js
 const { renderer, scene, camera } = initScene(canvas);
 ```
@@ -64,35 +64,35 @@ const { renderer, scene, camera } = initScene(canvas);
 - An active `requestAnimationFrame` loop referencing old WebGL context
 - A `window.resize` event listener holding a closure over the old renderer
 
-Over repeated mounts this accumulates leaked RAF loops and listeners.  
+Over repeated mounts this accumulates leaked RAF loops and listeners.
 **Suggested fix:** Destructure `dispose` and store it on the container or a module-level variable; call it before replacing the view.
 
 ---
 
-**M2 — `window.__onSessionLoaded` is a mutable global**  
-**File:** `frontend/src/views/playbackView.js` lines 29–32  
-The callback is stored on `window`, making it callable by any inline script, browser extension, or injected third-party code. While the data path is safe (values reach `label.textContent`, not `innerHTML`), the global can be overwritten by race conditions if `renderPlaybackView` is ever called twice before the first unmounts. The stale closure would update orphaned label DOM nodes.  
+**M2 — `window.__onSessionLoaded` is a mutable global**
+**File:** `frontend/src/views/playbackView.js` lines 29–32
+The callback is stored on `window`, making it callable by any inline script, browser extension, or injected third-party code. While the data path is safe (values reach `label.textContent`, not `innerHTML`), the global can be overwritten by race conditions if `renderPlaybackView` is ever called twice before the first unmounts. The stale closure would update orphaned label DOM nodes.
 **Suggested fix:** Use a module-level variable or attach the callback to a non-global event bus / custom DOM event.
 
 ---
 
-**M3 — Seat label positions not updated on window resize**  
-**File:** `frontend/src/views/playbackView.js` lines 27, 30  
-`updateSeatLabelPositions` is called once at init and once in `__onSessionLoaded`. The resize handler in `table.js` (`onResize`) updates the renderer size and camera projection matrix but does not call `updateSeatLabelPositions`. After the user resizes the browser, the Three.js scene redraws correctly, but the HTML seat labels remain at stale pixel coordinates — they appear to drift from their 3-D seating positions.  
+**M3 — Seat label positions not updated on window resize**
+**File:** `frontend/src/views/playbackView.js` lines 27, 30
+`updateSeatLabelPositions` is called once at init and once in `__onSessionLoaded`. The resize handler in `table.js` (`onResize`) updates the renderer size and camera projection matrix but does not call `updateSeatLabelPositions`. After the user resizes the browser, the Three.js scene redraws correctly, but the HTML seat labels remain at stale pixel coordinates — they appear to drift from their 3-D seating positions.
 **Suggested fix:** Accept a `onAfterResize` hook in `initScene`, or register a `ResizeObserver` on the canvas in `renderPlaybackView` that calls `updateSeatLabelPositions` after each layout change.
 
 ---
 
 ### LOW
 
-**L1 — `loadSession_` naming convention**  
-**File:** `frontend/src/views/playbackView.js` line 70  
+**L1 — `loadSession_` naming convention**
+**File:** `frontend/src/views/playbackView.js` line 70
 The underscore suffix on `loadSession_` is non-idiomatic JavaScript. It was introduced to avoid collision with the imported `loadSession` from `tableGeometry.js`. A clearer name (`loadHandsForSession`, `onSessionRowClick`) would eliminate ambiguity without a naming hack.
 
 ---
 
-**L2 — `loadSessionList` queries DOM globally instead of using scoped reference**  
-**File:** `frontend/src/views/playbackView.js` line 37  
+**L2 — `loadSessionList` queries DOM globally instead of using scoped reference**
+**File:** `frontend/src/views/playbackView.js` line 37
 ```js
 const list = document.getElementById('session-list');
 ```

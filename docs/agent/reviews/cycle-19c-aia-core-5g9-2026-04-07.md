@@ -1,8 +1,8 @@
 # Code Review Report — Cycle 19c · aia-core-5g9 · 2026-04-07
 
-**Reviewer:** Scott  
-**Target:** `frontend/src/views/dataView.js` — `catch` block inside `handleRowClick`  
-**Scope:** Spot-check — stale-check guard presence and any new CRITICAL / HIGH issues  
+**Reviewer:** Scott
+**Target:** `frontend/src/views/dataView.js` — `catch` block inside `handleRowClick`
+**Scope:** Spot-check — stale-check guard presence and any new CRITICAL / HIGH issues
 **Date:** 2026-04-07
 
 ---
