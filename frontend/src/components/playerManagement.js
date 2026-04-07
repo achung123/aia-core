@@ -1,16 +1,12 @@
-import { fetchLeaderboard, createPlayer } from '../api/client.js';
+import { fetchPlayers, createPlayer } from '../api/client.js';
 
-function buildPlayerRow(playerName, totalHands) {
+function buildPlayerRow(playerName) {
   const tr = document.createElement('tr');
 
   const tdName = document.createElement('td');
   tdName.textContent = playerName;
 
-  const tdHands = document.createElement('td');
-  tdHands.textContent = totalHands;
-
   tr.appendChild(tdName);
-  tr.appendChild(tdHands);
   return tr;
 }
 
@@ -28,7 +24,7 @@ export function createPlayerManagement(container) {
 
   const thead = document.createElement('thead');
   const headerRow = document.createElement('tr');
-  ['Player', 'Total Hands'].forEach(label => {
+  ['Player'].forEach(label => {
     const th = document.createElement('th');
     th.textContent = label;
     headerRow.appendChild(th);
@@ -60,38 +56,35 @@ export function createPlayerManagement(container) {
   nameInput.name = 'playerName';
   form.appendChild(nameInput);
 
-  const submitBtn = document.createElement('button');
-  submitBtn.type = 'submit';
-  submitBtn.textContent = 'Submit';
-  form.appendChild(submitBtn);
-
   const inlineError = document.createElement('p');
   inlineError.className = 'inline-error';
   inlineError.style.color = 'red';
   inlineError.hidden = true;
   form.appendChild(inlineError);
 
+  const submitBtn = document.createElement('button');
+  submitBtn.type = 'submit';
+  submitBtn.textContent = 'Submit';
+  form.appendChild(submitBtn);
+
   formSection.appendChild(form);
   wrapper.appendChild(formSection);
 
   container.appendChild(wrapper);
 
-  // --- Fetch and render leaderboard ---
-  fetchLeaderboard()
-    .then(entries => {
+  // --- Fetch and render players ---
+  fetchPlayers()
+    .then(players => {
       loadingEl.remove();
-      if (!entries || entries.length === 0) {
+      if (!players || players.length === 0) {
         const emptyMsg = document.createElement('p');
         emptyMsg.textContent =
-          'No player data yet. Players appear here after sessions are recorded.';
+          'No players yet. Add a player below.';
         wrapper.insertBefore(emptyMsg, formSection);
         return;
       }
-      entries.forEach(entry => {
-        const row = buildPlayerRow(
-          entry.player_name,
-          entry.hands_played ?? 0,
-        );
+      players.forEach(player => {
+        const row = buildPlayerRow(player.name);
         tbody.appendChild(row);
       });
     })
@@ -121,7 +114,7 @@ export function createPlayerManagement(container) {
     try {
       const newPlayer = await createPlayer({ name });
       const playerName = (newPlayer && newPlayer.name) ? newPlayer.name : name;
-      tbody.appendChild(buildPlayerRow(playerName, 0));
+      tbody.appendChild(buildPlayerRow(playerName));
       nameInput.value = '';
     } catch (err) {
       const status = err.message && err.message.startsWith('HTTP 409')

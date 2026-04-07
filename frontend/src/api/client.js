@@ -29,6 +29,10 @@ export function fetchLeaderboard() {
   return request('/stats/leaderboard');
 }
 
+export function fetchPlayers() {
+  return request('/players');
+}
+
 export function createSession(data) {
   return request('/games', {
     method: 'POST',
