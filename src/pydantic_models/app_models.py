@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date, datetime
 from enum import Enum
 
 from dateutil.parser import parse
@@ -206,3 +207,221 @@ class CommunityErrorResponse(BaseModel):
 
     status: str
     message: str
+
+
+# === Game/Hand/Player Request/Response Models ===
+
+
+class GameSessionCreate(BaseModel):
+    game_date: date
+    player_names: list[str] = Field(..., min_length=1)
+
+
+class GameSessionListItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    game_id: int
+    game_date: date
+    status: str
+    player_count: int
+    hand_count: int
+
+
+class GameSessionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    game_id: int
+    game_date: date
+    status: str
+    created_at: datetime
+    player_names: list[str]
+    hand_count: int
+
+
+class PlayerCreate(BaseModel):
+    name: str
+
+
+class PlayerResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    player_id: int
+    name: str
+    created_at: datetime
+
+
+class PlayerHandEntry(BaseModel):
+    model_config = ConfigDict(use_enum_values=True)
+
+    player_name: str
+    card_1: Card
+    card_2: Card
+    result: str | None = None
+    profit_loss: float | None = None
+
+
+class HandCreate(BaseModel):
+    model_config = ConfigDict(use_enum_values=True)
+
+    flop_1: Card
+    flop_2: Card
+    flop_3: Card
+    turn: Card | None = None
+    river: Card | None = None
+    player_entries: list[PlayerHandEntry] = Field(..., min_length=1)
+
+
+class PlayerHandResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    player_hand_id: int
+    hand_id: int
+    player_id: int
+    player_name: str
+    card_1: str
+    card_2: str
+    result: str | None = None
+    profit_loss: float | None = None
+
+
+class HandResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    hand_id: int
+    game_id: int
+    hand_number: int
+    flop_1: str
+    flop_2: str
+    flop_3: str
+    turn: str | None = None
+    river: str | None = None
+    source_upload_id: int | None = None
+    created_at: datetime
+    player_hands: list[PlayerHandResponse] = []
+
+
+class HandResultUpdate(BaseModel):
+    result: str
+    profit_loss: float
+
+
+class PlayerResultEntry(BaseModel):
+    player_name: str
+    result: str
+    profit_loss: float
+
+
+class CommunityCardsUpdate(BaseModel):
+    model_config = ConfigDict(use_enum_values=True)
+
+    flop_1: Card
+    flop_2: Card
+    flop_3: Card
+    turn: Card | None = None
+    river: Card | None = None
+
+
+class HoleCardsUpdate(BaseModel):
+    model_config = ConfigDict(use_enum_values=True)
+
+    card_1: Card
+    card_2: Card
+
+
+class PlayerStatsResponse(BaseModel):
+    player_name: str
+    total_hands_played: int
+    hands_won: int
+    hands_lost: int
+    hands_folded: int
+    win_rate: float
+    total_profit_loss: float
+    avg_profit_loss_per_hand: float
+    avg_profit_loss_per_session: float
+    flop_pct: float
+    turn_pct: float
+    river_pct: float
+
+
+class LeaderboardMetric(str, Enum):
+    total_profit_loss = 'total_profit_loss'
+    win_rate = 'win_rate'
+    hands_played = 'hands_played'
+
+
+class LeaderboardEntry(BaseModel):
+    rank: int
+    player_name: str
+    total_profit_loss: float
+    win_rate: float
+    hands_played: int
+
+
+class GameStatsPlayerEntry(BaseModel):
+    player_name: str
+    hands_played: int
+    hands_won: int
+    hands_lost: int
+    hands_folded: int
+    win_rate: float
+    profit_loss: float
+
+
+class GameStatsResponse(BaseModel):
+    game_id: int
+    game_date: date
+    total_hands: int
+    player_stats: list[GameStatsPlayerEntry]
+
+
+class HandSearchResult(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    hand_id: int
+    game_id: int
+    game_date: date
+    hand_number: int
+    flop_1: str
+    flop_2: str
+    flop_3: str
+    turn: str | None = None
+    river: str | None = None
+    created_at: datetime
+    player_hand: PlayerHandResponse
+
+
+class PaginatedHandSearchResponse(BaseModel):
+    total: int
+    page: int
+    per_page: int
+    results: list[HandSearchResult]
+
+
+class ConfirmCommunityCards(BaseModel):
+    model_config = ConfigDict(use_enum_values=True)
+
+    flop_1: Card
+    flop_2: Card
+    flop_3: Card
+    turn: Card | None = None
+    river: Card | None = None
+
+
+class ConfirmPlayerEntry(BaseModel):
+    model_config = ConfigDict(use_enum_values=True)
+
+    player_name: str
+    card_1: Card
+    card_2: Card
+
+
+class ConfirmDetectionRequest(BaseModel):
+    community_cards: ConfirmCommunityCards
+    player_hands: list[ConfirmPlayerEntry] = Field(..., min_length=1)
+
+
+class CSVCommitSummary(BaseModel):
+    games_created: int
+    hands_created: int
+    players_created: int
+    players_matched: int

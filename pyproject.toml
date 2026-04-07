@@ -11,8 +11,10 @@ dependencies = [
     "uvicorn",
     "python-dateutil",
     "sqlalchemy",
+    "alembic",
     "pytz",
     "httpx",
+    "python-multipart>=0.0.22",
 ]
 
 [dependency-groups]

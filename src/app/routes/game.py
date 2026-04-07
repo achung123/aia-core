@@ -3,13 +3,14 @@ from typing import Annotated
 
 import pytz
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 from sqlalchemy.exc import OperationalError
-from app.database.database_models import Game, engine
+from app.database.database_models import Game
 from app.database.database_queries import (
     query_community_with_date_and_hand,
     query_game_with_date,
 )
+from app.database.session import get_db
 from pydantic_models.app_models import (
     CommunityErrorResponse,
     CommunityRequest,
@@ -25,19 +26,10 @@ from .utils import (
 )
 
 router = APIRouter(prefix='/game', tags=['game'])
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-
-def _get_db():
-    db = SessionLocal()
-    try:
-        yield db  # Dependency injection
-    finally:
-        db.close()
 
 
 @router.post('/')
-def create_game(db: Annotated[Session, Depends(_get_db)]):
+def create_game(db: Annotated[Session, Depends(get_db)]):
     """
     Create a new game table
     """
@@ -62,7 +54,7 @@ def create_game(db: Annotated[Session, Depends(_get_db)]):
 
 
 @router.get('/{game_date}')
-def get_game_by_date(game_date: str, db: Annotated[Session, Depends(_get_db)]):
+def get_game_by_date(game_date: str, db: Annotated[Session, Depends(get_db)]):
     """
     Get a game by date
     """
@@ -83,7 +75,7 @@ def push_community(
     game_date: str,
     hand_number: int,
     request: CommunityRequest,
-    db: Annotated[Session, Depends(_get_db)],
+    db: Annotated[Session, Depends(get_db)],
 ):
     # Check if the game exists
     try:
@@ -162,7 +154,7 @@ def push_community(
 
 @router.get('/community/{game_date}/{hand_number}')
 def get_community(
-    game_date: str, hand_number: int, db: Annotated[Session, Depends(_get_db)]
+    game_date: str, hand_number: int, db: Annotated[Session, Depends(get_db)]
 ):
     community_query = query_community_with_date_and_hand(db, game_date, hand_number)
     if not community_query:
