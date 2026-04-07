@@ -142,6 +142,7 @@ async function handleRowClick(session, tr, tbody, columns) {
     tr.insertAdjacentElement('afterend', detailsRow);
   } catch (err) {
     loadingRow.remove();
+    if (expandedSessionId !== session.id) return;
 
     const errorRow = document.createElement('tr');
     errorRow.className = 'hand-details-row';
