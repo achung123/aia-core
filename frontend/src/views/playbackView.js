@@ -48,11 +48,6 @@ export function renderPlaybackView(container) {
     window.__onSessionLoaded = ({ hands, playerNames }) => {
       loadSession(labels, playerNames);
       updateSeatLabelPositions(labels, seatPositions, camera, renderer);
-      const seatPlayerMap = {};
-      playerNames.forEach((name, i) => { seatPlayerMap[i] = name; });
-      chipStacksCtrl.updateChipStacks({}, seatPlayerMap);
-
-      if (!hands.length) return;
 
       if (activeScrubber) {
         activeScrubber.dispose();
@@ -60,6 +55,12 @@ export function renderPlaybackView(container) {
       }
       const scrubberContainer = container.querySelector('#scrubber-container');
       scrubberContainer.innerHTML = '';  // clear any residual DOM
+
+      if (!hands.length) return;
+
+      const seatPlayerMap = {};
+      playerNames.forEach((name, i) => { seatPlayerMap[i] = name; });
+      chipStacksCtrl.updateChipStacks({}, seatPlayerMap);
       activeScrubber = createSessionScrubber(scrubberContainer, hands.length, (handNumber) => {
         const plMap = computeCumulativePL(hands, handNumber - 1);
         chipStacksCtrl.updateChipStacks(plMap);
