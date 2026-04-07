@@ -96,10 +96,36 @@ export ALLOWED_ORIGINS="https://app.example.com,https://www.example.com"
 
 After building the frontend (`npm run build`), mount `frontend/dist/` as a `StaticFiles` directory in FastAPI so the app can serve the SPA from the same process.
 
+> **Warning — remove or relocate `@app.get("/")` before mounting StaticFiles**
+>
+> `src/app/main.py` currently defines `@app.get("/")` (the JSON welcome response).
+> FastAPI resolves explicit route handlers before the `StaticFiles` mount, so that route
+> will be matched on every `GET /` request — meaning every browser page load returns the
+> JSON welcome object instead of `index.html`.
+>
+> Before mounting at `"/"`, either **remove** the welcome route entirely or **move it** to
+> a different prefix (e.g. `/api/`):
+>
+> ```python
+> # src/app/main.py — updated excerpt
+> from fastapi.staticfiles import StaticFiles
+>
+> # Option A: remove the welcome route entirely
+> # (delete or comment out the @app.get("/") handler)
+>
+> # Option B: move it to /api/
+> @app.get("/api/")
+> def root():
+>     return {"message": "All In Analytics API"}
+>
+> # Register all other API routers here, then mount the SPA last:
+> app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="frontend")
+> ```
+
 ```python
 from fastapi.staticfiles import StaticFiles
 
-# After all API routers are registered:
+# After all API routers are registered (and @app.get("/") removed or relocated):
 app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="frontend")
 ```
 
