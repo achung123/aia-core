@@ -342,18 +342,21 @@ export function createHandRecordForm(container, sessionId, playerNames, onSucces
     try {
       const handResp = await createHand(sessionId, postBody);
       const handNumber = handResp.hand_number;
-
-      // PATCH each player's hole cards
-      await Promise.all(
-        playerRows.map(row =>
-          updateHolecards(sessionId, handNumber, row.name, {
-            card_1: parseCard(row.card1Input.value),
-            card_2: parseCard(row.card2Input.value),
-          })
-        )
-      );
-
       onSuccess();
+
+      // Best-effort PATCH hole cards (non-fatal — hand already saved via POST)
+      try {
+        await Promise.all(
+          playerRows.map(row =>
+            updateHolecards(sessionId, handNumber, row.name, {
+              card_1: parseCard(row.card1Input.value),
+              card_2: parseCard(row.card2Input.value),
+            })
+          )
+        );
+      } catch (patchErr) {
+        console.warn('Supplementary PATCH failed (hand already saved):', patchErr);
+      }
     } catch (err) {
       formError.textContent = err.message;
       formError.hidden = false;
