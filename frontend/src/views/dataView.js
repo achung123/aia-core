@@ -76,6 +76,9 @@ async function handleRowClick(session, tr, tbody, columns) {
     const hands = await fetchHands(session.id);
     loadingRow.remove();
 
+    // Stale check — bail if the user changed selection while we were fetching
+    if (expandedSessionId !== session.id) return;
+
     const detailsRow = document.createElement('tr');
     detailsRow.className = 'hand-details-row';
     const detailsTd = document.createElement('td');
