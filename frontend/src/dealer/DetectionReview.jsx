@@ -12,10 +12,11 @@ function formatCard(detectedValue) {
 }
 
 export function DetectionReview({ detections, imageUrl, mode, targetName, onConfirm, onRetake }) {
-  const cards = detections || [];
+  const allCards = detections || [];
+  const maxCards = mode === 'community' ? 5 : 2;
+  const cards = allCards.slice(0, maxCards);
   const expectedMin = mode === 'community' ? 3 : 2;
-  const expectedMax = mode === 'community' ? 5 : 2;
-  const countOk = cards.length >= expectedMin && cards.length <= expectedMax;
+  const countOk = cards.length >= expectedMin;
 
   const [corrections, setCorrections] = useState({});
   const [pickerIndex, setPickerIndex] = useState(null);
