@@ -15,7 +15,19 @@ dependencies = [
     "pytz",
     "httpx",
     "python-multipart",
+    "torch>=2.0.0",
+    "torchvision",
+    "ultralytics",
 ]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
 
 [dependency-groups]
 test = [
