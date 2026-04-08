@@ -12,6 +12,8 @@ from app.database.database_models import Base as LegacyBase
 from app.database.models import Base as ModelsBase, Hand
 from app.database.session import get_db
 from app.main import app
+from app.routes.images import get_card_detector
+from app.services.card_detector import MockCardDetector
 
 DATABASE_URL = 'sqlite:///:memory:'
 engine = create_engine(
@@ -40,6 +42,7 @@ def setup_db():
 @pytest.fixture
 def client():
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_card_detector] = lambda: MockCardDetector()
     yield TestClient(app)
     app.dependency_overrides.clear()
 

@@ -19,7 +19,7 @@ from app.database.models import (
     PlayerHand,
 )
 from app.database.session import get_db
-from app.services.card_detector import CardDetector, MockCardDetector
+from app.services.card_detector import CardDetector, MockCardDetector, YoloCardDetector
 from pydantic_models.app_models import (
     ConfirmDetectionRequest,
     HandResponse,
@@ -37,8 +37,14 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 JPEG_MAGIC = b'\xff\xd8\xff'
 PNG_MAGIC = b'\x89PNG\r\n\x1a\n'
 
+_WEIGHTS_PATH = os.path.join(
+    os.path.dirname(__file__), '..', '..', '..', 'models', 'best.pt'
+)
+
 
 def get_card_detector() -> CardDetector:
+    if os.path.exists(_WEIGHTS_PATH):
+        return YoloCardDetector(_WEIGHTS_PATH)
     return MockCardDetector()
 
 
@@ -165,6 +171,10 @@ def get_detection_results(
                     card_position=r['card_position'],
                     detected_value=r['detected_value'],
                     confidence=r['confidence'],
+                    bbox_x=r.get('bbox_x'),
+                    bbox_y=r.get('bbox_y'),
+                    bbox_width=r.get('bbox_width'),
+                    bbox_height=r.get('bbox_height'),
                 )
                 db.add(detection)
             upload.status = 'detected'

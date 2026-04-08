@@ -39,6 +39,7 @@ def setup_db():
 @pytest.fixture
 def client():
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_card_detector] = lambda: MockCardDetector()
     yield TestClient(app)
     app.dependency_overrides.clear()
 
@@ -329,8 +330,9 @@ class TestCardDetectorDependencyInjection:
         detector = get_card_detector()
         assert isinstance(detector, CardDetector)
 
-    def test_get_card_detector_returns_mock_by_default(self):
-        """Default dependency returns MockCardDetector."""
+    def test_get_card_detector_returns_mock_when_no_weights(self, monkeypatch):
+        """get_card_detector returns MockCardDetector when weights file is missing."""
+        monkeypatch.setattr('app.routes.images._WEIGHTS_PATH', '/nonexistent/best.pt')
         detector = get_card_detector()
         assert isinstance(detector, MockCardDetector)
 
