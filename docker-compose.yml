@@ -26,5 +26,12 @@ services:
       - ./frontend/src:/app/src
       - ./frontend/index.html:/app/index.html
       - ./frontend/public:/app/public
+      - ./frontend/vite.config.js:/app/vite.config.js
     depends_on:
       - backend
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate --url http://frontend:5173
+    depends_on:
+      - frontend
