@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'preact/hooks';
+import { useRef, useState } from 'preact/hooks';
 import { uploadImage, getDetectionResults } from '../api/client.js';
 
 export function CameraCapture({ gameId, targetName, onDetectionResult, onCancel }) {
@@ -13,10 +13,6 @@ export function CameraCapture({ gameId, targetName, onDetectionResult, onCancel 
     }
   }
 
-  useEffect(() => {
-    triggerInput();
-  }, []);
-
   async function handleFileChange(e) {
     const file = e.target.files?.[0];
     if (!file) {
@@ -29,7 +25,7 @@ export function CameraCapture({ gameId, targetName, onDetectionResult, onCancel 
 
     try {
       const upload = await uploadImage(gameId, file);
-      const detections = await getDetectionResults(gameId, upload.id);
+      const detections = await getDetectionResults(gameId, upload.upload_id);
       onDetectionResult(targetName, detections, file);
     } catch (err) {
       setError(err.message || 'Upload failed');
@@ -48,15 +44,17 @@ export function CameraCapture({ gameId, targetName, onDetectionResult, onCancel 
         ref={inputRef}
         type="file"
         accept="image/*"
-        capture="environment"
         style={{ display: 'none' }}
         onChange={handleFileChange}
       />
 
       {!loading && !error && (
         <div style={styles.card}>
-          <p style={styles.text}>Waiting for camera…</p>
-          <button style={styles.cancelButton} onClick={onCancel}>Cancel</button>
+          <p style={styles.text}>Tap to open camera</p>
+          <div style={styles.buttonRow}>
+            <button style={styles.retryButton} onClick={triggerInput}>Open Camera</button>
+            <button style={styles.cancelButton} onClick={onCancel}>Cancel</button>
+          </div>
         </div>
       )}
 
@@ -83,7 +81,10 @@ export function CameraCapture({ gameId, targetName, onDetectionResult, onCancel 
 const styles = {
   overlay: {
     position: 'fixed',
-    inset: 0,
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
