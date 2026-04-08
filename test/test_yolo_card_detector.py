@@ -62,17 +62,14 @@ class TestYoloCardDetector:
         expected = {'As', '2d', '3s', '4h', '5c'}
         # All 5 known cards should be detected
         assert expected.issubset(detected_values), (
-            f'Missing cards: {expected - detected_values}. '
-            f'Detected: {detected_values}'
+            f'Missing cards: {expected - detected_values}. Detected: {detected_values}'
         )
 
     def test_detect_deduplicates_overlapping_boxes(self, detector, test_image):
         """Each unique card value should appear at most once after NMS."""
         results = detector.detect(test_image)
         values = [r['detected_value'] for r in results]
-        assert len(values) == len(set(values)), (
-            f'Duplicate detections found: {values}'
-        )
+        assert len(values) == len(set(values)), f'Duplicate detections found: {values}'
 
     def test_detect_card_positions_are_sequential(self, detector, test_image):
         """Card positions should be card_1, card_2, ... in order of confidence."""
@@ -80,7 +77,9 @@ class TestYoloCardDetector:
         for i, r in enumerate(results):
             assert r['card_position'] == f'card_{i + 1}'
 
-    def test_detect_results_ordered_by_confidence_descending(self, detector, test_image):
+    def test_detect_results_ordered_by_confidence_descending(
+        self, detector, test_image
+    ):
         results = detector.detect(test_image)
         confidences = [r['confidence'] for r in results]
         assert confidences == sorted(confidences, reverse=True)

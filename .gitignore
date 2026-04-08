@@ -5,3 +5,23 @@ __pycache__/
 # Dolt database files (added by bd init)
 .dolt/
 *.db
+
+# Training data (large, not tracked in git)
+/data/
+
+# Uploaded images (runtime artifacts)
+uploads/
+
+# YOLO training run outputs
+runs/
+
+# Model weights — track only curated models, not raw training outputs
+# (add specific model files with: git add -f models/best_closeup.pt)
+models/*
+!models/.gitkeep
+
+# Scratch files
+yolo26n.pt
+start.ps1
+# Windows Zone.Identifier files
+*:Zone.Identifier

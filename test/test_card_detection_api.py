@@ -331,8 +331,13 @@ class TestCardDetectorDependencyInjection:
         assert isinstance(detector, CardDetector)
 
     def test_get_card_detector_returns_mock_when_no_weights(self, monkeypatch):
-        """get_card_detector returns MockCardDetector when weights file is missing."""
-        monkeypatch.setattr('app.routes.images._WEIGHTS_PATH', '/nonexistent/best.pt')
+        """get_card_detector returns MockCardDetector when weights file are missing."""
+        monkeypatch.setattr(
+            'app.routes.images._WEIGHTS_PATH', '/nonexistent/best_closeup.pt'
+        )
+        monkeypatch.setattr(
+            'app.routes.images._WEIGHTS_PATH_FALLBACK', '/nonexistent/best.pt'
+        )
         detector = get_card_detector()
         assert isinstance(detector, MockCardDetector)
 

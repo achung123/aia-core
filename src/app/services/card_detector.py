@@ -51,12 +51,19 @@ class MockCardDetector:
 
 
 class YoloCardDetector:
-    """Card detector using a YOLOv8 model trained on playing cards."""
+    """Card detector using a YOLOv8 model trained on playing cards.
+
+    Uses multi-scale inference to handle images where cards appear at
+    different sizes (close-up photos vs. overhead table shots).
+    """
+
+    _DEFAULT_SCALES: tuple[int, ...] = (480, 640)
 
     def __init__(
         self,
         weights_path: str,
-        confidence_threshold: float = 0.25,
+        confidence_threshold: float = 0.20,
+        scales: tuple[int, ...] | None = None,
     ) -> None:
         if not os.path.exists(weights_path):
             raise FileNotFoundError(f'Model weights not found: {weights_path}')
@@ -64,32 +71,36 @@ class YoloCardDetector:
 
         self._model = YOLO(weights_path)
         self._confidence_threshold = confidence_threshold
+        self._scales = scales or self._DEFAULT_SCALES
 
     def detect(self, image_path: str) -> list[dict]:
         if not os.path.exists(image_path):
             raise FileNotFoundError(f'Image not found: {image_path}')
 
-        results = self._model(
-            image_path, conf=self._confidence_threshold, verbose=False
-        )
-
         raw_detections: list[dict] = []
-        for r in results:
-            for box in r.boxes:
-                cls_id = int(box.cls[0])
-                conf = round(float(box.conf[0]), 4)
-                label = r.names[cls_id]
-                x1, y1, x2, y2 = box.xyxy[0].tolist()
-                raw_detections.append(
-                    {
-                        'detected_value': label,
-                        'confidence': conf,
-                        'bbox_x': round(x1, 2),
-                        'bbox_y': round(y1, 2),
-                        'bbox_width': round(x2 - x1, 2),
-                        'bbox_height': round(y2 - y1, 2),
-                    }
-                )
+        for scale in self._scales:
+            results = self._model(
+                image_path,
+                conf=self._confidence_threshold,
+                imgsz=scale,
+                verbose=False,
+            )
+            for r in results:
+                for box in r.boxes:
+                    cls_id = int(box.cls[0])
+                    conf = round(float(box.conf[0]), 4)
+                    label = r.names[cls_id]
+                    x1, y1, x2, y2 = box.xyxy[0].tolist()
+                    raw_detections.append(
+                        {
+                            'detected_value': label,
+                            'confidence': conf,
+                            'bbox_x': round(x1, 2),
+                            'bbox_y': round(y1, 2),
+                            'bbox_width': round(x2 - x1, 2),
+                            'bbox_height': round(y2 - y1, 2),
+                        }
+                    )
 
         # Deduplicate: keep highest confidence detection per card value
         best_per_card: dict[str, dict] = {}

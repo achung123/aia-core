@@ -37,14 +37,16 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 JPEG_MAGIC = b'\xff\xd8\xff'
 PNG_MAGIC = b'\x89PNG\r\n\x1a\n'
 
-_WEIGHTS_PATH = os.path.join(
-    os.path.dirname(__file__), '..', '..', '..', 'models', 'best.pt'
-)
+_MODELS_DIR = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'models')
+_WEIGHTS_PATH = os.path.join(_MODELS_DIR, 'best_closeup.pt')
+_WEIGHTS_PATH_FALLBACK = os.path.join(_MODELS_DIR, 'best.pt')
 
 
 def get_card_detector() -> CardDetector:
     if os.path.exists(_WEIGHTS_PATH):
         return YoloCardDetector(_WEIGHTS_PATH)
+    if os.path.exists(_WEIGHTS_PATH_FALLBACK):
+        return YoloCardDetector(_WEIGHTS_PATH_FALLBACK)
     return MockCardDetector()
 
 

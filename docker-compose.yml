@@ -11,6 +11,7 @@ services:
       - ./uv.lock:/app/uv.lock
       - ./docker-entrypoint.sh:/app/docker-entrypoint.sh
       - ./scripts:/app/scripts
+      - ./models:/app/models
     environment:
       - PYTHONPATH=/app/src
       - DATABASE_URL=sqlite:///./poker.db
