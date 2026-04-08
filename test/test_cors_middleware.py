@@ -33,6 +33,28 @@ def test_cors_preflight_disallowed_origin():
     assert response.headers.get('access-control-allow-origin') is None
 
 
+@pytest.mark.parametrize(
+    'origin',
+    [
+        'http://192.168.1.42:5173',
+        'http://10.0.0.5:8080',
+        'http://172.16.0.1:3000',
+        'http://127.0.0.1:5173',
+        'https://192.168.0.100:5173',
+    ],
+)
+def test_cors_allows_private_ip_origins(origin):
+    response = client.options(
+        '/',
+        headers={
+            'Origin': origin,
+            'Access-Control-Request-Method': 'GET',
+        },
+    )
+    assert response.headers.get('access-control-allow-origin') == origin
+    assert response.headers.get('access-control-allow-credentials') == 'true'
+
+
 def test_cors_multi_origin_parsing(monkeypatch):
     import app.main as main_module
 
