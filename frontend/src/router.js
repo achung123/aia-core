@@ -1,12 +1,17 @@
 export function initRouter(routes) {
   const app = document.getElementById('app');
   const nav = document.querySelector('nav') || createNav();
+  let cleanup = null;
 
   function navigate() {
     const hash = window.location.hash || '#/playback';
     const render = routes[hash] || routes['#/playback'];
+    if (cleanup) {
+      cleanup();
+      cleanup = null;
+    }
     app.innerHTML = '';
-    render(app);
+    cleanup = render(app) || null;
     // Update active link
     nav.querySelectorAll('a').forEach(a => {
       a.classList.toggle('active', a.getAttribute('href') === hash);
@@ -26,6 +31,7 @@ function createNav() {
   nav.innerHTML = `
     <a href="#/playback">Playback</a>
     <a href="#/data">Data</a>
+    <a href="#/dealer">Dealer</a>
   `;
   document.body.insertBefore(nav, document.body.firstChild);
   return nav;

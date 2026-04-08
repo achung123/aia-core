@@ -98,6 +98,24 @@ export function uploadCsvCommit(file) {
     });
 }
 
+export function uploadImage(gameId, file) {
+  const form = new FormData();
+  form.append('file', file);
+  return fetch(`${BASE_URL}/games/${gameId}/hands/image`, { method: 'POST', body: form })
+    .then(async r => {
+      const body = await r.json();
+      if (!r.ok) {
+        const detail = typeof body.detail === 'object' ? JSON.stringify(body.detail) : (body.detail || `HTTP ${r.status}`);
+        throw new Error(detail);
+      }
+      return body;
+    });
+}
+
+export function getDetectionResults(gameId, uploadId) {
+  return request(`/games/${gameId}/hands/image/${uploadId}`);
+}
+
 export function fetchCsvSchema() {
   return request('/upload/csv/schema');
 }
