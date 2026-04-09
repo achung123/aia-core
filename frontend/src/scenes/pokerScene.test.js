@@ -1,6 +1,27 @@
 /** @vitest-environment happy-dom */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+// Mock OrbitControls
+const mockOrbitControls = {
+  enableDamping: false,
+  enableZoom: false,
+  enableRotate: false,
+  enablePan: false,
+  touches: {},
+  target: null,
+  update: vi.fn(),
+  dispose: vi.fn(),
+  saveState: vi.fn(),
+  reset: vi.fn(),
+};
+const OrbitControlsCtor = vi.fn(function () {
+  Object.assign(this, mockOrbitControls);
+  return mockOrbitControls;
+});
+vi.mock('three/examples/jsm/controls/OrbitControls.js', () => ({
+  OrbitControls: OrbitControlsCtor,
+}));
+
 // Mock Three.js before importing the module under test
 vi.mock('three', () => {
   class Color {
@@ -74,6 +95,7 @@ vi.mock('three', () => {
     Sprite,
     Group,
     CanvasTexture,
+    TOUCH: { ROTATE: 0, PAN: 1, DOLLY_PAN: 2, DOLLY_ROTATE: 3 },
   };
 });
 
@@ -214,6 +236,156 @@ describe('createPokerScene', () => {
     const result = createPokerScene(canvas, { width: 1024, height: 768 });
 
     expect(result.renderer).toBeDefined();
+    result.dispose();
+  });
+});
+
+describe('touch controls', () => {
+  let createPokerScene;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    // Reset mock state
+    mockOrbitControls.enableDamping = false;
+    mockOrbitControls.enableZoom = false;
+    mockOrbitControls.enableRotate = false;
+    mockOrbitControls.enablePan = false;
+    mockOrbitControls.touches = {};
+    ({ createPokerScene } = await import('./pokerScene.js'));
+  });
+
+  it('creates OrbitControls attached to the canvas', () => {
+    const canvas = makeCanvas();
+    const result = createPokerScene(canvas);
+
+    expect(OrbitControlsCtor).toHaveBeenCalledWith(result.camera, canvas);
+    result.dispose();
+  });
+
+  it('enables damping and zoom on OrbitControls', () => {
+    const canvas = makeCanvas();
+    const result = createPokerScene(canvas);
+
+    expect(mockOrbitControls.enableDamping).toBe(true);
+    expect(mockOrbitControls.enableZoom).toBe(true);
+    expect(mockOrbitControls.enableRotate).toBe(true);
+
+    result.dispose();
+  });
+
+  it('disables panning on OrbitControls', () => {
+    const canvas = makeCanvas();
+    const result = createPokerScene(canvas);
+
+    expect(mockOrbitControls.enablePan).toBe(false);
+
+    result.dispose();
+  });
+
+  it('configures touch controls for single-finger orbit and pinch-zoom', async () => {
+    const THREE = await import('three');
+    const canvas = makeCanvas();
+    const result = createPokerScene(canvas);
+
+    // OrbitControls TOUCH enum:  ROTATE = 0, PAN = 1, DOLLY_PAN = 2, DOLLY_ROTATE = 3
+    expect(mockOrbitControls.touches).toEqual({
+      ONE: THREE.TOUCH?.ROTATE ?? 0,
+      TWO: THREE.TOUCH?.DOLLY_ROTATE ?? 3,
+    });
+
+    result.dispose();
+  });
+
+  it('suppresses context menu on the canvas', () => {
+    const canvas = makeCanvas();
+    const preventDefaultSpy = vi.fn();
+    const result = createPokerScene(canvas);
+
+    const event = new Event('contextmenu', { cancelable: true });
+    event.preventDefault = preventDefaultSpy;
+    canvas.dispatchEvent(event);
+
+    expect(preventDefaultSpy).toHaveBeenCalled();
+
+    result.dispose();
+  });
+
+  it('double-tap on canvas resets camera position', () => {
+    const canvas = makeCanvas();
+    vi.useFakeTimers();
+    const result = createPokerScene(canvas);
+
+    const singleFingerEnd = () => Object.assign(new Event('touchend'), {
+      touches: [],
+      changedTouches: [{}],
+    });
+
+    // Simulate two quick touchend events (double-tap)
+    canvas.dispatchEvent(singleFingerEnd());
+    vi.advanceTimersByTime(200);
+    canvas.dispatchEvent(singleFingerEnd());
+
+    expect(mockOrbitControls.reset).toHaveBeenCalled();
+
+    vi.useRealTimers();
+    result.dispose();
+  });
+
+  it('single tap does not reset camera', () => {
+    const canvas = makeCanvas();
+    vi.useFakeTimers();
+    const result = createPokerScene(canvas);
+
+    canvas.dispatchEvent(Object.assign(new Event('touchend'), {
+      touches: [],
+      changedTouches: [{}],
+    }));
+    vi.advanceTimersByTime(400); // too slow for double-tap
+
+    expect(mockOrbitControls.reset).not.toHaveBeenCalled();
+
+    vi.useRealTimers();
+    result.dispose();
+  });
+
+  it('pinch-zoom end does not trigger double-tap reset', () => {
+    const canvas = makeCanvas();
+    vi.useFakeTimers();
+    const result = createPokerScene(canvas);
+
+    // First finger lifts — touches still has one remaining finger
+    canvas.dispatchEvent(Object.assign(new Event('touchend'), {
+      touches: [{}],
+      changedTouches: [{}],
+    }));
+    vi.advanceTimersByTime(50);
+    // Second finger lifts — changedTouches has > 1 (multi-finger lift)
+    canvas.dispatchEvent(Object.assign(new Event('touchend'), {
+      touches: [],
+      changedTouches: [{}, {}],
+    }));
+
+    expect(mockOrbitControls.reset).not.toHaveBeenCalled();
+
+    vi.useRealTimers();
+    result.dispose();
+  });
+
+  it('dispose cleans up OrbitControls', () => {
+    const canvas = makeCanvas();
+    const result = createPokerScene(canvas);
+
+    result.dispose();
+
+    expect(mockOrbitControls.dispose).toHaveBeenCalled();
+  });
+
+  it('returns controls in the API surface', () => {
+    const canvas = makeCanvas();
+    const result = createPokerScene(canvas);
+
+    expect(result.controls).toBe(mockOrbitControls);
+
     result.dispose();
   });
 });

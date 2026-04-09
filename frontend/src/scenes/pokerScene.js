@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { addPokerTable, computeSeatPositions } from './tableGeometry.js';
 import { createChipStacks } from './chipStacks.js';
 import { createCommunityCards } from './communityCards.js';
@@ -40,6 +41,38 @@ export function createPokerScene(canvas, options = {}) {
   camera.position.set(0, 8, 5);
   camera.lookAt(0, 0, 0);
 
+  // --- OrbitControls (touch-enabled) ---
+  const controls = new OrbitControls(camera, canvas);
+  controls.enableDamping = true;
+  controls.enableZoom = true;
+  controls.enableRotate = true;
+  controls.enablePan = false;
+  controls.touches = {
+    ONE: THREE.TOUCH?.ROTATE ?? 0,
+    TWO: THREE.TOUCH?.DOLLY_ROTATE ?? 3,
+  };
+  controls.saveState();
+
+  // --- Context menu suppression ---
+  function onContextMenu(e) { e.preventDefault(); }
+  canvas.addEventListener('contextmenu', onContextMenu);
+
+  // --- Double-tap to reset camera ---
+  let lastTapTime = 0;
+  const DOUBLE_TAP_MS = 300;
+  function onTouchEnd(e) {
+    // Ignore multi-finger lifts (e.g. pinch-zoom ending)
+    if (e.touches.length > 0 || e.changedTouches.length > 1) return;
+    const now = Date.now();
+    if (now - lastTapTime < DOUBLE_TAP_MS) {
+      controls.reset();
+      lastTapTime = 0;
+    } else {
+      lastTapTime = now;
+    }
+  }
+  canvas.addEventListener('touchend', onTouchEnd);
+
   // --- Lighting ---
   const ambientLight = new THREE.AmbientLight(0x606060);
   scene.add(ambientLight);
@@ -76,6 +109,7 @@ export function createPokerScene(canvas, options = {}) {
   let rafId;
   function animate() {
     rafId = requestAnimationFrame(animate);
+    controls.update();
     renderer.render(scene, camera);
   }
   animate();
@@ -119,6 +153,9 @@ export function createPokerScene(canvas, options = {}) {
   function dispose() {
     cancelAnimationFrame(rafId);
     window.removeEventListener('resize', onResize);
+    canvas.removeEventListener('contextmenu', onContextMenu);
+    canvas.removeEventListener('touchend', onTouchEnd);
+    controls.dispose();
     chipStacks.dispose();
     holeCards.dispose();
     if (activeCommunityCards) {
@@ -132,6 +169,7 @@ export function createPokerScene(canvas, options = {}) {
     scene,
     camera,
     renderer,
+    controls,
     seatPositions,
     chipStacks,
     holeCards,

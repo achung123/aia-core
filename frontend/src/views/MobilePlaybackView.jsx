@@ -1,7 +1,10 @@
 import { h } from 'preact';
 import { useState, useEffect, useRef } from 'preact/hooks';
-import { fetchSessions, fetchHands } from '../api/client.js';
+import { fetchSessions, fetchHands, fetchEquity } from '../api/client.js';
 import { createPokerScene } from '../scenes/pokerScene.js';
+import { SessionScrubber } from '../mobile/SessionScrubber.jsx';
+import { StreetScrubber } from '../mobile/StreetScrubber.jsx';
+import { EquityRow } from '../mobile/EquityRow.jsx';
 
 function parseCard(cardStr) {
   if (!cardStr) return null;
@@ -35,6 +38,11 @@ export function MobilePlaybackView() {
   const [error, setError] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [activeGameId, setActiveGameId] = useState(null);
+  const [hands, setHands] = useState([]);
+  const [handIndex, setHandIndex] = useState(0);
+  const [currentStreet, setCurrentStreet] = useState('Pre-Flop');
+  const [equityMap, setEquityMap] = useState(null);
+  const [equityLoading, setEquityLoading] = useState(false);
 
   useEffect(() => {
     fetchSessions()
@@ -72,14 +80,43 @@ export function MobilePlaybackView() {
     };
   }, []);
 
-  async function selectGame(gameId) {
-    setActiveGameId(gameId);
-    setDrawerOpen(false);
+  function showHand(index, handsList) {
+    const list = handsList || hands;
+    if (!list.length) return;
+    const cardData = handToCardData(list[index]);
+    const seatPlayerMap = {};
+    const seen = new Set();
+    const playerNames = [];
+    list.forEach(h => {
+      (h.player_hands || []).forEach(ph => {
+        if (ph.player_name && !seen.has(ph.player_name)) {
+          seen.add(ph.player_name);
+          playerNames.push(ph.player_name);
+        }
+      });
+    });
+    playerNames.forEach((name, i) => { seatPlayerMap[i] = name; });
 
-    try {
-      const hands = await fetchHands(gameId);
-      if (!hands.length || !sceneRef.current) return;
+    setCurrentStreet('Pre-Flop');
 
+    if (sceneRef.current) {
+      const streetMap = { 'Pre-Flop': 0, 'Flop': 1, 'Turn': 2, 'River': 3, 'Showdown': 4 };
+      sceneRef.current.update({
+        cardData,
+        seatPlayerMap,
+        plMap: {},
+        streetIndex: streetMap['Pre-Flop'],
+      });
+    }
+  }
+
+  function handleStreetChange(streetName) {
+    setCurrentStreet(streetName);
+    if (!hands.length) return;
+    const cardData = handToCardData(hands[handIndex]);
+
+    if (sceneRef.current) {
+      const streetMap = { 'Pre-Flop': 0, 'Flop': 1, 'Turn': 2, 'River': 3, 'Showdown': 4 };
       const seatPlayerMap = {};
       const seen = new Set();
       const playerNames = [];
@@ -93,17 +130,79 @@ export function MobilePlaybackView() {
       });
       playerNames.forEach((name, i) => { seatPlayerMap[i] = name; });
 
-      const cardData = handToCardData(hands[0]);
       sceneRef.current.update({
         cardData,
         seatPlayerMap,
         plMap: {},
-        streetIndex: 0,
+        streetIndex: streetMap[streetName] ?? 0,
       });
+    }
+  }
+
+  async function selectGame(gameId) {
+    setActiveGameId(gameId);
+    setDrawerOpen(false);
+
+    try {
+      const fetchedHands = await fetchHands(gameId);
+      setHands(fetchedHands);
+      setHandIndex(0);
+      if (fetchedHands.length) {
+        showHand(0, fetchedHands);
+      }
     } catch (err) {
       setError(err.message);
     }
   }
+
+  function handleBack() {
+    setActiveGameId(null);
+    setHands([]);
+    setHandIndex(0);
+    setCurrentStreet('Pre-Flop');
+    setEquityMap(null);
+    setDrawerOpen(true);
+  }
+
+  function handleSessionChange(newIndex) {
+    setHandIndex(newIndex - 1);
+    showHand(newIndex - 1);
+  }
+
+  // Fetch equity from backend when hand changes
+  useEffect(() => {
+    if (!activeGameId || !hands.length) {
+      setEquityMap(null);
+      return;
+    }
+    const hand = hands[handIndex];
+    if (!hand) {
+      setEquityMap(null);
+      return;
+    }
+
+    let cancelled = false;
+    setEquityLoading(true);
+    fetchEquity(activeGameId, hand.hand_number)
+      .then(data => {
+        if (cancelled) return;
+        const eqMap = {};
+        (data.equities || []).forEach(e => {
+          eqMap[e.player_name] = e.equity;
+        });
+        setEquityMap(Object.keys(eqMap).length > 0 ? eqMap : null);
+      })
+      .catch(() => {
+        if (!cancelled) setEquityMap(null);
+      })
+      .finally(() => {
+        if (!cancelled) setEquityLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [activeGameId, handIndex, hands]);
+
+  const currentCardData = hands.length ? handToCardData(hands[handIndex]) : null;
 
   return (
     <div
@@ -115,11 +214,55 @@ export function MobilePlaybackView() {
         style={{ display: 'block', width: '100%', height: '100%' }}
       />
 
-      {/* Scrubber mount point */}
+      {/* Back button */}
+      {activeGameId && (
+        <button
+          data-testid="back-button"
+          onClick={handleBack}
+          style={{
+            position: 'absolute',
+            top: '12px',
+            left: '12px',
+            zIndex: 15,
+            minWidth: '48px',
+            minHeight: '48px',
+            padding: '8px 14px',
+            border: 'none',
+            borderRadius: '8px',
+            background: '#4f46e5',
+            color: '#fff',
+            fontSize: '16px',
+            cursor: 'pointer',
+            fontFamily: 'system-ui, sans-serif',
+          }}
+        >
+          ← Back
+        </button>
+      )}
+
+      {/* Scrubber controls */}
       <div
         data-testid="scrubber-mount"
         style={{ position: 'absolute', bottom: '60px', left: 0, right: 0, zIndex: 5 }}
-      />
+      >
+        {hands.length > 0 && (
+          <div>
+            <SessionScrubber
+              current={handIndex + 1}
+              total={hands.length}
+              onchange={handleSessionChange}
+            />
+            {currentCardData && (
+              <StreetScrubber
+                currentStreet={currentStreet}
+                handData={currentCardData}
+                onStreetChange={handleStreetChange}
+              />
+            )}
+            {(equityLoading || equityMap) && <EquityRow equityMap={equityMap} loading={equityLoading} />}
+          </div>
+        )}
+      </div>
 
       {/* Bottom drawer */}
       <div
