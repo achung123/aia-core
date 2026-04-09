@@ -6,9 +6,10 @@ import { HandDashboard } from './HandDashboard.jsx';
 vi.mock('../api/client.js', () => ({
   fetchHands: vi.fn(),
   createHand: vi.fn(),
+  completeGame: vi.fn(),
 }));
 
-import { fetchHands, createHand } from '../api/client.js';
+import { fetchHands, createHand, completeGame } from '../api/client.js';
 
 function renderToContainer(vnode) {
   const container = document.createElement('div');
@@ -28,8 +29,8 @@ const HANDS = [
     river: null,
     created_at: '2026-04-08T10:00:00Z',
     player_hands: [
-      { player_hand_id: 1, hand_id: 1, player_id: 1, player_name: 'Alice', card_1: 'Ah', card_2: 'Kd', result: 'Won', profit_loss: 50.0 },
-      { player_hand_id: 2, hand_id: 1, player_id: 2, player_name: 'Bob', card_1: 'Jc', card_2: 'Ts', result: 'Lost', profit_loss: -25.0 },
+      { player_hand_id: 1, hand_id: 1, player_id: 1, player_name: 'Alice', card_1: 'Ah', card_2: 'Kd', result: 'won', profit_loss: 50.0, outcome_street: 'river' },
+      { player_hand_id: 2, hand_id: 1, player_id: 2, player_name: 'Bob', card_1: 'Jc', card_2: 'Ts', result: 'lost', profit_loss: -25.0, outcome_street: 'turn' },
     ],
   },
   {
@@ -104,9 +105,11 @@ describe('HandDashboard', () => {
     );
     await vi.waitFor(() => {
       const rows = container.querySelectorAll('[data-testid="hand-row"]');
-      // Hand 1 has results
-      expect(rows[0].textContent).toContain('Won');
-      expect(rows[0].textContent).toContain('Lost');
+      // Hand 1 has results with outcome streets
+      expect(rows[0].textContent).toContain('won');
+      expect(rows[0].textContent).toContain('river');
+      expect(rows[0].textContent).toContain('lost');
+      expect(rows[0].textContent).toContain('turn');
     });
   });
 
@@ -203,6 +206,140 @@ describe('HandDashboard', () => {
       const list = container.querySelector('[data-testid="hand-list"]');
       expect(list).toBeTruthy();
       expect(list.style.overflowY).toBe('auto');
+    });
+  });
+
+  it('renders End Game button', async () => {
+    fetchHands.mockResolvedValue(HANDS);
+    const container = renderToContainer(
+      <HandDashboard gameId={42} players={['Alice', 'Bob']} onSelectHand={() => {}} onBack={() => {}} />
+    );
+    await vi.waitFor(() => {
+      const btn = container.querySelector('[data-testid="end-game-btn"]');
+      expect(btn).toBeTruthy();
+      expect(btn.textContent).toContain('End Game');
+    });
+  });
+
+  it('End Game shows winner selection dialog', async () => {
+    fetchHands.mockResolvedValue(HANDS);
+    const container = renderToContainer(
+      <HandDashboard gameId={42} players={['Alice', 'Bob']} onSelectHand={() => {}} onBack={() => {}} />
+    );
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="end-game-btn"]')).toBeTruthy();
+    });
+    container.querySelector('[data-testid="end-game-btn"]').click();
+    await vi.waitFor(() => {
+      const dialog = container.querySelector('[data-testid="end-game-confirm"]');
+      expect(dialog).toBeTruthy();
+      // Should show player checkboxes for winner selection
+      expect(dialog.textContent).toContain('Alice');
+      expect(dialog.textContent).toContain('Bob');
+    });
+  });
+
+  it('End Game requires at least 1 winner selected', async () => {
+    fetchHands.mockResolvedValue(HANDS);
+    const container = renderToContainer(
+      <HandDashboard gameId={42} players={['Alice', 'Bob']} onSelectHand={() => {}} onBack={() => {}} />
+    );
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="end-game-btn"]')).toBeTruthy();
+    });
+    container.querySelector('[data-testid="end-game-btn"]').click();
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="end-game-confirm"]')).toBeTruthy();
+    });
+    // Try to confirm without selecting anyone
+    container.querySelector('[data-testid="end-game-confirm-yes"]').click();
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain('Select 1 or 2 winners');
+    });
+    // completeGame should NOT have been called
+    expect(completeGame).not.toHaveBeenCalled();
+  });
+
+  it('End Game limits to 2 winners max', async () => {
+    fetchHands.mockResolvedValue(HANDS);
+    const container = renderToContainer(
+      <HandDashboard gameId={42} players={['Alice', 'Bob', 'Carol']} onSelectHand={() => {}} onBack={() => {}} />
+    );
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="end-game-btn"]')).toBeTruthy();
+    });
+    container.querySelector('[data-testid="end-game-btn"]').click();
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="end-game-confirm"]')).toBeTruthy();
+    });
+    // Select all 3 players
+    container.querySelector('[data-testid="winner-checkbox-Alice"]').click();
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="winner-checkbox-Alice"]').textContent).toContain('✅');
+    });
+    container.querySelector('[data-testid="winner-checkbox-Bob"]').click();
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="winner-checkbox-Bob"]').textContent).toContain('✅');
+    });
+    container.querySelector('[data-testid="winner-checkbox-Carol"]').click();
+    // Third should not toggle on (still only 2 selected)
+    container.querySelector('[data-testid="end-game-confirm-yes"]').click();
+    await vi.waitFor(() => {
+      expect(completeGame).toHaveBeenCalledWith(42, ['Alice', 'Bob']);
+    });
+  });
+
+  it('End Game with winner calls completeGame and onBack', async () => {
+    fetchHands.mockResolvedValue(HANDS);
+    completeGame.mockResolvedValue({});
+    const onBack = vi.fn();
+    const container = renderToContainer(
+      <HandDashboard gameId={42} players={['Alice', 'Bob']} onSelectHand={() => {}} onBack={onBack} />
+    );
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="end-game-btn"]')).toBeTruthy();
+    });
+    container.querySelector('[data-testid="end-game-btn"]').click();
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="end-game-confirm"]')).toBeTruthy();
+    });
+    container.querySelector('[data-testid="winner-checkbox-Alice"]').click();
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="winner-checkbox-Alice"]').textContent).toContain('✅');
+    });
+    container.querySelector('[data-testid="end-game-confirm-yes"]').click();
+    await vi.waitFor(() => {
+      expect(completeGame).toHaveBeenCalledWith(42, ['Alice']);
+      expect(onBack).toHaveBeenCalled();
+    });
+  });
+
+  it('End Game confirmation can be cancelled', async () => {
+    fetchHands.mockResolvedValue(HANDS);
+    const container = renderToContainer(
+      <HandDashboard gameId={42} players={['Alice', 'Bob']} onSelectHand={() => {}} onBack={() => {}} />
+    );
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="end-game-btn"]')).toBeTruthy();
+    });
+    container.querySelector('[data-testid="end-game-btn"]').click();
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="end-game-confirm"]')).toBeTruthy();
+    });
+    container.querySelector('[data-testid="end-game-confirm-no"]').click();
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="end-game-confirm"]')).toBeNull();
+    });
+  });
+
+  it('shows winner icon next to player with won result', async () => {
+    fetchHands.mockResolvedValue(HANDS);
+    const container = renderToContainer(
+      <HandDashboard gameId={42} onSelectHand={() => {}} onBack={() => {}} />
+    );
+    await vi.waitFor(() => {
+      const rows = container.querySelectorAll('[data-testid="hand-row"]');
+      expect(rows[0].textContent).toContain('🏆');
     });
   });
 });

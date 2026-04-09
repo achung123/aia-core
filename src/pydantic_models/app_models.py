@@ -4,13 +4,26 @@ from datetime import date, datetime
 from enum import Enum
 
 from dateutil.parser import parse
-from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 
 
 class ResultEnum(str, Enum):
     WON = 'won'
     FOLDED = 'folded'
     LOST = 'lost'
+
+
+class StreetEnum(str, Enum):
+    FLOP = 'flop'
+    TURN = 'turn'
+    RIVER = 'river'
 
 
 class GameState(str, Enum):
@@ -99,6 +112,19 @@ class Card(BaseModel):
 
     rank: CardRank
     suit: CardSuit
+
+    @model_validator(mode='before')
+    @classmethod
+    def _parse_string(cls, data):
+        if isinstance(data, str):
+            s = data.strip().upper()
+            if len(s) == 3 and s[:2] == '10':
+                return {'rank': '10', 'suit': s[2]}
+            if len(s) == 2:
+                return {'rank': s[0], 'suit': s[1]}
+            msg = f'Invalid card string: {data!r}'
+            raise ValueError(msg)
+        return data
 
     def __str__(self) -> str:
         return f'{self.rank}{self.suit}'
@@ -231,6 +257,7 @@ class GameSessionListItem(BaseModel):
     status: str
     player_count: int
     hand_count: int
+    winners: list[str] = []
 
 
 class GameSessionResponse(BaseModel):
@@ -242,6 +269,11 @@ class GameSessionResponse(BaseModel):
     created_at: datetime
     player_names: list[str]
     hand_count: int
+    winners: list[str] = []
+
+
+class CompleteGameRequest(BaseModel):
+    winners: list[str] = Field(default_factory=list, max_length=2)
 
 
 class PlayerCreate(BaseModel):
@@ -288,6 +320,7 @@ class PlayerHandResponse(BaseModel):
     card_2: str | None = None
     result: str | None = None
     profit_loss: float | None = None
+    outcome_street: str | None = None
 
 
 class HandResponse(BaseModel):
@@ -326,6 +359,7 @@ class PlayerResultUpdate(BaseModel):
 
     result: ResultEnum
     profit_loss: float | None = None
+    outcome_street: StreetEnum | None = None
 
 
 class CommunityCardsUpdate(BaseModel):

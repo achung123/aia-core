@@ -16,6 +16,8 @@ function parseCard(cardStr) {
   return { rank, suit: SUIT_SYMBOL[suitChar] || suitChar };
 }
 
+const RESULT_MAP = { won: 'win', folded: 'fold', lost: 'loss' };
+
 function handToCardData(hand) {
   return {
     flop: [parseCard(hand.flop_1), parseCard(hand.flop_2), parseCard(hand.flop_3)],
@@ -24,7 +26,7 @@ function handToCardData(hand) {
     player_hands: (hand.player_hands || []).map(ph => ({
       player_name: ph.player_name,
       hole_cards: ph.card_1 && ph.card_2 ? [parseCard(ph.card_1), parseCard(ph.card_2)] : null,
-      result: ph.result,
+      result: RESULT_MAP[ph.result] || ph.result,
       profit_loss: ph.profit_loss,
     })),
   };

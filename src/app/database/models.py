@@ -34,6 +34,7 @@ class GameSession(Base):
     game_id = Column(Integer, primary_key=True, autoincrement=True)
     game_date = Column(Date, nullable=False)
     status = Column(String, nullable=False, default='active')
+    winners = Column(String, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     players = relationship('Player', secondary='game_players', back_populates='games')
@@ -82,6 +83,7 @@ class PlayerHand(Base):
     card_2 = Column(String, nullable=True)
     result = Column(String, nullable=True)
     profit_loss = Column(Float, nullable=True)
+    outcome_street = Column(String, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     hand = relationship('Hand', back_populates='player_hands')

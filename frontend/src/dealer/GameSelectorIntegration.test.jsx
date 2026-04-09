@@ -16,6 +16,8 @@ vi.mock('../api/client.js', () => ({
   fetchSessions: vi.fn(),
   fetchHands: vi.fn(() => Promise.resolve([])),
   fetchEquity: vi.fn(() => Promise.resolve({ equities: [] })),
+  fetchGame: vi.fn(),
+  fetchHand: vi.fn(),
 }));
 
 vi.mock('./CameraCapture.jsx', () => ({
@@ -33,6 +35,8 @@ import {
   fetchPlayers,
   fetchSessions,
   fetchHands,
+  fetchGame,
+  fetchHand,
 } from '../api/client.js';
 import { DealerApp } from './DealerApp.jsx';
 import { initialState } from './dealerState.js';
@@ -52,6 +56,12 @@ describe('GameSelector integration in DealerApp', () => {
       { player_id: 2, name: 'Bob' },
     ]);
     fetchHands.mockResolvedValue([]);
+    fetchHand.mockResolvedValue({
+      hand_number: 1,
+      flop_1: null, flop_2: null, flop_3: null,
+      turn: null, river: null,
+      player_hands: [],
+    });
   });
 
   it('initialState starts at gameSelector step', () => {
@@ -139,6 +149,13 @@ describe('GameSelector integration in DealerApp', () => {
     fetchSessions.mockResolvedValue([
       { game_id: 42, game_date: '2026-04-08', status: 'active', player_count: 3, hand_count: 5 },
     ]);
+    fetchGame.mockResolvedValue({
+      game_id: 42,
+      game_date: '2026-04-08',
+      status: 'active',
+      player_names: ['Alice', 'Bob', 'Charlie'],
+      hand_count: 5,
+    });
 
     const container = renderToContainer(<DealerApp />);
 
@@ -154,6 +171,104 @@ describe('GameSelector integration in DealerApp', () => {
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="new-hand-btn"]')).not.toBeNull();
     });
+  });
+
+  it('selecting existing game fetches players and shows them on playerGrid', async () => {
+    fetchSessions.mockResolvedValue([
+      { game_id: 42, game_date: '2026-04-08', status: 'active', player_count: 3, hand_count: 1 },
+    ]);
+    fetchGame.mockResolvedValue({
+      game_id: 42,
+      game_date: '2026-04-08',
+      status: 'active',
+      player_names: ['Alice', 'Bob', 'Charlie'],
+      hand_count: 1,
+    });
+    fetchHands.mockResolvedValue([
+      { hand_number: 1, hand_id: 1, player_hands: [] },
+    ]);
+
+    const container = renderToContainer(<DealerApp />);
+
+    // Select the game
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="game-card"]')).not.toBeNull();
+    });
+    container.querySelector('[data-testid="game-card"]').click();
+
+    // Wait for dashboard
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="hand-row"]')).not.toBeNull();
+    });
+
+    // Click the hand to go to playerGrid
+    container.querySelector('[data-testid="hand-row"]').click();
+
+    // Player tiles should be visible
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="player-tile-Alice"]')).not.toBeNull();
+      expect(container.querySelector('[data-testid="player-tile-Bob"]')).not.toBeNull();
+      expect(container.querySelector('[data-testid="player-tile-Charlie"]')).not.toBeNull();
+    });
+  });
+
+  it('selecting existing hand hydrates player tiles with terminal state', async () => {
+    fetchSessions.mockResolvedValue([
+      { game_id: 42, game_date: '2026-04-08', status: 'active', player_count: 2, hand_count: 1 },
+    ]);
+    fetchGame.mockResolvedValue({
+      game_id: 42,
+      game_date: '2026-04-08',
+      status: 'active',
+      player_names: ['Alice', 'Bob'],
+      hand_count: 1,
+    });
+    fetchHands.mockResolvedValue([
+      { hand_number: 1, hand_id: 1, player_hands: [
+        { player_hand_id: 1, player_name: 'Alice', result: 'won' },
+        { player_hand_id: 2, player_name: 'Bob', result: 'lost' },
+      ]},
+    ]);
+    fetchHand.mockResolvedValue({
+      hand_number: 1,
+      flop_1: '2H', flop_2: '3C', flop_3: '5D',
+      turn: 'JS', river: null,
+      player_hands: [
+        { player_name: 'Alice', card_1: 'AH', card_2: 'KD', result: 'won', profit_loss: 50 },
+        { player_name: 'Bob', card_1: '9S', card_2: 'TC', result: 'lost', profit_loss: -50 },
+      ],
+    });
+
+    const container = renderToContainer(<DealerApp />);
+
+    // Select the game
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="game-card"]')).not.toBeNull();
+    });
+    container.querySelector('[data-testid="game-card"]').click();
+
+    // Wait for dashboard with hand row
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="hand-row"]')).not.toBeNull();
+    });
+
+    // Click the hand
+    container.querySelector('[data-testid="hand-row"]').click();
+
+    // Player tiles should show terminal status, not "playing"
+    await vi.waitFor(() => {
+      const aliceRow = container.querySelector('[data-testid="player-row-Alice"]');
+      expect(aliceRow).not.toBeNull();
+      expect(aliceRow.textContent).toContain('won');
+
+      const bobRow = container.querySelector('[data-testid="player-row-Bob"]');
+      expect(bobRow).not.toBeNull();
+      expect(bobRow.textContent).toContain('lost');
+    });
+
+    // Community should show as recorded (check mark on table tile)
+    const tableTile = container.querySelector('[data-testid="table-tile"]');
+    expect(tableTile.textContent).toContain('✅');
   });
 
   it('HandDashboard Back button returns to GameSelector', async () => {

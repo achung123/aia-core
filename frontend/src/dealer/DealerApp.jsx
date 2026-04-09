@@ -1,5 +1,5 @@
 import { useReducer, useState } from 'preact/hooks';
-import { reducer, initialState } from './dealerState.js';
+import { reducer, initialState, validateOutcomeStreets } from './dealerState.js';
 import { GameSelector } from './GameSelector.jsx';
 import { GameCreateForm } from './GameCreateForm.jsx';
 import { HandDashboard } from './HandDashboard.jsx';
@@ -8,7 +8,7 @@ import { CameraCapture } from './CameraCapture.jsx';
 import { DetectionReview } from './DetectionReview.jsx';
 import { OutcomeButtons } from './OutcomeButtons.jsx';
 import { DealerPreview } from './DealerPreview.jsx';
-import { addPlayerToHand, updateHolecards, updateCommunityCards, patchPlayerResult } from '../api/client.js';
+import { addPlayerToHand, updateHolecards, updateCommunityCards, patchPlayerResult, fetchGame, fetchHand } from '../api/client.js';
 
 export function DealerApp() {
   const [state, dispatch] = useReducer(reducer, initialState);
@@ -27,17 +27,27 @@ export function DealerApp() {
     dispatch({ type: 'SET_STEP', payload: 'create' });
   }
 
-  function handleSelectGame(gameId) {
-    dispatch({ type: 'SET_GAME', payload: { gameId, players: [], gameDate: null } });
+  async function handleSelectGame(gameId) {
+    try {
+      const game = await fetchGame(gameId);
+      dispatch({ type: 'SET_GAME', payload: { gameId, players: game.player_names, gameDate: game.game_date } });
+    } catch {
+      dispatch({ type: 'SET_GAME', payload: { gameId, players: [], gameDate: null } });
+    }
   }
 
   function handleGameCreated(gameId, players, gameDate) {
     dispatch({ type: 'SET_GAME', payload: { gameId, players, gameDate } });
   }
 
-  function handleSelectHand(handNumber) {
-    dispatch({ type: 'SET_HAND_ID', payload: handNumber });
-    dispatch({ type: 'SET_STEP', payload: 'playerGrid' });
+  async function handleSelectHand(handNumber) {
+    try {
+      const handData = await fetchHand(state.gameId, handNumber);
+      dispatch({ type: 'LOAD_HAND', payload: handData });
+    } catch {
+      dispatch({ type: 'SET_HAND_ID', payload: handNumber });
+      dispatch({ type: 'SET_STEP', payload: 'playerGrid' });
+    }
   }
 
   function handleTileSelect(name) {
@@ -144,12 +154,22 @@ export function DealerApp() {
     setCaptureTarget(target);
   }
 
-  async function handleOutcomeSelect(result) {
+  async function handleOutcomeSelect(result, outcomeStreet) {
     setOutcomeError(null);
     setOutcomeSubmitting(true);
+
+    // "not_playing" is UI-only — skip the API call
+    if (result === 'not_playing') {
+      dispatch({ type: 'SET_PLAYER_RESULT', payload: { name: outcomeTarget, status: 'not_playing', outcomeStreet: null } });
+      setOutcomeTarget(null);
+      dispatch({ type: 'SET_STEP', payload: 'playerGrid' });
+      setOutcomeSubmitting(false);
+      return;
+    }
+
     try {
-      await patchPlayerResult(state.gameId, state.currentHandId, outcomeTarget, { result });
-      dispatch({ type: 'SET_PLAYER_RESULT', payload: { name: outcomeTarget, status: result } });
+      await patchPlayerResult(state.gameId, state.currentHandId, outcomeTarget, { result, outcome_street: outcomeStreet || null });
+      dispatch({ type: 'SET_PLAYER_RESULT', payload: { name: outcomeTarget, status: result, outcomeStreet: outcomeStreet || null } });
       setOutcomeTarget(null);
       dispatch({ type: 'SET_STEP', payload: 'playerGrid' });
     } catch (err) {
@@ -170,28 +190,26 @@ export function DealerApp() {
       alert('Community cards must be recorded before finishing the hand.');
       return;
     }
+
+    // Validate outcome streets are consistent
+    const validationError = validateOutcomeStreets(state.players);
+    if (validationError) {
+      setPatchError(validationError);
+      return;
+    }
+
     const uncaptured = state.players.filter((p) => p.status === 'playing');
     if (uncaptured.length === 0) {
-      doFinishHand([]);
+      doFinishHand();
     } else {
       setShowFinishConfirm(true);
     }
   }
 
-  async function doFinishHand(uncapturedPlayers) {
+  async function doFinishHand() {
     setFinishing(true);
     setFinishError(null);
     try {
-      const remaining = uncapturedPlayers.filter((p) => !persistedPlayers.has(p.name));
-      for (const p of remaining) {
-        await addPlayerToHand(state.gameId, state.currentHandId, {
-          player_name: p.name,
-          card_1: null,
-          card_2: null,
-          result: null,
-        });
-        setPersistedPlayers((prev) => new Set(prev).add(p.name));
-      }
       dispatch({ type: 'FINISH_HAND' });
       setShowFinishConfirm(false);
       setPersistedPlayers(new Set());
@@ -222,6 +240,7 @@ export function DealerApp() {
       {state.currentStep === 'dashboard' && state.gameId && (
         <HandDashboard
           gameId={state.gameId}
+          players={state.players.map((p) => p.name)}
           onSelectHand={handleSelectHand}
           onBack={() => dispatch({ type: 'SET_STEP', payload: 'gameSelector' })}
         />
@@ -237,6 +256,7 @@ export function DealerApp() {
             onDirectOutcome={handleDirectOutcome}
             canFinish={canFinish}
             onFinishHand={handleFinishHand}
+            onBack={() => dispatch({ type: 'SET_STEP', payload: 'dashboard' })}
           />
           {patchError && (
             <div style={toastStyle}>{patchError}</div>
@@ -277,7 +297,7 @@ export function DealerApp() {
       {showFinishConfirm && (
         <div data-testid="finish-confirm-dialog" style={dialogOverlayStyle}>
           <div style={dialogStyle}>
-            <p>The following players have not been captured and will be recorded with no cards:</p>
+            <p>The following players will not be recorded for this hand:</p>
             <ul>
               {state.players.filter((p) => p.status === 'playing').map((p) => (
                 <li key={p.name}>{p.name}</li>
@@ -287,7 +307,7 @@ export function DealerApp() {
             <div style={dialogButtonRow}>
               <button onClick={() => setShowFinishConfirm(false)} disabled={finishing}>Cancel</button>
               <button
-                onClick={() => doFinishHand(state.players.filter((p) => p.status === 'playing'))}
+                onClick={() => doFinishHand()}
                 disabled={finishing}
               >
                 {finishing ? 'Finishing…' : 'Confirm'}

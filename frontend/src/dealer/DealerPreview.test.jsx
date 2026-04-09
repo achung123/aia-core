@@ -194,6 +194,11 @@ describe('DealerPreview equity overlay', () => {
     );
     await flush();
 
+    // Expand table to see badges
+    const toggle = container.querySelector('[data-testid="preview-toggle"]');
+    act(() => { toggle.click(); });
+    await flush();
+
     expect(fetchEquity).toHaveBeenCalledWith(1, 1);
     const badges = container.querySelector('[data-testid="equity-badges"]');
     expect(badges).toBeTruthy();
@@ -242,6 +247,11 @@ describe('DealerPreview equity overlay', () => {
       <DealerPreview community={community} players={twoCardPlayers} gameId={1} handNumber={1} />,
     );
     await flush();
+
+    // Expand table
+    const toggle = container.querySelector('[data-testid="preview-toggle"]');
+    act(() => { toggle.click(); });
+    await flush();
     expect(fetchEquity).toHaveBeenCalledTimes(1);
 
     fetchEquity.mockResolvedValue({
@@ -274,6 +284,11 @@ describe('DealerPreview equity overlay', () => {
     );
     await flush();
 
+    // Expand table
+    const toggle = container.querySelector('[data-testid="preview-toggle"]');
+    act(() => { toggle.click(); });
+    await flush();
+
     expect(container.querySelector('[data-testid="equity-badge-Alice"]').textContent).toBe('Alice: 65%');
     expect(container.querySelector('[data-testid="equity-badge-Bob"]').textContent).toBe('Bob: 35%');
     cleanup(container);
@@ -287,6 +302,34 @@ describe('DealerPreview equity overlay', () => {
 
     expect(fetchEquity).not.toHaveBeenCalled();
     expect(container.querySelector('[data-testid="equity-badges"]')).toBeNull();
+    cleanup(container);
+  });
+
+  it('equity badges only visible when table is expanded', async () => {
+    fetchEquity.mockResolvedValue({
+      equities: [
+        { player_name: 'Alice', equity: 0.65 },
+        { player_name: 'Bob', equity: 0.35 },
+      ],
+    });
+
+    const container = renderToContainer(
+      <DealerPreview community={community} players={twoCardPlayers} gameId={1} handNumber={1} />,
+    );
+    await flush();
+
+    // Collapsed — badges should NOT be visible
+    expect(container.querySelector('[data-testid="equity-badges"]')).toBeNull();
+
+    // Expand
+    const toggle = container.querySelector('[data-testid="preview-toggle"]');
+    act(() => { toggle.click(); });
+    await flush();
+
+    // Expanded — badges should be visible
+    expect(container.querySelector('[data-testid="equity-badges"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="equity-badge-Alice"]').textContent).toBe('Alice: 65%');
+
     cleanup(container);
   });
 });

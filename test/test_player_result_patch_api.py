@@ -276,3 +276,65 @@ class TestPlayerResultPatch422:
             json={},
         )
         assert resp.status_code == 422
+
+
+class TestPlayerResultPatchOutcomeStreet:
+    """outcome_street records when the outcome happened (flop/turn/river)."""
+
+    def test_patch_with_outcome_street_flop(self, client, game_with_hand):
+        game_id, hand_number = game_with_hand
+        resp = client.patch(
+            _url(game_id, hand_number, 'Alice'),
+            json={'result': 'folded', 'outcome_street': 'flop'},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body['result'] == 'folded'
+        assert body['outcome_street'] == 'flop'
+
+    def test_patch_with_outcome_street_turn(self, client, game_with_hand):
+        game_id, hand_number = game_with_hand
+        resp = client.patch(
+            _url(game_id, hand_number, 'Alice'),
+            json={'result': 'lost', 'outcome_street': 'turn'},
+        )
+        assert resp.status_code == 200
+        assert resp.json()['outcome_street'] == 'turn'
+
+    def test_patch_with_outcome_street_river(self, client, game_with_hand):
+        game_id, hand_number = game_with_hand
+        resp = client.patch(
+            _url(game_id, hand_number, 'Alice'),
+            json={'result': 'won', 'outcome_street': 'river'},
+        )
+        assert resp.status_code == 200
+        assert resp.json()['outcome_street'] == 'river'
+
+    def test_outcome_street_defaults_to_none(self, client, game_with_hand):
+        game_id, hand_number = game_with_hand
+        resp = client.patch(
+            _url(game_id, hand_number, 'Alice'),
+            json={'result': 'won'},
+        )
+        assert resp.status_code == 200
+        assert resp.json()['outcome_street'] is None
+
+    def test_outcome_street_persisted(self, client, game_with_hand):
+        game_id, hand_number = game_with_hand
+        client.patch(
+            _url(game_id, hand_number, 'Alice'),
+            json={'result': 'folded', 'outcome_street': 'flop'},
+        )
+        get_resp = client.get(f'/games/{game_id}/hands/{hand_number}')
+        alice_ph = next(
+            ph for ph in get_resp.json()['player_hands'] if ph['player_name'] == 'Alice'
+        )
+        assert alice_ph['outcome_street'] == 'flop'
+
+    def test_invalid_outcome_street_returns_422(self, client, game_with_hand):
+        game_id, hand_number = game_with_hand
+        resp = client.patch(
+            _url(game_id, hand_number, 'Alice'),
+            json={'result': 'won', 'outcome_street': 'preflop'},
+        )
+        assert resp.status_code == 422

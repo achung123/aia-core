@@ -16,6 +16,8 @@ vi.mock('../api/client.js', () => ({
   fetchSessions: vi.fn(),
   fetchHands: vi.fn(() => Promise.resolve([])),
   fetchEquity: vi.fn(() => Promise.resolve({ equities: [] })),
+  fetchGame: vi.fn(),
+  fetchHand: vi.fn(),
 }));
 
 vi.mock('./CameraCapture.jsx', () => ({
@@ -75,7 +77,7 @@ vi.mock('./dealerState.js', async () => {
   };
 });
 
-import { createHand, addPlayerToHand, updateHolecards, updateCommunityCards, patchPlayerResult, fetchHands } from '../api/client.js';
+import { createHand, addPlayerToHand, updateHolecards, updateCommunityCards, patchPlayerResult, fetchHands, fetchHand } from '../api/client.js';
 import { DealerApp } from './DealerApp.jsx';
 
 function renderToContainer(vnode) {
@@ -95,6 +97,12 @@ describe('DealerApp per-player card collection', () => {
     vi.clearAllMocks();
     fetchHands.mockResolvedValue([]);
     createHand.mockResolvedValue({ hand_number: 1 });
+    fetchHand.mockResolvedValue({
+      hand_number: 1,
+      flop_1: null, flop_2: null, flop_3: null,
+      turn: null, river: null,
+      player_hands: [],
+    });
     addPlayerToHand.mockResolvedValue({});
     updateHolecards.mockResolvedValue({});
     patchPlayerResult.mockResolvedValue({});
@@ -124,11 +132,15 @@ describe('DealerApp per-player card collection', () => {
 
   async function captureAndCompletePlayer(container, playerName) {
     await capturePlayerCards(container, playerName);
-    // After card confirm, outcome buttons appear — select Won to return to grid
+    // After card confirm, outcome buttons appear — select Won then street to return to grid
     await vi.waitFor(() => {
       expect(findButton(container, 'Won')).not.toBeNull();
     });
     findButton(container, 'Won').click();
+    await vi.waitFor(() => {
+      expect(findButton(container, 'River')).not.toBeNull();
+    });
+    findButton(container, 'River').click();
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Select a Player');
     });
@@ -314,7 +326,12 @@ describe('DealerApp outcome flow', () => {
     findButton(container, 'Won').click();
 
     await vi.waitFor(() => {
-      expect(patchPlayerResult).toHaveBeenCalledWith(42, 1, 'Alice', { result: 'won' });
+      expect(findButton(container, 'River')).not.toBeNull();
+    });
+    findButton(container, 'River').click();
+
+    await vi.waitFor(() => {
+      expect(patchPlayerResult).toHaveBeenCalledWith(42, 1, 'Alice', { result: 'won', outcome_street: 'river' });
     });
   });
 
@@ -330,7 +347,12 @@ describe('DealerApp outcome flow', () => {
     findButton(container, 'Folded').click();
 
     await vi.waitFor(() => {
-      expect(patchPlayerResult).toHaveBeenCalledWith(42, 1, 'Alice', { result: 'folded' });
+      expect(findButton(container, 'Flop')).not.toBeNull();
+    });
+    findButton(container, 'Flop').click();
+
+    await vi.waitFor(() => {
+      expect(patchPlayerResult).toHaveBeenCalledWith(42, 1, 'Alice', { result: 'folded', outcome_street: 'flop' });
     });
   });
 
@@ -346,7 +368,12 @@ describe('DealerApp outcome flow', () => {
     findButton(container, 'Lost').click();
 
     await vi.waitFor(() => {
-      expect(patchPlayerResult).toHaveBeenCalledWith(42, 1, 'Alice', { result: 'lost' });
+      expect(findButton(container, 'Turn')).not.toBeNull();
+    });
+    findButton(container, 'Turn').click();
+
+    await vi.waitFor(() => {
+      expect(patchPlayerResult).toHaveBeenCalledWith(42, 1, 'Alice', { result: 'lost', outcome_street: 'turn' });
     });
   });
 
@@ -362,9 +389,14 @@ describe('DealerApp outcome flow', () => {
     findButton(container, 'Won').click();
 
     await vi.waitFor(() => {
-      const aliceTile = container.querySelector('[data-testid="player-tile-Alice"]');
-      expect(aliceTile).not.toBeNull();
-      expect(aliceTile.textContent).toContain('won');
+      expect(findButton(container, 'River')).not.toBeNull();
+    });
+    findButton(container, 'River').click();
+
+    await vi.waitFor(() => {
+      const aliceRow = container.querySelector('[data-testid="player-row-Alice"]');
+      expect(aliceRow).not.toBeNull();
+      expect(aliceRow.textContent).toContain('won');
     });
   });
 
@@ -380,6 +412,11 @@ describe('DealerApp outcome flow', () => {
     });
 
     findButton(container, 'Won').click();
+
+    await vi.waitFor(() => {
+      expect(findButton(container, 'River')).not.toBeNull();
+    });
+    findButton(container, 'River').click();
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Result PATCH failed');
@@ -420,7 +457,12 @@ describe('DealerApp outcome flow', () => {
     findButton(container, 'Folded').click();
 
     await vi.waitFor(() => {
-      expect(patchPlayerResult).toHaveBeenCalledWith(42, 1, 'Alice', { result: 'folded' });
+      expect(findButton(container, 'Flop')).not.toBeNull();
+    });
+    findButton(container, 'Flop').click();
+
+    await vi.waitFor(() => {
+      expect(patchPlayerResult).toHaveBeenCalledWith(42, 1, 'Alice', { result: 'folded', outcome_street: 'flop' });
     });
 
     // Should NOT have called addPlayerToHand
@@ -437,6 +479,11 @@ describe('DealerApp outcome flow', () => {
     });
 
     findButton(container, 'Won').click();
+
+    await vi.waitFor(() => {
+      expect(findButton(container, 'River')).not.toBeNull();
+    });
+    findButton(container, 'River').click();
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Select a Player');
@@ -599,6 +646,10 @@ describe('DealerApp finish hand flow', () => {
     });
     findButton(container, 'Won').click();
     await vi.waitFor(() => {
+      expect(findButton(container, 'River')).not.toBeNull();
+    });
+    findButton(container, 'River').click();
+    await vi.waitFor(() => {
       expect(container.textContent).toContain('Select a Player');
     });
   }
@@ -609,6 +660,10 @@ describe('DealerApp finish hand flow', () => {
       expect(findButton(container, outcome)).not.toBeNull();
     });
     findButton(container, outcome).click();
+    await vi.waitFor(() => {
+      expect(findButton(container, 'River')).not.toBeNull();
+    });
+    findButton(container, 'River').click();
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Select a Player');
     });
@@ -657,7 +712,7 @@ describe('DealerApp finish hand flow', () => {
     await vi.waitFor(() => {
       // Dialog should list Bob as uncaptured (still 'playing')
       expect(container.textContent).toContain('Bob');
-      expect(container.textContent).toContain('not been captured');
+      expect(container.textContent).toContain('will not be recorded');
       expect(findButton(container, 'Confirm')).not.toBeUndefined();
       expect(findButton(container, 'Cancel')).not.toBeUndefined();
     });
@@ -681,7 +736,7 @@ describe('DealerApp finish hand flow', () => {
     });
   });
 
-  it('confirming finish POSTs uncaptured players with null cards and null result', async () => {
+  it('confirming finish does NOT post uncaptured players', async () => {
     const container = renderToContainer(<DealerApp />);
     await startHand(container);
     await captureCommunityCards(container);
@@ -695,14 +750,15 @@ describe('DealerApp finish hand flow', () => {
     findButton(container, 'Confirm').click();
 
     await vi.waitFor(() => {
-      // Bob was 'playing' (uncaptured), should be POSTed with null cards
-      expect(addPlayerToHand).toHaveBeenCalledWith(42, 1, {
-        player_name: 'Bob',
-        card_1: null,
-        card_2: null,
-        result: null,
-      });
+      // Should reach dashboard without posting uncaptured Bob
+      expect(container.querySelector('[data-testid="new-hand-btn"]')).not.toBeNull();
     });
+
+    // addPlayerToHand should NOT have been called for uncaptured Bob
+    const bobCalls = addPlayerToHand.mock.calls.filter(
+      ([, , data]) => data.player_name === 'Bob'
+    );
+    expect(bobCalls).toHaveLength(0);
   });
 
   it('confirming finish dispatches FINISH_HAND and returns to dashboard with incremented count', async () => {
@@ -739,57 +795,31 @@ describe('DealerApp finish hand flow', () => {
     });
   });
 
-  it('on partial failure, retrying does not re-POST already-persisted players', async () => {
+  it('uncaptured players with three players are all skipped', async () => {
     const container = renderToContainer(<DealerApp />);
     await startHand(container);
     await captureCommunityCards(container);
     await directOutcome(container, 'Alice', 'Folded');
 
     // Bob and Charlie are both uncaptured ('playing')
-    // First POST (Bob) succeeds, second POST (Charlie) fails
-    let callCount = 0;
-    addPlayerToHand.mockImplementation(() => {
-      callCount++;
-      if (callCount === 1) return Promise.resolve({});
-      return Promise.reject(new Error('Server error on Charlie'));
-    });
-
     findButton(container, 'Finish Hand').click();
     await vi.waitFor(() => {
+      expect(container.textContent).toContain('Bob');
+      expect(container.textContent).toContain('Charlie');
       expect(findButton(container, 'Confirm')).not.toBeUndefined();
     });
 
     findButton(container, 'Confirm').click();
 
-    // Should show error from Charlie's failed POST
     await vi.waitFor(() => {
-      expect(container.textContent).toContain('Server error on Charlie');
-    });
-
-    // Bob was POSTed once (succeeded), Charlie was POSTed once (failed)
-    expect(addPlayerToHand).toHaveBeenCalledTimes(2);
-
-    // Reset mock for retry — all calls succeed now
-    addPlayerToHand.mockResolvedValue({});
-
-    // Click Confirm again to retry
-    findButton(container, 'Confirm').click();
-
-    await vi.waitFor(() => {
-      // Should reach dashboard after successful retry
       expect(container.querySelector('[data-testid="new-hand-btn"]')).not.toBeNull();
     });
 
-    // On retry, only Charlie should be POSTed (Bob was already persisted)
-    // Total calls: 2 from first attempt + 1 from retry = 3
-    expect(addPlayerToHand).toHaveBeenCalledTimes(3);
-    // The retry call should be for Charlie only
-    expect(addPlayerToHand).toHaveBeenLastCalledWith(42, 1, {
-      player_name: 'Charlie',
-      card_1: null,
-      card_2: null,
-      result: null,
-    });
+    // Neither Bob nor Charlie should have been POSTed
+    const uncapturedCalls = addPlayerToHand.mock.calls.filter(
+      ([, , data]) => data.player_name === 'Bob' || data.player_name === 'Charlie'
+    );
+    expect(uncapturedCalls).toHaveLength(0);
   });
 
   it('does not show legacy Submit Hand button', async () => {

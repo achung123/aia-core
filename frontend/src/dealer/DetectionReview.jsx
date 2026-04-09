@@ -11,10 +11,21 @@ function formatCard(detectedValue) {
   return { rank, suit: symbol };
 }
 
+const POSITION_LABELS = ['Flop', 'Flop', 'Flop', 'Turn', 'River'];
+
 export function DetectionReview({ detections, imageUrl, mode, targetName, onConfirm, onRetake }) {
   const allCards = detections || [];
   const maxCards = mode === 'community' ? 5 : 2;
-  const cards = allCards.slice(0, maxCards);
+
+  // For community mode, sort by bbox_x (left-to-right) to predict flop/turn/river
+  let cards;
+  if (mode === 'community') {
+    const sorted = [...allCards].sort((a, b) => (a.bbox_x ?? 0) - (b.bbox_x ?? 0));
+    cards = sorted.slice(0, maxCards);
+  } else {
+    cards = allCards.slice(0, maxCards);
+  }
+
   const expectedMin = mode === 'community' ? 3 : 2;
   const countOk = cards.length >= expectedMin;
 
@@ -58,8 +69,12 @@ export function DetectionReview({ detections, imageUrl, mode, targetName, onConf
           const labelStyle = isCorrected
             ? { ...styles.cardLabel, borderColor: '#ea580c' }
             : styles.cardLabel;
+          const positionLabel = mode === 'community' ? POSITION_LABELS[i] : null;
           return (
             <div key={i} style={labelStyle} onClick={() => setPickerIndex(i)}>
+              {positionLabel && (
+                <span data-testid={`card-position-${i}`} style={styles.positionLabel}>{positionLabel}</span>
+              )}
               <span style={{ ...styles.cardText, color }}>{rank}{suit}</span>
               <span style={styles.confidence}>{isCorrected ? 'corrected' : `${conf}%`}</span>
             </div>
@@ -146,6 +161,14 @@ const styles = {
     fontSize: '0.75rem',
     color: '#6b7280',
     marginTop: '0.25rem',
+  },
+  positionLabel: {
+    fontSize: '0.65rem',
+    fontWeight: '700',
+    color: '#4f46e5',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+    marginBottom: '0.15rem',
   },
   buttonRow: {
     display: 'flex',

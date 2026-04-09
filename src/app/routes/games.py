@@ -1,5 +1,6 @@
 """Games router - handles game-related endpoints."""
 
+import json
 from datetime import date
 from typing import Annotated
 
@@ -11,10 +12,18 @@ from sqlalchemy.orm import Session
 from app.database.models import GamePlayer, GameSession, Player
 from app.database.session import get_db
 from pydantic_models.app_models import (
+    CompleteGameRequest,
     GameSessionCreate,
     GameSessionListItem,
     GameSessionResponse,
 )
+
+
+def _parse_winners(raw: str | None) -> list[str]:
+    if not raw:
+        return []
+    return json.loads(raw)
+
 
 router = APIRouter(prefix='/games', tags=['games'])
 
@@ -38,6 +47,7 @@ def list_game_sessions(
             status=game.status,
             player_count=len(game.players),
             hand_count=len(game.hands),
+            winners=_parse_winners(game.winners),
         )
         for game in games
     ]
@@ -86,6 +96,7 @@ def create_game_session(
         created_at=game.created_at,
         player_names=[p.name for p in game.players],
         hand_count=len(game.hands),
+        winners=_parse_winners(game.winners),
     )
 
 
@@ -104,6 +115,7 @@ def get_game_session(
         created_at=game.created_at,
         player_names=[p.name for p in game.players],
         hand_count=len(game.hands),
+        winners=_parse_winners(game.winners),
     )
 
 
@@ -111,13 +123,16 @@ def get_game_session(
 def complete_game_session(
     game_id: int,
     db: Annotated[Session, Depends(get_db)],
+    payload: CompleteGameRequest | None = None,
 ):
     game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
     if game is None:
         raise HTTPException(status_code=404, detail='Game session not found')
     if game.status == 'completed':
         raise HTTPException(status_code=400, detail='Game session already completed')
+    winners = payload.winners if payload else []
     game.status = 'completed'
+    game.winners = json.dumps(winners) if winners else None
     db.commit()
     db.refresh(game)
     return GameSessionResponse(
@@ -127,4 +142,30 @@ def complete_game_session(
         created_at=game.created_at,
         player_names=[p.name for p in game.players],
         hand_count=len(game.hands),
+        winners=_parse_winners(game.winners),
+    )
+
+
+@router.patch('/{game_id}/reactivate', response_model=GameSessionResponse)
+def reactivate_game_session(
+    game_id: int,
+    db: Annotated[Session, Depends(get_db)],
+):
+    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
+    if game is None:
+        raise HTTPException(status_code=404, detail='Game session not found')
+    if game.status == 'active':
+        raise HTTPException(status_code=400, detail='Game session is already active')
+    game.status = 'active'
+    game.winners = None
+    db.commit()
+    db.refresh(game)
+    return GameSessionResponse(
+        game_id=game.game_id,
+        game_date=game.game_date,
+        status=game.status,
+        created_at=game.created_at,
+        player_names=[p.name for p in game.players],
+        hand_count=len(game.hands),
+        winners=_parse_winners(game.winners),
     )

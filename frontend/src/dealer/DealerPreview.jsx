@@ -135,7 +135,7 @@ export function DealerPreview({ community, players, gameId, handNumber }) {
           <canvas ref={canvasRef} style={canvasStyle} />
         </div>
       )}
-      {equities && equities.length > 0 && (
+      {expanded && equities && equities.length > 0 && (
         <div data-testid="equity-badges" style={badgeContainerStyle}>
           {(players || []).map((p) =>
             equityMap[p.name] != null ? (

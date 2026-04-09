@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { reducer, initialState } from './dealerState.js';
+import { reducer, initialState, validateOutcomeStreets } from './dealerState.js';
 
 describe('initialState', () => {
   it('has the correct shape', () => {
@@ -28,8 +28,8 @@ describe('reducer', () => {
       expect(state.gameDate).toBe('2026-04-08');
       expect(state.currentStep).toBe('dashboard');
       expect(state.players).toEqual([
-        { name: 'Alice', card1: null, card2: null, recorded: false, status: 'playing' },
-        { name: 'Bob', card1: null, card2: null, recorded: false, status: 'playing' },
+        { name: 'Alice', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null },
+        { name: 'Bob', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null },
       ]);
       expect(state.community).toEqual({
         flop1: null, flop2: null, flop3: null, turn: null, river: null, recorded: false,
@@ -50,11 +50,11 @@ describe('reducer', () => {
       });
 
       expect(state.players[0]).toEqual({
-        name: 'Alice', card1: 'Ah', card2: 'Kd', recorded: true, status: 'playing',
+        name: 'Alice', card1: 'Ah', card2: 'Kd', recorded: true, status: 'playing', outcomeStreet: null,
       });
       // Bob is untouched
       expect(state.players[1]).toEqual({
-        name: 'Bob', card1: null, card2: null, recorded: false, status: 'playing',
+        name: 'Bob', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null,
       });
     });
 
@@ -112,8 +112,8 @@ describe('reducer', () => {
       expect(reset.gameId).toBe(7);
       expect(reset.gameDate).toBe('2026-04-08');
       expect(reset.players).toEqual([
-        { name: 'Alice', card1: null, card2: null, recorded: false, status: 'playing' },
-        { name: 'Bob', card1: null, card2: null, recorded: false, status: 'playing' },
+        { name: 'Alice', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null },
+        { name: 'Bob', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null },
       ]);
       expect(reset.community).toEqual({
         flop1: null, flop2: null, flop3: null, turn: null, river: null, recorded: false,
@@ -147,7 +147,7 @@ describe('reducer', () => {
   });
 
   describe('SET_PLAYER_RESULT', () => {
-    it('sets a player status to won', () => {
+    it('sets a player status to won with outcomeStreet', () => {
       const gameState = reducer(initialState, {
         type: 'SET_GAME',
         payload: { gameId: 1, players: ['Alice', 'Bob'], gameDate: '2026-04-08' },
@@ -155,14 +155,16 @@ describe('reducer', () => {
 
       const state = reducer(gameState, {
         type: 'SET_PLAYER_RESULT',
-        payload: { name: 'Alice', status: 'won' },
+        payload: { name: 'Alice', status: 'won', outcomeStreet: 'river' },
       });
 
       expect(state.players[0].status).toBe('won');
+      expect(state.players[0].outcomeStreet).toBe('river');
       expect(state.players[1].status).toBe('playing');
+      expect(state.players[1].outcomeStreet).toBeNull();
     });
 
-    it('sets a player status to folded', () => {
+    it('sets a player status to folded with outcomeStreet', () => {
       const gameState = reducer(initialState, {
         type: 'SET_GAME',
         payload: { gameId: 1, players: ['Alice'], gameDate: '2026-04-08' },
@@ -170,13 +172,14 @@ describe('reducer', () => {
 
       const state = reducer(gameState, {
         type: 'SET_PLAYER_RESULT',
-        payload: { name: 'Alice', status: 'folded' },
+        payload: { name: 'Alice', status: 'folded', outcomeStreet: 'flop' },
       });
 
       expect(state.players[0].status).toBe('folded');
+      expect(state.players[0].outcomeStreet).toBe('flop');
     });
 
-    it('sets a player status to lost', () => {
+    it('sets a player status to lost with outcomeStreet', () => {
       const gameState = reducer(initialState, {
         type: 'SET_GAME',
         payload: { gameId: 1, players: ['Alice'], gameDate: '2026-04-08' },
@@ -184,10 +187,26 @@ describe('reducer', () => {
 
       const state = reducer(gameState, {
         type: 'SET_PLAYER_RESULT',
-        payload: { name: 'Alice', status: 'lost' },
+        payload: { name: 'Alice', status: 'lost', outcomeStreet: 'turn' },
       });
 
       expect(state.players[0].status).toBe('lost');
+      expect(state.players[0].outcomeStreet).toBe('turn');
+    });
+
+    it('sets not_playing status with null outcomeStreet', () => {
+      const gameState = reducer(initialState, {
+        type: 'SET_GAME',
+        payload: { gameId: 1, players: ['Alice'], gameDate: '2026-04-08' },
+      });
+
+      const state = reducer(gameState, {
+        type: 'SET_PLAYER_RESULT',
+        payload: { name: 'Alice', status: 'not_playing', outcomeStreet: null },
+      });
+
+      expect(state.players[0].status).toBe('not_playing');
+      expect(state.players[0].outcomeStreet).toBeNull();
     });
 
     it('does not mutate the original state', () => {
@@ -266,8 +285,8 @@ describe('reducer', () => {
       expect(finished.currentHandId).toBeNull();
       expect(finished.currentStep).toBe('dashboard');
       expect(finished.players).toEqual([
-        { name: 'Alice', card1: null, card2: null, recorded: false, status: 'playing' },
-        { name: 'Bob', card1: null, card2: null, recorded: false, status: 'playing' },
+        { name: 'Alice', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null },
+        { name: 'Bob', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null },
       ]);
       expect(finished.community).toEqual({
         flop1: null, flop2: null, flop3: null, turn: null, river: null, recorded: false,
@@ -315,6 +334,150 @@ describe('reducer', () => {
     it('returns state unchanged', () => {
       const state = reducer(initialState, { type: 'UNKNOWN' });
       expect(state).toBe(initialState);
+    });
+  });
+
+  describe('LOAD_HAND', () => {
+    it('hydrates players and community from API hand data', () => {
+      let state = reducer(initialState, {
+        type: 'SET_GAME',
+        payload: { gameId: 1, players: ['Alice', 'Bob', 'Charlie'], gameDate: '2026-04-08' },
+      });
+
+      const handData = {
+        hand_number: 3,
+        flop_1: '2H', flop_2: '3C', flop_3: '5D',
+        turn: 'JS', river: 'QH',
+        player_hands: [
+          { player_name: 'Alice', card_1: 'AH', card_2: 'KD', result: 'won', profit_loss: 50, outcome_street: 'river' },
+          { player_name: 'Bob', card_1: '9S', card_2: 'TC', result: 'lost', profit_loss: -25, outcome_street: 'turn' },
+        ],
+      };
+
+      state = reducer(state, { type: 'LOAD_HAND', payload: handData });
+
+      expect(state.currentHandId).toBe(3);
+      expect(state.currentStep).toBe('playerGrid');
+      expect(state.community).toEqual({
+        flop1: '2H', flop2: '3C', flop3: '5D', turn: 'JS', river: 'QH', recorded: true,
+      });
+      // Alice and Bob have their recorded data
+      expect(state.players[0]).toEqual({
+        name: 'Alice', card1: 'AH', card2: 'KD', recorded: true, status: 'won', outcomeStreet: 'river',
+      });
+      expect(state.players[1]).toEqual({
+        name: 'Bob', card1: '9S', card2: 'TC', recorded: true, status: 'lost', outcomeStreet: 'turn',
+      });
+      // Charlie was not in the hand — stays fresh
+      expect(state.players[2]).toEqual({
+        name: 'Charlie', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null,
+      });
+    });
+
+    it('handles hand with no community cards', () => {
+      let state = reducer(initialState, {
+        type: 'SET_GAME',
+        payload: { gameId: 1, players: ['Alice'], gameDate: '2026-04-08' },
+      });
+
+      const handData = {
+        hand_number: 1,
+        flop_1: null, flop_2: null, flop_3: null,
+        turn: null, river: null,
+        player_hands: [],
+      };
+
+      state = reducer(state, { type: 'LOAD_HAND', payload: handData });
+
+      expect(state.community.recorded).toBe(false);
+      expect(state.players[0].status).toBe('playing');
+    });
+
+    it('handles player with null cards (folded without showing)', () => {
+      let state = reducer(initialState, {
+        type: 'SET_GAME',
+        payload: { gameId: 1, players: ['Alice'], gameDate: '2026-04-08' },
+      });
+
+      const handData = {
+        hand_number: 1,
+        flop_1: null, flop_2: null, flop_3: null,
+        turn: null, river: null,
+        player_hands: [
+          { player_name: 'Alice', card_1: null, card_2: null, result: 'folded', profit_loss: -10 },
+        ],
+      };
+
+      state = reducer(state, { type: 'LOAD_HAND', payload: handData });
+
+      expect(state.players[0]).toEqual({
+        name: 'Alice', card1: null, card2: null, recorded: true, status: 'folded', outcomeStreet: null,
+      });
+    });
+  });
+
+  describe('validateOutcomeStreets', () => {
+    const STREET_ORDER = { flop: 0, turn: 1, river: 2 };
+
+    it('returns null when all outcomes are on the same street', () => {
+      const players = [
+        { name: 'Alice', status: 'won', outcomeStreet: 'river' },
+        { name: 'Bob', status: 'lost', outcomeStreet: 'river' },
+      ];
+      expect(validateOutcomeStreets(players)).toBeNull();
+    });
+
+    it('returns null when winner won on a later street than losers folded', () => {
+      const players = [
+        { name: 'Alice', status: 'won', outcomeStreet: 'river' },
+        { name: 'Bob', status: 'folded', outcomeStreet: 'flop' },
+        { name: 'Carol', status: 'folded', outcomeStreet: 'turn' },
+      ];
+      expect(validateOutcomeStreets(players)).toBeNull();
+    });
+
+    it('returns error when loser lost on a later street than winner won', () => {
+      const players = [
+        { name: 'Alice', status: 'won', outcomeStreet: 'flop' },
+        { name: 'Bob', status: 'lost', outcomeStreet: 'river' },
+      ];
+      const err = validateOutcomeStreets(players);
+      expect(err).toBeTruthy();
+      expect(err).toContain('Bob');
+    });
+
+    it('returns error when folder folded after the winner won', () => {
+      const players = [
+        { name: 'Alice', status: 'won', outcomeStreet: 'flop' },
+        { name: 'Bob', status: 'folded', outcomeStreet: 'turn' },
+      ];
+      const err = validateOutcomeStreets(players);
+      expect(err).toBeTruthy();
+      expect(err).toContain('Bob');
+    });
+
+    it('returns null when no winner is set yet (all playing or missing streets)', () => {
+      const players = [
+        { name: 'Alice', status: 'playing', outcomeStreet: null },
+        { name: 'Bob', status: 'folded', outcomeStreet: 'flop' },
+      ];
+      expect(validateOutcomeStreets(players)).toBeNull();
+    });
+
+    it('returns null when there are not_playing players', () => {
+      const players = [
+        { name: 'Alice', status: 'won', outcomeStreet: 'river' },
+        { name: 'Bob', status: 'not_playing', outcomeStreet: null },
+      ];
+      expect(validateOutcomeStreets(players)).toBeNull();
+    });
+
+    it('allows losers on the same street as the winner', () => {
+      const players = [
+        { name: 'Alice', status: 'won', outcomeStreet: 'turn' },
+        { name: 'Bob', status: 'lost', outcomeStreet: 'turn' },
+      ];
+      expect(validateOutcomeStreets(players)).toBeNull();
     });
   });
 });

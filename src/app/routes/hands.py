@@ -53,6 +53,7 @@ def list_hands(
                     card_2=ph.card_2,
                     result=ph.result,
                     profit_loss=ph.profit_loss,
+                    outcome_street=ph.outcome_street,
                 )
             )
         result.append(
@@ -103,6 +104,7 @@ def get_hand(
                 card_2=ph.card_2,
                 result=ph.result,
                 profit_loss=ph.profit_loss,
+                outcome_street=ph.outcome_street,
             )
         )
 
@@ -234,6 +236,7 @@ def edit_community_cards(
                 card_2=ph.card_2,
                 result=ph.result,
                 profit_loss=ph.profit_loss,
+                outcome_street=ph.outcome_street,
             )
         )
 
@@ -329,6 +332,7 @@ def edit_player_hole_cards(
         card_2=ph.card_2,
         result=ph.result,
         profit_loss=ph.profit_loss,
+        outcome_street=ph.outcome_street,
     )
 
 
@@ -426,6 +430,7 @@ def add_player_to_hand(
         card_2=ph.card_2,
         result=ph.result,
         profit_loss=ph.profit_loss,
+        outcome_street=ph.outcome_street,
     )
 
 
@@ -572,6 +577,7 @@ def record_hand(
                 card_2=ph.card_2,
                 result=ph.result,
                 profit_loss=ph.profit_loss,
+                outcome_street=ph.outcome_street,
             )
         )
 
@@ -637,6 +643,7 @@ def update_player_result(
 
     ph.result = payload.result
     ph.profit_loss = payload.profit_loss
+    ph.outcome_street = payload.outcome_street
 
     db.commit()
     db.refresh(ph)
@@ -650,6 +657,7 @@ def update_player_result(
         card_2=ph.card_2,
         result=ph.result,
         profit_loss=ph.profit_loss,
+        outcome_street=ph.outcome_street,
     )
 
 
@@ -718,6 +726,7 @@ def record_hand_results(
                 card_2=ph.card_2,
                 result=ph.result,
                 profit_loss=ph.profit_loss,
+                outcome_street=ph.outcome_street,
             )
         )
 

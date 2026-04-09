@@ -3,42 +3,61 @@ const statusColors = {
   won: '#bbf7d0',
   folded: '#fecaca',
   lost: '#fed7aa',
+  not_playing: '#e5e7eb',
 };
 
-export function PlayerGrid({ players, communityRecorded, onTileSelect, onDirectOutcome, canFinish, onFinishHand }) {
+function formatStatus(status, outcomeStreet) {
+  if (status === 'not_playing') return 'not playing';
+  if (outcomeStreet) return `${status} on ${outcomeStreet}`;
+  return status;
+}
+
+export function PlayerGrid({ players, communityRecorded, onTileSelect, onDirectOutcome, canFinish, onFinishHand, onBack }) {
   return (
     <div style={styles.container}>
       <h2 style={styles.heading}>Select a Player</h2>
-      <div style={styles.grid}>
-        <button
-          data-testid="table-tile"
-          style={styles.tile}
-          onClick={() => onTileSelect('community')}
-        >
-          <span style={styles.tileName}>Table</span>
-          {communityRecorded && <span style={styles.check}>✅</span>}
+      {onBack && (
+        <button data-testid="back-btn" onClick={onBack} style={styles.backButton}>
+          Back to Hands
         </button>
+      )}
 
+      <button
+        data-testid="table-tile"
+        style={styles.tableTile}
+        onClick={() => onTileSelect('community')}
+      >
+        <span style={styles.tileName}>Table</span>
+        {communityRecorded && <span style={styles.check}>✅</span>}
+      </button>
+
+      <div data-testid="player-list" style={styles.playerList}>
         {players.map((p) => (
-          <div key={p.name} style={styles.tileWrapper}>
+          <div
+            key={p.name}
+            data-testid={`player-row-${p.name}`}
+            style={{ ...styles.playerRow, backgroundColor: statusColors[p.status] || '#ffffff' }}
+          >
             <button
               data-testid={`player-tile-${p.name}`}
-              style={{ ...styles.tile, backgroundColor: statusColors[p.status] || '#ffffff' }}
+              style={styles.playerNameCol}
               onClick={() => onTileSelect(p.name)}
             >
               <span style={styles.tileName}>{p.name}</span>
-              <span style={styles.statusText}>{p.status}</span>
-              {p.recorded && <span style={styles.check}>✅</span>}
+              {p.recorded && <span style={styles.inlineCheck}>✅</span>}
             </button>
-            {onDirectOutcome && p.status === 'playing' && (
-              <button
-                data-testid={`outcome-btn-${p.name}`}
-                style={styles.outcomeButton}
-                onClick={() => onDirectOutcome(p.name)}
-              >
-                📋
-              </button>
-            )}
+            <div style={styles.statusCol}>
+              <span style={styles.statusText}>{formatStatus(p.status, p.outcomeStreet)}</span>
+              {onDirectOutcome && (
+                <button
+                  data-testid={`outcome-btn-${p.name}`}
+                  style={styles.outcomeButton}
+                  onClick={() => onDirectOutcome(p.name)}
+                >
+                  📋
+                </button>
+              )}
+            </div>
           </div>
         ))}
       </div>
@@ -65,16 +84,17 @@ const styles = {
     fontSize: '1.4rem',
     marginBottom: '1rem',
   },
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(2, 1fr)',
-    gap: '0.75rem',
+  backButton: {
+    marginBottom: '0.75rem',
+    padding: '0.5rem 1rem',
+    fontSize: '0.95rem',
+    cursor: 'pointer',
   },
-  tile: {
+  tableTile: {
     position: 'relative',
-    minHeight: '80px',
+    width: '100%',
+    minHeight: '60px',
     display: 'flex',
-    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
     fontSize: '1.1rem',
@@ -84,17 +104,57 @@ const styles = {
     background: '#eef2ff',
     color: '#312e81',
     cursor: 'pointer',
-    padding: '1rem',
+    padding: '0.75rem 1rem',
+    marginBottom: '0.75rem',
     WebkitTapHighlightColor: 'transparent',
+  },
+  playerList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.5rem',
+  },
+  playerRow: {
+    display: 'flex',
+    alignItems: 'center',
+    border: '2px solid #c7d2fe',
+    borderRadius: '12px',
+    overflow: 'hidden',
+    minHeight: '56px',
+  },
+  playerNameCol: {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    padding: '0.75rem 1rem',
+    fontSize: '1.1rem',
+    fontWeight: 'bold',
+    border: 'none',
+    background: 'transparent',
+    color: '#312e81',
+    cursor: 'pointer',
+    WebkitTapHighlightColor: 'transparent',
+    minHeight: '48px',
+  },
+  statusCol: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    padding: '0.5rem 1rem',
+    minWidth: '80px',
+    justifyContent: 'flex-end',
   },
   tileName: {
     textAlign: 'center',
   },
   statusText: {
-    fontSize: '0.8rem',
-    fontWeight: 'normal',
-    marginTop: '0.25rem',
+    fontSize: '0.85rem',
+    fontWeight: '600',
     color: '#555',
+    textTransform: 'capitalize',
+  },
+  inlineCheck: {
+    fontSize: '1rem',
   },
   check: {
     position: 'absolute',
@@ -102,15 +162,9 @@ const styles = {
     right: '6px',
     fontSize: '1.2rem',
   },
-  tileWrapper: {
-    position: 'relative',
-  },
   outcomeButton: {
-    position: 'absolute',
-    bottom: '4px',
-    right: '4px',
-    width: '28px',
-    height: '28px',
+    width: '32px',
+    height: '32px',
     fontSize: '0.9rem',
     border: 'none',
     borderRadius: '6px',
@@ -119,29 +173,19 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 0,
-    zIndex: 1,
-  },
-  error: {
-    marginTop: '1rem',
-    padding: '0.75rem',
-    background: '#fef2f2',
-    border: '1px solid #fca5a5',
-    borderRadius: '8px',
-    color: '#991b1b',
-    fontSize: '0.9rem',
+    WebkitTapHighlightColor: 'transparent',
   },
   finishButton: {
-    marginTop: '1.5rem',
     width: '100%',
-    padding: '0.875rem',
+    padding: '0.75rem',
     minHeight: '48px',
     fontSize: '1.1rem',
     fontWeight: 'bold',
     border: 'none',
-    borderRadius: '12px',
+    borderRadius: '8px',
     background: '#16a34a',
     color: '#fff',
     cursor: 'pointer',
+    marginTop: '1rem',
   },
 };

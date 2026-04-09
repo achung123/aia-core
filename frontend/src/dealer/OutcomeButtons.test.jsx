@@ -23,11 +23,12 @@ describe('OutcomeButtons', () => {
     submitting: false,
   };
 
-  it('renders three outcome buttons: Won, Folded, Lost', () => {
+  it('renders four outcome buttons: Won, Folded, Lost, Not Playing', () => {
     const container = renderToContainer(<OutcomeButtons {...defaultProps} />);
     expect(findButton(container, 'Won')).not.toBeNull();
     expect(findButton(container, 'Folded')).not.toBeNull();
     expect(findButton(container, 'Lost')).not.toBeNull();
+    expect(findButton(container, 'Not Playing')).not.toBeNull();
   });
 
   it('displays the player name', () => {
@@ -53,25 +54,25 @@ describe('OutcomeButtons', () => {
     expect(btn.style.backgroundColor).toBe('#ea580c');
   });
 
-  it('calls onSelect with "won" when Won is clicked', () => {
+  it('does not call onSelect immediately when Won is clicked (awaits street)', () => {
     const onSelect = vi.fn();
     const container = renderToContainer(<OutcomeButtons {...defaultProps} onSelect={onSelect} />);
     findButton(container, 'Won').click();
-    expect(onSelect).toHaveBeenCalledWith('won');
+    expect(onSelect).not.toHaveBeenCalled();
   });
 
-  it('calls onSelect with "folded" when Folded is clicked', () => {
+  it('does not call onSelect immediately when Folded is clicked (awaits street)', () => {
     const onSelect = vi.fn();
     const container = renderToContainer(<OutcomeButtons {...defaultProps} onSelect={onSelect} />);
     findButton(container, 'Folded').click();
-    expect(onSelect).toHaveBeenCalledWith('folded');
+    expect(onSelect).not.toHaveBeenCalled();
   });
 
-  it('calls onSelect with "lost" when Lost is clicked', () => {
+  it('does not call onSelect immediately when Lost is clicked (awaits street)', () => {
     const onSelect = vi.fn();
     const container = renderToContainer(<OutcomeButtons {...defaultProps} onSelect={onSelect} />);
     findButton(container, 'Lost').click();
-    expect(onSelect).toHaveBeenCalledWith('lost');
+    expect(onSelect).not.toHaveBeenCalled();
   });
 
   it('shows error message when error prop is set', () => {
@@ -97,6 +98,7 @@ describe('OutcomeButtons', () => {
     expect(findButton(container, 'Won').disabled).toBe(true);
     expect(findButton(container, 'Folded').disabled).toBe(true);
     expect(findButton(container, 'Lost').disabled).toBe(true);
+    expect(findButton(container, 'Not Playing').disabled).toBe(true);
   });
 
   it('includes a back/cancel button', () => {
@@ -108,5 +110,72 @@ describe('OutcomeButtons', () => {
     expect(cancelBtn).not.toBeNull();
     cancelBtn.click();
     expect(onCancel).toHaveBeenCalled();
+  });
+
+  describe('street selection', () => {
+    it('Not Playing calls onSelect immediately with no street', () => {
+      const onSelect = vi.fn();
+      const container = renderToContainer(<OutcomeButtons {...defaultProps} onSelect={onSelect} />);
+      findButton(container, 'Not Playing').click();
+      expect(onSelect).toHaveBeenCalledWith('not_playing', null);
+    });
+
+    it('shows street buttons (Flop, Turn, River) after selecting an outcome', async () => {
+      const container = renderToContainer(<OutcomeButtons {...defaultProps} />);
+      findButton(container, 'Won').click();
+      await vi.waitFor(() => {
+        expect(findButton(container, 'Flop')).not.toBeUndefined();
+        expect(findButton(container, 'Turn')).not.toBeUndefined();
+        expect(findButton(container, 'River')).not.toBeUndefined();
+      });
+    });
+
+    it('calls onSelect with result and street after selecting street', async () => {
+      const onSelect = vi.fn();
+      const container = renderToContainer(<OutcomeButtons {...defaultProps} onSelect={onSelect} />);
+      findButton(container, 'Folded').click();
+      await vi.waitFor(() => {
+        expect(findButton(container, 'Flop')).not.toBeUndefined();
+      });
+      // onSelect should NOT have been called yet (waiting for street)
+      expect(onSelect).not.toHaveBeenCalled();
+      findButton(container, 'Flop').click();
+      expect(onSelect).toHaveBeenCalledWith('folded', 'flop');
+    });
+
+    it('calls onSelect with won and river', async () => {
+      const onSelect = vi.fn();
+      const container = renderToContainer(<OutcomeButtons {...defaultProps} onSelect={onSelect} />);
+      findButton(container, 'Won').click();
+      await vi.waitFor(() => {
+        expect(findButton(container, 'River')).not.toBeUndefined();
+      });
+      findButton(container, 'River').click();
+      expect(onSelect).toHaveBeenCalledWith('won', 'river');
+    });
+
+    it('calls onSelect with lost and turn', async () => {
+      const onSelect = vi.fn();
+      const container = renderToContainer(<OutcomeButtons {...defaultProps} onSelect={onSelect} />);
+      findButton(container, 'Lost').click();
+      await vi.waitFor(() => {
+        expect(findButton(container, 'Turn')).not.toBeUndefined();
+      });
+      findButton(container, 'Turn').click();
+      expect(onSelect).toHaveBeenCalledWith('lost', 'turn');
+    });
+
+    it('hides outcome buttons and shows street buttons after outcome click', async () => {
+      const container = renderToContainer(<OutcomeButtons {...defaultProps} />);
+      findButton(container, 'Won').click();
+      await vi.waitFor(() => {
+        // Street buttons should be shown
+        expect(findButton(container, 'Flop')).not.toBeUndefined();
+      });
+      // Outcome buttons should be gone
+      expect(findButton(container, 'Won')).toBeUndefined();
+      expect(findButton(container, 'Folded')).toBeUndefined();
+      expect(findButton(container, 'Lost')).toBeUndefined();
+    });
   });
 });

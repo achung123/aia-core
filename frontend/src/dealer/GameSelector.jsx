@@ -10,9 +10,7 @@ export function GameSelector({ onSelectGame, onNewGame }) {
   useEffect(() => {
     fetchSessions()
       .then(data => {
-        const sorted = [...data].sort((a, b) =>
-          b.game_date.localeCompare(a.game_date)
-        );
+        const sorted = [...data].sort((a, b) => b.game_id - a.game_id);
         setSessions(sorted);
       })
       .catch(err => setError(err.message))
@@ -51,7 +49,7 @@ export function GameSelector({ onSelectGame, onNewGame }) {
               }}
               onClick={() => onSelectGame(s.game_id)}
             >
-              <div style={styles.cardDate}>{s.game_date}</div>
+              <div style={styles.cardDate}>{s.game_date} <span style={styles.gameId}>#{s.game_id}</span></div>
               <div style={styles.cardDetails}>
                 <span style={styles.badge}>
                   {isActive ? '● Active' : 'Complete'}
@@ -59,6 +57,11 @@ export function GameSelector({ onSelectGame, onNewGame }) {
                 <span>{s.player_count} players</span>
                 <span>{s.hand_count} hands</span>
               </div>
+              {s.winners && s.winners.length > 0 && (
+                <div style={styles.winnersRow}>
+                  🏆 {s.winners.join(', ')}
+                </div>
+              )}
             </button>
           );
         })}
@@ -139,6 +142,11 @@ const styles = {
     fontWeight: 'bold',
     fontSize: '1.1rem',
   },
+  gameId: {
+    fontWeight: 'normal',
+    fontSize: '0.85rem',
+    color: '#6b7280',
+  },
   cardDetails: {
     display: 'flex',
     gap: '1rem',
@@ -146,5 +154,10 @@ const styles = {
   },
   badge: {
     fontWeight: 600,
+  },
+  winnersRow: {
+    fontSize: '0.85rem',
+    fontWeight: 600,
+    color: '#16a34a',
   },
 };

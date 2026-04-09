@@ -181,9 +181,7 @@ class TestDealerFlowSmoke:
         hand_get = client.get(f'/games/{game_id}/hands/{hand_number}')
         assert hand_get.status_code == 200
         player_hands = hand_get.json()['player_hands']
-        dave_ph = next(
-            ph for ph in player_hands if ph['player_name'] == 'Dave'
-        )
+        dave_ph = next(ph for ph in player_hands if ph['player_name'] == 'Dave')
         assert dave_ph['card_1'] is None
         assert dave_ph['card_2'] is None
         assert dave_ph['result'] is None

@@ -103,6 +103,7 @@ def search_hands(
                     card_2=ph.card_2,
                     result=ph.result,
                     profit_loss=ph.profit_loss,
+                    outcome_street=ph.outcome_street,
                 ),
             )
         )

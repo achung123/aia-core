@@ -13,8 +13,16 @@ export function fetchSessions() {
   return request('/games');
 }
 
+export function fetchGame(gameId) {
+  return request(`/games/${gameId}`);
+}
+
 export function fetchHands(sessionId) {
   return request(`/games/${sessionId}/hands`);
+}
+
+export function fetchHand(gameId, handNumber) {
+  return request(`/games/${gameId}/hands/${handNumber}`);
 }
 
 export function fetchPlayerStats(playerName) {
@@ -86,6 +94,20 @@ export function patchPlayerResult(gameId, handNumber, playerName, data) {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
+  });
+}
+
+export function completeGame(gameId, winners) {
+  return request(`/games/${gameId}/complete`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ winners: winners || [] }),
+  });
+}
+
+export function reactivateGame(gameId) {
+  return request(`/games/${gameId}/reactivate`, {
+    method: 'PATCH',
   });
 }
 
