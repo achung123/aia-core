@@ -28,7 +28,7 @@ VALID_ROW_ADAM = [
     '4S',
     '5H',
     '6C',
-    'win',
+    'won',
     '50.0',
 ]
 VALID_ROW_GIL = [
@@ -42,7 +42,7 @@ VALID_ROW_GIL = [
     '4S',
     '5H',
     '6C',
-    'loss',
+    'lost',
     '-50.0',
 ]
 
@@ -83,7 +83,7 @@ class TestValidCSVUpload:
             '4S',
             '',
             '',
-            'fold',
+            'folded',
             '-10.0',
         ]
         csv_bytes = _make_csv([row])
@@ -129,7 +129,7 @@ class TestInvalidCardValues:
             '4S',
             '5H',
             '6C',
-            'win',
+            'won',
             '0',
         ]
         csv_bytes = _make_csv([row])
@@ -156,7 +156,7 @@ class TestInvalidCardValues:
             '4S',
             '5H',
             '6C',
-            'win',
+            'won',
             '0',
         ]
         csv_bytes = _make_csv([row])
@@ -182,7 +182,7 @@ class TestInvalidCardValues:
             '4S',
             '5H',
             '6C',
-            'win',
+            'won',
             '0',
         ]
         csv_bytes = _make_csv([row])
@@ -209,7 +209,7 @@ class TestInvalidCardValues:
             '4S',
             'ZZ',
             '6C',
-            'win',
+            'won',
             '0',
         ]
         csv_bytes = _make_csv([row])
@@ -235,7 +235,7 @@ class TestInvalidCardValues:
             '4S',
             '5H',
             '6C',
-            'win',
+            'won',
             '0',
         ]
         csv_bytes = _make_csv([row])
@@ -261,7 +261,7 @@ class TestInvalidCardValues:
             '4S',
             '5H',
             '6C',
-            'win',
+            'won',
             '0',
         ]
         csv_bytes = _make_csv([row])
@@ -290,7 +290,7 @@ class TestDuplicateCardDetection:
             '4S',
             '5H',
             '6C',
-            'win',
+            'won',
             '0',
         ]
         csv_bytes = _make_csv([row])
@@ -316,7 +316,7 @@ class TestDuplicateCardDetection:
             '4S',
             '5H',
             '6C',
-            'win',
+            'won',
             '0',
         ]
         csv_bytes = _make_csv([row])
@@ -341,7 +341,7 @@ class TestDuplicateCardDetection:
             '4S',
             '5H',
             '6C',
-            'win',
+            'won',
             '50.0',
         ]
         row2 = [
@@ -355,7 +355,7 @@ class TestDuplicateCardDetection:
             '4S',
             '5H',
             '6C',
-            'loss',
+            'lost',
             '-50.0',
         ]
         csv_bytes = _make_csv([row1, row2])
@@ -380,7 +380,7 @@ class TestDuplicateCardDetection:
             '4S',
             '5H',
             '6C',
-            'win',
+            'won',
             '50.0',
         ]
         row2 = [
@@ -394,7 +394,7 @@ class TestDuplicateCardDetection:
             '9S',
             '10H',
             'JC',
-            'loss',
+            'lost',
             '-30.0',
         ]
         csv_bytes = _make_csv([row1, row2])
@@ -456,7 +456,7 @@ class TestTenRankCards:
             '4S',
             '5H',
             '6C',
-            'win',
+            'won',
             '50.0',
         ]
         csv_bytes = _make_csv([row])
@@ -501,6 +501,114 @@ class TestHeaderEdgeCases:
         assert data['total_rows'] == 0
 
 
+class TestInvalidResultValues:
+    """CSV validation rejects invalid result strings."""
+
+    def _row_with_result(self, result: str) -> list[str]:
+        return [
+            '03-09-2026',
+            '1',
+            'Adam',
+            'AS',
+            'KH',
+            '2C',
+            '3D',
+            '4S',
+            '5H',
+            '6C',
+            result,
+            '50.0',
+        ]
+
+    def test_arbitrary_result_string_reported_as_error(self, client):
+        csv_bytes = _make_csv([self._row_with_result('destroyed')])
+        response = client.post(
+            '/upload/csv',
+            files={'file': ('hands.csv', csv_bytes, 'text/csv')},
+        )
+        data = response.json()
+        assert data['valid'] is False
+        assert data['error_count'] > 0
+        fields = [e['field'] for e in data['errors']]
+        assert 'result' in fields
+
+    def test_legacy_win_value_reported_as_error(self, client):
+        csv_bytes = _make_csv([self._row_with_result('win')])
+        response = client.post(
+            '/upload/csv',
+            files={'file': ('hands.csv', csv_bytes, 'text/csv')},
+        )
+        data = response.json()
+        assert data['valid'] is False
+        fields = [e['field'] for e in data['errors']]
+        assert 'result' in fields
+
+    def test_legacy_loss_value_reported_as_error(self, client):
+        csv_bytes = _make_csv([self._row_with_result('loss')])
+        response = client.post(
+            '/upload/csv',
+            files={'file': ('hands.csv', csv_bytes, 'text/csv')},
+        )
+        data = response.json()
+        assert data['valid'] is False
+
+    def test_legacy_fold_value_reported_as_error(self, client):
+        csv_bytes = _make_csv([self._row_with_result('fold')])
+        response = client.post(
+            '/upload/csv',
+            files={'file': ('hands.csv', csv_bytes, 'text/csv')},
+        )
+        data = response.json()
+        assert data['valid'] is False
+
+    def test_valid_result_won_accepted(self, client):
+        csv_bytes = _make_csv([self._row_with_result('won')])
+        response = client.post(
+            '/upload/csv',
+            files={'file': ('hands.csv', csv_bytes, 'text/csv')},
+        )
+        data = response.json()
+        assert data['valid'] is True
+
+    def test_valid_result_lost_accepted(self, client):
+        csv_bytes = _make_csv([self._row_with_result('lost')])
+        response = client.post(
+            '/upload/csv',
+            files={'file': ('hands.csv', csv_bytes, 'text/csv')},
+        )
+        data = response.json()
+        assert data['valid'] is True
+
+    def test_valid_result_folded_accepted(self, client):
+        csv_bytes = _make_csv([self._row_with_result('folded')])
+        response = client.post(
+            '/upload/csv',
+            files={'file': ('hands.csv', csv_bytes, 'text/csv')},
+        )
+        data = response.json()
+        assert data['valid'] is True
+
+    def test_empty_result_accepted(self, client):
+        csv_bytes = _make_csv([self._row_with_result('')])
+        response = client.post(
+            '/upload/csv',
+            files={'file': ('hands.csv', csv_bytes, 'text/csv')},
+        )
+        data = response.json()
+        assert data['valid'] is True
+
+    def test_error_message_mentions_valid_values(self, client):
+        csv_bytes = _make_csv([self._row_with_result('destroyed')])
+        response = client.post(
+            '/upload/csv',
+            files={'file': ('hands.csv', csv_bytes, 'text/csv')},
+        )
+        data = response.json()
+        error = next(e for e in data['errors'] if e['field'] == 'result')
+        msg = error['message'].lower()
+        assert 'won' in msg or 'lost' in msg or 'folded' in msg
+
+
 class TestInvalidOptionalCards:
     def test_invalid_river_with_empty_turn_reported(self, client):
         row = [
@@ -514,7 +622,7 @@ class TestInvalidOptionalCards:
             '4S',
             '',
             'ZZ',
-            'win',
+            'won',
             '0',
         ]
         csv_bytes = _make_csv([row])

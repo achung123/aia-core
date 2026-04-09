@@ -100,8 +100,8 @@ def seeded_client(client):
     r1 = client.patch(
         f'/games/{gid1}/hands/{hn1}/results',
         json=[
-            {'player_name': 'Alice', 'result': 'win', 'profit_loss': 30.0},
-            {'player_name': 'Bob', 'result': 'loss', 'profit_loss': -30.0},
+            {'player_name': 'Alice', 'result': 'won', 'profit_loss': 30.0},
+            {'player_name': 'Bob', 'result': 'lost', 'profit_loss': -30.0},
         ],
     )
     assert r1.status_code == 200
@@ -133,8 +133,8 @@ def seeded_client(client):
     r2 = client.patch(
         f'/games/{gid1}/hands/{hn2}/results',
         json=[
-            {'player_name': 'Alice', 'result': 'fold', 'profit_loss': 0.0},
-            {'player_name': 'Bob', 'result': 'win', 'profit_loss': 10.0},
+            {'player_name': 'Alice', 'result': 'folded', 'profit_loss': 0.0},
+            {'player_name': 'Bob', 'result': 'won', 'profit_loss': 10.0},
         ],
     )
     assert r2.status_code == 200
@@ -174,8 +174,8 @@ def seeded_client(client):
     r3 = client.patch(
         f'/games/{gid2}/hands/{hn3}/results',
         json=[
-            {'player_name': 'Alice', 'result': 'win', 'profit_loss': 50.0},
-            {'player_name': 'Bob', 'result': 'loss', 'profit_loss': -50.0},
+            {'player_name': 'Alice', 'result': 'won', 'profit_loss': 50.0},
+            {'player_name': 'Bob', 'result': 'lost', 'profit_loss': -50.0},
         ],
     )
     assert r3.status_code == 200

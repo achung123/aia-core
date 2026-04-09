@@ -63,14 +63,14 @@ HAND_PAYLOAD = {
             'player_name': 'Alice',
             'card_1': {'rank': '7', 'suit': 'S'},
             'card_2': {'rank': '8', 'suit': 'S'},
-            'result': 'win',
+            'result': 'won',
             'profit_loss': 50.0,
         },
         {
             'player_name': 'Bob',
             'card_1': {'rank': '9', 'suit': 'H'},
             'card_2': {'rank': '10', 'suit': 'H'},
-            'result': 'loss',
+            'result': 'lost',
             'profit_loss': -50.0,
         },
     ],
@@ -162,7 +162,7 @@ class TestSearchHandsByPlayer:
     ):
         response = client.get('/hands', params={'player': 'Alice'})
         ph = response.json()['results'][0]['player_hand']
-        assert ph['result'] == 'win'
+        assert ph['result'] == 'won'
 
     def test_search_result_includes_game_date(
         self, client, game_with_players, recorded_hand

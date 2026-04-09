@@ -311,14 +311,14 @@ class TestPlayerHandNullableColumns:
             player_id=player.player_id,
             card_1='AS',
             card_2='KH',
-            result='win',
+            result='won',
             profit_loss=150.0,
         )
         db_session.add(ph)
         db_session.commit()
 
         result = db_session.query(PlayerHand).first()
-        assert result.result == 'win'
+        assert result.result == 'won'
         assert result.profit_loss == 150.0
 
 
@@ -342,7 +342,7 @@ class TestPlayerHandCreation:
             player_id=player.player_id,
             card_1='AS',
             card_2='KH',
-            result='win',
+            result='won',
             profit_loss=100.0,
         )
         db_session.add(ph)
@@ -354,7 +354,7 @@ class TestPlayerHandCreation:
         assert result.player_id == player.player_id
         assert result.card_1 == 'AS'
         assert result.card_2 == 'KH'
-        assert result.result == 'win'
+        assert result.result == 'won'
         assert result.profit_loss == 100.0
 
     def test_player_hand_created_at_has_default(self, db_session):

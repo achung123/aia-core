@@ -5,26 +5,42 @@ import { HandDashboard } from './HandDashboard.jsx';
 import { PlayerGrid } from './PlayerGrid.jsx';
 import { CameraCapture } from './CameraCapture.jsx';
 import { DetectionReview } from './DetectionReview.jsx';
-import { createHand } from '../api/client.js';
-import { assembleHandPayload, validateNoDuplicates } from './handPayload.js';
+import { OutcomeButtons } from './OutcomeButtons.jsx';
+import { DealerPreview } from './DealerPreview.jsx';
+import { addPlayerToHand, updateHolecards, updateCommunityCards, patchPlayerResult } from '../api/client.js';
 
 export function DealerApp() {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [captureTarget, setCaptureTarget] = useState(null);
   const [reviewData, setReviewData] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState(null);
+  const [patchError, setPatchError] = useState(null);
+  const [outcomeTarget, setOutcomeTarget] = useState(null);
+  const [outcomeError, setOutcomeError] = useState(null);
+  const [outcomeSubmitting, setOutcomeSubmitting] = useState(false);
+  const [showFinishConfirm, setShowFinishConfirm] = useState(false);
+  const [finishError, setFinishError] = useState(null);
+  const [finishing, setFinishing] = useState(false);
+  const [persistedPlayers, setPersistedPlayers] = useState(new Set());
 
   function handleGameCreated(gameId, players, gameDate) {
     dispatch({ type: 'SET_GAME', payload: { gameId, players, gameDate } });
   }
 
-  function handleStartHand() {
+  function handleSelectHand(handNumber) {
+    dispatch({ type: 'SET_HAND_ID', payload: handNumber });
     dispatch({ type: 'SET_STEP', payload: 'playerGrid' });
   }
 
   function handleTileSelect(name) {
+    setPatchError(null);
     setCaptureTarget(name);
+  }
+
+  function handleDirectOutcome(name) {
+    setPatchError(null);
+    setOutcomeError(null);
+    setOutcomeTarget(name);
+    dispatch({ type: 'SET_STEP', payload: 'outcome' });
   }
 
   function handleDetectionResult(targetName, apiResponse, file) {
@@ -44,33 +60,71 @@ export function DealerApp() {
     setCaptureTarget(null);
   }
 
-  function handleReviewConfirm(targetName, cardValues) {
+  async function handleReviewConfirm(targetName, cardValues) {
     if (reviewData?.imageUrl) URL.revokeObjectURL(reviewData.imageUrl);
 
     if (reviewData?.mode === 'community') {
-      dispatch({
-        type: 'SET_COMMUNITY_CARDS',
-        payload: {
-          flop1: cardValues[0] || null,
-          flop2: cardValues[1] || null,
-          flop3: cardValues[2] || null,
-          turn: cardValues[3] || null,
-          river: cardValues[4] || null,
-        },
-      });
+      const communityPayload = {
+        flop_1: cardValues[0] || null,
+        flop_2: cardValues[1] || null,
+        flop_3: cardValues[2] || null,
+        turn: cardValues[3] || null,
+        river: cardValues[4] || null,
+      };
+      setReviewData(null);
+      try {
+        await updateCommunityCards(state.gameId, state.currentHandId, communityPayload);
+        dispatch({
+          type: 'SET_COMMUNITY_CARDS',
+          payload: {
+            flop1: cardValues[0] || null,
+            flop2: cardValues[1] || null,
+            flop3: cardValues[2] || null,
+            turn: cardValues[3] || null,
+            river: cardValues[4] || null,
+          },
+        });
+        setPatchError(null);
+        dispatch({ type: 'SET_STEP', payload: 'playerGrid' });
+      } catch (err) {
+        dispatch({ type: 'SET_STEP', payload: 'playerGrid' });
+        setPatchError(err.message || 'Failed to save community cards');
+      }
     } else {
-      dispatch({
-        type: 'SET_PLAYER_CARDS',
-        payload: {
-          name: targetName,
-          card1: cardValues[0] || null,
-          card2: cardValues[1] || null,
-        },
-      });
-    }
+      const card1 = cardValues[0] || null;
+      const card2 = cardValues[1] || null;
+      const player = state.players.find((p) => p.name === targetName);
+      const isRetake = player?.recorded;
 
-    setReviewData(null);
-    dispatch({ type: 'SET_STEP', payload: 'playerGrid' });
+      setReviewData(null);
+
+      try {
+        if (isRetake) {
+          await updateHolecards(state.gameId, state.currentHandId, targetName, {
+            card_1: card1,
+            card_2: card2,
+          });
+        } else {
+          await addPlayerToHand(state.gameId, state.currentHandId, {
+            player_name: targetName,
+            card_1: card1,
+            card_2: card2,
+          });
+        }
+        dispatch({
+          type: 'SET_PLAYER_CARDS',
+          payload: { name: targetName, card1, card2 },
+        });
+        setPatchError(null);
+        // Transition to outcome step
+        setOutcomeTarget(targetName);
+        setOutcomeError(null);
+        dispatch({ type: 'SET_STEP', payload: 'outcome' });
+      } catch (err) {
+        dispatch({ type: 'SET_STEP', payload: 'playerGrid' });
+        setPatchError(err.message || 'Failed to save cards');
+      }
+    }
   }
 
   function handleReviewRetake() {
@@ -81,28 +135,68 @@ export function DealerApp() {
     setCaptureTarget(target);
   }
 
-  async function handleSubmitHand() {
-    setSubmitError(null);
-    const payload = assembleHandPayload(state);
-    const dupeError = validateNoDuplicates(payload);
-    if (dupeError) {
-      setSubmitError(dupeError);
-      return;
-    }
-    setSubmitting(true);
+  async function handleOutcomeSelect(result) {
+    setOutcomeError(null);
+    setOutcomeSubmitting(true);
     try {
-      await createHand(state.gameId, payload);
-      dispatch({ type: 'RESET_HAND' });
-      setSubmitError(null);
+      await patchPlayerResult(state.gameId, state.currentHandId, outcomeTarget, { result });
+      dispatch({ type: 'SET_PLAYER_RESULT', payload: { name: outcomeTarget, status: result } });
+      setOutcomeTarget(null);
+      dispatch({ type: 'SET_STEP', payload: 'playerGrid' });
     } catch (err) {
-      setSubmitError(err.message || 'Failed to submit hand');
+      setOutcomeError(err.message || 'Failed to save result');
     } finally {
-      setSubmitting(false);
+      setOutcomeSubmitting(false);
     }
   }
 
-  const allRecorded =
-    state.community.recorded && state.players.length > 0 && state.players.every((p) => p.recorded);
+  function handleOutcomeCancel() {
+    setOutcomeTarget(null);
+    setOutcomeError(null);
+    dispatch({ type: 'SET_STEP', payload: 'playerGrid' });
+  }
+
+  function handleFinishHand() {
+    if (!state.community.recorded) {
+      alert('Community cards must be recorded before finishing the hand.');
+      return;
+    }
+    const uncaptured = state.players.filter((p) => p.status === 'playing');
+    if (uncaptured.length === 0) {
+      doFinishHand([]);
+    } else {
+      setShowFinishConfirm(true);
+    }
+  }
+
+  async function doFinishHand(uncapturedPlayers) {
+    setFinishing(true);
+    setFinishError(null);
+    try {
+      const remaining = uncapturedPlayers.filter((p) => !persistedPlayers.has(p.name));
+      for (const p of remaining) {
+        await addPlayerToHand(state.gameId, state.currentHandId, {
+          player_name: p.name,
+          card_1: null,
+          card_2: null,
+          result: null,
+        });
+        setPersistedPlayers((prev) => new Set(prev).add(p.name));
+      }
+      dispatch({ type: 'FINISH_HAND' });
+      setShowFinishConfirm(false);
+      setPersistedPlayers(new Set());
+    } catch (err) {
+      setFinishError(err.message || 'Failed to finish hand');
+    } finally {
+      setFinishing(false);
+    }
+  }
+
+  const canFinish =
+    state.community.recorded &&
+    state.players.length > 0 &&
+    state.players.some((p) => p.status !== 'playing');
 
   return (
     <div id="dealer-root">
@@ -114,23 +208,27 @@ export function DealerApp() {
 
       {state.currentStep === 'dashboard' && state.gameId && (
         <HandDashboard
-          gameDate={state.gameDate}
-          players={state.players.map((p) => p.name)}
-          handCount={state.handCount}
-          onStartHand={handleStartHand}
+          gameId={state.gameId}
+          onSelectHand={handleSelectHand}
+          onBack={() => dispatch({ type: 'SET_STEP', payload: 'create' })}
         />
       )}
 
       {state.currentStep === 'playerGrid' && state.gameId && (
-        <PlayerGrid
-          players={state.players}
-          communityRecorded={state.community.recorded}
-          onTileSelect={handleTileSelect}
-          allRecorded={allRecorded}
-          submitting={submitting}
-          submitError={submitError}
-          onSubmitHand={handleSubmitHand}
-        />
+        <>
+          <DealerPreview community={state.community} players={state.players} gameId={state.gameId} handNumber={state.currentHandId} />
+          <PlayerGrid
+            players={state.players}
+            communityRecorded={state.community.recorded}
+            onTileSelect={handleTileSelect}
+            onDirectOutcome={handleDirectOutcome}
+            canFinish={canFinish}
+            onFinishHand={handleFinishHand}
+          />
+          {patchError && (
+            <div style={toastStyle}>{patchError}</div>
+          )}
+        </>
       )}
 
       {captureTarget && state.gameId && (
@@ -152,6 +250,82 @@ export function DealerApp() {
           onRetake={handleReviewRetake}
         />
       )}
+
+      {state.currentStep === 'outcome' && outcomeTarget && (
+        <OutcomeButtons
+          playerName={outcomeTarget}
+          onSelect={handleOutcomeSelect}
+          onCancel={handleOutcomeCancel}
+          error={outcomeError}
+          submitting={outcomeSubmitting}
+        />
+      )}
+
+      {showFinishConfirm && (
+        <div data-testid="finish-confirm-dialog" style={dialogOverlayStyle}>
+          <div style={dialogStyle}>
+            <p>The following players have not been captured and will be recorded with no cards:</p>
+            <ul>
+              {state.players.filter((p) => p.status === 'playing').map((p) => (
+                <li key={p.name}>{p.name}</li>
+              ))}
+            </ul>
+            {finishError && <div style={{ color: '#991b1b', marginBottom: '0.5rem' }}>{finishError}</div>}
+            <div style={dialogButtonRow}>
+              <button onClick={() => setShowFinishConfirm(false)} disabled={finishing}>Cancel</button>
+              <button
+                onClick={() => doFinishHand(state.players.filter((p) => p.status === 'playing'))}
+                disabled={finishing}
+              >
+                {finishing ? 'Finishing…' : 'Confirm'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+const dialogOverlayStyle = {
+  position: 'fixed',
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  background: 'rgba(0,0,0,0.5)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  zIndex: 300,
+};
+
+const dialogStyle = {
+  background: '#fff',
+  borderRadius: '12px',
+  padding: '1.5rem',
+  maxWidth: '400px',
+  width: '90%',
+};
+
+const dialogButtonRow = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  marginTop: '1rem',
+  gap: '0.5rem',
+};
+
+const toastStyle = {
+  position: 'fixed',
+  bottom: '1rem',
+  left: '50%',
+  transform: 'translateX(-50%)',
+  background: '#991b1b',
+  color: '#fff',
+  padding: '0.75rem 1.5rem',
+  borderRadius: '8px',
+  fontSize: '0.95rem',
+  zIndex: 200,
+  maxWidth: '90%',
+  textAlign: 'center',
+};

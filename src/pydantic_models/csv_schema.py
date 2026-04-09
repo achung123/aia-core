@@ -6,7 +6,7 @@ import csv
 import io
 from collections import defaultdict
 
-from pydantic_models.app_models import CardRank, CardSuit
+from pydantic_models.app_models import CardRank, CardSuit, ResultEnum
 
 CSV_COLUMNS = [
     'game_date',
@@ -34,7 +34,7 @@ CSV_COLUMN_FORMATS = {
     'flop_3': 'card (e.g. AS, KH, 10D)',
     'turn': 'card or empty',
     'river': 'card or empty',
-    'result': 'win | loss | fold',
+    'result': 'won | lost | folded',
     'profit_loss': 'decimal number',
 }
 
@@ -44,6 +44,7 @@ OPTIONAL_CARD_FIELDS = ['turn', 'river']
 
 _VALID_RANKS = {r.value for r in CardRank}
 _VALID_SUITS = {s.value for s in CardSuit}
+_VALID_RESULTS = {r.value for r in ResultEnum}
 
 
 def is_valid_card(card_str: str) -> bool:
@@ -106,6 +107,21 @@ def validate_csv_rows(
                             'message': f'Invalid card value: {value}',
                         }
                     )
+
+            # Validate result against ResultEnum
+            result_value = row.get('result', '').strip()
+            if result_value and result_value not in _VALID_RESULTS:
+                errors.append(
+                    {
+                        'row': row_index,
+                        'field': 'result',
+                        'value': result_value,
+                        'message': (
+                            f'Invalid result: {result_value}. '
+                            f'Must be one of: {", ".join(sorted(_VALID_RESULTS))}'
+                        ),
+                    }
+                )
 
             # Add community cards once (from first row) and hole cards per player.
             if not community_added:

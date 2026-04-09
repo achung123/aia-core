@@ -62,15 +62,15 @@ def generate_hand(player_names: list[str]) -> dict:
     for i, name in enumerate(player_names):
         hole = deal(deck, 2)
         if i in fold_indices:
-            result = 'fold'
+            result = 'folded'
             pl = -round(random.uniform(5, 15), 2)
         elif i == winner_idx:
-            result = 'win'
+            result = 'won'
             pl = 0.0  # placeholder — computed after
         else:
-            result = 'loss'
+            result = 'lost'
             pl = -round(random.uniform(15, 40), 2)
-        pot -= pl if result != 'win' else 0
+        pot -= pl if result != 'won' else 0
         entries.append(
             {
                 'name': name,
@@ -83,7 +83,7 @@ def generate_hand(player_names: list[str]) -> dict:
 
     # Winner gets the pot
     for e in entries:
-        if e['result'] == 'win':
+        if e['result'] == 'won':
             e['profit_loss'] = round(pot, 2)
             break
 

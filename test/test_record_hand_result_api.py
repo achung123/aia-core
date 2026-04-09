@@ -83,7 +83,7 @@ class TestRecordHandResultBasic:
         game_id, hand_number = game_with_hand
         resp = client.patch(
             f'/games/{game_id}/hands/{hand_number}/results',
-            json=[{'player_name': 'Alice', 'result': 'win', 'profit_loss': 50.0}],
+            json=[{'player_name': 'Alice', 'result': 'won', 'profit_loss': 50.0}],
         )
         assert resp.status_code == 200
 
@@ -91,14 +91,14 @@ class TestRecordHandResultBasic:
         game_id, hand_number = game_with_hand
         resp = client.patch(
             f'/games/{game_id}/hands/{hand_number}/results',
-            json=[{'player_name': 'Alice', 'result': 'win', 'profit_loss': 50.0}],
+            json=[{'player_name': 'Alice', 'result': 'won', 'profit_loss': 50.0}],
         )
         assert resp.status_code == 200
         body = resp.json()
         alice_ph = next(
             ph for ph in body['player_hands'] if ph['player_name'] == 'Alice'
         )
-        assert alice_ph['result'] == 'win'
+        assert alice_ph['result'] == 'won'
         assert alice_ph['profit_loss'] == 50.0
 
     def test_patch_results_leaves_unspecified_player_untouched(
@@ -108,7 +108,7 @@ class TestRecordHandResultBasic:
         game_id, hand_number = game_with_hand
         resp = client.patch(
             f'/games/{game_id}/hands/{hand_number}/results',
-            json=[{'player_name': 'Alice', 'result': 'win', 'profit_loss': 50.0}],
+            json=[{'player_name': 'Alice', 'result': 'won', 'profit_loss': 50.0}],
         )
         assert resp.status_code == 200
         body = resp.json()
@@ -121,8 +121,8 @@ class TestRecordHandResultBasic:
         resp = client.patch(
             f'/games/{game_id}/hands/{hand_number}/results',
             json=[
-                {'player_name': 'Alice', 'result': 'win', 'profit_loss': 50.0},
-                {'player_name': 'Bob', 'result': 'loss', 'profit_loss': -50.0},
+                {'player_name': 'Alice', 'result': 'won', 'profit_loss': 50.0},
+                {'player_name': 'Bob', 'result': 'lost', 'profit_loss': -50.0},
             ],
         )
         assert resp.status_code == 200
@@ -131,16 +131,16 @@ class TestRecordHandResultBasic:
             ph for ph in body['player_hands'] if ph['player_name'] == 'Alice'
         )
         bob_ph = next(ph for ph in body['player_hands'] if ph['player_name'] == 'Bob')
-        assert alice_ph['result'] == 'win'
+        assert alice_ph['result'] == 'won'
         assert alice_ph['profit_loss'] == 50.0
-        assert bob_ph['result'] == 'loss'
+        assert bob_ph['result'] == 'lost'
         assert bob_ph['profit_loss'] == -50.0
 
     def test_patch_results_returns_full_hand_response(self, client, game_with_hand):
         game_id, hand_number = game_with_hand
         resp = client.patch(
             f'/games/{game_id}/hands/{hand_number}/results',
-            json=[{'player_name': 'Alice', 'result': 'win', 'profit_loss': 10.0}],
+            json=[{'player_name': 'Alice', 'result': 'won', 'profit_loss': 10.0}],
         )
         body = resp.json()
         assert 'hand_id' in body
@@ -156,7 +156,7 @@ class TestRecordHandResult404:
         _, hand_number = game_with_hand
         resp = client.patch(
             f'/games/9999/hands/{hand_number}/results',
-            json=[{'player_name': 'Alice', 'result': 'win', 'profit_loss': 50.0}],
+            json=[{'player_name': 'Alice', 'result': 'won', 'profit_loss': 50.0}],
         )
         assert resp.status_code == 404
 
@@ -164,7 +164,7 @@ class TestRecordHandResult404:
         game_id, _ = game_with_hand
         resp = client.patch(
             f'/games/{game_id}/hands/9999/results',
-            json=[{'player_name': 'Alice', 'result': 'win', 'profit_loss': 50.0}],
+            json=[{'player_name': 'Alice', 'result': 'won', 'profit_loss': 50.0}],
         )
         assert resp.status_code == 404
 
@@ -172,6 +172,6 @@ class TestRecordHandResult404:
         game_id, hand_number = game_with_hand
         resp = client.patch(
             f'/games/{game_id}/hands/{hand_number}/results',
-            json=[{'player_name': 'Charlie', 'result': 'win', 'profit_loss': 50.0}],
+            json=[{'player_name': 'Charlie', 'result': 'won', 'profit_loss': 50.0}],
         )
         assert resp.status_code == 404

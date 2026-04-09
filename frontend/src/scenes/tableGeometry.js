@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-const SEAT_COUNT = 10;
+const DEFAULT_SEAT_COUNT = 10;
 const TABLE_RADIUS_X = 3.5;
 const TABLE_RADIUS_Z = 2.0;
 
@@ -14,10 +14,10 @@ export function addPokerTable(scene) {
   return tableMesh;
 }
 
-export function computeSeatPositions() {
+export function computeSeatPositions(seatCount = DEFAULT_SEAT_COUNT) {
   const positions = [];
-  for (let i = 0; i < SEAT_COUNT; i++) {
-    const angle = (i / SEAT_COUNT) * Math.PI * 2;
+  for (let i = 0; i < seatCount; i++) {
+    const angle = (i / seatCount) * Math.PI * 2;
     const x = Math.cos(angle) * (TABLE_RADIUS_X + 0.8);
     const z = Math.sin(angle) * (TABLE_RADIUS_Z + 0.8);
     positions.push(new THREE.Vector3(x, 0, z));
@@ -25,9 +25,9 @@ export function computeSeatPositions() {
   return positions;
 }
 
-export function createSeatLabels(container) {
+export function createSeatLabels(container, seatCount = DEFAULT_SEAT_COUNT) {
   const labels = [];
-  for (let i = 0; i < SEAT_COUNT; i++) {
+  for (let i = 0; i < seatCount; i++) {
     const div = document.createElement('div');
     div.className = 'seat-label';
     div.style.cssText = 'position:absolute;pointer-events:none;color:#fff;font-size:12px;white-space:nowrap;opacity:0.3;';

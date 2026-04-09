@@ -132,10 +132,10 @@ class TestPlayerHandEntry:
             player_name='Adam',
             card_1=Card(rank=CardRank.ACE, suit=CardSuit.SPADES),
             card_2=Card(rank=CardRank.KING, suit=CardSuit.HEARTS),
-            result='win',
+            result='won',
             profit_loss=50.0,
         )
-        assert entry.result == 'win'
+        assert entry.result == 'won'
         assert entry.profit_loss == 50.0
 
     def test_player_hand_entry_optional_result(self):
@@ -147,9 +147,10 @@ class TestPlayerHandEntry:
         assert entry.result is None
         assert entry.profit_loss is None
 
-    def test_player_hand_entry_requires_cards(self):
-        with pytest.raises(ValidationError):
-            PlayerHandEntry(player_name='Adam')
+    def test_player_hand_entry_cards_default_to_none(self):
+        entry = PlayerHandEntry(player_name='Adam')
+        assert entry.card_1 is None
+        assert entry.card_2 is None
 
     def test_player_hand_entry_validates_card_values(self):
         with pytest.raises(ValidationError):
@@ -199,26 +200,27 @@ class TestHandCreate:
         assert str(hand.turn) == '4H'
         assert str(hand.river) == '5S'
 
-    def test_hand_create_requires_flop(self):
-        with pytest.raises(ValidationError):
-            HandCreate(
-                player_entries=[
-                    PlayerHandEntry(
-                        player_name='Adam',
-                        card_1=Card(rank=CardRank.KING, suit=CardSuit.HEARTS),
-                        card_2=Card(rank=CardRank.QUEEN, suit=CardSuit.HEARTS),
-                    ),
-                ],
-            )
+    def test_hand_create_flop_defaults_to_none(self):
+        hand = HandCreate(
+            player_entries=[
+                PlayerHandEntry(
+                    player_name='Adam',
+                    card_1=Card(rank=CardRank.KING, suit=CardSuit.HEARTS),
+                    card_2=Card(rank=CardRank.QUEEN, suit=CardSuit.HEARTS),
+                ),
+            ],
+        )
+        assert hand.flop_1 is None
+        assert hand.flop_2 is None
+        assert hand.flop_3 is None
 
-    def test_hand_create_requires_player_entries(self):
-        with pytest.raises(ValidationError):
-            HandCreate(
-                flop_1=Card(rank=CardRank.ACE, suit=CardSuit.SPADES),
-                flop_2=Card(rank=CardRank.TWO, suit=CardSuit.CLUBS),
-                flop_3=Card(rank=CardRank.THREE, suit=CardSuit.DIAMONDS),
-                player_entries=[],
-            )
+    def test_hand_create_player_entries_defaults_to_empty(self):
+        hand = HandCreate(
+            flop_1=Card(rank=CardRank.ACE, suit=CardSuit.SPADES),
+            flop_2=Card(rank=CardRank.TWO, suit=CardSuit.CLUBS),
+            flop_3=Card(rank=CardRank.THREE, suit=CardSuit.DIAMONDS),
+        )
+        assert hand.player_entries == []
 
     def test_hand_create_serialization_round_trip(self):
         hand = HandCreate(
@@ -262,7 +264,7 @@ class TestHandResponse:
                     player_name='Adam',
                     card_1='KH',
                     card_2='QH',
-                    result='win',
+                    result='won',
                     profit_loss=50.0,
                 ),
             ],
@@ -311,37 +313,37 @@ class TestHandResponse:
 class TestHandResultUpdate:
     def test_valid_hand_result_update(self):
         update = HandResultUpdate(
-            result='win',
+            result='won',
             profit_loss=100.0,
         )
-        assert update.result == 'win'
+        assert update.result == 'won'
         assert update.profit_loss == 100.0
 
     def test_hand_result_update_loss(self):
         update = HandResultUpdate(
-            result='loss',
+            result='lost',
             profit_loss=-50.0,
         )
-        assert update.result == 'loss'
+        assert update.result == 'lost'
         assert update.profit_loss == -50.0
 
     def test_hand_result_update_fold(self):
         update = HandResultUpdate(
-            result='fold',
+            result='folded',
             profit_loss=-10.0,
         )
-        assert update.result == 'fold'
+        assert update.result == 'folded'
 
-    def test_hand_result_update_requires_result(self):
-        with pytest.raises(ValidationError):
-            HandResultUpdate(profit_loss=50.0)
+    def test_hand_result_update_allows_null_result(self):
+        update = HandResultUpdate(profit_loss=50.0)
+        assert update.result is None
 
     def test_hand_result_update_requires_profit_loss(self):
         with pytest.raises(ValidationError):
-            HandResultUpdate(result='win')
+            HandResultUpdate(result='won')
 
     def test_hand_result_update_serialization_round_trip(self):
-        update = HandResultUpdate(result='win', profit_loss=100.0)
+        update = HandResultUpdate(result='won', profit_loss=100.0)
         data = update.model_dump()
         restored = HandResultUpdate.model_validate(data)
         assert restored.result == update.result

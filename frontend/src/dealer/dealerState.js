@@ -2,6 +2,7 @@ const emptyCommunity = { flop1: null, flop2: null, flop3: null, turn: null, rive
 
 export const initialState = {
   gameId: null,
+  currentHandId: null,
   players: [],
   community: { ...emptyCommunity },
   currentStep: 'create',
@@ -10,7 +11,7 @@ export const initialState = {
 };
 
 function initPlayer(name) {
-  return { name, card1: null, card2: null, recorded: false };
+  return { name, card1: null, card2: null, recorded: false, status: 'playing' };
 }
 
 export function reducer(state, action) {
@@ -48,6 +49,30 @@ export function reducer(state, action) {
     case 'RESET_HAND':
       return {
         ...state,
+        currentHandId: null,
+        players: state.players.map((p) => initPlayer(p.name)),
+        community: { ...emptyCommunity },
+        handCount: state.handCount + 1,
+        currentStep: 'dashboard',
+      };
+
+    case 'SET_PLAYER_RESULT': {
+      const { name, status } = action.payload;
+      return {
+        ...state,
+        players: state.players.map((p) =>
+          p.name === name ? { ...p, status } : p,
+        ),
+      };
+    }
+
+    case 'SET_HAND_ID':
+      return { ...state, currentHandId: action.payload };
+
+    case 'FINISH_HAND':
+      return {
+        ...state,
+        currentHandId: null,
         players: state.players.map((p) => initPlayer(p.name)),
         community: { ...emptyCommunity },
         handCount: state.handCount + 1,

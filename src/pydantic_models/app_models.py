@@ -7,6 +7,12 @@ from dateutil.parser import parse
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 
+class ResultEnum(str, Enum):
+    WON = 'won'
+    FOLDED = 'folded'
+    LOST = 'lost'
+
+
 class GameState(str, Enum):
     """
     Enumeration for the state of the game.
@@ -254,21 +260,21 @@ class PlayerHandEntry(BaseModel):
     model_config = ConfigDict(use_enum_values=True)
 
     player_name: str
-    card_1: Card
-    card_2: Card
-    result: str | None = None
+    card_1: Card | None = None
+    card_2: Card | None = None
+    result: ResultEnum | None = None
     profit_loss: float | None = None
 
 
 class HandCreate(BaseModel):
     model_config = ConfigDict(use_enum_values=True)
 
-    flop_1: Card
-    flop_2: Card
-    flop_3: Card
+    flop_1: Card | None = None
+    flop_2: Card | None = None
+    flop_3: Card | None = None
     turn: Card | None = None
     river: Card | None = None
-    player_entries: list[PlayerHandEntry] = Field(..., min_length=1)
+    player_entries: list[PlayerHandEntry] = []
 
 
 class PlayerHandResponse(BaseModel):
@@ -278,8 +284,8 @@ class PlayerHandResponse(BaseModel):
     hand_id: int
     player_id: int
     player_name: str
-    card_1: str
-    card_2: str
+    card_1: str | None = None
+    card_2: str | None = None
     result: str | None = None
     profit_loss: float | None = None
 
@@ -290,9 +296,9 @@ class HandResponse(BaseModel):
     hand_id: int
     game_id: int
     hand_number: int
-    flop_1: str
-    flop_2: str
-    flop_3: str
+    flop_1: str | None = None
+    flop_2: str | None = None
+    flop_3: str | None = None
     turn: str | None = None
     river: str | None = None
     source_upload_id: int | None = None
@@ -301,14 +307,25 @@ class HandResponse(BaseModel):
 
 
 class HandResultUpdate(BaseModel):
-    result: str
+    model_config = ConfigDict(use_enum_values=True)
+
+    result: ResultEnum | None = None
     profit_loss: float
 
 
 class PlayerResultEntry(BaseModel):
+    model_config = ConfigDict(use_enum_values=True)
+
     player_name: str
-    result: str
+    result: ResultEnum | None = None
     profit_loss: float
+
+
+class PlayerResultUpdate(BaseModel):
+    model_config = ConfigDict(use_enum_values=True)
+
+    result: ResultEnum
+    profit_loss: float | None = None
 
 
 class CommunityCardsUpdate(BaseModel):
@@ -324,8 +341,8 @@ class CommunityCardsUpdate(BaseModel):
 class HoleCardsUpdate(BaseModel):
     model_config = ConfigDict(use_enum_values=True)
 
-    card_1: Card
-    card_2: Card
+    card_1: Card | None = None
+    card_2: Card | None = None
 
 
 class PlayerStatsResponse(BaseModel):
@@ -425,3 +442,12 @@ class CSVCommitSummary(BaseModel):
     hands_created: int
     players_created: int
     players_matched: int
+
+
+class PlayerEquityEntry(BaseModel):
+    player_name: str
+    equity: float
+
+
+class EquityResponse(BaseModel):
+    equities: list[PlayerEquityEntry] = []

@@ -1,9 +1,17 @@
-export function PlayerGrid({ players, communityRecorded, onTileSelect, allRecorded, submitting, submitError, onSubmitHand }) {
+const statusColors = {
+  playing: '#ffffff',
+  won: '#bbf7d0',
+  folded: '#fecaca',
+  lost: '#fed7aa',
+};
+
+export function PlayerGrid({ players, communityRecorded, onTileSelect, onDirectOutcome, canFinish, onFinishHand }) {
   return (
     <div style={styles.container}>
       <h2 style={styles.heading}>Select a Player</h2>
       <div style={styles.grid}>
         <button
+          data-testid="table-tile"
           style={styles.tile}
           onClick={() => onTileSelect('community')}
         >
@@ -12,29 +20,37 @@ export function PlayerGrid({ players, communityRecorded, onTileSelect, allRecord
         </button>
 
         {players.map((p) => (
-          <button
-            key={p.name}
-            style={styles.tile}
-            onClick={() => onTileSelect(p.name)}
-          >
-            <span style={styles.tileName}>{p.name}</span>
-            {p.recorded && <span style={styles.check}>✅</span>}
-          </button>
+          <div key={p.name} style={styles.tileWrapper}>
+            <button
+              data-testid={`player-tile-${p.name}`}
+              style={{ ...styles.tile, backgroundColor: statusColors[p.status] || '#ffffff' }}
+              onClick={() => onTileSelect(p.name)}
+            >
+              <span style={styles.tileName}>{p.name}</span>
+              <span style={styles.statusText}>{p.status}</span>
+              {p.recorded && <span style={styles.check}>✅</span>}
+            </button>
+            {onDirectOutcome && p.status === 'playing' && (
+              <button
+                data-testid={`outcome-btn-${p.name}`}
+                style={styles.outcomeButton}
+                onClick={() => onDirectOutcome(p.name)}
+              >
+                📋
+              </button>
+            )}
+          </div>
         ))}
       </div>
 
-      {submitError && <div style={styles.error}>{submitError}</div>}
-
-      <button
-        style={{
-          ...styles.submitButton,
-          ...((!allRecorded || submitting) ? styles.submitButtonDisabled : {}),
-        }}
-        disabled={!allRecorded || submitting}
-        onClick={onSubmitHand}
-      >
-        {submitting ? 'Submitting…' : 'Submit Hand'}
-      </button>
+      {canFinish && (
+        <button
+          style={styles.finishButton}
+          onClick={onFinishHand}
+        >
+          Finish Hand
+        </button>
+      )}
     </div>
   );
 }
@@ -58,6 +74,7 @@ const styles = {
     position: 'relative',
     minHeight: '80px',
     display: 'flex',
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
     fontSize: '1.1rem',
@@ -73,11 +90,37 @@ const styles = {
   tileName: {
     textAlign: 'center',
   },
+  statusText: {
+    fontSize: '0.8rem',
+    fontWeight: 'normal',
+    marginTop: '0.25rem',
+    color: '#555',
+  },
   check: {
     position: 'absolute',
     top: '6px',
     right: '6px',
     fontSize: '1.2rem',
+  },
+  tileWrapper: {
+    position: 'relative',
+  },
+  outcomeButton: {
+    position: 'absolute',
+    bottom: '4px',
+    right: '4px',
+    width: '28px',
+    height: '28px',
+    fontSize: '0.9rem',
+    border: 'none',
+    borderRadius: '6px',
+    background: '#e0e7ff',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 0,
+    zIndex: 1,
   },
   error: {
     marginTop: '1rem',
@@ -88,7 +131,7 @@ const styles = {
     color: '#991b1b',
     fontSize: '0.9rem',
   },
-  submitButton: {
+  finishButton: {
     marginTop: '1.5rem',
     width: '100%',
     padding: '0.875rem',
@@ -97,12 +140,8 @@ const styles = {
     fontWeight: 'bold',
     border: 'none',
     borderRadius: '12px',
-    background: '#4f46e5',
+    background: '#16a34a',
     color: '#fff',
     cursor: 'pointer',
-  },
-  submitButtonDisabled: {
-    background: '#a5b4fc',
-    cursor: 'not-allowed',
   },
 };

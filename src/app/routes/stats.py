@@ -60,9 +60,9 @@ def get_player_stats(
             river_pct=0.0,
         )
 
-    hands_won = sum(1 for ph in player_hands if ph.result == 'win')
-    hands_lost = sum(1 for ph in player_hands if ph.result == 'loss')
-    hands_folded = sum(1 for ph in player_hands if ph.result == 'fold')
+    hands_won = sum(1 for ph in player_hands if ph.result == 'won')
+    hands_lost = sum(1 for ph in player_hands if ph.result == 'lost')
+    hands_folded = sum(1 for ph in player_hands if ph.result == 'folded')
     win_rate = round(hands_won / total * 100, 2)
 
     total_pl = sum(ph.profit_loss or 0.0 for ph in player_hands)
@@ -103,7 +103,7 @@ def get_leaderboard(
             Player.name,
             func.count(PlayerHand.player_hand_id).label('hands_played'),
             func.coalesce(func.sum(PlayerHand.profit_loss), 0.0).label('total_pl'),
-            func.sum(case((PlayerHand.result == 'win', 1), else_=0)).label('wins'),
+            func.sum(case((PlayerHand.result == 'won', 1), else_=0)).label('wins'),
         )
         .join(PlayerHand, Player.player_id == PlayerHand.player_id)
         .filter(PlayerHand.result.isnot(None))
@@ -175,11 +175,11 @@ def get_game_stats(
             }
         s = stats[pid]
         s['hands_played'] += 1
-        if ph.result == 'win':
+        if ph.result == 'won':
             s['hands_won'] += 1
-        elif ph.result == 'loss':
+        elif ph.result == 'lost':
             s['hands_lost'] += 1
-        elif ph.result == 'fold':
+        elif ph.result == 'folded':
             s['hands_folded'] += 1
         s['profit_loss'] += ph.profit_loss or 0.0
 

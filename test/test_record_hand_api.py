@@ -146,14 +146,14 @@ class TestRecordHandBasic:
                     'player_name': 'Alice',
                     'card_1': {'rank': '7', 'suit': 'S'},
                     'card_2': {'rank': '8', 'suit': 'S'},
-                    'result': 'win',
+                    'result': 'won',
                     'profit_loss': 50.0,
                 },
                 {
                     'player_name': 'Bob',
                     'card_1': {'rank': '9', 'suit': 'H'},
                     'card_2': {'rank': '10', 'suit': 'H'},
-                    'result': 'loss',
+                    'result': 'lost',
                     'profit_loss': -50.0,
                 },
             ],
@@ -161,9 +161,9 @@ class TestRecordHandBasic:
         resp = client.post(f'/games/{game_with_players}/hands', json=payload)
         assert resp.status_code == 201
         player_hands = {ph['player_name']: ph for ph in resp.json()['player_hands']}
-        assert player_hands['Alice']['result'] == 'win'
+        assert player_hands['Alice']['result'] == 'won'
         assert player_hands['Alice']['profit_loss'] == 50.0
-        assert player_hands['Bob']['result'] == 'loss'
+        assert player_hands['Bob']['result'] == 'lost'
         assert player_hands['Bob']['profit_loss'] == -50.0
 
     def test_record_hand_creates_db_records(self, client, game_with_players):
@@ -266,12 +266,12 @@ class TestRecordHandValidation:
         resp = client.post(f'/games/{game_with_players}/hands', json=payload)
         assert resp.status_code == 400
 
-    def test_record_hand_empty_player_entries_returns_422(
+    def test_record_hand_empty_player_entries_returns_201(
         self, client, game_with_players
     ):
         payload = {**HAND_PAYLOAD, 'player_entries': []}
         resp = client.post(f'/games/{game_with_players}/hands', json=payload)
-        assert resp.status_code == 422
+        assert resp.status_code == 201
 
 
 class TestDuplicateCardValidation:

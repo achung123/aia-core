@@ -125,13 +125,13 @@ class TestAddPlayerToHand:
                 'player_name': 'Bob',
                 'card_1': {'rank': '9', 'suit': 'H'},
                 'card_2': {'rank': '10', 'suit': 'H'},
-                'result': 'win',
+                'result': 'won',
                 'profit_loss': 25.0,
             },
         )
         assert resp.status_code == 201
         data = resp.json()
-        assert data['result'] == 'win'
+        assert data['result'] == 'won'
         assert data['profit_loss'] == 25.0
 
     def test_add_player_404_game_not_found(self, client):
@@ -267,6 +267,84 @@ class TestAddPlayerToHand:
         )
         assert resp.status_code == 400
         assert 'detail' in resp.json()
+
+
+# ---------------------------------------------------------------------------
+# POST — Add player with optional (null) cards
+# ---------------------------------------------------------------------------
+
+
+class TestAddPlayerWithNullCards:
+    """T-005 AC-1: Add player with card_1=null, card_2=null returns 201."""
+
+    def test_add_player_with_null_cards_returns_201(self, client, game_with_hand):
+        game_id, hand_number = game_with_hand
+        resp = client.post(
+            f'/games/{game_id}/hands/{hand_number}/players',
+            json={
+                'player_name': 'Bob',
+                'card_1': None,
+                'card_2': None,
+            },
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data['player_name'] == 'Bob'
+        assert data['card_1'] is None
+        assert data['card_2'] is None
+
+    def test_add_player_with_omitted_cards_returns_201(self, client, game_with_hand):
+        """Omitting card fields entirely should default to null."""
+        game_id, hand_number = game_with_hand
+        resp = client.post(
+            f'/games/{game_id}/hands/{hand_number}/players',
+            json={'player_name': 'Bob'},
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data['player_name'] == 'Bob'
+        assert data['card_1'] is None
+        assert data['card_2'] is None
+
+    def test_add_player_null_cards_persists_in_get_hand(self, client, game_with_hand):
+        game_id, hand_number = game_with_hand
+        client.post(
+            f'/games/{game_id}/hands/{hand_number}/players',
+            json={'player_name': 'Bob', 'card_1': None, 'card_2': None},
+        )
+        get_resp = client.get(f'/games/{game_id}/hands/{hand_number}')
+        assert get_resp.status_code == 200
+        bob = next(
+            ph for ph in get_resp.json()['player_hands'] if ph['player_name'] == 'Bob'
+        )
+        assert bob['card_1'] is None
+        assert bob['card_2'] is None
+
+    def test_add_player_with_one_card_null(self, client, game_with_hand):
+        """Providing only one card (other null) should work."""
+        game_id, hand_number = game_with_hand
+        resp = client.post(
+            f'/games/{game_id}/hands/{hand_number}/players',
+            json={
+                'player_name': 'Bob',
+                'card_1': {'rank': '9', 'suit': 'H'},
+                'card_2': None,
+            },
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data['card_1'] == '9H'
+        assert data['card_2'] is None
+
+    def test_duplicate_player_with_null_cards_returns_400(self, client, game_with_hand):
+        """T-005 AC-3: Adding a player already in the hand returns 400 even with null cards."""
+        game_id, hand_number = game_with_hand
+        # Alice is already in the hand from the fixture
+        resp = client.post(
+            f'/games/{game_id}/hands/{hand_number}/players',
+            json={'player_name': 'Alice', 'card_1': None, 'card_2': None},
+        )
+        assert resp.status_code == 400
 
 
 # ---------------------------------------------------------------------------

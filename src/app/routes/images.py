@@ -255,8 +255,10 @@ def confirm_detection(
     if cc.river is not None:
         all_cards.append(str(cc.river))
     for entry in payload.player_hands:
-        all_cards.append(str(entry.card_1))
-        all_cards.append(str(entry.card_2))
+        if entry.card_1 is not None:
+            all_cards.append(str(entry.card_1))
+        if entry.card_2 is not None:
+            all_cards.append(str(entry.card_2))
     try:
         validate_no_duplicate_cards(all_cards)
     except ValueError as exc:
@@ -312,8 +314,8 @@ def confirm_detection(
         ph = PlayerHand(
             hand_id=hand.hand_id,
             player_id=player.player_id,
-            card_1=str(entry.card_1),
-            card_2=str(entry.card_2),
+            card_1=str(entry.card_1) if entry.card_1 is not None else None,
+            card_2=str(entry.card_2) if entry.card_2 is not None else None,
         )
         db.add(ph)
         db.flush()
@@ -354,12 +356,20 @@ def confirm_detection(
     # Map player hole cards — use hole_1/hole_2 for first player,
     # hole_3/hole_4 for second, etc.
     for i, entry in enumerate(payload.player_hands):
-        confirmed_map[f'hole_{i * 2 + 1}'] = str(entry.card_1)
-        confirmed_map[f'hole_{i * 2 + 2}'] = str(entry.card_2)
+        confirmed_map[f'hole_{i * 2 + 1}'] = (
+            str(entry.card_1) if entry.card_1 is not None else None
+        )
+        confirmed_map[f'hole_{i * 2 + 2}'] = (
+            str(entry.card_2) if entry.card_2 is not None else None
+        )
 
     for position, confirmed_value in confirmed_map.items():
         detected_value = detection_map.get(position)
-        if detected_value is not None and detected_value != confirmed_value:
+        if (
+            detected_value is not None
+            and confirmed_value is not None
+            and detected_value != confirmed_value
+        ):
             db.add(
                 DetectionCorrection(
                     upload_id=upload_id,

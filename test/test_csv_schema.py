@@ -79,7 +79,7 @@ class TestCSVParser:
                     '4S',
                     '5H',
                     '6C',
-                    'win',
+                    'won',
                     '50.0',
                 ],
                 [
@@ -93,7 +93,7 @@ class TestCSVParser:
                     '4S',
                     '5H',
                     '6C',
-                    'loss',
+                    'lost',
                     '-50.0',
                 ],
             ]
@@ -120,7 +120,7 @@ class TestCSVParser:
                     '4S',
                     '5H',
                     '6C',
-                    'win',
+                    'won',
                     '50.0',
                 ],
                 [
@@ -134,7 +134,7 @@ class TestCSVParser:
                     '9S',
                     '10H',
                     'JC',
-                    'loss',
+                    'lost',
                     '-30.0',
                 ],
             ]
@@ -158,7 +158,7 @@ class TestCSVParser:
                     '4S',
                     '5H',
                     '6C',
-                    'win',
+                    'won',
                     '50.0',
                 ],
                 [
@@ -172,7 +172,7 @@ class TestCSVParser:
                     '9S',
                     '10H',
                     'JC',
-                    'win',
+                    'won',
                     '20.0',
                 ],
             ]
@@ -196,7 +196,7 @@ class TestCSVParser:
                     '4S',
                     '5H',
                     '6C',
-                    'win',
+                    'won',
                     '50.0',
                 ]
             ],
@@ -224,7 +224,7 @@ class TestCSVParser:
                     '4S',
                     '5H',
                     '6C',
-                    'win',
+                    'won',
                     '50.0',
                 ],
             ]
@@ -241,7 +241,7 @@ class TestCSVParser:
         assert entry['flop_3'] == '4S'
         assert entry['turn'] == '5H'
         assert entry['river'] == '6C'
-        assert entry['result'] == 'win'
+        assert entry['result'] == 'won'
         assert entry['profit_loss'] == '50.0'
 
     def test_parse_csv_optional_turn_river_empty(self):
@@ -258,7 +258,7 @@ class TestCSVParser:
                     '4S',
                     '',
                     '',
-                    'fold',
+                    'folded',
                     '-10.0',
                 ],
             ]
@@ -318,7 +318,7 @@ class TestValidateCSVRows:
                     'flop_3': '4S',
                     'turn': '5H',
                     'river': '6C',
-                    'result': 'win',
+                    'result': 'won',
                     'profit_loss': '50.0',
                 },
             ]
@@ -364,7 +364,7 @@ class TestValidateCSVRows:
                     'flop_3': '4S',
                     'turn': '5H',
                     'river': '6C',
-                    'result': 'win',
+                    'result': 'won',
                     'profit_loss': '50.0',
                 },
             ]

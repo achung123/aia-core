@@ -1,9 +1,7 @@
 import { fetchSessions, fetchHands } from '../api/client.js';
-import { initScene } from '../scenes/table.js';
-import { addPokerTable, computeSeatPositions, createSeatLabels, loadSession, updateSeatLabelPositions } from '../scenes/tableGeometry.js';
-import { createChipStacks } from '../scenes/chipStacks.js';
+import { createPokerScene } from '../scenes/pokerScene.js';
+import { createSeatLabels, loadSession, updateSeatLabelPositions } from '../scenes/tableGeometry.js';
 import { createCommunityCards } from '../scenes/communityCards.js';
-import { createHoleCards } from '../scenes/holeCards.js';
 import { createSessionScrubber } from '../components/sessionScrubber.js';
 import { createStreetScrubber } from '../components/streetScrubber.js';
 import { calculateEquity } from '../poker/evaluator.js';
@@ -91,10 +89,8 @@ export function renderPlaybackView(container) {
     requestAnimationFrame(() => waitForLayout(cb, tries - 1));
   }
   waitForLayout(() => {
-    const { renderer, scene, camera, dispose } = initScene(canvas);
-    addPokerTable(scene);
-    const seatPositions = computeSeatPositions();
-    const chipStacksCtrl = createChipStacks(scene, seatPositions, {});
+    const pokerScene = createPokerScene(canvas);
+    const { renderer, scene, camera, seatPositions, chipStacks: chipStacksCtrl, holeCards: holeCardsCtrl, dispose } = pokerScene;
     const canvasArea = container.querySelector('#canvas-area');
     const labels = createSeatLabels(canvasArea);
     updateSeatLabelPositions(labels, seatPositions, camera, renderer);
@@ -121,7 +117,6 @@ export function renderPlaybackView(container) {
     let activeScrubber = null;
     let activeStreetScrubber = null;
     let activeCommunityCards = null;
-    const holeCardsCtrl = createHoleCards(scene, seatPositions);
 
     window.__onSessionLoaded = ({ hands, playerNames }) => {
       loadSession(labels, playerNames);
