@@ -377,11 +377,11 @@ describe('PlayerApp — polling and status', () => {
     await goToPlaying(container);
 
     await vi.waitFor(() => {
-      expect(fetchHands).toHaveBeenCalledWith(3);
+      expect(fetchHands).toHaveBeenCalledWith(3, expect.objectContaining({ signal: expect.any(AbortSignal) }));
     });
 
     await vi.waitFor(() => {
-      expect(fetchHandStatus).toHaveBeenCalledWith(3, 1);
+      expect(fetchHandStatus).toHaveBeenCalledWith(3, 1, expect.objectContaining({ signal: expect.any(AbortSignal) }));
     });
   });
 
@@ -492,7 +492,7 @@ describe('PlayerApp — polling and status', () => {
     });
 
     await vi.waitFor(() => {
-      expect(fetchHandStatus).toHaveBeenCalledWith(3, 3);
+      expect(fetchHandStatus).toHaveBeenCalledWith(3, 3, expect.objectContaining({ signal: expect.any(AbortSignal) }));
     });
   });
 
@@ -1053,5 +1053,158 @@ describe('PlayerApp — hand back cards action', () => {
 
     // Hand back button should be gone
     expect(container.querySelector('[data-testid="hand-back-btn"]')).toBeNull();
+  });
+});
+
+describe('PlayerApp — polling edge cases', () => {
+  let originalHash;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    originalHash = window.location.hash;
+    window.location.hash = '';
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    window.location.hash = originalHash;
+  });
+
+  it('shows "No hands yet" when fetchHands returns empty array', async () => {
+    const container = document.createElement('div');
+    await goToPlaying(container, 1, { hands: [] });
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="no-active-hand"]')).not.toBeNull();
+      expect(container.textContent).toContain('No hands yet');
+    });
+
+    // Player status controls should not be shown
+    expect(container.querySelector('[data-testid="capture-cards-btn"]')).toBeNull();
+    expect(container.querySelector('[data-testid="fold-btn"]')).toBeNull();
+  });
+
+  it('recovers from empty hands when a new hand appears', async () => {
+    const container = document.createElement('div');
+    await goToPlaying(container, 1, { hands: [] });
+
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain('No hands yet');
+    });
+
+    // Next poll cycle: a hand now exists
+    fetchHands.mockResolvedValue([{ hand_number: 1 }]);
+    fetchHandStatus.mockResolvedValue(makeStatus('Bob', 'pending'));
+    vi.advanceTimersByTime(3000);
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="no-active-hand"]')).toBeNull();
+      expect(container.textContent).toContain('Your turn');
+    });
+  });
+
+  it('detects hand number change and resets status', async () => {
+    const container = document.createElement('div');
+    await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'joined', { card_1: 'Ah', card_2: 'Ks' }) });
+
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain('Cards submitted');
+    });
+
+    // New hand starts — hand_number changes from 1 to 2
+    fetchHands.mockResolvedValue([{ hand_number: 1 }, { hand_number: 2 }]);
+    fetchHandStatus.mockResolvedValue({
+      hand_number: 2,
+      community_recorded: false,
+      players: GAME_DETAIL.player_names.map(name => ({
+        name,
+        participation_status: 'idle',
+        card_1: null,
+        card_2: null,
+        result: null,
+        outcome_street: null,
+      })),
+    });
+    vi.advanceTimersByTime(3000);
+
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain('Waiting for hand');
+    });
+  });
+
+  it('handles network error on fetchHands without crashing', async () => {
+    const container = document.createElement('div');
+    await goToPlaying(container, 1);
+
+    await vi.waitFor(() => {
+      expect(fetchHandStatus).toHaveBeenCalled();
+    });
+
+    // Next poll: fetchHands network error
+    fetchHands.mockRejectedValue(new Error('Network error'));
+    vi.advanceTimersByTime(3000);
+
+    // Should show poll error but not crash
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="poll-error"]')).not.toBeNull();
+    });
+
+    // Component should still be mounted and functional
+    expect(container.textContent).toContain('Player Mode');
+    expect(container.querySelector('[data-testid="change-player-btn"]')).not.toBeNull();
+  });
+
+  it('handles network error on fetchHandStatus without crashing', async () => {
+    const container = document.createElement('div');
+    await goToPlaying(container, 1);
+
+    await vi.waitFor(() => {
+      expect(fetchHandStatus).toHaveBeenCalled();
+    });
+
+    // Next poll: fetchHandStatus network error
+    fetchHandStatus.mockRejectedValue(new Error('Server error'));
+    vi.advanceTimersByTime(3000);
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="poll-error"]')).not.toBeNull();
+    });
+
+    // Should recover on next successful poll
+    fetchHands.mockResolvedValue([{ hand_number: 1 }]);
+    fetchHandStatus.mockResolvedValue(makeStatus('Bob', 'pending'));
+    vi.advanceTimersByTime(3000);
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="poll-error"]')).toBeNull();
+      expect(container.textContent).toContain('Your turn');
+    });
+  });
+
+  it('clears poll error on successful recovery', async () => {
+    const container = document.createElement('div');
+    await goToPlaying(container, 1);
+
+    await vi.waitFor(() => {
+      expect(fetchHandStatus).toHaveBeenCalled();
+    });
+
+    // Error poll
+    fetchHands.mockRejectedValue(new Error('Timeout'));
+    vi.advanceTimersByTime(3000);
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="poll-error"]')).not.toBeNull();
+    });
+
+    // Recovery poll
+    fetchHands.mockResolvedValue([{ hand_number: 1 }]);
+    fetchHandStatus.mockResolvedValue(HAND_STATUS_IDLE);
+    vi.advanceTimersByTime(3000);
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="poll-error"]')).toBeNull();
+    });
   });
 });

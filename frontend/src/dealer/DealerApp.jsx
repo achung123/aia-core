@@ -26,22 +26,26 @@ export function DealerApp() {
   useEffect(() => {
     if (state.currentStep !== 'playerGrid' || !state.gameId || !state.currentHandId) return;
 
-    let cancelled = false;
+    const controller = new AbortController();
+    const { signal } = controller;
 
     function poll() {
-      fetchHandStatus(state.gameId, state.currentHandId)
+      fetchHandStatus(state.gameId, state.currentHandId, { signal })
         .then((data) => {
-          if (cancelled) return;
+          if (signal.aborted) return;
           dispatch({ type: 'UPDATE_PARTICIPATION', payload: data });
         })
-        .catch(() => { /* ignore polling errors */ });
+        .catch((err) => {
+          if (err.name === 'AbortError') return;
+          /* ignore polling errors */
+        });
     }
 
     poll();
     const intervalId = setInterval(poll, 3000);
 
     return () => {
-      cancelled = true;
+      controller.abort();
       clearInterval(intervalId);
     };
   }, [state.currentStep, state.gameId, state.currentHandId]);

@@ -18,6 +18,7 @@ vi.mock('../api/client.js', () => ({
   fetchEquity: vi.fn(() => Promise.resolve({ equities: [] })),
   fetchGame: vi.fn(),
   fetchHand: vi.fn(),
+  fetchHandStatus: vi.fn(() => Promise.resolve({ hand_number: 1, community_recorded: false, players: [] })),
 }));
 
 vi.mock('./CameraCapture.jsx', () => ({

@@ -877,7 +877,7 @@ describe('DealerApp hand status polling', () => {
 
     // Initial poll on mount
     await vi.waitFor(() => {
-      expect(fetchHandStatus).toHaveBeenCalledWith(42, 1);
+      expect(fetchHandStatus).toHaveBeenCalledWith(42, 1, expect.objectContaining({ signal: expect.any(AbortSignal) }));
     });
   });
 
@@ -1015,5 +1015,84 @@ describe('DealerApp hand status polling', () => {
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Select a Player');
     });
+  });
+
+  it('recovers after transient network error', async () => {
+    const container = renderToContainer(<DealerApp />);
+    await startHand(container);
+
+    await vi.waitFor(() => {
+      expect(fetchHandStatus).toHaveBeenCalled();
+    });
+
+    // Error on next poll
+    fetchHandStatus.mockRejectedValueOnce(new Error('Timeout'));
+    await vi.advanceTimersByTimeAsync(3000);
+
+    // Grid still visible
+    expect(container.textContent).toContain('Select a Player');
+
+    // Successful recovery poll
+    fetchHandStatus.mockResolvedValue({
+      hand_number: 1,
+      community_recorded: false,
+      players: [
+        { name: 'Alice', participation_status: 'joined' },
+        { name: 'Bob', participation_status: 'idle' },
+        { name: 'Charlie', participation_status: 'idle' },
+      ],
+    });
+    await vi.advanceTimersByTimeAsync(3000);
+
+    await vi.waitFor(() => {
+      const aliceRow = container.querySelector('[data-testid="player-row-Alice"]');
+      expect(aliceRow.style.backgroundColor).toBe('#bbf7d0');
+    });
+  });
+
+  it('manual action wins over stale poll response (recorded player not overwritten)', async () => {
+    vi.useRealTimers();
+    const container = renderToContainer(<DealerApp />);
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="new-hand-btn"]')).not.toBeNull();
+    });
+    container.querySelector('[data-testid="new-hand-btn"]').click();
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain('Select a Player');
+    });
+
+    // Manually capture Alice's cards
+    container.querySelector('[data-testid="player-tile-Alice"]').click();
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="mock-detect"]')).not.toBeNull();
+    });
+    container.querySelector('[data-testid="mock-detect"]').click();
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="mock-confirm"]')).not.toBeNull();
+    });
+    container.querySelector('[data-testid="mock-confirm"]').click();
+
+    await vi.waitFor(() => {
+      expect(addPlayerToHand).toHaveBeenCalled();
+    });
+
+    // Set outcome — select "Not Playing" which is a single-click outcome (no street needed)
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain('Outcome for Alice');
+    });
+    const notPlayingBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent === 'Not Playing');
+    notPlayingBtn.click();
+
+    // Wait for player grid to show
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain('Select a Player');
+    });
+
+    // Alice is now recorded. The grid should reflect that.
+    const aliceRow = container.querySelector('[data-testid="player-row-Alice"]');
+    expect(aliceRow).not.toBeNull();
+    // Alice should not have the idle/playing background (#f3f4f6)
+    expect(aliceRow.style.backgroundColor).not.toBe('#f3f4f6');
   });
 });

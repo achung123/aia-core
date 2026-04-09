@@ -1,5 +1,5 @@
 import { h } from 'preact';
-import { useState, useEffect, useRef } from 'preact/hooks';
+import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
 import { fetchSessions, fetchGame, fetchHands, fetchHandStatus, updateHolecards, patchPlayerResult } from '../api/client.js';
 import { CameraCapture } from '../dealer/CameraCapture.jsx';
 import { DetectionReview } from '../dealer/DetectionReview.jsx';
@@ -29,6 +29,9 @@ export function PlayerApp() {
   const [folding, setFolding] = useState(false);
   const [handingBack, setHandingBack] = useState(false);
   const [handBackError, setHandBackError] = useState(null);
+  const [noActiveHand, setNoActiveHand] = useState(false);
+  const [pollError, setPollError] = useState(null);
+  const handNumberRef = useRef(null);
 
   function loadPlayers(id) {
     setPlayersLoading(true);
@@ -77,6 +80,9 @@ export function PlayerApp() {
   function handleChangePlayer() {
     setPlayerName(null);
     setPlayerStatus('idle');
+    setNoActiveHand(false);
+    setPollError(null);
+    handNumberRef.current = null;
     setCaptureStep(null);
     setReviewData(null);
     setCaptureError(null);
@@ -156,36 +162,51 @@ export function PlayerApp() {
   useEffect(() => {
     if (step !== 'playing' || !gameId || !playerName) return;
 
+    const controller = new AbortController();
+    const { signal } = controller;
     let intervalId = null;
-    let cancelled = false;
 
-    function pollStatus(handNumber) {
-      fetchHandStatus(gameId, handNumber)
+    function pollCycle() {
+      fetchHands(gameId, { signal })
+        .then(hands => {
+          if (signal.aborted) return;
+          if (!hands || hands.length === 0) {
+            setNoActiveHand(true);
+            setHandNumber(null);
+            handNumberRef.current = null;
+            setPlayerStatus('idle');
+            return null;
+          }
+          setNoActiveHand(false);
+          const latest = hands.reduce((max, h) =>
+            h.hand_number > max.hand_number ? h : max, hands[0]);
+          if (latest.hand_number !== handNumberRef.current) {
+            setHandNumber(latest.hand_number);
+            handNumberRef.current = latest.hand_number;
+            setPlayerStatus('idle');
+          }
+          return fetchHandStatus(gameId, latest.hand_number, { signal });
+        })
         .then(data => {
-          if (cancelled) return;
+          if (!data || signal.aborted) return;
+          setPollError(null);
           setCommunityRecorded(data.community_recorded);
           const me = data.players.find(p => p.name === playerName);
           if (me) {
             setPlayerStatus(me.participation_status);
           }
         })
-        .catch(() => { /* ignore polling errors */ });
+        .catch(err => {
+          if (err.name === 'AbortError') return;
+          setPollError('Connection issue — retrying…');
+        });
     }
 
-    fetchHands(gameId)
-      .then(hands => {
-        if (cancelled) return;
-        if (!hands || hands.length === 0) return;
-        const latest = hands.reduce((max, h) =>
-          h.hand_number > max.hand_number ? h : max, hands[0]);
-        setHandNumber(latest.hand_number);
-        pollStatus(latest.hand_number);
-        intervalId = setInterval(() => pollStatus(latest.hand_number), 3000);
-      })
-      .catch(() => { /* ignore */ });
+    pollCycle();
+    intervalId = setInterval(pollCycle, 3000);
 
     return () => {
-      cancelled = true;
+      controller.abort();
       if (intervalId) clearInterval(intervalId);
     };
   }, [step, gameId, playerName]);
@@ -219,7 +240,15 @@ export function PlayerApp() {
 
         {!captureStep && (
           <>
-            <PlayerStatusView
+            {noActiveHand && (
+              <p data-testid="no-active-hand" style={{ color: '#6b7280' }}>No hands yet — waiting for dealer</p>
+            )}
+            {pollError && (
+              <p data-testid="poll-error" style={{ color: '#ca8a04', fontSize: '0.85rem' }}>{pollError}</p>
+            )}
+            {!noActiveHand && (
+              <>
+              <PlayerStatusView
               status={playerStatus}
               onCapture={handleStartCapture}
               onFold={handleFold}
@@ -262,6 +291,8 @@ export function PlayerApp() {
                   Retry
                 </button>
               </div>
+            )}
+              </>
             )}
           </>
         )}

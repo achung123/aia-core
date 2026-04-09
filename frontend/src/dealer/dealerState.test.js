@@ -546,5 +546,66 @@ describe('reducer', () => {
       expect(state.players[0].recorded).toBe(true);
       expect(state.players[0].status).toBe('joined');
     });
+
+    it('does not let stale poll reset recorded player to idle', () => {
+      const gameState = reducer(initialState, {
+        type: 'SET_GAME',
+        payload: { gameId: 1, players: ['Alice', 'Bob'], gameDate: '2026-04-08' },
+      });
+
+      // Dealer manually captures Alice's cards
+      const withCards = reducer(gameState, {
+        type: 'SET_PLAYER_CARDS',
+        payload: { name: 'Alice', card1: 'Ah', card2: 'Kd' },
+      });
+
+      // Stale poll response says Alice is idle (request was before manual capture)
+      const state = reducer(withCards, {
+        type: 'UPDATE_PARTICIPATION',
+        payload: {
+          players: [
+            { name: 'Alice', participation_status: 'idle' },
+            { name: 'Bob', participation_status: 'pending' },
+          ],
+        },
+      });
+
+      // Alice should keep her recorded status, not reset to idle
+      expect(state.players[0].status).toBe('playing');
+      expect(state.players[0].recorded).toBe(true);
+      // Bob (not recorded) should update normally
+      expect(state.players[1].status).toBe('pending');
+    });
+
+    it('does not let stale poll reset recorded player to playing', () => {
+      const gameState = reducer(initialState, {
+        type: 'SET_GAME',
+        payload: { gameId: 1, players: ['Alice'], gameDate: '2026-04-08' },
+      });
+
+      const withCards = reducer(gameState, {
+        type: 'SET_PLAYER_CARDS',
+        payload: { name: 'Alice', card1: 'Ah', card2: 'Kd' },
+      });
+
+      const withResult = reducer(withCards, {
+        type: 'SET_PLAYER_RESULT',
+        payload: { name: 'Alice', status: 'won', outcomeStreet: 'river' },
+      });
+
+      // Stale poll says 'playing'
+      const state = reducer(withResult, {
+        type: 'UPDATE_PARTICIPATION',
+        payload: {
+          players: [
+            { name: 'Alice', participation_status: 'playing' },
+          ],
+        },
+      });
+
+      // Should keep 'won', not downgrade to 'playing'
+      expect(state.players[0].status).toBe('won');
+      expect(state.players[0].recorded).toBe(true);
+    });
   });
 });

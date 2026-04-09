@@ -1,7 +1,7 @@
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 async function request(path, options = {}) {
-  const response = await fetch(`${BASE_URL}${path}`, options);
+  const response = await fetch(`${BASE_URL}${path}`, { signal: options.signal, ...options });
   if (!response.ok) {
     const text = await response.text();
     throw new Error(`HTTP ${response.status}: ${text}`);
@@ -17,8 +17,8 @@ export function fetchGame(gameId) {
   return request(`/games/${gameId}`);
 }
 
-export function fetchHands(sessionId) {
-  return request(`/games/${sessionId}/hands`);
+export function fetchHands(sessionId, { signal } = {}) {
+  return request(`/games/${sessionId}/hands`, { signal });
 }
 
 export function fetchHand(gameId, handNumber) {
@@ -162,6 +162,6 @@ export function fetchEquity(gameId, handNumber) {
   return request(`/games/${gameId}/hands/${handNumber}/equity`);
 }
 
-export function fetchHandStatus(gameId, handNumber) {
-  return request(`/games/${gameId}/hands/${handNumber}/status`);
+export function fetchHandStatus(gameId, handNumber, { signal } = {}) {
+  return request(`/games/${gameId}/hands/${handNumber}/status`, { signal });
 }

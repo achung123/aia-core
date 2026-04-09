@@ -142,6 +142,8 @@ export function reducer(state, action) {
         players: state.players.map((p) => {
           const ps = statusMap.get(p.name);
           if (ps == null) return p;
+          // Don't let a stale poll reset a manually-recorded player to idle/playing
+          if (p.recorded && (ps === 'idle' || ps === 'playing')) return p;
           return { ...p, status: ps };
         }),
       };
