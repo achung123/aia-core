@@ -4,12 +4,17 @@ import { h, render } from 'preact';
 import { initRouter } from './router.js';
 import { renderDataView } from './views/dataView.js';
 import { renderPlaybackView } from './views/playbackView.js';
+import { MobilePlaybackView } from './views/MobilePlaybackView.jsx';
 import { DealerApp } from './dealer/DealerApp.jsx';
 
 console.log('Three.js r' + THREE.REVISION);
 
 initRouter({
   '#/playback': container => renderPlaybackView(container),
+  '#/playback-mobile': container => {
+    render(h(MobilePlaybackView), container);
+    return () => render(null, container);
+  },
   '#/data': container => renderDataView(container),
   '#/dealer': container => {
     render(h(DealerApp), container);

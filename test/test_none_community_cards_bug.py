@@ -73,7 +73,9 @@ class TestAddPlayerToEmptyHand:
                 'card_2': {'rank': '8', 'suit': 'S'},
             },
         )
-        assert resp.status_code == 201, f'Expected 201 but got {resp.status_code}: {resp.json()}'
+        assert resp.status_code == 201, (
+            f'Expected 201 but got {resp.status_code}: {resp.json()}'
+        )
 
     def test_add_two_players_to_empty_hand(self, client, game_with_empty_hand):
         game_id, hand_number = game_with_empty_hand
@@ -95,13 +97,17 @@ class TestAddPlayerToEmptyHand:
                 'card_2': {'rank': '10', 'suit': 'H'},
             },
         )
-        assert resp2.status_code == 201, f'Expected 201 but got {resp2.status_code}: {resp2.json()}'
+        assert resp2.status_code == 201, (
+            f'Expected 201 but got {resp2.status_code}: {resp2.json()}'
+        )
 
 
 class TestEditHoleCardsOnEmptyHand:
     """aia-core-y7jn: edit_player_hole_cards on empty hand should not 400."""
 
-    def test_edit_hole_cards_on_empty_hand_returns_200(self, client, game_with_empty_hand):
+    def test_edit_hole_cards_on_empty_hand_returns_200(
+        self, client, game_with_empty_hand
+    ):
         game_id, hand_number = game_with_empty_hand
         # First add a player so we can edit their cards
         add_resp = client.post(
@@ -122,4 +128,6 @@ class TestEditHoleCardsOnEmptyHand:
                 'card_2': {'rank': 'J', 'suit': 'D'},
             },
         )
-        assert edit_resp.status_code == 200, f'Expected 200 but got {edit_resp.status_code}: {edit_resp.json()}'
+        assert edit_resp.status_code == 200, (
+            f'Expected 200 but got {edit_resp.status_code}: {edit_resp.json()}'
+        )

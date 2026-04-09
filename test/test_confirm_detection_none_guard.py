@@ -5,7 +5,6 @@ is made optional in future), the DB stores SQL NULL instead of literal "None".
 """
 
 from types import SimpleNamespace
-from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,7 +12,7 @@ from sqlalchemy import create_engine, StaticPool
 from sqlalchemy.orm import sessionmaker
 
 from app.database.database_models import Base as LegacyBase
-from app.database.models import Base as ModelsBase, Hand, PlayerHand
+from app.database.models import Base as ModelsBase, PlayerHand
 from app.database.session import get_db
 from app.main import app
 from app.routes.images import get_card_detector
@@ -90,9 +89,7 @@ class _FakeCard:
 class TestConfirmDetectionNoneGuard:
     """aia-core-vfa6: str(entry.card_N) must not produce 'None' string."""
 
-    def test_none_card_in_player_hand_stores_null_not_string(
-        self, client, game_id
-    ):
+    def test_none_card_in_player_hand_stores_null_not_string(self, client, game_id):
         """If entry.card_1 is None, PlayerHand.card_1 must be SQL NULL."""
         upload_id = _upload_and_detect(client, game_id)
 
@@ -135,18 +132,12 @@ class TestConfirmDetectionNoneGuard:
 
             # Verify the PlayerHand has NULL, not "None"
             ph = db.query(PlayerHand).filter_by(hand_id=result.hand_id).first()
-            assert ph.card_1 is None, (
-                f"Expected SQL NULL for card_1, got {ph.card_1!r}"
-            )
-            assert ph.card_2 is None, (
-                f"Expected SQL NULL for card_2, got {ph.card_2!r}"
-            )
+            assert ph.card_1 is None, f'Expected SQL NULL for card_1, got {ph.card_1!r}'
+            assert ph.card_2 is None, f'Expected SQL NULL for card_2, got {ph.card_2!r}'
         finally:
             db.close()
 
-    def test_none_card_excluded_from_duplicate_validation(
-        self, client, game_id
-    ):
+    def test_none_card_excluded_from_duplicate_validation(self, client, game_id):
         """None cards must not be included in the duplicate card check."""
         upload_id = _upload_and_detect(client, game_id)
 
@@ -234,8 +225,6 @@ class TestConfirmDetectionNoneGuard:
 
             ph = db.query(PlayerHand).filter_by(hand_id=result.hand_id).first()
             assert ph.card_1 == '2H'
-            assert ph.card_2 is None, (
-                f"Expected SQL NULL for card_2, got {ph.card_2!r}"
-            )
+            assert ph.card_2 is None, f'Expected SQL NULL for card_2, got {ph.card_2!r}'
         finally:
             db.close()

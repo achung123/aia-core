@@ -8,7 +8,7 @@ describe('initialState', () => {
       currentHandId: null,
       players: [],
       community: { flop1: null, flop2: null, flop3: null, turn: null, river: null, recorded: false },
-      currentStep: 'create',
+      currentStep: 'gameSelector',
       handCount: 0,
       gameDate: null,
     });

@@ -5,7 +5,7 @@ export const initialState = {
   currentHandId: null,
   players: [],
   community: { ...emptyCommunity },
-  currentStep: 'create',
+  currentStep: 'gameSelector',
   handCount: 0,
   gameDate: null,
 };

@@ -79,12 +79,8 @@ class TestBug1RecordHandNoneCards:
         data = resp.json()
         # Both players have no cards — should be null, not "None"
         for ph in data['player_hands']:
-            assert ph['card_1'] is None, (
-                f"card_1 should be None, got {ph['card_1']!r}"
-            )
-            assert ph['card_2'] is None, (
-                f"card_2 should be None, got {ph['card_2']!r}"
-            )
+            assert ph['card_1'] is None, f'card_1 should be None, got {ph["card_1"]!r}'
+            assert ph['card_2'] is None, f'card_2 should be None, got {ph["card_2"]!r}'
 
     def test_record_hand_mixed_null_and_real_cards(self, client, game_with_players):
         """One player with cards, one without — no duplicate error, nulls stored."""

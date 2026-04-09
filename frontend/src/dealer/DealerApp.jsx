@@ -1,5 +1,6 @@
 import { useReducer, useState } from 'preact/hooks';
 import { reducer, initialState } from './dealerState.js';
+import { GameSelector } from './GameSelector.jsx';
 import { GameCreateForm } from './GameCreateForm.jsx';
 import { HandDashboard } from './HandDashboard.jsx';
 import { PlayerGrid } from './PlayerGrid.jsx';
@@ -21,6 +22,14 @@ export function DealerApp() {
   const [finishError, setFinishError] = useState(null);
   const [finishing, setFinishing] = useState(false);
   const [persistedPlayers, setPersistedPlayers] = useState(new Set());
+
+  function handleNewGame() {
+    dispatch({ type: 'SET_STEP', payload: 'create' });
+  }
+
+  function handleSelectGame(gameId) {
+    dispatch({ type: 'SET_GAME', payload: { gameId, players: [], gameDate: null } });
+  }
 
   function handleGameCreated(gameId, players, gameDate) {
     dispatch({ type: 'SET_GAME', payload: { gameId, players, gameDate } });
@@ -202,6 +211,10 @@ export function DealerApp() {
     <div id="dealer-root">
       <h1>Dealer Interface</h1>
 
+      {state.currentStep === 'gameSelector' && (
+        <GameSelector onSelectGame={handleSelectGame} onNewGame={handleNewGame} />
+      )}
+
       {state.currentStep === 'create' && (
         <GameCreateForm onGameCreated={handleGameCreated} />
       )}
@@ -210,7 +223,7 @@ export function DealerApp() {
         <HandDashboard
           gameId={state.gameId}
           onSelectHand={handleSelectHand}
-          onBack={() => dispatch({ type: 'SET_STEP', payload: 'create' })}
+          onBack={() => dispatch({ type: 'SET_STEP', payload: 'gameSelector' })}
         />
       )}
 

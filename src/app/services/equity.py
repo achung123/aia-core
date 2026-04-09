@@ -6,17 +6,30 @@ import random
 from itertools import combinations
 
 RANK_VAL = {
-    '2': 0, '3': 1, '4': 2, '5': 3, '6': 4, '7': 5, '8': 6,
-    '9': 7, '10': 8, 'T': 8, 'J': 9, 'Q': 10, 'K': 11, 'A': 12,
+    '2': 0,
+    '3': 1,
+    '4': 2,
+    '5': 3,
+    '6': 4,
+    '7': 5,
+    '8': 6,
+    '9': 7,
+    '10': 8,
+    'T': 8,
+    'J': 9,
+    'Q': 10,
+    'K': 11,
+    'A': 12,
 }
 SUIT_VAL = {'h': 0, 'd': 1, 'c': 2, 's': 3}
 
 B = 14  # base > 13 to avoid collisions
-B5 = B ** 5
+B5 = B**5
 
 # ---------------------------------------------------------------------------
 # Card helpers
 # ---------------------------------------------------------------------------
+
 
 def _to_internal(card: tuple[str, str]) -> tuple[int, int]:
     """Convert (rank, suit) to internal (r, s) ints."""
@@ -32,6 +45,7 @@ def _build_deck(known: list[tuple[int, int]]) -> list[tuple[int, int]]:
 # 5-card hand evaluator
 # ---------------------------------------------------------------------------
 
+
 def _score_component(cat: int, kickers: list[int]) -> int:
     s = cat
     for i in range(5):
@@ -39,8 +53,13 @@ def _score_component(cat: int, kickers: list[int]) -> int:
     return s
 
 
-def _eval5(c0: tuple[int, int], c1: tuple[int, int], c2: tuple[int, int],
-           c3: tuple[int, int], c4: tuple[int, int]) -> int:
+def _eval5(
+    c0: tuple[int, int],
+    c1: tuple[int, int],
+    c2: tuple[int, int],
+    c3: tuple[int, int],
+    c4: tuple[int, int],
+) -> int:
     """Evaluate exactly 5 cards → numeric score (higher is better)."""
     ranks = sorted((c0[0], c1[0], c2[0], c3[0], c4[0]), reverse=True)
     flush = c0[1] == c1[1] == c2[1] == c3[1] == c4[1]
@@ -81,13 +100,16 @@ def _eval5(c0: tuple[int, int], c1: tuple[int, int], c2: tuple[int, int],
     if groups[0][1] == 2 and groups[1][1] == 2:
         return _score_component(2, [groups[0][0], groups[1][0], groups[2][0]])
     if groups[0][1] == 2:
-        return _score_component(1, [groups[0][0], groups[1][0], groups[2][0], groups[3][0]])
+        return _score_component(
+            1, [groups[0][0], groups[1][0], groups[2][0], groups[3][0]]
+        )
     return _score_component(0, ranks)
 
 
 # ---------------------------------------------------------------------------
 # Best-of-7 evaluator
 # ---------------------------------------------------------------------------
+
 
 def _best_score(cards: list[tuple[int, int]]) -> int:
     best = -1
@@ -102,6 +124,7 @@ def _best_score(cards: list[tuple[int, int]]) -> int:
 # Board evaluation
 # ---------------------------------------------------------------------------
 
+
 def _eval_board(
     players: list[list[tuple[int, int]]],
     board: list[tuple[int, int]],
@@ -115,6 +138,7 @@ def _eval_board(
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def calculate_equity(
     player_hole_cards: list[list[tuple[str, str]]],

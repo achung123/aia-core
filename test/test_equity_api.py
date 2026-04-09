@@ -87,9 +87,7 @@ class TestEquityEndpointHappyPath:
             ],
         )
 
-        resp = client.get(
-            f'/games/{game_with_players}/hands/{hand_number}/equity'
-        )
+        resp = client.get(f'/games/{game_with_players}/hands/{hand_number}/equity')
         assert resp.status_code == 200
         data = resp.json()
         assert 'equities' in data
@@ -120,9 +118,7 @@ class TestEquityEndpointHappyPath:
             ],
         )
 
-        resp = client.get(
-            f'/games/{game_with_players}/hands/{hand_number}/equity'
-        )
+        resp = client.get(f'/games/{game_with_players}/hands/{hand_number}/equity')
         data = resp.json()
         equities_by_name = {e['player_name']: e['equity'] for e in data['equities']}
         assert abs(equities_by_name['Alice'] - 0.81) < 0.05
@@ -157,9 +153,7 @@ class TestEquityEndpointHappyPath:
             ],
         )
 
-        resp = client.get(
-            f'/games/{game_with_players}/hands/{hand_number}/equity'
-        )
+        resp = client.get(f'/games/{game_with_players}/hands/{hand_number}/equity')
         assert resp.status_code == 200
         data = resp.json()
         assert len(data['equities']) == 3
@@ -174,9 +168,7 @@ class TestEquityEndpointTooFewPlayers:
         """Hand with no player cards → empty equities."""
         hand_number = _create_hand(client, game_with_players)
 
-        resp = client.get(
-            f'/games/{game_with_players}/hands/{hand_number}/equity'
-        )
+        resp = client.get(f'/games/{game_with_players}/hands/{hand_number}/equity')
         assert resp.status_code == 200
         assert resp.json() == {'equities': []}
 
@@ -194,9 +186,7 @@ class TestEquityEndpointTooFewPlayers:
             ],
         )
 
-        resp = client.get(
-            f'/games/{game_with_players}/hands/{hand_number}/equity'
-        )
+        resp = client.get(f'/games/{game_with_players}/hands/{hand_number}/equity')
         assert resp.status_code == 200
         assert resp.json() == {'equities': []}
 
@@ -236,9 +226,7 @@ class TestEquityEndpointNullCardsExcluded:
             ],
         )
 
-        resp = client.get(
-            f'/games/{game_with_players}/hands/{hand_number}/equity'
-        )
+        resp = client.get(f'/games/{game_with_players}/hands/{hand_number}/equity')
         assert resp.status_code == 200
         data = resp.json()
         names = {e['player_name'] for e in data['equities']}
@@ -264,9 +252,7 @@ class TestEquityEndpointNullCardsExcluded:
             ],
         )
 
-        resp = client.get(
-            f'/games/{game_with_players}/hands/{hand_number}/equity'
-        )
+        resp = client.get(f'/games/{game_with_players}/hands/{hand_number}/equity')
         data = resp.json()
         total = sum(e['equity'] for e in data['equities'])
         assert abs(total - 1.0) < 0.02
