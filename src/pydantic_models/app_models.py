@@ -18,6 +18,7 @@ class ResultEnum(str, Enum):
     WON = 'won'
     FOLDED = 'folded'
     LOST = 'lost'
+    HANDED_BACK = 'handed_back'
 
 
 class StreetEnum(str, Enum):
@@ -485,3 +486,18 @@ class PlayerEquityEntry(BaseModel):
 
 class EquityResponse(BaseModel):
     equities: list[PlayerEquityEntry] = []
+
+
+class PlayerStatusEntry(BaseModel):
+    name: str
+    participation_status: str
+    card_1: str | None = None
+    card_2: str | None = None
+    result: str | None = None
+    outcome_street: str | None = None
+
+
+class HandStatusResponse(BaseModel):
+    hand_number: int
+    community_recorded: bool
+    players: list[PlayerStatusEntry]

@@ -435,3 +435,88 @@ class TestLeaderboardExcludesPlayersWithNoResults:
         resp = client.get('/stats/leaderboard')
         names = [e['player_name'] for e in resp.json()]
         assert 'Ghost' not in names
+
+
+class TestLeaderboardExcludesHandedBack:
+    """handed_back results should be invisible to the leaderboard."""
+
+    def test_handed_back_not_counted_in_leaderboard(self, seeded_client):
+        """Add a handed_back result for Alice and verify leaderboard is unchanged."""
+        g = seeded_client.post(
+            '/games',
+            json={'game_date': '2026-03-01', 'player_names': ['Alice']},
+        )
+        assert g.status_code == 201
+        gid = g.json()['game_id']
+
+        h = seeded_client.post(
+            f'/games/{gid}/hands',
+            json={
+                'flop_1': {'rank': '2', 'suit': 'C'},
+                'flop_2': {'rank': '3', 'suit': 'C'},
+                'flop_3': {'rank': '4', 'suit': 'C'},
+                'player_entries': [
+                    {
+                        'player_name': 'Alice',
+                        'card_1': {'rank': '5', 'suit': 'C'},
+                        'card_2': {'rank': '6', 'suit': 'C'},
+                    },
+                ],
+            },
+        )
+        assert h.status_code == 201
+        hn = h.json()['hand_number']
+        seeded_client.patch(
+            f'/games/{gid}/hands/{hn}/results',
+            json=[
+                {'player_name': 'Alice', 'result': 'handed_back', 'profit_loss': 0.0},
+            ],
+        )
+
+        resp = seeded_client.get('/stats/leaderboard')
+        alice = next(e for e in resp.json() if e['player_name'] == 'Alice')
+        # Alice's stats should be unchanged: 3 hands, 80.0 P/L, 66.67% win rate
+        assert alice['hands_played'] == 3
+        assert alice['total_profit_loss'] == 80.0
+        assert alice['win_rate'] == round(2 / 3 * 100, 2)
+
+    def test_player_with_only_handed_back_excluded(self, client):
+        """A player whose only result is handed_back should not appear."""
+        g = client.post(
+            '/games',
+            json={'game_date': '2026-03-01', 'player_names': ['OnlyHandedBack']},
+        )
+        assert g.status_code == 201
+        gid = g.json()['game_id']
+
+        h = client.post(
+            f'/games/{gid}/hands',
+            json={
+                'flop_1': {'rank': '2', 'suit': 'C'},
+                'flop_2': {'rank': '3', 'suit': 'C'},
+                'flop_3': {'rank': '4', 'suit': 'C'},
+                'player_entries': [
+                    {
+                        'player_name': 'OnlyHandedBack',
+                        'card_1': {'rank': '5', 'suit': 'C'},
+                        'card_2': {'rank': '6', 'suit': 'C'},
+                    },
+                ],
+            },
+        )
+        assert h.status_code == 201
+        hn = h.json()['hand_number']
+        client.patch(
+            f'/games/{gid}/hands/{hn}/results',
+            json=[
+                {
+                    'player_name': 'OnlyHandedBack',
+                    'result': 'handed_back',
+                    'profit_loss': 0.0,
+                },
+            ],
+        )
+
+        resp = client.get('/stats/leaderboard')
+        names = [e['player_name'] for e in resp.json()]
+        assert 'OnlyHandedBack' not in names

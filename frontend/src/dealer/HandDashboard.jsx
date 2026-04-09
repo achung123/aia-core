@@ -1,6 +1,7 @@
 import { h } from 'preact';
 import { useState, useEffect } from 'preact/hooks';
 import { fetchHands, createHand, completeGame } from '../api/client.js';
+import { QRCodeDisplay } from './QRCodeDisplay.jsx';
 
 const resultColors = {
   won: '#16a34a',
@@ -27,6 +28,7 @@ export function HandDashboard({ gameId, players: playerNames, onSelectHand, onBa
   const [ending, setEnding] = useState(false);
   const [selectedWinners, setSelectedWinners] = useState([]);
   const [winnerError, setWinnerError] = useState(null);
+  const [showQR, setShowQR] = useState(false);
 
   useEffect(() => {
     fetchHands(gameId)
@@ -110,6 +112,14 @@ export function HandDashboard({ gameId, players: playerNames, onSelectHand, onBa
       <button data-testid="new-hand-btn" onClick={handleNewHand} style={styles.button}>
         New Hand
       </button>
+      <button
+        data-testid="toggle-qr-btn"
+        onClick={() => setShowQR((v) => !v)}
+        style={styles.qrButton}
+      >
+        {showQR ? 'Hide QR' : 'Show QR'}
+      </button>
+      <QRCodeDisplay gameId={gameId} visible={showQR} />
       <button
         data-testid="end-game-btn"
         onClick={() => setShowEndConfirm(true)}
@@ -212,6 +222,17 @@ const styles = {
     borderRadius: '8px',
     background: '#dc2626',
     color: '#fff',
+    cursor: 'pointer',
+    marginTop: '0.5rem',
+  },
+  qrButton: {
+    width: '100%',
+    padding: '0.5rem',
+    minHeight: '40px',
+    fontSize: '0.95rem',
+    border: '1px solid #d1d5db',
+    borderRadius: '8px',
+    background: '#f9fafb',
     cursor: 'pointer',
     marginTop: '0.5rem',
   },

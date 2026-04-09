@@ -38,6 +38,7 @@ def get_player_stats(
         .filter(
             PlayerHand.player_id == player.player_id,
             PlayerHand.result.isnot(None),
+            PlayerHand.result != 'handed_back',
         )
         .all()
     )
@@ -106,7 +107,7 @@ def get_leaderboard(
             func.sum(case((PlayerHand.result == 'won', 1), else_=0)).label('wins'),
         )
         .join(PlayerHand, Player.player_id == PlayerHand.player_id)
-        .filter(PlayerHand.result.isnot(None))
+        .filter(PlayerHand.result.isnot(None), PlayerHand.result != 'handed_back')
         .group_by(Player.player_id, Player.name)
         .all()
     )
@@ -156,7 +157,11 @@ def get_game_stats(
         db.query(PlayerHand)
         .join(Hand, PlayerHand.hand_id == Hand.hand_id)
         .join(Player, PlayerHand.player_id == Player.player_id)
-        .filter(Hand.game_id == game_id, PlayerHand.result.isnot(None))
+        .filter(
+            Hand.game_id == game_id,
+            PlayerHand.result.isnot(None),
+            PlayerHand.result != 'handed_back',
+        )
         .all()
     )
 

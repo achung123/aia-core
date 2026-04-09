@@ -32,6 +32,7 @@ function createNav() {
     <a href="#/playback">Playback</a>
     <a href="#/data">Data</a>
     <a href="#/dealer">Dealer</a>
+    <a href="#/player">Player</a>
   `;
   document.body.insertBefore(nav, document.body.firstChild);
   return nav;

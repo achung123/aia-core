@@ -151,4 +151,80 @@ describe('PlayerGrid', () => {
     container.querySelector('[data-testid="outcome-btn-Bob"]').click();
     expect(onDirectOutcome).toHaveBeenCalledWith('Bob');
   });
+
+  it('sets background color for pending participation status', () => {
+    const players = [
+      { name: 'Zara', recorded: false, status: 'pending', outcomeStreet: null },
+    ];
+    const container = renderToContainer(
+      <PlayerGrid {...defaultProps} players={players} />
+    );
+    const row = container.querySelector('[data-testid="player-row-Zara"]');
+    expect(row.style.backgroundColor).toBe('#fef08a');
+  });
+
+  it('sets background color for joined participation status', () => {
+    const players = [
+      { name: 'Zara', recorded: false, status: 'joined', outcomeStreet: null },
+    ];
+    const container = renderToContainer(
+      <PlayerGrid {...defaultProps} players={players} />
+    );
+    const row = container.querySelector('[data-testid="player-row-Zara"]');
+    expect(row.style.backgroundColor).toBe('#bbf7d0');
+  });
+
+  it('sets background color for handed_back participation status', () => {
+    const players = [
+      { name: 'Zara', recorded: false, status: 'handed_back', outcomeStreet: null },
+    ];
+    const container = renderToContainer(
+      <PlayerGrid {...defaultProps} players={players} />
+    );
+    const row = container.querySelector('[data-testid="player-row-Zara"]');
+    expect(row.style.backgroundColor).toBe('#fef08a');
+  });
+
+  it('formats pending status text as "pending"', () => {
+    const players = [
+      { name: 'Zara', recorded: false, status: 'pending', outcomeStreet: null },
+    ];
+    const container = renderToContainer(
+      <PlayerGrid {...defaultProps} players={players} />
+    );
+    const row = container.querySelector('[data-testid="player-row-Zara"]');
+    expect(row.textContent).toContain('pending');
+  });
+
+  it('formats joined status text as "joined"', () => {
+    const players = [
+      { name: 'Zara', recorded: false, status: 'joined', outcomeStreet: null },
+    ];
+    const container = renderToContainer(
+      <PlayerGrid {...defaultProps} players={players} />
+    );
+    const row = container.querySelector('[data-testid="player-row-Zara"]');
+    expect(row.textContent).toContain('joined');
+  });
+
+  it('formats handed_back status text as "handed back"', () => {
+    const players = [
+      { name: 'Zara', recorded: false, status: 'handed_back', outcomeStreet: null },
+    ];
+    const container = renderToContainer(
+      <PlayerGrid {...defaultProps} players={players} />
+    );
+    const row = container.querySelector('[data-testid="player-row-Zara"]');
+    expect(row.textContent).toContain('handed back');
+  });
+
+  it('preserves existing status colors when new statuses are added', () => {
+    const container = renderToContainer(<PlayerGrid {...defaultProps} />);
+    const rows = container.querySelectorAll('[data-testid^="player-row-"]');
+    expect(rows[0].style.backgroundColor).toBe('#ffffff'); // playing
+    expect(rows[1].style.backgroundColor).toBe('#bbf7d0'); // won
+    expect(rows[2].style.backgroundColor).toBe('#fecaca'); // folded
+    expect(rows[3].style.backgroundColor).toBe('#fed7aa'); // lost
+    expect(rows[4].style.backgroundColor).toBe('#e5e7eb'); // not_playing
+  });
 });

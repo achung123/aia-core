@@ -72,7 +72,9 @@ class TestCompleteGameWithWinners:
         assert resp.status_code == 200
         assert sorted(resp.json()['winners']) == ['Alice', 'Bob']
 
-    def test_complete_without_winners_body_defaults_to_empty(self, client, created_game):
+    def test_complete_without_winners_body_defaults_to_empty(
+        self, client, created_game
+    ):
         """Backwards compat: no body still works, winners defaults to empty."""
         game_id = created_game['game_id']
         resp = client.patch(f'/games/{game_id}/complete')

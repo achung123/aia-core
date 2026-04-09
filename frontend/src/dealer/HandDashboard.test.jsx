@@ -9,6 +9,11 @@ vi.mock('../api/client.js', () => ({
   completeGame: vi.fn(),
 }));
 
+vi.mock('./QRCodeDisplay.jsx', () => ({
+  QRCodeDisplay: ({ gameId, visible }) =>
+    visible ? <div data-testid="qr-code-display">QR:{gameId}</div> : null,
+}));
+
 import { fetchHands, createHand, completeGame } from '../api/client.js';
 
 function renderToContainer(vnode) {
@@ -341,5 +346,41 @@ describe('HandDashboard', () => {
       const rows = container.querySelectorAll('[data-testid="hand-row"]');
       expect(rows[0].textContent).toContain('🏆');
     });
+  });
+
+  it('QR code is hidden by default', async () => {
+    fetchHands.mockResolvedValue(HANDS);
+    const container = renderToContainer(
+      <HandDashboard gameId={42} onSelectHand={() => {}} onBack={() => {}} />
+    );
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="toggle-qr-btn"]')).not.toBeNull();
+    });
+    expect(container.querySelector('[data-testid="qr-code-display"]')).toBeNull();
+    expect(container.querySelector('[data-testid="toggle-qr-btn"]').textContent).toBe('Show QR');
+  });
+
+  it('toggle button shows/hides QR code', async () => {
+    fetchHands.mockResolvedValue(HANDS);
+    const container = renderToContainer(
+      <HandDashboard gameId={42} onSelectHand={() => {}} onBack={() => {}} />
+    );
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="toggle-qr-btn"]')).not.toBeNull();
+    });
+
+    // Click to show
+    container.querySelector('[data-testid="toggle-qr-btn"]').click();
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="qr-code-display"]')).not.toBeNull();
+    });
+    expect(container.querySelector('[data-testid="toggle-qr-btn"]').textContent).toBe('Hide QR');
+
+    // Click to hide
+    container.querySelector('[data-testid="toggle-qr-btn"]').click();
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="qr-code-display"]')).toBeNull();
+    });
+    expect(container.querySelector('[data-testid="toggle-qr-btn"]').textContent).toBe('Show QR');
   });
 });

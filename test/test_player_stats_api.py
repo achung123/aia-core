@@ -406,3 +406,60 @@ class TestPlayerStatsResponseFields:
         ]
         for field in required_fields:
             assert field in body, f'Missing field: {field}'
+
+
+class TestPlayerStatsExcludesHandedBack:
+    """handed_back results should not count in win/loss/fold totals."""
+
+    def test_handed_back_excluded_from_totals(self, seeded_client):
+        """Add a handed_back result and verify it is invisible to stats."""
+        # Seed a new hand with handed_back for Alice in game 1
+        # First find game 1
+        g = seeded_client.post(
+            '/games',
+            json={'game_date': '2026-03-01', 'player_names': ['Alice', 'Bob']},
+        )
+        assert g.status_code == 201
+        gid = g.json()['game_id']
+
+        h = seeded_client.post(
+            f'/games/{gid}/hands',
+            json={
+                'flop_1': {'rank': '2', 'suit': 'C'},
+                'flop_2': {'rank': '3', 'suit': 'C'},
+                'flop_3': {'rank': '4', 'suit': 'C'},
+                'player_entries': [
+                    {
+                        'player_name': 'Alice',
+                        'card_1': {'rank': '5', 'suit': 'C'},
+                        'card_2': {'rank': '6', 'suit': 'C'},
+                    },
+                    {
+                        'player_name': 'Bob',
+                        'card_1': {'rank': '7', 'suit': 'C'},
+                        'card_2': {'rank': '8', 'suit': 'C'},
+                    },
+                ],
+            },
+        )
+        assert h.status_code == 201
+        hn = h.json()['hand_number']
+        r = seeded_client.patch(
+            f'/games/{gid}/hands/{hn}/results',
+            json=[
+                {'player_name': 'Alice', 'result': 'handed_back', 'profit_loss': 0.0},
+                {'player_name': 'Bob', 'result': 'won', 'profit_loss': 20.0},
+            ],
+        )
+        assert r.status_code == 200
+
+        # Alice stats should be unchanged from the seeded_client fixture
+        # (3 hands: 2 won, 0 lost, 1 folded — the handed_back is invisible)
+        resp = seeded_client.get('/stats/players/Alice')
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body['total_hands_played'] == 3
+        assert body['hands_won'] == 2
+        assert body['hands_lost'] == 0
+        assert body['hands_folded'] == 1
+        assert abs(body['win_rate'] - 66.67) < 0.01

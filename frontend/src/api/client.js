@@ -161,3 +161,7 @@ export function fetchCsvSchema() {
 export function fetchEquity(gameId, handNumber) {
   return request(`/games/${gameId}/hands/${handNumber}/equity`);
 }
+
+export function fetchHandStatus(gameId, handNumber) {
+  return request(`/games/${gameId}/hands/${handNumber}/status`);
+}

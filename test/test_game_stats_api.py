@@ -512,3 +512,98 @@ class TestGameStatsComputationAccuracy:
         client, gid = three_player_session
         resp = client.get(f'/stats/games/{gid}')
         assert len(resp.json()['player_stats']) == 3
+
+
+class TestGameStatsExcludesHandedBack:
+    """handed_back results should not count as completed results in game stats."""
+
+    def _get_player(self, player_stats, name):
+        return next(p for p in player_stats if p['player_name'] == name)
+
+    def test_handed_back_excluded_from_game_stats(self, client):
+        """A player with handed_back should have 0 hands_played for that hand."""
+        g = client.post(
+            '/games',
+            json={'game_date': '2026-03-01', 'player_names': ['Alice', 'Bob']},
+        )
+        assert g.status_code == 201
+        gid = g.json()['game_id']
+
+        # Hand 1: Alice wins, Bob loses
+        h1 = client.post(
+            f'/games/{gid}/hands',
+            json={
+                'flop_1': {'rank': 'A', 'suit': 'S'},
+                'flop_2': {'rank': 'K', 'suit': 'H'},
+                'flop_3': {'rank': '2', 'suit': 'D'},
+                'player_entries': [
+                    {
+                        'player_name': 'Alice',
+                        'card_1': {'rank': '7', 'suit': 'S'},
+                        'card_2': {'rank': '8', 'suit': 'S'},
+                    },
+                    {
+                        'player_name': 'Bob',
+                        'card_1': {'rank': '9', 'suit': 'H'},
+                        'card_2': {'rank': '10', 'suit': 'H'},
+                    },
+                ],
+            },
+        )
+        assert h1.status_code == 201
+        hn1 = h1.json()['hand_number']
+        client.patch(
+            f'/games/{gid}/hands/{hn1}/results',
+            json=[
+                {'player_name': 'Alice', 'result': 'won', 'profit_loss': 30.0},
+                {'player_name': 'Bob', 'result': 'lost', 'profit_loss': -30.0},
+            ],
+        )
+
+        # Hand 2: Alice handed_back, Bob wins
+        h2 = client.post(
+            f'/games/{gid}/hands',
+            json={
+                'flop_1': {'rank': '3', 'suit': 'S'},
+                'flop_2': {'rank': '4', 'suit': 'H'},
+                'flop_3': {'rank': '5', 'suit': 'D'},
+                'player_entries': [
+                    {
+                        'player_name': 'Alice',
+                        'card_1': {'rank': 'J', 'suit': 'S'},
+                        'card_2': {'rank': 'Q', 'suit': 'S'},
+                    },
+                    {
+                        'player_name': 'Bob',
+                        'card_1': {'rank': 'K', 'suit': 'D'},
+                        'card_2': {'rank': 'A', 'suit': 'D'},
+                    },
+                ],
+            },
+        )
+        assert h2.status_code == 201
+        hn2 = h2.json()['hand_number']
+        client.patch(
+            f'/games/{gid}/hands/{hn2}/results',
+            json=[
+                {
+                    'player_name': 'Alice',
+                    'result': 'handed_back',
+                    'profit_loss': 0.0,
+                },
+                {'player_name': 'Bob', 'result': 'won', 'profit_loss': 10.0},
+            ],
+        )
+
+        resp = client.get(f'/stats/games/{gid}')
+        assert resp.status_code == 200
+        alice = self._get_player(resp.json()['player_stats'], 'Alice')
+        # Only hand 1 counts — hand 2 is handed_back
+        assert alice['hands_played'] == 1
+        assert alice['hands_won'] == 1
+        assert alice['hands_lost'] == 0
+        assert alice['hands_folded'] == 0
+
+        bob = self._get_player(resp.json()['player_stats'], 'Bob')
+        # Both hands count for Bob (won, lost)
+        assert bob['hands_played'] == 2

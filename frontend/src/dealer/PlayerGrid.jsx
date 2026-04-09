@@ -4,10 +4,14 @@ const statusColors = {
   folded: '#fecaca',
   lost: '#fed7aa',
   not_playing: '#e5e7eb',
+  pending: '#fef08a',
+  joined: '#bbf7d0',
+  handed_back: '#fef08a',
 };
 
 function formatStatus(status, outcomeStreet) {
   if (status === 'not_playing') return 'not playing';
+  if (status === 'handed_back') return 'handed back';
   if (outcomeStreet) return `${status} on ${outcomeStreet}`;
   return status;
 }

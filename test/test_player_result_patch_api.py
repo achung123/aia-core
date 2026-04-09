@@ -169,6 +169,16 @@ class TestPlayerResultPatchSuccess:
         assert body['player_name'] == 'Alice'
         assert body['result'] == 'won'
 
+    def test_patch_handed_back_result(self, client, game_with_hand):
+        game_id, hand_number = game_with_hand
+        resp = client.patch(
+            _url(game_id, hand_number, 'Alice'),
+            json={'result': 'handed_back'},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body['result'] == 'handed_back'
+
 
 class TestPlayerResultPatchPersistence:
     """AC-2: result and profit_loss are persisted in the database."""

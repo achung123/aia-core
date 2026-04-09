@@ -14,15 +14,74 @@ from pydantic_models.app_models import (
     EquityResponse,
     HandCreate,
     HandResponse,
+    HandStatusResponse,
     HoleCardsUpdate,
     PlayerHandEntry,
     PlayerHandResponse,
     PlayerResultEntry,
     PlayerResultUpdate,
+    PlayerStatusEntry,
 )
 from pydantic_models.card_validator import validate_no_duplicate_cards
 
 router = APIRouter(prefix='/games', tags=['hands'])
+
+
+def _derive_participation_status(player_hand: PlayerHand | None) -> str:
+    """Derive participation status from a PlayerHand row (or None)."""
+    if player_hand is None:
+        return 'idle'
+    if player_hand.result is not None:
+        return player_hand.result
+    if player_hand.card_1 is not None:
+        return 'joined'
+    return 'pending'
+
+
+@router.get('/{game_id}/hands/{hand_number}/status', response_model=HandStatusResponse)
+def get_hand_status(
+    game_id: int,
+    hand_number: int,
+    db: Annotated[Session, Depends(get_db)],
+):
+    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
+    if game is None:
+        raise HTTPException(status_code=404, detail='Game session not found')
+
+    hand = (
+        db.query(Hand)
+        .filter(Hand.game_id == game_id, Hand.hand_number == hand_number)
+        .first()
+    )
+    if hand is None:
+        raise HTTPException(status_code=404, detail='Hand not found')
+
+    community_recorded = any(
+        c is not None for c in [hand.flop_1, hand.turn, hand.river]
+    )
+
+    # Build a lookup of player_id -> PlayerHand for this hand
+    ph_by_player_id = {ph.player_id: ph for ph in hand.player_hands}
+
+    players: list[PlayerStatusEntry] = []
+    for player in game.players:
+        ph = ph_by_player_id.get(player.player_id)
+        players.append(
+            PlayerStatusEntry(
+                name=player.name,
+                participation_status=_derive_participation_status(ph),
+                card_1=ph.card_1 if ph else None,
+                card_2=ph.card_2 if ph else None,
+                result=ph.result if ph else None,
+                outcome_street=ph.outcome_street if ph else None,
+            )
+        )
+
+    return HandStatusResponse(
+        hand_number=hand.hand_number,
+        community_recorded=community_recorded,
+        players=players,
+    )
 
 
 @router.get('/{game_id}/hands', response_model=list[HandResponse])
