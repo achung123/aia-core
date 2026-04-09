@@ -133,6 +133,20 @@ export function reducer(state, action) {
     case 'SET_STEP':
       return { ...state, currentStep: action.payload };
 
+    case 'UPDATE_PARTICIPATION': {
+      const statusMap = new Map(
+        action.payload.players.map((p) => [p.name, p.participation_status]),
+      );
+      return {
+        ...state,
+        players: state.players.map((p) => {
+          const ps = statusMap.get(p.name);
+          if (ps == null) return p;
+          return { ...p, status: ps };
+        }),
+      };
+    }
+
     default:
       return state;
   }

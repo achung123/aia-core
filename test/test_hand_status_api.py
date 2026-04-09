@@ -6,7 +6,7 @@ from sqlalchemy import create_engine, StaticPool
 from sqlalchemy.orm import sessionmaker
 
 from app.database.database_models import Base as LegacyBase
-from app.database.models import Base as ModelsBase, Hand, Player, PlayerHand
+from app.database.models import Base as ModelsBase
 from app.database.session import get_db
 from app.main import app
 
@@ -118,7 +118,10 @@ class TestHandStatusJoined:
         )
         client.patch(
             f'/games/{game_id}/hands/{hand_number}/players/Alice',
-            json={'card_1': {'rank': 'A', 'suit': 'S'}, 'card_2': {'rank': 'K', 'suit': 'H'}},
+            json={
+                'card_1': {'rank': 'A', 'suit': 'S'},
+                'card_2': {'rank': 'K', 'suit': 'H'},
+            },
         )
         resp = client.get(f'/games/{game_id}/hands/{hand_number}/status')
         data = resp.json()

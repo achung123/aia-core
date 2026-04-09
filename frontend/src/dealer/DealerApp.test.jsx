@@ -1,5 +1,5 @@
 /** @vitest-environment happy-dom */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render } from 'preact';
 
 vi.mock('../api/client.js', () => ({
@@ -18,6 +18,7 @@ vi.mock('../api/client.js', () => ({
   fetchEquity: vi.fn(() => Promise.resolve({ equities: [] })),
   fetchGame: vi.fn(),
   fetchHand: vi.fn(),
+  fetchHandStatus: vi.fn(() => Promise.resolve({ hand_number: 1, community_recorded: false, players: [] })),
 }));
 
 vi.mock('./CameraCapture.jsx', () => ({
@@ -77,7 +78,7 @@ vi.mock('./dealerState.js', async () => {
   };
 });
 
-import { createHand, addPlayerToHand, updateHolecards, updateCommunityCards, patchPlayerResult, fetchHands, fetchHand } from '../api/client.js';
+import { createHand, addPlayerToHand, updateHolecards, updateCommunityCards, patchPlayerResult, fetchHands, fetchHand, fetchHandStatus } from '../api/client.js';
 import { DealerApp } from './DealerApp.jsx';
 
 function renderToContainer(vnode) {
@@ -827,5 +828,192 @@ describe('DealerApp finish hand flow', () => {
     await startHand(container);
 
     expect(findButton(container, 'Submit Hand')).toBeUndefined();
+  });
+});
+
+describe('DealerApp hand status polling', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    fetchHands.mockResolvedValue([]);
+    createHand.mockResolvedValue({ hand_number: 1 });
+    fetchHand.mockResolvedValue({
+      hand_number: 1,
+      flop_1: null, flop_2: null, flop_3: null,
+      turn: null, river: null,
+      player_hands: [],
+    });
+    addPlayerToHand.mockResolvedValue({});
+    updateHolecards.mockResolvedValue({});
+    patchPlayerResult.mockResolvedValue({});
+    fetchHandStatus.mockResolvedValue({
+      hand_number: 1,
+      community_recorded: false,
+      players: [
+        { name: 'Alice', participation_status: 'idle', card_1: null, card_2: null, result: null, outcome_street: null },
+        { name: 'Bob', participation_status: 'idle', card_1: null, card_2: null, result: null, outcome_street: null },
+        { name: 'Charlie', participation_status: 'idle', card_1: null, card_2: null, result: null, outcome_street: null },
+      ],
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function startHand(container) {
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="new-hand-btn"]')).not.toBeNull();
+    });
+    container.querySelector('[data-testid="new-hand-btn"]').click();
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain('Select a Player');
+    });
+  }
+
+  it('starts polling fetchHandStatus when on playerGrid step', async () => {
+    const container = renderToContainer(<DealerApp />);
+    await startHand(container);
+
+    // Initial poll on mount
+    await vi.waitFor(() => {
+      expect(fetchHandStatus).toHaveBeenCalledWith(42, 1);
+    });
+  });
+
+  it('polls every 3 seconds', async () => {
+    const container = renderToContainer(<DealerApp />);
+    await startHand(container);
+
+    // Wait for initial poll to happen
+    await vi.waitFor(() => {
+      expect(fetchHandStatus).toHaveBeenCalled();
+    });
+
+    // Clear call history after initial poll(s) during startHand
+    fetchHandStatus.mockClear();
+    fetchHandStatus.mockResolvedValue({
+      hand_number: 1,
+      community_recorded: false,
+      players: [
+        { name: 'Alice', participation_status: 'idle' },
+        { name: 'Bob', participation_status: 'idle' },
+        { name: 'Charlie', participation_status: 'idle' },
+      ],
+    });
+
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(fetchHandStatus).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(fetchHandStatus).toHaveBeenCalledTimes(2);
+  });
+
+  it('maps participation_status into player tile colors', async () => {
+    const container = renderToContainer(<DealerApp />);
+    await startHand(container);
+
+    // Update mock to return 'joined' for Alice
+    fetchHandStatus.mockResolvedValue({
+      hand_number: 1,
+      community_recorded: false,
+      players: [
+        { name: 'Alice', participation_status: 'joined' },
+        { name: 'Bob', participation_status: 'pending' },
+        { name: 'Charlie', participation_status: 'idle' },
+      ],
+    });
+
+    await vi.advanceTimersByTimeAsync(3000);
+
+    await vi.waitFor(() => {
+      const aliceRow = container.querySelector('[data-testid="player-row-Alice"]');
+      expect(aliceRow.style.backgroundColor).toBe('#bbf7d0'); // joined
+    });
+
+    await vi.waitFor(() => {
+      const bobRow = container.querySelector('[data-testid="player-row-Bob"]');
+      expect(bobRow.style.backgroundColor).toBe('#fef08a'); // pending
+    });
+  });
+
+  it('stops polling when leaving playerGrid step', async () => {
+    const container = renderToContainer(<DealerApp />);
+    await startHand(container);
+
+    await vi.waitFor(() => {
+      expect(fetchHandStatus).toHaveBeenCalled();
+    });
+
+    // Navigate back to dashboard
+    container.querySelector('[data-testid="back-btn"]').click();
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="new-hand-btn"]')).not.toBeNull();
+    });
+
+    fetchHandStatus.mockClear();
+    await vi.advanceTimersByTimeAsync(6000);
+    expect(fetchHandStatus).toHaveBeenCalledTimes(0);
+  });
+
+  it('stops polling on unmount', async () => {
+    const container = renderToContainer(<DealerApp />);
+    await startHand(container);
+
+    await vi.waitFor(() => {
+      expect(fetchHandStatus).toHaveBeenCalled();
+    });
+
+    render(null, container);
+
+    fetchHandStatus.mockClear();
+    await vi.advanceTimersByTimeAsync(6000);
+    expect(fetchHandStatus).toHaveBeenCalledTimes(0);
+  });
+
+  it('existing manual flow still works alongside polling', async () => {
+    vi.useRealTimers();
+    const container = renderToContainer(<DealerApp />);
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="new-hand-btn"]')).not.toBeNull();
+    });
+    container.querySelector('[data-testid="new-hand-btn"]').click();
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain('Select a Player');
+    });
+
+    // Manually capture Alice's cards via tile tap
+    container.querySelector('[data-testid="player-tile-Alice"]').click();
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="mock-detect"]')).not.toBeNull();
+    });
+    container.querySelector('[data-testid="mock-detect"]').click();
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="mock-confirm"]')).not.toBeNull();
+    });
+    container.querySelector('[data-testid="mock-confirm"]').click();
+
+    await vi.waitFor(() => {
+      expect(addPlayerToHand).toHaveBeenCalled();
+    });
+  });
+
+  it('silently ignores polling errors', async () => {
+    const container = renderToContainer(<DealerApp />);
+    await startHand(container);
+
+    await vi.waitFor(() => {
+      expect(fetchHandStatus).toHaveBeenCalled();
+    });
+
+    fetchHandStatus.mockRejectedValue(new Error('Network error'));
+    await vi.advanceTimersByTimeAsync(3000);
+
+    // Should not crash — grid still visible
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain('Select a Player');
+    });
   });
 });

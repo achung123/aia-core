@@ -1,4 +1,4 @@
-import { useReducer, useState } from 'preact/hooks';
+import { useReducer, useState, useEffect } from 'preact/hooks';
 import { reducer, initialState, validateOutcomeStreets } from './dealerState.js';
 import { GameSelector } from './GameSelector.jsx';
 import { GameCreateForm } from './GameCreateForm.jsx';
@@ -8,7 +8,7 @@ import { CameraCapture } from './CameraCapture.jsx';
 import { DetectionReview } from './DetectionReview.jsx';
 import { OutcomeButtons } from './OutcomeButtons.jsx';
 import { DealerPreview } from './DealerPreview.jsx';
-import { addPlayerToHand, updateHolecards, updateCommunityCards, patchPlayerResult, fetchGame, fetchHand } from '../api/client.js';
+import { addPlayerToHand, updateHolecards, updateCommunityCards, patchPlayerResult, fetchGame, fetchHand, fetchHandStatus } from '../api/client.js';
 
 export function DealerApp() {
   const [state, dispatch] = useReducer(reducer, initialState);
@@ -22,6 +22,29 @@ export function DealerApp() {
   const [finishError, setFinishError] = useState(null);
   const [finishing, setFinishing] = useState(false);
   const [persistedPlayers, setPersistedPlayers] = useState(new Set());
+
+  useEffect(() => {
+    if (state.currentStep !== 'playerGrid' || !state.gameId || !state.currentHandId) return;
+
+    let cancelled = false;
+
+    function poll() {
+      fetchHandStatus(state.gameId, state.currentHandId)
+        .then((data) => {
+          if (cancelled) return;
+          dispatch({ type: 'UPDATE_PARTICIPATION', payload: data });
+        })
+        .catch(() => { /* ignore polling errors */ });
+    }
+
+    poll();
+    const intervalId = setInterval(poll, 3000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+    };
+  }, [state.currentStep, state.gameId, state.currentHandId]);
 
   function handleNewGame() {
     dispatch({ type: 'SET_STEP', payload: 'create' });

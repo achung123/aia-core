@@ -1,6 +1,8 @@
 import { h } from 'preact';
-import { useState, useEffect } from 'preact/hooks';
-import { fetchSessions, fetchGame } from '../api/client.js';
+import { useState, useEffect, useRef } from 'preact/hooks';
+import { fetchSessions, fetchGame, fetchHands, fetchHandStatus, updateHolecards, patchPlayerResult } from '../api/client.js';
+import { CameraCapture } from '../dealer/CameraCapture.jsx';
+import { DetectionReview } from '../dealer/DetectionReview.jsx';
 
 function parseGameIdFromHash() {
   const hash = window.location.hash || '';
@@ -17,6 +19,16 @@ export function PlayerApp() {
   const [players, setPlayers] = useState([]);
   const [playersLoading, setPlayersLoading] = useState(false);
   const [playerName, setPlayerName] = useState(null);
+  const [playerStatus, setPlayerStatus] = useState('idle');
+  const [communityRecorded, setCommunityRecorded] = useState(false);
+  const [handNumber, setHandNumber] = useState(null);
+  const [captureStep, setCaptureStep] = useState(null); // null | 'camera' | 'review'
+  const [reviewData, setReviewData] = useState(null);
+  const [captureError, setCaptureError] = useState(null);
+  const [foldError, setFoldError] = useState(null);
+  const [folding, setFolding] = useState(false);
+  const [handingBack, setHandingBack] = useState(false);
+  const [handBackError, setHandBackError] = useState(null);
 
   function loadPlayers(id) {
     setPlayersLoading(true);
@@ -58,13 +70,125 @@ export function PlayerApp() {
 
   function handleSelectPlayer(name) {
     setPlayerName(name);
+    setPlayerStatus('idle');
     setStep('playing');
   }
 
   function handleChangePlayer() {
     setPlayerName(null);
+    setPlayerStatus('idle');
+    setCaptureStep(null);
+    setReviewData(null);
+    setCaptureError(null);
     setStep('namePick');
   }
+
+  function handleStartCapture() {
+    setCaptureStep('camera');
+    setCaptureError(null);
+  }
+
+  function handleDetectionResult(targetName, apiResponse, file) {
+    setCaptureStep('review');
+    const imageUrl = URL.createObjectURL(file);
+    setReviewData({
+      targetName,
+      detections: apiResponse.detections,
+      imageUrl,
+    });
+  }
+
+  function handleCaptureCancel() {
+    setCaptureStep(null);
+    setReviewData(null);
+  }
+
+  async function handleReviewConfirm(targetName, cardValues) {
+    if (reviewData?.imageUrl) URL.revokeObjectURL(reviewData.imageUrl);
+    const card1 = cardValues[0] || null;
+    const card2 = cardValues[1] || null;
+    try {
+      await updateHolecards(gameId, handNumber, playerName, {
+        card_1: card1,
+        card_2: card2,
+      });
+      setCaptureStep(null);
+      setReviewData(null);
+      setCaptureError(null);
+    } catch (err) {
+      setCaptureStep(null);
+      setReviewData(null);
+      setCaptureError(err.message || 'Failed to submit cards');
+    }
+  }
+
+  function handleReviewRetake() {
+    if (reviewData?.imageUrl) URL.revokeObjectURL(reviewData.imageUrl);
+    setReviewData(null);
+    setCaptureStep('camera');
+  }
+
+  async function handleFold() {
+    if (!window.confirm('Fold this hand?')) return;
+    setFolding(true);
+    setFoldError(null);
+    try {
+      await patchPlayerResult(gameId, handNumber, playerName, { result: 'folded' });
+    } catch (err) {
+      setFoldError(err.message || 'Failed to fold');
+    } finally {
+      setFolding(false);
+    }
+  }
+
+  async function handleHandBack() {
+    setHandingBack(true);
+    setHandBackError(null);
+    try {
+      await patchPlayerResult(gameId, handNumber, playerName, { result: 'handed_back' });
+    } catch (err) {
+      setHandBackError(err.message || 'Failed to hand back cards');
+    } finally {
+      setHandingBack(false);
+    }
+  }
+
+  useEffect(() => {
+    if (step !== 'playing' || !gameId || !playerName) return;
+
+    let intervalId = null;
+    let cancelled = false;
+
+    function pollStatus(handNumber) {
+      fetchHandStatus(gameId, handNumber)
+        .then(data => {
+          if (cancelled) return;
+          setCommunityRecorded(data.community_recorded);
+          const me = data.players.find(p => p.name === playerName);
+          if (me) {
+            setPlayerStatus(me.participation_status);
+          }
+        })
+        .catch(() => { /* ignore polling errors */ });
+    }
+
+    fetchHands(gameId)
+      .then(hands => {
+        if (cancelled) return;
+        if (!hands || hands.length === 0) return;
+        const latest = hands.reduce((max, h) =>
+          h.hand_number > max.hand_number ? h : max, hands[0]);
+        setHandNumber(latest.hand_number);
+        pollStatus(latest.hand_number);
+        intervalId = setInterval(() => pollStatus(latest.hand_number), 3000);
+      })
+      .catch(() => { /* ignore */ });
+
+    return () => {
+      cancelled = true;
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [step, gameId, playerName]);
 
   if (step === 'playing') {
     return (
@@ -72,7 +196,76 @@ export function PlayerApp() {
         <h1>Player Mode</h1>
         <p>Game #{gameId}</p>
         <h2 style={styles.heading}>{playerName}</h2>
-        <p>Waiting for hand…</p>
+
+        {captureStep === 'camera' && gameId && (
+          <CameraCapture
+            gameId={gameId}
+            targetName={playerName}
+            onDetectionResult={handleDetectionResult}
+            onCancel={handleCaptureCancel}
+          />
+        )}
+
+        {captureStep === 'review' && reviewData && (
+          <DetectionReview
+            detections={reviewData.detections}
+            imageUrl={reviewData.imageUrl}
+            mode="player"
+            targetName={reviewData.targetName}
+            onConfirm={handleReviewConfirm}
+            onRetake={handleReviewRetake}
+          />
+        )}
+
+        {!captureStep && (
+          <>
+            <PlayerStatusView
+              status={playerStatus}
+              onCapture={handleStartCapture}
+              onFold={handleFold}
+              folding={folding}
+              onHandBack={handleHandBack}
+              handingBack={handingBack}
+            />
+            {captureError && (
+              <div style={styles.error}>
+                <p>{captureError}</p>
+                <button
+                  data-testid="capture-retry-btn"
+                  style={styles.captureBtn}
+                  onClick={handleStartCapture}
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+            {foldError && (
+              <div style={styles.error}>
+                <p>{foldError}</p>
+                <button
+                  data-testid="fold-retry-btn"
+                  style={styles.foldBtn}
+                  onClick={handleFold}
+                >
+                  Retry Fold
+                </button>
+              </div>
+            )}
+            {handBackError && (
+              <div style={styles.error}>
+                <p>{handBackError}</p>
+                <button
+                  data-testid="hand-back-retry-btn"
+                  style={styles.handBackBtn}
+                  onClick={handleHandBack}
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+          </>
+        )}
+
         <button
           data-testid="change-player-btn"
           style={styles.changeBtn}
@@ -148,6 +341,58 @@ export function PlayerApp() {
   );
 }
 
+function PlayerStatusView({ status, onCapture, onFold, folding, onHandBack, handingBack }) {
+  switch (status) {
+    case 'pending':
+      return (
+        <div>
+          <p style={{ color: '#ca8a04' }}>Your turn! Capture your cards.</p>
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <button
+              data-testid="capture-cards-btn"
+              style={styles.captureBtn}
+              onClick={onCapture}
+            >
+              Capture Cards
+            </button>
+            <button
+              data-testid="fold-btn"
+              style={styles.foldBtn}
+              onClick={onFold}
+              disabled={folding}
+            >
+              {folding ? 'Folding…' : 'Fold'}
+            </button>
+          </div>
+        </div>
+      );
+    case 'joined':
+      return (
+        <div>
+          <p style={{ color: '#16a34a' }}>Cards submitted ✓</p>
+          <button
+            data-testid="hand-back-btn"
+            style={styles.handBackBtn}
+            onClick={onHandBack}
+            disabled={handingBack}
+          >
+            {handingBack ? 'Handing back…' : 'Hand Back Cards'}
+          </button>
+        </div>
+      );
+    case 'folded':
+      return <p style={{ color: '#dc2626' }}>Folded</p>;
+    case 'handed_back':
+      return <p style={{ color: '#2563eb' }}>Waiting for dealer decision…</p>;
+    case 'won':
+      return <p style={{ color: '#16a34a' }}>You won!</p>;
+    case 'lost':
+      return <p style={{ color: '#6b7280' }}>You lost.</p>;
+    default:
+      return <p style={{ color: '#6b7280' }}>Waiting for hand…</p>;
+  }
+}
+
 const styles = {
   container: {
     maxWidth: '480px',
@@ -205,5 +450,44 @@ const styles = {
     color: '#374151',
     cursor: 'pointer',
     fontSize: '0.9rem',
+  },
+  captureBtn: {
+    marginTop: '0.5rem',
+    padding: '0.75rem 1.5rem',
+    minHeight: '48px',
+    minWidth: '48px',
+    fontSize: '1rem',
+    fontWeight: 'bold',
+    border: 'none',
+    borderRadius: '8px',
+    background: '#4f46e5',
+    color: '#fff',
+    cursor: 'pointer',
+  },
+  foldBtn: {
+    marginTop: '0.5rem',
+    padding: '0.75rem 1.5rem',
+    minHeight: '48px',
+    minWidth: '48px',
+    fontSize: '1rem',
+    fontWeight: 'bold',
+    border: '2px solid #dc2626',
+    borderRadius: '8px',
+    background: '#fff',
+    color: '#dc2626',
+    cursor: 'pointer',
+  },
+  handBackBtn: {
+    marginTop: '0.5rem',
+    padding: '0.75rem 1.5rem',
+    minHeight: '48px',
+    minWidth: '48px',
+    fontSize: '1rem',
+    fontWeight: 'bold',
+    border: 'none',
+    borderRadius: '8px',
+    background: '#2563eb',
+    color: '#fff',
+    cursor: 'pointer',
   },
 };

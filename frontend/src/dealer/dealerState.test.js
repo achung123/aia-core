@@ -480,4 +480,71 @@ describe('reducer', () => {
       expect(validateOutcomeStreets(players)).toBeNull();
     });
   });
+
+  describe('UPDATE_PARTICIPATION', () => {
+    it('maps participation_status onto matching players', () => {
+      const gameState = reducer(initialState, {
+        type: 'SET_GAME',
+        payload: { gameId: 1, players: ['Alice', 'Bob'], gameDate: '2026-04-08' },
+      });
+
+      const state = reducer(gameState, {
+        type: 'UPDATE_PARTICIPATION',
+        payload: {
+          players: [
+            { name: 'Alice', participation_status: 'joined' },
+            { name: 'Bob', participation_status: 'pending' },
+          ],
+        },
+      });
+
+      expect(state.players[0].status).toBe('joined');
+      expect(state.players[1].status).toBe('pending');
+    });
+
+    it('leaves unmatched players unchanged', () => {
+      const gameState = reducer(initialState, {
+        type: 'SET_GAME',
+        payload: { gameId: 1, players: ['Alice', 'Bob'], gameDate: '2026-04-08' },
+      });
+
+      const state = reducer(gameState, {
+        type: 'UPDATE_PARTICIPATION',
+        payload: {
+          players: [
+            { name: 'Alice', participation_status: 'joined' },
+          ],
+        },
+      });
+
+      expect(state.players[0].status).toBe('joined');
+      expect(state.players[1].status).toBe('playing');
+    });
+
+    it('preserves other player fields (cards, recorded, outcomeStreet)', () => {
+      const gameState = reducer(initialState, {
+        type: 'SET_GAME',
+        payload: { gameId: 1, players: ['Alice'], gameDate: '2026-04-08' },
+      });
+
+      const withCards = reducer(gameState, {
+        type: 'SET_PLAYER_CARDS',
+        payload: { name: 'Alice', card1: 'Ah', card2: 'Kd' },
+      });
+
+      const state = reducer(withCards, {
+        type: 'UPDATE_PARTICIPATION',
+        payload: {
+          players: [
+            { name: 'Alice', participation_status: 'joined' },
+          ],
+        },
+      });
+
+      expect(state.players[0].card1).toBe('Ah');
+      expect(state.players[0].card2).toBe('Kd');
+      expect(state.players[0].recorded).toBe(true);
+      expect(state.players[0].status).toBe('joined');
+    });
+  });
 });
