@@ -60,8 +60,18 @@ def game_with_hand(client):
             'turn': '7C',
             'river': '10H',
             'player_entries': [
-                {'player_name': 'Alice', 'card_1': 'QH', 'card_2': 'JD', 'result': 'won'},
-                {'player_name': 'Bob', 'card_1': '3S', 'card_2': '4C', 'result': 'lost'},
+                {
+                    'player_name': 'Alice',
+                    'card_1': 'QH',
+                    'card_2': 'JD',
+                    'result': 'won',
+                },
+                {
+                    'player_name': 'Bob',
+                    'card_1': '3S',
+                    'card_2': '4C',
+                    'result': 'lost',
+                },
             ],
         },
     )
@@ -82,7 +92,10 @@ class TestExportCsv:
         resp = client.get(f'/games/{game_with_hand}/export/csv')
         lines = resp.text.strip().splitlines()
         header = lines[0].strip()
-        assert header == 'game_date,hand_number,player_name,hole_card_1,hole_card_2,flop_1,flop_2,flop_3,turn,river,result,profit_loss'
+        assert (
+            header
+            == 'game_date,hand_number,player_name,hole_card_1,hole_card_2,flop_1,flop_2,flop_3,turn,river,result,profit_loss'
+        )
 
     def test_export_csv_has_correct_data_rows(self, client, game_with_hand):
         resp = client.get(f'/games/{game_with_hand}/export/csv')
@@ -152,7 +165,12 @@ class TestExportCsv:
                 'flop_2': 'KD',
                 'flop_3': '2S',
                 'player_entries': [
-                    {'player_name': 'Alice', 'card_1': 'QH', 'card_2': 'JD', 'result': 'won'},
+                    {
+                        'player_name': 'Alice',
+                        'card_1': 'QH',
+                        'card_2': 'JD',
+                        'result': 'won',
+                    },
                 ],
             },
         )
