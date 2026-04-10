@@ -11,6 +11,7 @@ describe('initialState', () => {
       currentStep: 'gameSelector',
       handCount: 0,
       gameDate: null,
+      gameMode: 'dealer_centric',
     });
   });
 });
@@ -27,6 +28,7 @@ describe('reducer', () => {
       expect(state.gameId).toBe(42);
       expect(state.gameDate).toBe('2026-04-08');
       expect(state.currentStep).toBe('dashboard');
+      expect(state.gameMode).toBe('dealer_centric');
       expect(state.players).toEqual([
         { name: 'Alice', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null },
         { name: 'Bob', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null },
@@ -34,6 +36,17 @@ describe('reducer', () => {
       expect(state.community).toEqual({
         flop1: null, flop2: null, flop3: null, turn: null, river: null, recorded: false,
       });
+    });
+
+    it('sets step to qrCodes when gameMode is participation', () => {
+      const action = {
+        type: 'SET_GAME',
+        payload: { gameId: 42, players: ['Alice', 'Bob'], gameDate: '2026-04-08', gameMode: 'participation' },
+      };
+      const state = reducer(initialState, action);
+
+      expect(state.currentStep).toBe('qrCodes');
+      expect(state.gameMode).toBe('participation');
     });
   });
 

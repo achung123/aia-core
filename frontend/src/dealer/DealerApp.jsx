@@ -8,6 +8,7 @@ import { CameraCapture } from './CameraCapture.jsx';
 import { DetectionReview } from './DetectionReview.jsx';
 import { OutcomeButtons } from './OutcomeButtons.jsx';
 import { DealerPreview } from './DealerPreview.jsx';
+import { QRCodeDisplay } from './QRCodeDisplay.jsx';
 import { addPlayerToHand, updateHolecards, updateCommunityCards, patchPlayerResult, fetchGame, fetchHand, fetchHandStatus } from '../api/client.js';
 
 export function DealerApp() {
@@ -63,8 +64,8 @@ export function DealerApp() {
     }
   }
 
-  function handleGameCreated(gameId, players, gameDate) {
-    dispatch({ type: 'SET_GAME', payload: { gameId, players, gameDate } });
+  function handleGameCreated(gameId, players, gameDate, gameMode) {
+    dispatch({ type: 'SET_GAME', payload: { gameId, players, gameDate, gameMode } });
   }
 
   async function handleSelectHand(handNumber) {
@@ -77,8 +78,43 @@ export function DealerApp() {
     }
   }
 
-  function handleTileSelect(name) {
+  async function handleTileSelect(name) {
     setPatchError(null);
+
+    // Community tile: dealer always captures community cards
+    if (name === 'community') {
+      setCaptureTarget(name);
+      return;
+    }
+
+    // Participation mode: tile click activates players or opens outcome
+    if (state.gameMode === 'participation') {
+      const player = state.players.find((p) => p.name === name);
+      if (!player) return;
+
+      if (player.status === 'playing') {
+        // Activate: create player_hand with null cards → poll will show "pending"
+        try {
+          await addPlayerToHand(state.gameId, state.currentHandId, {
+            player_name: name,
+          });
+        } catch (err) {
+          setPatchError(err.message || 'Failed to activate player');
+        }
+        return;
+      }
+
+      if (player.status === 'handed_back') {
+        // Player has handed back cards — dealer sets outcome
+        handleDirectOutcome(name);
+        return;
+      }
+
+      // pending, joined, won, lost, folded — no action
+      return;
+    }
+
+    // Dealer-centric: open camera
     setCaptureTarget(name);
   }
 
@@ -264,6 +300,26 @@ export function DealerApp() {
         <GameCreateForm onGameCreated={handleGameCreated} />
       )}
 
+      {state.currentStep === 'qrCodes' && state.gameId && (
+        <div style={{ maxWidth: '480px', margin: '0 auto', padding: '1rem' }}>
+          <h2>Share with Players</h2>
+          <p style={{ color: '#6b7280', marginBottom: '1rem' }}>Each player scans their QR code to join:</p>
+          {state.players.map((p) => (
+            <div key={p.name} style={{ marginBottom: '1.5rem', textAlign: 'center', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '0.75rem' }}>
+              <h3 style={{ margin: '0 0 0.25rem' }}>{p.name}</h3>
+              <QRCodeDisplay gameId={state.gameId} playerName={p.name} visible={true} />
+            </div>
+          ))}
+          <button
+            data-testid="qr-continue-btn"
+            style={{ width: '100%', padding: '0.75rem', minHeight: '48px', fontSize: '1.1rem', fontWeight: 'bold', border: 'none', borderRadius: '8px', background: '#4f46e5', color: '#fff', cursor: 'pointer', marginTop: '1rem' }}
+            onClick={() => dispatch({ type: 'SET_STEP', payload: 'dashboard' })}
+          >
+            Continue
+          </button>
+        </div>
+      )}
+
       {state.currentStep === 'dashboard' && state.gameId && (
         <HandDashboard
           gameId={state.gameId}
@@ -280,7 +336,7 @@ export function DealerApp() {
             players={state.players}
             communityRecorded={state.community.recorded}
             onTileSelect={handleTileSelect}
-            onDirectOutcome={handleDirectOutcome}
+            onDirectOutcome={state.gameMode !== 'participation' ? handleDirectOutcome : null}
             canFinish={canFinish}
             onFinishHand={handleFinishHand}
             onBack={() => dispatch({ type: 'SET_STEP', payload: 'dashboard' })}

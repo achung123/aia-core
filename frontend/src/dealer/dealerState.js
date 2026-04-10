@@ -31,6 +31,7 @@ export const initialState = {
   currentStep: 'gameSelector',
   handCount: 0,
   gameDate: null,
+  gameMode: 'dealer_centric',
 };
 
 function initPlayer(name) {
@@ -40,14 +41,15 @@ function initPlayer(name) {
 export function reducer(state, action) {
   switch (action.type) {
     case 'SET_GAME': {
-      const { gameId, players, gameDate } = action.payload;
+      const { gameId, players, gameDate, gameMode } = action.payload;
       return {
         ...state,
         gameId,
         gameDate,
+        gameMode: gameMode || 'dealer_centric',
         players: players.map(initPlayer),
         community: { ...emptyCommunity },
-        currentStep: 'dashboard',
+        currentStep: gameMode === 'participation' ? 'qrCodes' : 'dashboard',
       };
     }
 

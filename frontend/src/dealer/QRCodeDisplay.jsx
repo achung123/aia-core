@@ -1,18 +1,22 @@
 import { useState, useEffect } from 'preact/hooks';
 import QRCode from 'qrcode';
 
-export function QRCodeDisplay({ gameId, visible }) {
+export function QRCodeDisplay({ gameId, playerName, visible }) {
   const [dataUrl, setDataUrl] = useState(null);
 
   useEffect(() => {
     if (!visible) return;
-    const url = `${window.location.origin}/#/player?game=${gameId}`;
+    const url = playerName
+      ? `${window.location.origin}/#/player?game=${gameId}&player=${encodeURIComponent(playerName)}`
+      : `${window.location.origin}/#/player?game=${gameId}`;
     QRCode.toDataURL(url, { width: 200, margin: 2 }).then(setDataUrl);
-  }, [gameId, visible]);
+  }, [gameId, playerName, visible]);
 
   if (!visible) return null;
 
-  const playerUrl = `${window.location.origin}/#/player?game=${gameId}`;
+  const playerUrl = playerName
+    ? `${window.location.origin}/#/player?game=${gameId}&player=${encodeURIComponent(playerName)}`
+    : `${window.location.origin}/#/player?game=${gameId}`;
 
   return (
     <div data-testid="qr-code-display" style={styles.wrapper}>

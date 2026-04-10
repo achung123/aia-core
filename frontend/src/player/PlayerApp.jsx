@@ -10,6 +10,12 @@ function parseGameIdFromHash() {
   return match ? Number(match[1]) : null;
 }
 
+function parsePlayerFromHash() {
+  const hash = window.location.hash || '';
+  const match = hash.match(/[?&]player=([^&]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 export function PlayerApp() {
   const [step, setStep] = useState('gameSelect');
   const [gameId, setGameId] = useState(null);
@@ -25,8 +31,6 @@ export function PlayerApp() {
   const [captureStep, setCaptureStep] = useState(null); // null | 'camera' | 'review'
   const [reviewData, setReviewData] = useState(null);
   const [captureError, setCaptureError] = useState(null);
-  const [foldError, setFoldError] = useState(null);
-  const [folding, setFolding] = useState(false);
   const [handingBack, setHandingBack] = useState(false);
   const [handBackError, setHandBackError] = useState(null);
   const [noActiveHand, setNoActiveHand] = useState(false);
@@ -43,6 +47,26 @@ export function PlayerApp() {
 
   useEffect(() => {
     const urlGameId = parseGameIdFromHash();
+    const urlPlayer = parsePlayerFromHash();
+
+    // If both game and player are in URL, skip selection screens
+    if (urlGameId !== null && urlPlayer) {
+      fetchSessions()
+        .then(data => {
+          const active = data.filter(s => s.status === 'active');
+          const found = active.find(s => s.game_id === urlGameId);
+          if (found) {
+            setGameId(urlGameId);
+            setPlayerName(urlPlayer);
+            setStep('playing');
+          } else {
+            setError(`Game #${urlGameId} not found or not active`);
+          }
+        })
+        .catch(err => setError(err.message))
+        .finally(() => setLoading(false));
+      return;
+    }
 
     fetchSessions()
       .then(data => {
@@ -132,19 +156,6 @@ export function PlayerApp() {
     if (reviewData?.imageUrl) URL.revokeObjectURL(reviewData.imageUrl);
     setReviewData(null);
     setCaptureStep('camera');
-  }
-
-  async function handleFold() {
-    if (!window.confirm('Fold this hand?')) return;
-    setFolding(true);
-    setFoldError(null);
-    try {
-      await patchPlayerResult(gameId, handNumber, playerName, { result: 'folded' });
-    } catch (err) {
-      setFoldError(err.message || 'Failed to fold');
-    } finally {
-      setFolding(false);
-    }
   }
 
   async function handleHandBack() {
@@ -251,8 +262,6 @@ export function PlayerApp() {
               <PlayerStatusView
               status={playerStatus}
               onCapture={handleStartCapture}
-              onFold={handleFold}
-              folding={folding}
               onHandBack={handleHandBack}
               handingBack={handingBack}
             />
@@ -265,18 +274,6 @@ export function PlayerApp() {
                   onClick={handleStartCapture}
                 >
                   Retry
-                </button>
-              </div>
-            )}
-            {foldError && (
-              <div style={styles.error}>
-                <p>{foldError}</p>
-                <button
-                  data-testid="fold-retry-btn"
-                  style={styles.foldBtn}
-                  onClick={handleFold}
-                >
-                  Retry Fold
                 </button>
               </div>
             )}
@@ -372,7 +369,7 @@ export function PlayerApp() {
   );
 }
 
-function PlayerStatusView({ status, onCapture, onFold, folding, onHandBack, handingBack }) {
+function PlayerStatusView({ status, onCapture, onHandBack, handingBack }) {
   switch (status) {
     case 'pending':
       return (
@@ -385,14 +382,6 @@ function PlayerStatusView({ status, onCapture, onFold, folding, onHandBack, hand
               onClick={onCapture}
             >
               Capture Cards
-            </button>
-            <button
-              data-testid="fold-btn"
-              style={styles.foldBtn}
-              onClick={onFold}
-              disabled={folding}
-            >
-              {folding ? 'Folding…' : 'Fold'}
             </button>
           </div>
         </div>
@@ -493,19 +482,6 @@ const styles = {
     borderRadius: '8px',
     background: '#4f46e5',
     color: '#fff',
-    cursor: 'pointer',
-  },
-  foldBtn: {
-    marginTop: '0.5rem',
-    padding: '0.75rem 1.5rem',
-    minHeight: '48px',
-    minWidth: '48px',
-    fontSize: '1rem',
-    fontWeight: 'bold',
-    border: '2px solid #dc2626',
-    borderRadius: '8px',
-    background: '#fff',
-    color: '#dc2626',
     cursor: 'pointer',
   },
   handBackBtn: {

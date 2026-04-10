@@ -293,6 +293,29 @@ describe('PlayerApp — name picker', () => {
       expect(playerBtns[1].textContent).toContain('Eve');
     });
   });
+
+  it('auto-selects game AND player when both are in URL, skipping name pick', async () => {
+    window.location.hash = '#/player?game=2&player=Bob';
+    fetchSessions.mockResolvedValue(SESSIONS);
+    fetchHands.mockResolvedValue([{ hand_number: 1 }]);
+    fetchHandStatus.mockResolvedValue({
+      hand_number: 1,
+      community_recorded: false,
+      players: [
+        { name: 'Bob', participation_status: 'idle', card_1: null, card_2: null, result: null, outcome_street: null },
+      ],
+    });
+    const container = renderToContainer(<PlayerApp />);
+
+    // Should go straight to playing step, not name pick
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain('Bob');
+      expect(container.textContent).toContain('Game #2');
+      expect(container.textContent).toContain('Waiting for hand');
+    });
+    // Should NOT show name pick buttons
+    expect(container.querySelectorAll('[data-testid="player-name-btn"]').length).toBe(0);
+  });
 });
 
 /* ---- Helper: navigate to playing step ---- */
@@ -761,149 +784,6 @@ describe('PlayerApp — camera capture flow', () => {
   });
 });
 
-describe('PlayerApp — fold action', () => {
-  let originalHash;
-  let originalConfirm;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.useFakeTimers();
-    originalHash = window.location.hash;
-    window.location.hash = '';
-    originalConfirm = window.confirm;
-    window.confirm = vi.fn();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-    window.location.hash = originalHash;
-    window.confirm = originalConfirm;
-  });
-
-  it('shows Fold button when status is pending', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'pending') });
-
-    await vi.waitFor(() => {
-      const btn = container.querySelector('[data-testid="fold-btn"]');
-      expect(btn).not.toBeNull();
-      expect(btn.textContent).toContain('Fold');
-    });
-  });
-
-  it('does NOT show Fold button when status is idle', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container, 1);
-
-    await vi.waitFor(() => {
-      expect(container.textContent).toContain('Waiting for hand');
-    });
-
-    expect(container.querySelector('[data-testid="fold-btn"]')).toBeNull();
-  });
-
-  it('does NOT show Fold button when status is joined', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'joined') });
-
-    await vi.waitFor(() => {
-      expect(container.textContent).toContain('Cards submitted');
-    });
-
-    expect(container.querySelector('[data-testid="fold-btn"]')).toBeNull();
-  });
-
-  it('shows confirmation dialog when Fold is tapped', async () => {
-    window.confirm.mockReturnValue(false);
-    const container = document.createElement('div');
-    await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'pending') });
-
-    await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="fold-btn"]')).not.toBeNull();
-    });
-
-    container.querySelector('[data-testid="fold-btn"]').click();
-
-    expect(window.confirm).toHaveBeenCalledWith('Fold this hand?');
-    // Should NOT call API since user cancelled
-    expect(patchPlayerResult).not.toHaveBeenCalled();
-  });
-
-  it('calls patchPlayerResult with folded on confirm', async () => {
-    window.confirm.mockReturnValue(true);
-    patchPlayerResult.mockResolvedValue({});
-    const container = document.createElement('div');
-    await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'pending') });
-
-    await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="fold-btn"]')).not.toBeNull();
-    });
-
-    container.querySelector('[data-testid="fold-btn"]').click();
-
-    await vi.waitFor(() => {
-      expect(patchPlayerResult).toHaveBeenCalledWith(3, 1, 'Bob', { result: 'folded' });
-    });
-  });
-
-  it('shows error and retry when fold API fails', async () => {
-    window.confirm.mockReturnValue(true);
-    patchPlayerResult.mockRejectedValue(new Error('Network error'));
-    const container = document.createElement('div');
-    await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'pending') });
-
-    await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="fold-btn"]')).not.toBeNull();
-    });
-
-    container.querySelector('[data-testid="fold-btn"]').click();
-
-    await vi.waitFor(() => {
-      expect(container.textContent).toContain('Network error');
-    });
-
-    // Retry button should be visible
-    const retryBtn = container.querySelector('[data-testid="fold-retry-btn"]');
-    expect(retryBtn).not.toBeNull();
-
-    // Retry should call API again
-    patchPlayerResult.mockResolvedValue({});
-    retryBtn.click();
-
-    await vi.waitFor(() => {
-      expect(patchPlayerResult).toHaveBeenCalledTimes(2);
-    });
-  });
-
-  it('polling picks up folded status after successful fold', async () => {
-    window.confirm.mockReturnValue(true);
-    patchPlayerResult.mockResolvedValue({});
-    const container = document.createElement('div');
-    await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'pending') });
-
-    await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="fold-btn"]')).not.toBeNull();
-    });
-
-    container.querySelector('[data-testid="fold-btn"]').click();
-
-    await vi.waitFor(() => {
-      expect(patchPlayerResult).toHaveBeenCalled();
-    });
-
-    // Next poll returns folded status
-    fetchHandStatus.mockResolvedValue(makeStatus('Bob', 'folded', { result: 'folded' }));
-    vi.advanceTimersByTime(3000);
-
-    await vi.waitFor(() => {
-      expect(container.textContent).toContain('Folded');
-    });
-
-    // Fold button should be gone
-    expect(container.querySelector('[data-testid="fold-btn"]')).toBeNull();
-  });
-});
-
 describe('PlayerApp — hand back cards action', () => {
   let originalHash;
 
@@ -1082,7 +962,6 @@ describe('PlayerApp — polling edge cases', () => {
 
     // Player status controls should not be shown
     expect(container.querySelector('[data-testid="capture-cards-btn"]')).toBeNull();
-    expect(container.querySelector('[data-testid="fold-btn"]')).toBeNull();
   });
 
   it('recovers from empty hands when a new hand appears', async () => {

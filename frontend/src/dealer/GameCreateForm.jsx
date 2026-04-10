@@ -19,6 +19,7 @@ export function GameCreateForm({ onGameCreated }) {
   const [newPlayerName, setNewPlayerName] = useState('');
   const [addingPlayer, setAddingPlayer] = useState(false);
   const [addPlayerError, setAddPlayerError] = useState(null);
+  const [gameMode, setGameMode] = useState('dealer_centric');
 
   useEffect(() => {
     fetchPlayers()
@@ -67,7 +68,7 @@ export function GameCreateForm({ onGameCreated }) {
         game_date: date,
         player_names: [...selected],
       });
-      onGameCreated(result.game_id, result.player_names, result.game_date);
+      onGameCreated(result.game_id, result.player_names, result.game_date, gameMode);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -136,6 +137,44 @@ export function GameCreateForm({ onGameCreated }) {
       </fieldset>
 
       {error && <p style={styles.error}>{error}</p>}
+
+      <fieldset style={styles.fieldset}>
+        <legend style={styles.legend}>Game Mode</legend>
+        <div style={styles.modeContainer}>
+          <label style={{
+            ...styles.modeOption,
+            ...(gameMode === 'dealer_centric' ? styles.modeActive : {}),
+          }}>
+            <input
+              type="radio"
+              name="gameMode"
+              value="dealer_centric"
+              checked={gameMode === 'dealer_centric'}
+              onChange={() => setGameMode('dealer_centric')}
+              style={{ display: 'none' }}
+            />
+            <span style={styles.modeEmoji}>🎰</span>
+            <span>Dealer Centric</span>
+            <span style={styles.modeDesc}>Dealer logs all cards &amp; outcomes</span>
+          </label>
+          <label style={{
+            ...styles.modeOption,
+            ...(gameMode === 'participation' ? styles.modeActive : {}),
+          }}>
+            <input
+              type="radio"
+              name="gameMode"
+              value="participation"
+              checked={gameMode === 'participation'}
+              onChange={() => setGameMode('participation')}
+              style={{ display: 'none' }}
+            />
+            <span style={styles.modeEmoji}>📱</span>
+            <span>Player Participation</span>
+            <span style={styles.modeDesc}>Players capture their own cards</span>
+          </label>
+        </div>
+      </fieldset>
 
       <button type="submit" disabled={!canSubmit} style={{
         ...styles.submit,
@@ -264,5 +303,41 @@ const styles = {
     fontSize: '13px',
     marginTop: '6px',
     marginBottom: 0,
+  },
+  modeContainer: {
+    display: 'flex',
+    gap: '8px',
+    marginTop: '8px',
+  },
+  modeOption: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '4px',
+    padding: '12px 8px',
+    borderRadius: '12px',
+    border: '2px solid var(--border)',
+    background: 'var(--bg)',
+    cursor: 'pointer',
+    textAlign: 'center',
+    fontSize: '14px',
+    fontWeight: 500,
+    transition: 'background 0.15s, border-color 0.15s',
+    WebkitTapHighlightColor: 'transparent',
+  },
+  modeActive: {
+    background: 'var(--accent-bg)',
+    borderColor: 'var(--accent-border)',
+    color: 'var(--accent)',
+    fontWeight: 600,
+  },
+  modeEmoji: {
+    fontSize: '1.5rem',
+  },
+  modeDesc: {
+    fontSize: '11px',
+    color: '#6b7280',
+    fontWeight: 400,
   },
 };

@@ -45,6 +45,26 @@ describe('QRCodeDisplay', () => {
     cleanup(container);
   });
 
+  it('includes playerName in URL when provided', async () => {
+    let container;
+    await act(async () => {
+      container = renderToContainer(<QRCodeDisplay gameId={42} playerName="Alice" visible={true} />);
+    });
+    const expectedUrl = `${window.location.origin}/#/player?game=42&player=Alice`;
+    expect(QRCode.toDataURL).toHaveBeenCalledWith(expectedUrl, expect.any(Object));
+    cleanup(container);
+  });
+
+  it('encodes special characters in playerName', async () => {
+    let container;
+    await act(async () => {
+      container = renderToContainer(<QRCodeDisplay gameId={42} playerName="Bob Jr." visible={true} />);
+    });
+    const expectedUrl = `${window.location.origin}/#/player?game=42&player=Bob%20Jr.`;
+    expect(QRCode.toDataURL).toHaveBeenCalledWith(expectedUrl, expect.any(Object));
+    cleanup(container);
+  });
+
   it('renders a QR code image after loading', async () => {
     let container;
     await act(async () => {
