@@ -1,6 +1,11 @@
 #!/bin/sh
 set -e
 
+if [ "$SEED_DATA" = "1" ]; then
+  echo "SEED_DATA=1: wiping existing database for a clean seed..."
+  : > /app/poker.db
+fi
+
 echo "Running Alembic migrations..."
 uv run alembic upgrade head
 

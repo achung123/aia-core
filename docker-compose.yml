@@ -1,9 +1,10 @@
 services:
   backend:
+    profiles: ["cpu"]
     build: .
     ports:
       - "8000:8000"
-    volumes:
+    volumes: &backend-volumes
       - ./src:/app/src
       - ./alembic:/app/alembic
       - ./alembic.ini:/app/alembic.ini
@@ -12,12 +13,36 @@ services:
       - ./docker-entrypoint.sh:/app/docker-entrypoint.sh
       - ./scripts:/app/scripts
       - ./models:/app/models
-    environment:
+      - ./poker.db:/app/poker.db
+    environment: &backend-env
       - PYTHONPATH=/app/src
       - DATABASE_URL=sqlite:///./poker.db
       - SEED_DATA=1
       - ALLOWED_ORIGINS=http://localhost:5173,http://0.0.0.0:5173,http://127.0.0.1:5173
     working_dir: /app
+
+  # GPU-accelerated backend — use: docker compose --profile gpu up
+  backend-gpu:
+    profiles: ["gpu"]
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu
+    ports:
+      - "8000:8000"
+    volumes: *backend-volumes
+    environment: *backend-env
+    working_dir: /app
+    networks:
+      default:
+        aliases:
+          - backend
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   frontend:
     build: ./frontend
@@ -28,11 +53,10 @@ services:
       - ./frontend/index.html:/app/index.html
       - ./frontend/public:/app/public
       - ./frontend/vite.config.js:/app/vite.config.js
-    depends_on:
-      - backend
 
   tunnel:
     image: cloudflare/cloudflared:latest
-    command: tunnel --no-autoupdate --url http://frontend:5173
+    command: tunnel --no-autoupdate --protocol http2 --url http://frontend:5173
+    restart: unless-stopped
     depends_on:
       - frontend
