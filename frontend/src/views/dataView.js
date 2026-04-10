@@ -8,6 +8,7 @@ import {
   uploadCsvCommit,
   updateCommunityCards,
   updateHolecards,
+  exportGameCsvUrl,
 } from '../api/client.js';
 
 const SUIT_MAP = { H: '♥', D: '♦', C: '♣', S: '♠', h: '♥', d: '♦', c: '♣', s: '♠' };
@@ -64,24 +65,24 @@ function showCreateGameModal(wrapper, onCreated) {
   const existing = wrapper.querySelector('.modal-overlay');
   if (existing) existing.remove();
 
-  const overlay = el('div', { className: 'modal-overlay', style: { position: 'fixed', top: '0', left: '0', right: '0', bottom: '0', background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: '1000' } });
+  const overlay = el('div', { className: 'modal-overlay' });
 
-  const modal = el('div', { style: { background: '#222', color: '#eee', padding: '20px', borderRadius: '8px', minWidth: '340px', maxWidth: '450px' } });
+  const modal = el('div', { className: 'modal' });
 
-  modal.appendChild(el('h2', { style: { margin: '0 0 12px' } }, 'New Game Session'));
+  modal.appendChild(el('h2', {}, 'New Game Session'));
 
-  const dateInput = el('input', { type: 'date', style: { width: '100%', padding: '6px', marginBottom: '10px', boxSizing: 'border-box' } });
+  const dateInput = el('input', { type: 'date', style: { width: '100%', boxSizing: 'border-box' } });
   dateInput.value = new Date().toISOString().slice(0, 10);
   modal.appendChild(el('label', {}, 'Date'));
   modal.appendChild(dateInput);
 
-  const playerSelect = el('select', { multiple: true, style: { width: '100%', height: '120px', marginBottom: '8px' } });
+  const playerSelect = el('select', { multiple: true, style: { width: '100%', height: '120px', marginTop: '0.5rem' } });
   modal.appendChild(el('label', {}, 'Players (select multiple)'));
   modal.appendChild(playerSelect);
 
-  const newPlayerRow = el('div', { style: { display: 'flex', gap: '4px', marginBottom: '8px' } });
-  const newPlayerInput = el('input', { type: 'text', placeholder: 'New player name', style: { flex: '1', padding: '4px' } });
-  const addPlayerBtn = el('button', { type: 'button', style: { padding: '4px 10px' } }, '+ Add');
+  const newPlayerRow = el('div', { style: { display: 'flex', gap: '0.4rem', marginTop: '0.5rem' } });
+  const newPlayerInput = el('input', { type: 'text', placeholder: 'New player name', style: { flex: '1' } });
+  const addPlayerBtn = el('button', { type: 'button', className: 'dv-btn dv-btn-sm' }, '+ Add');
   newPlayerRow.appendChild(newPlayerInput);
   newPlayerRow.appendChild(addPlayerBtn);
   modal.appendChild(newPlayerRow);
@@ -93,13 +94,13 @@ function showCreateGameModal(wrapper, onCreated) {
     newPlayerInput.value = '';
   });
 
-  const errEl = el('p', { style: { color: '#f55', margin: '4px 0' } });
+  const errEl = el('p', { className: 'error-msg' });
   errEl.hidden = true;
   modal.appendChild(errEl);
 
-  const btnRow = el('div', { style: { display: 'flex', gap: '8px', justifyContent: 'flex-end' } });
-  const cancelBtn = el('button', { type: 'button' }, 'Cancel');
-  const submitBtn = el('button', { type: 'button' }, 'Create');
+  const btnRow = el('div', { className: 'btn-row' });
+  const cancelBtn = el('button', { type: 'button', className: 'dv-btn' }, 'Cancel');
+  const submitBtn = el('button', { type: 'button', className: 'dv-btn dv-btn-primary' }, 'Create');
   btnRow.appendChild(cancelBtn);
   btnRow.appendChild(submitBtn);
   modal.appendChild(btnRow);
@@ -138,24 +139,25 @@ function showCsvUploadModal(wrapper, onDone) {
   const existing = wrapper.querySelector('.modal-overlay');
   if (existing) existing.remove();
 
-  const overlay = el('div', { className: 'modal-overlay', style: { position: 'fixed', top: '0', left: '0', right: '0', bottom: '0', background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: '1000' } });
+  const overlay = el('div', { className: 'modal-overlay' });
 
-  const modal = el('div', { style: { background: '#222', color: '#eee', padding: '20px', borderRadius: '8px', minWidth: '400px', maxWidth: '550px' } });
+  const modal = el('div', { className: 'modal' });
 
-  modal.appendChild(el('h2', { style: { margin: '0 0 12px' } }, 'Import Game from CSV'));
-  modal.appendChild(el('p', { style: { fontSize: '13px', color: '#aaa', margin: '0 0 10px' } },
+  modal.appendChild(el('h2', {}, 'Import Game from CSV'));
+  modal.appendChild(el('p', { className: 'helper-text' },
     'Columns: game_date, hand_number, player_name, hole_card_1, hole_card_2, flop_1, flop_2, flop_3, turn, river, result, profit_loss'));
 
-  const fileInput = el('input', { type: 'file', accept: '.csv' });
+  const fileInput = el('input', { type: 'file', accept: '.csv', style: { width: '100%' } });
+  modal.appendChild(el('label', {}, 'CSV File'));
   modal.appendChild(fileInput);
 
-  const statusEl = el('div', { style: { margin: '10px 0', minHeight: '40px' } });
+  const statusEl = el('div', { className: 'status-msg' });
   modal.appendChild(statusEl);
 
-  const btnRow = el('div', { style: { display: 'flex', gap: '8px', justifyContent: 'flex-end' } });
-  const cancelBtn = el('button', { type: 'button' }, 'Cancel');
-  const validateBtn = el('button', { type: 'button', disabled: true }, 'Validate');
-  const commitBtn = el('button', { type: 'button', disabled: true }, 'Commit');
+  const btnRow = el('div', { className: 'btn-row' });
+  const cancelBtn = el('button', { type: 'button', className: 'dv-btn' }, 'Cancel');
+  const validateBtn = el('button', { type: 'button', className: 'dv-btn', disabled: true }, 'Validate');
+  const commitBtn = el('button', { type: 'button', className: 'dv-btn dv-btn-success', disabled: true }, 'Commit');
   btnRow.appendChild(cancelBtn);
   btnRow.appendChild(validateBtn);
   btnRow.appendChild(commitBtn);
@@ -172,12 +174,12 @@ function showCsvUploadModal(wrapper, onDone) {
   validateBtn.addEventListener('click', async () => {
     validateBtn.disabled = true;
     statusEl.textContent = 'Validating…';
-    statusEl.style.color = '#ccc';
+    statusEl.style.color = '#94a3b8';
     try {
       const result = await uploadCsvValidate(fileInput.files[0]);
       if (result.valid) {
         statusEl.textContent = `✓ Valid — ${result.total_rows} rows`;
-        statusEl.style.color = '#4f4';
+        statusEl.style.color = '#34d399';
         commitBtn.disabled = false;
       } else {
         statusEl.innerHTML = '';
@@ -186,26 +188,26 @@ function showCsvUploadModal(wrapper, onDone) {
           statusEl.appendChild(document.createElement('br'));
           statusEl.appendChild(document.createTextNode('  ' + err));
         });
-        statusEl.style.color = '#f55';
+        statusEl.style.color = '#f87171';
       }
     } catch (e) {
       statusEl.textContent = `Error: ${e.message}`;
-      statusEl.style.color = '#f55';
+      statusEl.style.color = '#f87171';
     } finally { validateBtn.disabled = false; }
   });
 
   commitBtn.addEventListener('click', async () => {
     commitBtn.disabled = true;
     statusEl.textContent = 'Committing…';
-    statusEl.style.color = '#ccc';
+    statusEl.style.color = '#94a3b8';
     try {
       const result = await uploadCsvCommit(fileInput.files[0]);
       statusEl.textContent = `✓ Committed — ${result.games_created} games, ${result.hands_created} hands, ${result.players_created} new players`;
-      statusEl.style.color = '#4f4';
+      statusEl.style.color = '#34d399';
       setTimeout(() => { overlay.remove(); onDone(); }, 1500);
     } catch (e) {
       statusEl.textContent = `Error: ${e.message}`;
-      statusEl.style.color = '#f55';
+      statusEl.style.color = '#f87171';
       commitBtn.disabled = false;
     }
   });
@@ -222,11 +224,11 @@ function showAddHandModal(wrapper, session, onDone) {
   const existing = wrapper.querySelector('.modal-overlay');
   if (existing) existing.remove();
 
-  const overlay = el('div', { className: 'modal-overlay', style: { position: 'fixed', top: '0', left: '0', right: '0', bottom: '0', background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: '1000' } });
+  const overlay = el('div', { className: 'modal-overlay' });
 
-  const modal = el('div', { style: { background: '#222', color: '#eee', padding: '20px', borderRadius: '8px', minWidth: '450px', maxWidth: '600px', maxHeight: '80vh', overflowY: 'auto' } });
+  const modal = el('div', { className: 'modal' });
 
-  modal.appendChild(el('h2', { style: { margin: '0 0 12px' } }, `Add Hand — Game ${session.game_date}`));
+  modal.appendChild(el('h2', {}, `Add Hand — Game ${session.game_date}`));
 
   const form = el('form');
 
@@ -235,9 +237,9 @@ function showAddHandModal(wrapper, session, onDone) {
   const communitySection = el('fieldset');
   communitySection.appendChild(el('legend', {}, 'Community Cards'));
   for (const [key, label] of [['flop_1','Flop 1'],['flop_2','Flop 2'],['flop_3','Flop 3'],['turn','Turn'],['river','River']]) {
-    const inp = el('input', { type: 'text', placeholder: 'e.g. AH', style: { width: '60px', margin: '0 4px' } });
+    const inp = el('input', { type: 'text', placeholder: 'e.g. AH', style: { width: '60px', margin: '0 0.25rem' } });
     communityFields[key] = inp;
-    communitySection.appendChild(el('label', { style: { marginRight: '8px' } }, `${label}: `));
+    communitySection.appendChild(el('label', { style: { marginRight: '0.5rem', display: 'inline', marginTop: '0' } }, `${label}: `));
     communitySection.appendChild(inp);
   }
   form.appendChild(communitySection);
@@ -246,7 +248,7 @@ function showAddHandModal(wrapper, session, onDone) {
   const playerSection = el('fieldset');
   playerSection.appendChild(el('legend', {}, 'Player Hands'));
   const playerInputs = [];
-  const loadingP = el('p', {}, 'Loading players…');
+  const loadingP = el('p', { className: 'loading' }, 'Loading players…');
   playerSection.appendChild(loadingP);
   form.appendChild(playerSection);
 
@@ -255,32 +257,32 @@ function showAddHandModal(wrapper, session, onDone) {
     const playerNames = new Set();
     hands.forEach(h => (h.player_hands || []).forEach(ph => playerNames.add(ph.player_name)));
     if (playerNames.size === 0) {
-      playerSection.appendChild(el('p', { style: { color: '#aaa' } }, 'No players found in existing hands.'));
+      playerSection.appendChild(el('p', { className: 'empty-msg' }, 'No players found in existing hands.'));
       return;
     }
     for (const name of playerNames) {
-      const row = el('div', { style: { marginBottom: '6px' } });
-      const c1 = el('input', { type: 'text', placeholder: 'e.g. AH', style: { width: '60px', margin: '0 4px' } });
-      const c2 = el('input', { type: 'text', placeholder: 'e.g. KD', style: { width: '60px', margin: '0 4px' } });
+      const row = el('div', { className: 'player-row' });
+      const c1 = el('input', { type: 'text', placeholder: 'e.g. AH', style: { width: '60px' } });
+      const c2 = el('input', { type: 'text', placeholder: 'e.g. KD', style: { width: '60px' } });
       const resSelect = el('select');
       for (const [v, t] of [['','--'],['win','Win'],['loss','Loss'],['fold','Fold']]) {
         resSelect.appendChild(el('option', { value: v }, t));
       }
-      const plInp = el('input', { type: 'number', step: '0.01', placeholder: '0', style: { width: '70px', margin: '0 4px' } });
-      row.appendChild(el('strong', { style: { display: 'inline-block', width: '80px' } }, name));
+      const plInp = el('input', { type: 'number', step: '0.01', placeholder: '0', style: { width: '70px' } });
+      row.appendChild(el('strong', {}, name));
       row.appendChild(c1); row.appendChild(c2); row.appendChild(resSelect); row.appendChild(plInp);
       playerSection.appendChild(row);
       playerInputs.push({ name, c1, c2, resSelect, plInp });
     }
   }).catch(err => { loadingP.textContent = `Error: ${err.message}`; });
 
-  const errEl = el('p', { style: { color: '#f55', margin: '4px 0' } });
+  const errEl = el('p', { className: 'error-msg' });
   errEl.hidden = true;
   form.appendChild(errEl);
 
-  const btnRow = el('div', { style: { display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '10px' } });
-  const cancelBtn = el('button', { type: 'button' }, 'Cancel');
-  const submitBtn = el('button', { type: 'submit' }, 'Record Hand');
+  const btnRow = el('div', { className: 'btn-row' });
+  const cancelBtn = el('button', { type: 'button', className: 'dv-btn' }, 'Cancel');
+  const submitBtn = el('button', { type: 'submit', className: 'dv-btn dv-btn-primary' }, 'Record Hand');
   btnRow.appendChild(cancelBtn);
   btnRow.appendChild(submitBtn);
   form.appendChild(btnRow);
@@ -333,11 +335,11 @@ function showEditHandModal(wrapper, gameId, hand, onDone) {
   const existing = wrapper.querySelector('.modal-overlay');
   if (existing) existing.remove();
 
-  const overlay = el('div', { className: 'modal-overlay', style: { position: 'fixed', top: '0', left: '0', right: '0', bottom: '0', background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: '1000' } });
+  const overlay = el('div', { className: 'modal-overlay' });
 
-  const modal = el('div', { style: { background: '#222', color: '#eee', padding: '20px', borderRadius: '8px', minWidth: '450px', maxWidth: '600px', maxHeight: '80vh', overflowY: 'auto' } });
+  const modal = el('div', { className: 'modal' });
 
-  modal.appendChild(el('h2', { style: { margin: '0 0 12px' } }, `Edit Hand #${hand.hand_number}`));
+  modal.appendChild(el('h2', {}, `Edit Hand #${hand.hand_number}`));
 
   const form = el('form');
 
@@ -346,9 +348,9 @@ function showEditHandModal(wrapper, gameId, hand, onDone) {
   const communitySection = el('fieldset');
   communitySection.appendChild(el('legend', {}, 'Community Cards'));
   for (const [key, label] of [['flop_1','Flop 1'],['flop_2','Flop 2'],['flop_3','Flop 3'],['turn','Turn'],['river','River']]) {
-    const inp = el('input', { type: 'text', value: hand[key] || '', style: { width: '60px', margin: '0 4px' } });
+    const inp = el('input', { type: 'text', value: hand[key] || '', style: { width: '60px', margin: '0 0.25rem' } });
     communityFields[key] = inp;
-    communitySection.appendChild(el('label', { style: { marginRight: '8px' } }, `${label}: `));
+    communitySection.appendChild(el('label', { style: { marginRight: '0.5rem', display: 'inline', marginTop: '0' } }, `${label}: `));
     communitySection.appendChild(inp);
   }
   form.appendChild(communitySection);
@@ -358,24 +360,24 @@ function showEditHandModal(wrapper, gameId, hand, onDone) {
   playerSection.appendChild(el('legend', {}, 'Player Hole Cards'));
   const playerEdits = [];
   for (const ph of (hand.player_hands || [])) {
-    const row = el('div', { style: { marginBottom: '6px' } });
-    const c1 = el('input', { type: 'text', value: ph.card_1 || '', style: { width: '60px', margin: '0 4px' } });
-    const c2 = el('input', { type: 'text', value: ph.card_2 || '', style: { width: '60px', margin: '0 4px' } });
-    row.appendChild(el('strong', { style: { display: 'inline-block', width: '80px' } }, ph.player_name));
+    const row = el('div', { className: 'player-row' });
+    const c1 = el('input', { type: 'text', value: ph.card_1 || '', style: { width: '60px' } });
+    const c2 = el('input', { type: 'text', value: ph.card_2 || '', style: { width: '60px' } });
+    row.appendChild(el('strong', {}, ph.player_name));
     row.appendChild(c1); row.appendChild(c2);
-    row.appendChild(el('span', { style: { color: '#aaa', marginLeft: '8px' } }, `${ph.result || ''} ${ph.profit_loss ?? ''}`));
+    row.appendChild(el('span', { style: { color: '#64748b', marginLeft: '0.5rem', fontSize: '0.82rem' } }, `${ph.result || ''} ${ph.profit_loss ?? ''}`));
     playerSection.appendChild(row);
     playerEdits.push({ playerName: ph.player_name, origC1: ph.card_1, origC2: ph.card_2, c1, c2 });
   }
   form.appendChild(playerSection);
 
-  const errEl = el('p', { style: { color: '#f55', margin: '4px 0' } });
+  const errEl = el('p', { className: 'error-msg' });
   errEl.hidden = true;
   form.appendChild(errEl);
 
-  const btnRow = el('div', { style: { display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '10px' } });
-  const cancelBtn = el('button', { type: 'button' }, 'Cancel');
-  const saveBtn = el('button', { type: 'submit' }, 'Save');
+  const btnRow = el('div', { className: 'btn-row' });
+  const cancelBtn = el('button', { type: 'button', className: 'dv-btn' }, 'Cancel');
+  const saveBtn = el('button', { type: 'submit', className: 'dv-btn dv-btn-primary' }, 'Save');
   btnRow.appendChild(cancelBtn);
   btnRow.appendChild(saveBtn);
   form.appendChild(btnRow);
@@ -454,12 +456,12 @@ async function handleRowClick(session, tr, tbody, columns, wrapper) {
     const detailsTd = el('td', { colSpan: columns.length });
 
     // Action bar
-    const actionBar = el('div', { style: { display: 'flex', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' } });
+    const actionBar = el('div', { className: 'action-bar' });
 
-    const addHandBtn = el('button', { type: 'button', style: { padding: '4px 10px', fontSize: '12px' } }, '+ Add Hand');
+    const addHandBtn = el('button', { type: 'button', className: 'dv-btn dv-btn-sm' }, '+ Add Hand');
     addHandBtn.addEventListener('click', () => showAddHandModal(wrapper, session, () => refreshAndExpand(session, tbody, columns, wrapper)));
 
-    const loadVizBtn = el('button', { type: 'button', style: { padding: '4px 10px', fontSize: '12px', background: '#2a5', color: '#fff', border: 'none', borderRadius: '3px' } }, '▶ Load in Visualizer');
+    const loadVizBtn = el('button', { type: 'button', className: 'dv-btn dv-btn-sm dv-btn-success' }, '▶ Load in Visualizer');
     loadVizBtn.addEventListener('click', () => {
       window.location.hash = '#/playback';
       setTimeout(() => {
@@ -469,10 +471,22 @@ async function handleRowClick(session, tr, tbody, columns, wrapper) {
 
     actionBar.appendChild(addHandBtn);
     actionBar.appendChild(loadVizBtn);
+
+    const exportCsvBtn = el('button', { type: 'button', className: 'dv-btn dv-btn-sm' }, '📥 Export CSV');
+    exportCsvBtn.addEventListener('click', () => {
+      const a = document.createElement('a');
+      a.href = exportGameCsvUrl(session.game_id);
+      a.download = '';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    });
+    actionBar.appendChild(exportCsvBtn);
+
     detailsTd.appendChild(actionBar);
 
     if (!hands || hands.length === 0) {
-      detailsTd.appendChild(el('p', {}, 'No hands recorded.'));
+      detailsTd.appendChild(el('p', { className: 'empty-msg' }, 'No hands recorded.'));
     } else {
       const handTable = el('table', { className: 'hand-table' });
       const thead = el('thead');
@@ -498,7 +512,7 @@ async function handleRowClick(session, tr, tbody, columns, wrapper) {
         }).join(', ');
         htr.appendChild(el('td', {}, playerText || '—'));
 
-        const editBtn = el('button', { type: 'button', style: { padding: '2px 8px', fontSize: '11px' } }, 'Edit');
+        const editBtn = el('button', { type: 'button', className: 'dv-btn dv-btn-sm' }, 'Edit');
         editBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           showEditHandModal(wrapper, session.game_id, h, () => refreshAndExpand(session, tbody, columns, wrapper));
@@ -546,10 +560,18 @@ function refreshAndExpand(session, tbody, columns, wrapper) {
 function buildTableBody(tbody, sorted, columns, wrapper) {
   tbody.textContent = '';
   sorted.forEach(s => {
-    const tr = el('tr', { className: 'session-row', style: { cursor: 'pointer' } });
+    const tr = el('tr', { className: 'session-row' });
     tr.dataset.gameId = String(s.game_id);
     tr.appendChild(el('td', {}, s.game_date || s.date || '—'));
-    tr.appendChild(el('td', {}, s.status || 'active'));
+
+    const statusTd = el('td');
+    const statusText = s.status || 'active';
+    const badge = el('span', {
+      className: `dv-status dv-status-${statusText}`,
+    }, statusText);
+    statusTd.appendChild(badge);
+    tr.appendChild(statusTd);
+
     tr.appendChild(el('td', {}, String(s.hand_count ?? '?')));
     tr.appendChild(el('td', {}, String(s.player_count ?? '?')));
     tr.addEventListener('click', () => handleRowClick(s, tr, tbody, columns, wrapper));
@@ -568,15 +590,17 @@ export function renderDataView(container) {
 
   const wrapper = el('div', { className: 'data-view' });
 
+  wrapper.appendChild(el('h1', { className: 'dv-title' }, '📊 Game Sessions'));
+
   // Toolbar
-  const toolbar = el('div', { style: { display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' } });
-  const newGameBtn = el('button', { type: 'button', style: { padding: '6px 14px' } }, '+ New Game');
-  const csvBtn = el('button', { type: 'button', style: { padding: '6px 14px' } }, 'Import CSV');
+  const toolbar = el('div', { className: 'toolbar' });
+  const newGameBtn = el('button', { type: 'button', className: 'dv-btn dv-btn-primary' }, '+ New Game');
+  const csvBtn = el('button', { type: 'button', className: 'dv-btn' }, 'Import CSV');
   toolbar.appendChild(newGameBtn);
   toolbar.appendChild(csvBtn);
   wrapper.appendChild(toolbar);
 
-  const loadingEl = el('p', {}, 'Loading sessions…');
+  const loadingEl = el('p', { className: 'loading' }, 'Loading sessions…');
   wrapper.appendChild(loadingEl);
   container.appendChild(wrapper);
 

@@ -7,7 +7,11 @@ import { render } from 'preact';
 vi.mock('../api/client.js', () => ({
   fetchSessions: vi.fn(),
   fetchHands: vi.fn(),
-  fetchEquity: vi.fn(),
+}));
+
+// Mock client-side equity calculator
+vi.mock('../poker/evaluator.js', () => ({
+  calculateEquity: vi.fn(() => []),
 }));
 
 // Mock poker scene — no WebGL in happy-dom
@@ -47,7 +51,8 @@ vi.mock('../components/equityOverlay.js', () => ({
   })),
 }));
 
-import { fetchSessions, fetchHands, fetchEquity } from '../api/client.js';
+import { fetchSessions, fetchHands } from '../api/client.js';
+import { calculateEquity } from '../poker/evaluator.js';
 import { MobilePlaybackView } from './MobilePlaybackView.jsx';
 
 function renderToContainer(vnode) {
@@ -79,12 +84,10 @@ describe('MobilePlaybackView', () => {
     vi.clearAllMocks();
     fetchSessions.mockResolvedValue(SESSIONS);
     fetchHands.mockResolvedValue(HANDS);
-    fetchEquity.mockResolvedValue({
-      equities: [
-        { player_name: 'Alice', equity: 0.6 },
-        { player_name: 'Bob', equity: 0.4 },
-      ],
-    });
+    calculateEquity.mockReturnValue([
+      { equity: 0.6 },
+      { equity: 0.4 },
+    ]);
   });
 
   it('renders a full-viewport canvas', () => {
@@ -198,17 +201,6 @@ describe('MobilePlaybackView', () => {
     });
   });
 
-  it('shows equity row after selecting a game with 2+ players', async () => {
-    const container = renderToContainer(<MobilePlaybackView />);
-    await vi.waitFor(() => {
-      expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(3);
-    });
-    container.querySelectorAll('[data-testid="game-card"]')[0].click();
-    await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="equity-row"]')).toBeTruthy();
-    });
-  });
-
   it('shows back button when a game is active', async () => {
     const container = renderToContainer(<MobilePlaybackView />);
     expect(container.querySelector('[data-testid="back-button"]')).toBeNull();
@@ -249,31 +241,30 @@ describe('MobilePlaybackView', () => {
     });
   });
 
-  it('calls fetchEquity with gameId and handNumber after selecting game', async () => {
+  it('calls calculateEquity after selecting game with 2+ players', async () => {
     const container = renderToContainer(<MobilePlaybackView />);
     await vi.waitFor(() => {
       expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(3);
     });
     container.querySelectorAll('[data-testid="game-card"]')[0].click();
     await vi.waitFor(() => {
-      expect(fetchEquity).toHaveBeenCalledWith(2, 1);
+      expect(calculateEquity).toHaveBeenCalled();
     });
   });
 
-  it('shows loading indicator while equity is being fetched', async () => {
-    fetchEquity.mockReturnValue(new Promise(() => {})); // never resolves
+  it('shows equity row after selecting a game with 2+ players', async () => {
     const container = renderToContainer(<MobilePlaybackView />);
     await vi.waitFor(() => {
       expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(3);
     });
     container.querySelectorAll('[data-testid="game-card"]')[0].click();
     await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="equity-loading"]')).toBeTruthy();
+      expect(container.querySelector('[data-testid="equity-row"]')).toBeTruthy();
     });
   });
 
-  it('hides equity row gracefully when fetchEquity fails', async () => {
-    fetchEquity.mockRejectedValue(new Error('Server error'));
+  it('hides equity row when calculateEquity throws', async () => {
+    calculateEquity.mockImplementation(() => { throw new Error('eval error'); });
     const container = renderToContainer(<MobilePlaybackView />);
     await vi.waitFor(() => {
       expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(3);
@@ -282,14 +273,13 @@ describe('MobilePlaybackView', () => {
     await vi.waitFor(() => {
       expect(fetchHands).toHaveBeenCalled();
     });
-    // Wait for the rejected promise to settle
+    // equity row should be hidden
     await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="equity-loading"]')).toBeNull();
+      expect(container.querySelector('[data-testid="equity-row"]')).toBeNull();
     });
-    expect(container.querySelector('[data-testid="equity-row"]')).toBeNull();
   });
 
-  it('re-fetches equity when hand index changes', async () => {
+  it('recalculates equity when hand index changes', async () => {
     const multiHands = [
       { ...HANDS[0], hand_number: 1 },
       { ...HANDS[0], hand_number: 2 },
@@ -301,15 +291,17 @@ describe('MobilePlaybackView', () => {
     });
     container.querySelectorAll('[data-testid="game-card"]')[0].click();
     await vi.waitFor(() => {
-      expect(fetchEquity).toHaveBeenCalledWith(2, 1);
+      expect(calculateEquity).toHaveBeenCalled();
     });
+
+    const callsBefore = calculateEquity.mock.calls.length;
 
     // Scrub to hand 2 via the next button
     const nextBtn = container.querySelector('[data-testid="scrubber-next"]');
     if (nextBtn) {
       nextBtn.click();
       await vi.waitFor(() => {
-        expect(fetchEquity).toHaveBeenCalledWith(2, 2);
+        expect(calculateEquity.mock.calls.length).toBeGreaterThan(callsBefore);
       });
     }
   });

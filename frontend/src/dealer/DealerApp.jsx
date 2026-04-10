@@ -11,6 +11,34 @@ import { DealerPreview } from './DealerPreview.jsx';
 import { QRCodeDisplay } from './QRCodeDisplay.jsx';
 import { addPlayerToHand, updateHolecards, updateCommunityCards, patchPlayerResult, fetchGame, fetchHand, fetchHandStatus } from '../api/client.js';
 
+const DEALER_STATE_KEY = 'aia_dealer_state';
+
+function saveState(state) {
+  try {
+    const toSave = {
+      gameId: state.gameId,
+      currentHandId: state.currentHandId,
+      players: state.players,
+      community: state.community,
+      currentStep: state.currentStep,
+      handCount: state.handCount,
+      gameDate: state.gameDate,
+      gameMode: state.gameMode,
+    };
+    sessionStorage.setItem(DEALER_STATE_KEY, JSON.stringify(toSave));
+  } catch { /* ignore quota errors */ }
+}
+
+function loadSavedState() {
+  try {
+    const raw = sessionStorage.getItem(DEALER_STATE_KEY);
+    if (!raw) return null;
+    const saved = JSON.parse(raw);
+    if (saved && saved.gameId && saved.currentStep) return saved;
+  } catch { /* ignore parse errors */ }
+  return null;
+}
+
 export function DealerApp() {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [captureTarget, setCaptureTarget] = useState(null);
@@ -24,8 +52,26 @@ export function DealerApp() {
   const [finishing, setFinishing] = useState(false);
   const [persistedPlayers, setPersistedPlayers] = useState(new Set());
 
+  // Restore state from sessionStorage on mount (only if starting fresh)
   useEffect(() => {
-    if (state.currentStep !== 'playerGrid' || !state.gameId || !state.currentHandId) return;
+    if (state.currentStep !== 'gameSelector') return;
+    const saved = loadSavedState();
+    if (saved) {
+      dispatch({ type: 'RESTORE_STATE', payload: saved });
+    }
+  }, []);
+
+  // Persist state to sessionStorage on every meaningful change
+  useEffect(() => {
+    if (state.gameId && state.currentStep !== 'gameSelector') {
+      saveState(state);
+    } else if (state.currentStep === 'gameSelector') {
+      try { sessionStorage.removeItem(DEALER_STATE_KEY); } catch { /* ignore */ }
+    }
+  }, [state]);
+
+  useEffect(() => {
+    if (state.currentStep !== 'playerGrid' || !state.gameId || !state.currentHandId || state.gameMode !== 'participation') return;
 
     const controller = new AbortController();
     const { signal } = controller;
@@ -35,6 +81,32 @@ export function DealerApp() {
         .then((data) => {
           if (signal.aborted) return;
           dispatch({ type: 'UPDATE_PARTICIPATION', payload: data });
+
+          // If any player has joined/handed_back, fetch hand data to get their cards
+          const joinedPlayers = (data.players || []).filter(
+            (p) => p.participation_status === 'joined' || p.participation_status === 'handed_back',
+          );
+          const needsCards = joinedPlayers.some((jp) => {
+            const local = state.players.find((lp) => lp.name === jp.name);
+            return local && !local.card1 && !local.card2;
+          });
+
+          if (needsCards) {
+            fetchHand(state.gameId, state.currentHandId)
+              .then((handData) => {
+                if (signal.aborted) return;
+                (handData.player_hands || []).forEach((ph) => {
+                  const local = state.players.find((lp) => lp.name === ph.player_name);
+                  if (local && !local.card1 && !local.card2 && ph.card_1 && ph.card_2) {
+                    dispatch({
+                      type: 'SET_PLAYER_CARDS',
+                      payload: { name: ph.player_name, card1: ph.card_1, card2: ph.card_2 },
+                    });
+                  }
+                });
+              })
+              .catch(() => { /* ignore card fetch errors */ });
+          }
         })
         .catch((err) => {
           if (err.name === 'AbortError') return;
@@ -49,7 +121,7 @@ export function DealerApp() {
       controller.abort();
       clearInterval(intervalId);
     };
-  }, [state.currentStep, state.gameId, state.currentHandId]);
+  }, [state.currentStep, state.gameId, state.currentHandId, state.gameMode]);
 
   function handleNewGame() {
     dispatch({ type: 'SET_STEP', payload: 'create' });
@@ -92,7 +164,7 @@ export function DealerApp() {
       const player = state.players.find((p) => p.name === name);
       if (!player) return;
 
-      if (player.status === 'playing') {
+      if (player.status === 'playing' || player.status === 'idle') {
         // Activate: create player_hand with null cards → poll will show "pending"
         try {
           await addPlayerToHand(state.gameId, state.currentHandId, {
@@ -123,6 +195,10 @@ export function DealerApp() {
     setOutcomeError(null);
     setOutcomeTarget(name);
     dispatch({ type: 'SET_STEP', payload: 'outcome' });
+  }
+
+  function handleMarkNotPlaying(name) {
+    dispatch({ type: 'SET_PLAYER_RESULT', payload: { name, status: 'not_playing', outcomeStreet: null } });
   }
 
   function handleDetectionResult(targetName, apiResponse, file) {
@@ -302,11 +378,11 @@ export function DealerApp() {
 
       {state.currentStep === 'qrCodes' && state.gameId && (
         <div style={{ maxWidth: '480px', margin: '0 auto', padding: '1rem' }}>
-          <h2>Share with Players</h2>
-          <p style={{ color: '#6b7280', marginBottom: '1rem' }}>Each player scans their QR code to join:</p>
+          <h2 style={{ color: '#e2e8f0' }}>Share with Players</h2>
+          <p style={{ color: '#94a3b8', marginBottom: '1rem' }}>Each player scans their QR code to join:</p>
           {state.players.map((p) => (
-            <div key={p.name} style={{ marginBottom: '1.5rem', textAlign: 'center', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '0.75rem' }}>
-              <h3 style={{ margin: '0 0 0.25rem' }}>{p.name}</h3>
+            <div key={p.name} style={{ marginBottom: '1.5rem', textAlign: 'center', border: '1px solid #2e303a', borderRadius: '12px', padding: '0.75rem', background: '#1e1f2b' }}>
+              <h3 style={{ margin: '0 0 0.25rem', color: '#c084fc' }}>{p.name}</h3>
               <QRCodeDisplay gameId={state.gameId} playerName={p.name} visible={true} />
             </div>
           ))}
@@ -324,8 +400,10 @@ export function DealerApp() {
         <HandDashboard
           gameId={state.gameId}
           players={state.players.map((p) => p.name)}
+          gameMode={state.gameMode}
           onSelectHand={handleSelectHand}
           onBack={() => dispatch({ type: 'SET_STEP', payload: 'gameSelector' })}
+          onModeChange={(mode) => dispatch({ type: 'SET_GAME_MODE', payload: mode })}
         />
       )}
 
@@ -336,7 +414,9 @@ export function DealerApp() {
             players={state.players}
             communityRecorded={state.community.recorded}
             onTileSelect={handleTileSelect}
-            onDirectOutcome={state.gameMode !== 'participation' ? handleDirectOutcome : null}
+            onDirectOutcome={handleDirectOutcome}
+            onMarkNotPlaying={handleMarkNotPlaying}
+            gameMode={state.gameMode}
             canFinish={canFinish}
             onFinishHand={handleFinishHand}
             onBack={() => dispatch({ type: 'SET_STEP', payload: 'dashboard' })}
@@ -417,11 +497,13 @@ const dialogOverlayStyle = {
 };
 
 const dialogStyle = {
-  background: '#fff',
+  background: '#1e1f2b',
   borderRadius: '12px',
   padding: '1.5rem',
   maxWidth: '400px',
   width: '90%',
+  color: '#e2e8f0',
+  border: '1px solid #2e303a',
 };
 
 const dialogButtonRow = {

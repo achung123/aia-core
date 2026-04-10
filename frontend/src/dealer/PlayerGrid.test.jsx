@@ -227,4 +227,79 @@ describe('PlayerGrid', () => {
     expect(rows[3].style.backgroundColor).toBe('#fed7aa'); // lost
     expect(rows[4].style.backgroundColor).toBe('#e5e7eb'); // not_playing
   });
+
+  describe('participation mode — sit-out button', () => {
+    const participationPlayers = [
+      { name: 'Alice', recorded: false, status: 'playing', outcomeStreet: null },
+      { name: 'Dan', recorded: false, status: 'idle', outcomeStreet: null },
+      { name: 'Bob', recorded: false, status: 'pending', outcomeStreet: null },
+      { name: 'Carol', recorded: false, status: 'handed_back', outcomeStreet: null },
+    ];
+
+    it('shows sit-out button for playing-status players in participation mode', () => {
+      const onMarkNotPlaying = vi.fn();
+      const container = renderToContainer(
+        <PlayerGrid
+          {...defaultProps}
+          players={participationPlayers}
+          gameMode="participation"
+          onMarkNotPlaying={onMarkNotPlaying}
+        />,
+      );
+      expect(container.querySelector('[data-testid="sitout-btn-Alice"]')).not.toBeNull();
+      expect(container.querySelector('[data-testid="sitout-btn-Dan"]')).not.toBeNull();
+    });
+
+    it('does not show sit-out button for non-playing-status players', () => {
+      const onMarkNotPlaying = vi.fn();
+      const container = renderToContainer(
+        <PlayerGrid
+          {...defaultProps}
+          players={participationPlayers}
+          gameMode="participation"
+          onMarkNotPlaying={onMarkNotPlaying}
+        />,
+      );
+      expect(container.querySelector('[data-testid="sitout-btn-Bob"]')).toBeNull();
+      expect(container.querySelector('[data-testid="sitout-btn-Carol"]')).toBeNull();
+    });
+
+    it('does not show sit-out button in dealer_centric mode', () => {
+      const onMarkNotPlaying = vi.fn();
+      const container = renderToContainer(
+        <PlayerGrid
+          {...defaultProps}
+          players={participationPlayers}
+          gameMode="dealer_centric"
+          onMarkNotPlaying={onMarkNotPlaying}
+        />,
+      );
+      expect(container.querySelector('[data-testid="sitout-btn-Alice"]')).toBeNull();
+    });
+
+    it('calls onMarkNotPlaying with player name when sit-out button clicked', () => {
+      const onMarkNotPlaying = vi.fn();
+      const container = renderToContainer(
+        <PlayerGrid
+          {...defaultProps}
+          players={participationPlayers}
+          gameMode="participation"
+          onMarkNotPlaying={onMarkNotPlaying}
+        />,
+      );
+      container.querySelector('[data-testid="sitout-btn-Alice"]').click();
+      expect(onMarkNotPlaying).toHaveBeenCalledWith('Alice');
+    });
+
+    it('does not show sit-out button when onMarkNotPlaying is not provided', () => {
+      const container = renderToContainer(
+        <PlayerGrid
+          {...defaultProps}
+          players={participationPlayers}
+          gameMode="participation"
+        />,
+      );
+      expect(container.querySelector('[data-testid="sitout-btn-Alice"]')).toBeNull();
+    });
+  });
 });

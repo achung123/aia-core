@@ -1,15 +1,18 @@
 """Games router - handles game-related endpoints."""
 
+import csv
+import io
 import json
 from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.database.models import GamePlayer, GameSession, Player
+from app.database.models import GamePlayer, GameSession, Hand, Player
 from app.database.session import get_db
 from pydantic_models.app_models import (
     CompleteGameRequest,
@@ -168,4 +171,67 @@ def reactivate_game_session(
         player_names=[p.name for p in game.players],
         hand_count=len(game.hands),
         winners=_parse_winners(game.winners),
+    )
+
+
+@router.get('/{game_id}/export/csv')
+def export_game_csv(
+    game_id: int,
+    db: Annotated[Session, Depends(get_db)],
+):
+    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
+    if game is None:
+        raise HTTPException(status_code=404, detail='Game session not found')
+
+    hands = (
+        db.query(Hand).filter(Hand.game_id == game_id).order_by(Hand.hand_number).all()
+    )
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            'game_date',
+            'hand_number',
+            'player_name',
+            'hole_card_1',
+            'hole_card_2',
+            'flop_1',
+            'flop_2',
+            'flop_3',
+            'turn',
+            'river',
+            'result',
+            'profit_loss',
+        ]
+    )
+
+    game_date_str = game.game_date.strftime('%m-%d-%Y') if game.game_date else ''
+
+    for hand in hands:
+        for ph in hand.player_hands:
+            player = db.query(Player).filter(Player.player_id == ph.player_id).first()
+            writer.writerow(
+                [
+                    game_date_str,
+                    hand.hand_number,
+                    player.name if player else '',
+                    ph.card_1 or '',
+                    ph.card_2 or '',
+                    hand.flop_1 or '',
+                    hand.flop_2 or '',
+                    hand.flop_3 or '',
+                    hand.turn or '',
+                    hand.river or '',
+                    ph.result or '',
+                    ph.profit_loss if ph.profit_loss is not None else '',
+                ]
+            )
+
+    filename = f'game_{game_id}_{game_date_str}.csv'
+    output.seek(0)
+    return StreamingResponse(
+        output,
+        media_type='text/csv',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
     )

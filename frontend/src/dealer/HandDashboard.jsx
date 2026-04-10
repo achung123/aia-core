@@ -21,7 +21,7 @@ function ResultBadge({ ph }) {
   );
 }
 
-export function HandDashboard({ gameId, players: playerNames, onSelectHand, onBack }) {
+export function HandDashboard({ gameId, players: playerNames, gameMode, onSelectHand, onBack, onModeChange }) {
   const [hands, setHands] = useState(null);
   const [error, setError] = useState(null);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
@@ -112,14 +112,41 @@ export function HandDashboard({ gameId, players: playerNames, onSelectHand, onBa
       <button data-testid="new-hand-btn" onClick={handleNewHand} style={styles.button}>
         New Hand
       </button>
-      <button
-        data-testid="toggle-qr-btn"
-        onClick={() => setShowQR((v) => !v)}
-        style={styles.qrButton}
-      >
-        {showQR ? 'Hide QR' : 'Show QR'}
-      </button>
-      <QRCodeDisplay gameId={gameId} visible={showQR} />
+      {onModeChange && (
+        <div data-testid="mode-toggle" style={styles.modeToggle}>
+          <button
+            data-testid="mode-dealer-btn"
+            style={{ ...styles.modeBtn, ...(gameMode === 'dealer_centric' ? styles.modeBtnActive : {}) }}
+            onClick={() => onModeChange('dealer_centric')}
+          >
+            🎰 Dealer Centric
+          </button>
+          <button
+            data-testid="mode-participation-btn"
+            style={{ ...styles.modeBtn, ...(gameMode === 'participation' ? styles.modeBtnActive : {}) }}
+            onClick={() => onModeChange('participation')}
+          >
+            📱 Player Participation
+          </button>
+        </div>
+      )}
+      {gameMode === 'participation' && (
+        <>
+          <button
+            data-testid="toggle-qr-btn"
+            onClick={() => setShowQR((v) => !v)}
+            style={styles.qrButton}
+          >
+            {showQR ? 'Hide QR' : 'Show QR'}
+          </button>
+          {showQR && (playerNames || []).map((name) => (
+            <div key={name} style={{ marginTop: '0.75rem', textAlign: 'center', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '0.75rem' }}>
+              <h3 style={{ margin: '0 0 0.25rem' }}>{name}</h3>
+              <QRCodeDisplay gameId={gameId} playerName={name} visible={true} />
+            </div>
+          ))}
+        </>
+      )}
       <button
         data-testid="end-game-btn"
         onClick={() => setShowEndConfirm(true)}
@@ -235,6 +262,28 @@ const styles = {
     background: '#f9fafb',
     cursor: 'pointer',
     marginTop: '0.5rem',
+  },
+  modeToggle: {
+    display: 'flex',
+    gap: '0.5rem',
+    marginTop: '0.75rem',
+  },
+  modeBtn: {
+    flex: 1,
+    padding: '0.5rem',
+    minHeight: '40px',
+    fontSize: '0.85rem',
+    fontWeight: 600,
+    border: '2px solid #d1d5db',
+    borderRadius: '8px',
+    background: '#f9fafb',
+    color: '#374151',
+    cursor: 'pointer',
+  },
+  modeBtnActive: {
+    borderColor: '#4f46e5',
+    background: '#eef2ff',
+    color: '#312e81',
   },
   dialogOverlay: {
     position: 'fixed',

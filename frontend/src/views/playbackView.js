@@ -92,7 +92,7 @@ export function renderPlaybackView(container) {
   }
   waitForLayout(() => {
     const pokerScene = createPokerScene(canvas);
-    const { renderer, scene, camera, seatPositions, chipStacks: chipStacksCtrl, holeCards: holeCardsCtrl, dispose } = pokerScene;
+    const { renderer, scene, camera, controls, seatPositions, chipStacks: chipStacksCtrl, holeCards: holeCardsCtrl, dispose } = pokerScene;
     const canvasArea = container.querySelector('#canvas-area');
     const labels = createSeatLabels(canvasArea);
     updateSeatLabelPositions(labels, seatPositions, camera, renderer);
@@ -101,6 +101,12 @@ export function renderPlaybackView(container) {
 
     // Keep overlays positioned on resize
     window.addEventListener('resize', () => {
+      updateSeatLabelPositions(labels, seatPositions, camera, renderer);
+      equityOverlay.updatePositions(seatPositions, camera, renderer);
+    });
+
+    // Keep overlays positioned when camera moves (pan/tilt/zoom)
+    controls.addEventListener('change', () => {
       updateSeatLabelPositions(labels, seatPositions, camera, renderer);
       equityOverlay.updatePositions(seatPositions, camera, renderer);
     });

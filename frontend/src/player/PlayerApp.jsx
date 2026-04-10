@@ -110,6 +110,7 @@ export function PlayerApp() {
     setCaptureStep(null);
     setReviewData(null);
     setCaptureError(null);
+    if (gameId) loadPlayers(gameId);
     setStep('namePick');
   }
 
@@ -228,6 +229,7 @@ export function PlayerApp() {
         <h1>Player Mode</h1>
         <p>Game #{gameId}</p>
         <h2 style={styles.heading}>{playerName}</h2>
+        {handNumber && <p style={{ color: '#6b7280', margin: '0 0 0.75rem' }}>Hand #{handNumber}</p>}
 
         {captureStep === 'camera' && gameId && (
           <CameraCapture

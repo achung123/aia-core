@@ -52,6 +52,13 @@ export function OutcomeButtons({ playerName, onSelect, onCancel, error, submitti
         <div style={styles.buttonGroup}>
           <p style={styles.streetLabel}>When?</p>
           <button
+            style={{ ...styles.button, backgroundColor: '#9333ea' }}
+            disabled={submitting}
+            onClick={() => handleStreetSelect('preflop')}
+          >
+            Pre-Flop
+          </button>
+          <button
             style={{ ...styles.button, backgroundColor: '#2563eb' }}
             disabled={submitting}
             onClick={() => handleStreetSelect('flop')}
@@ -100,7 +107,7 @@ const styles = {
   streetLabel: {
     fontSize: '1.1rem',
     fontWeight: '600',
-    color: '#374151',
+    color: '#c084fc',
     margin: '0 0 0.25rem 0',
   },
   buttonGroup: {
@@ -122,19 +129,20 @@ const styles = {
   error: {
     marginTop: '1rem',
     padding: '0.75rem',
-    background: '#fef2f2',
-    border: '1px solid #fca5a5',
+    background: 'rgba(239,68,68,0.15)',
+    border: '1px solid rgba(239,68,68,0.3)',
     borderRadius: '8px',
-    color: '#991b1b',
+    color: '#f87171',
     fontSize: '0.9rem',
   },
   backButton: {
     marginTop: '1rem',
     padding: '0.75rem 1.5rem',
     fontSize: '1rem',
-    background: '#e5e7eb',
-    border: 'none',
+    background: '#1e1f2b',
+    border: '1px solid #2e303a',
     borderRadius: '8px',
     cursor: 'pointer',
+    color: '#e2e8f0',
   },
 };

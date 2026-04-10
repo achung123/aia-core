@@ -341,10 +341,19 @@ class TestPlayerResultPatchOutcomeStreet:
         )
         assert alice_ph['outcome_street'] == 'flop'
 
-    def test_invalid_outcome_street_returns_422(self, client, game_with_hand):
+    def test_preflop_outcome_street_accepted(self, client, game_with_hand):
         game_id, hand_number = game_with_hand
         resp = client.patch(
             _url(game_id, hand_number, 'Alice'),
             json={'result': 'won', 'outcome_street': 'preflop'},
+        )
+        assert resp.status_code == 200
+        assert resp.json()['outcome_street'] == 'preflop'
+
+    def test_invalid_outcome_street_returns_422(self, client, game_with_hand):
+        game_id, hand_number = game_with_hand
+        resp = client.patch(
+            _url(game_id, hand_number, 'Alice'),
+            json={'result': 'won', 'outcome_street': 'banana'},
         )
         assert resp.status_code == 422

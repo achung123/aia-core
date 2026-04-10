@@ -10,9 +10,10 @@ function renderToContainer(vnode) {
 }
 
 function findButton(container, text) {
-  return Array.from(container.querySelectorAll('button')).find(
-    (b) => b.textContent.includes(text),
-  );
+  const buttons = Array.from(container.querySelectorAll('button'));
+  // Prefer exact text match, fall back to includes
+  return buttons.find((b) => b.textContent.trim() === text)
+    || buttons.find((b) => b.textContent.includes(text));
 }
 
 describe('OutcomeButtons', () => {
@@ -120,10 +121,11 @@ describe('OutcomeButtons', () => {
       expect(onSelect).toHaveBeenCalledWith('not_playing', null);
     });
 
-    it('shows street buttons (Flop, Turn, River) after selecting an outcome', async () => {
+    it('shows street buttons (Pre-Flop, Flop, Turn, River) after selecting an outcome', async () => {
       const container = renderToContainer(<OutcomeButtons {...defaultProps} />);
       findButton(container, 'Won').click();
       await vi.waitFor(() => {
+        expect(findButton(container, 'Pre-Flop')).not.toBeUndefined();
         expect(findButton(container, 'Flop')).not.toBeUndefined();
         expect(findButton(container, 'Turn')).not.toBeUndefined();
         expect(findButton(container, 'River')).not.toBeUndefined();

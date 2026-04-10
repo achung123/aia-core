@@ -29,6 +29,26 @@ vi.mock('./DetectionReview.jsx', () => ({
   DetectionReview: () => <div data-testid="detection-review" />,
 }));
 
+vi.mock('../scenes/pokerScene.js', () => ({
+  createPokerScene: vi.fn(() => ({
+    scene: {},
+    camera: { aspect: 1, updateProjectionMatrix: vi.fn() },
+    renderer: { setSize: vi.fn() },
+    seatPositions: [],
+    dispose: vi.fn(),
+    update: vi.fn(),
+  })),
+}));
+
+vi.mock('../mobile/StreetScrubber.jsx', () => ({
+  StreetScrubber: () => null,
+  STREETS: ['Pre-Flop', 'Flop', 'Turn', 'River', 'Showdown'],
+}));
+
+vi.mock('../poker/evaluator.js', () => ({
+  calculateEquity: vi.fn(() => []),
+}));
+
 // Use real dealerState (no mock override) — initialState.currentStep should be 'gameSelector'
 
 import {
@@ -51,6 +71,7 @@ function renderToContainer(vnode) {
 describe('GameSelector integration in DealerApp', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionStorage.clear();
     fetchSessions.mockResolvedValue([]);
     fetchPlayers.mockResolvedValue([
       { player_id: 1, name: 'Alice' },

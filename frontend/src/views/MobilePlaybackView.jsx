@@ -1,10 +1,11 @@
 import { h } from 'preact';
 import { useState, useEffect, useRef } from 'preact/hooks';
-import { fetchSessions, fetchHands, fetchEquity } from '../api/client.js';
+import { fetchSessions, fetchHands } from '../api/client.js';
 import { createPokerScene } from '../scenes/pokerScene.js';
 import { SessionScrubber } from '../mobile/SessionScrubber.jsx';
 import { StreetScrubber } from '../mobile/StreetScrubber.jsx';
 import { EquityRow } from '../mobile/EquityRow.jsx';
+import { calculateEquity } from '../poker/evaluator.js';
 
 function parseCard(cardStr) {
   if (!cardStr) return null;
@@ -30,9 +31,25 @@ function handToCardData(hand) {
   };
 }
 
+function communityForStreet(cardData, streetName) {
+  const cards = [];
+  if (streetName !== 'Pre-Flop' && cardData.flop) {
+    cards.push(...cardData.flop.filter(Boolean));
+  }
+  if ((streetName === 'Turn' || streetName === 'River' || streetName === 'Showdown') && cardData.turn) {
+    cards.push(cardData.turn);
+  }
+  if ((streetName === 'River' || streetName === 'Showdown') && cardData.river) {
+    cards.push(cardData.river);
+  }
+  return cards;
+}
+
 export function MobilePlaybackView() {
   const canvasRef = useRef(null);
+  const wrapperRef = useRef(null);
   const sceneRef = useRef(null);
+  const labelsRef = useRef([]);
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -58,7 +75,8 @@ export function MobilePlaybackView() {
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    const wrapper = wrapperRef.current;
+    if (!canvas || !wrapper) return;
 
     function init() {
       if (canvas.clientWidth > 0 && canvas.clientHeight > 0) {
@@ -66,6 +84,13 @@ export function MobilePlaybackView() {
           width: window.innerWidth,
           height: window.innerHeight,
         });
+        // Zoom out camera for a wider mobile view
+        sceneRef.current.camera.position.set(0, 10, 7);
+        sceneRef.current.camera.lookAt(0, 0, 0);
+        sceneRef.current.camera.updateProjectionMatrix();
+        if (sceneRef.current.controls) {
+          sceneRef.current.controls.saveState();
+        }
       } else {
         requestAnimationFrame(init);
       }
@@ -73,12 +98,68 @@ export function MobilePlaybackView() {
     init();
 
     return () => {
+      labelsRef.current.forEach((el) => el.remove());
+      labelsRef.current = [];
       if (sceneRef.current) {
         sceneRef.current.dispose();
         sceneRef.current = null;
       }
     };
   }, []);
+
+  function updateLabelPositions() {
+    if (!sceneRef.current) return;
+    const { seatPositions, camera, renderer } = sceneRef.current;
+    const domEl = renderer.domElement;
+    if (!domEl || !seatPositions) return;
+    const cw = domEl.clientWidth || 1;
+    const ch = domEl.clientHeight || 1;
+    labelsRef.current.forEach((label, i) => {
+      if (seatPositions[i] && seatPositions[i].clone) {
+        const p = seatPositions[i].clone().project(camera);
+        if (p.z > 1) { label.style.display = 'none'; return; }
+        label.style.display = '';
+        const x = (p.x * 0.5 + 0.5) * cw;
+        const y = (1 - (p.y * 0.5 + 0.5)) * ch;
+        label.style.left = `${x}px`;
+        label.style.top = `${y}px`;
+        label.style.transform = 'translate(-50%, -50%)';
+      }
+    });
+  }
+
+  function createSeatLabelsForPlayers(playerNames) {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+
+    // Remove old labels
+    labelsRef.current.forEach((el) => el.remove());
+    labelsRef.current = [];
+
+    // Remove old OrbitControls listener
+    if (sceneRef.current && sceneRef.current.controls) {
+      sceneRef.current.controls.removeEventListener('change', updateLabelPositions);
+    }
+
+    const labels = [];
+    playerNames.forEach((name, i) => {
+      const div = document.createElement('div');
+      div.className = 'seat-label';
+      div.setAttribute('data-testid', `seat-label-${i}`);
+      div.style.cssText = 'position:absolute;pointer-events:none;color:#fff;font-size:12px;font-weight:600;white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,0.8);z-index:4;';
+      div.textContent = name;
+      wrapper.appendChild(div);
+      labels.push(div);
+    });
+    labelsRef.current = labels;
+
+    // Listen for orbit changes
+    if (sceneRef.current && sceneRef.current.controls) {
+      sceneRef.current.controls.addEventListener('change', updateLabelPositions);
+    }
+
+    updateLabelPositions();
+  }
 
   function showHand(index, handsList) {
     const list = handsList || hands;
@@ -98,6 +179,8 @@ export function MobilePlaybackView() {
     playerNames.forEach((name, i) => { seatPlayerMap[i] = name; });
 
     setCurrentStreet('Pre-Flop');
+
+    createSeatLabelsForPlayers(playerNames);
 
     if (sceneRef.current) {
       const streetMap = { 'Pre-Flop': 0, 'Flop': 1, 'Turn': 2, 'River': 3, 'Showdown': 4 };
@@ -162,6 +245,8 @@ export function MobilePlaybackView() {
     setCurrentStreet('Pre-Flop');
     setEquityMap(null);
     setDrawerOpen(true);
+    labelsRef.current.forEach((el) => el.remove());
+    labelsRef.current = [];
   }
 
   function handleSessionChange(newIndex) {
@@ -169,7 +254,7 @@ export function MobilePlaybackView() {
     showHand(newIndex - 1);
   }
 
-  // Fetch equity from backend when hand changes
+  // Calculate equity client-side when hand or street changes
   useEffect(() => {
     if (!activeGameId || !hands.length) {
       setEquityMap(null);
@@ -181,31 +266,40 @@ export function MobilePlaybackView() {
       return;
     }
 
-    let cancelled = false;
-    setEquityLoading(true);
-    fetchEquity(activeGameId, hand.hand_number)
-      .then(data => {
-        if (cancelled) return;
-        const eqMap = {};
-        (data.equities || []).forEach(e => {
-          eqMap[e.player_name] = e.equity;
-        });
-        setEquityMap(Object.keys(eqMap).length > 0 ? eqMap : null);
-      })
-      .catch(() => {
-        if (!cancelled) setEquityMap(null);
-      })
-      .finally(() => {
-        if (!cancelled) setEquityLoading(false);
-      });
+    const cardData = handToCardData(hand);
+    const playersWithCards = (cardData.player_hands || []).filter(
+      (ph) => ph.hole_cards && ph.hole_cards.length === 2 && ph.hole_cards[0] && ph.hole_cards[1],
+    );
 
-    return () => { cancelled = true; };
-  }, [activeGameId, handIndex, hands]);
+    if (playersWithCards.length < 2) {
+      setEquityMap(null);
+      return;
+    }
+
+    // Build community cards for the current street
+    const communityCards = communityForStreet(cardData, currentStreet);
+    const holeCards = playersWithCards.map((ph) => ph.hole_cards);
+
+    try {
+      setEquityLoading(true);
+      const results = calculateEquity(holeCards, communityCards);
+      const eqMap = {};
+      playersWithCards.forEach((ph, i) => {
+        eqMap[ph.player_name] = results[i].equity;
+      });
+      setEquityMap(Object.keys(eqMap).length > 0 ? eqMap : null);
+    } catch {
+      setEquityMap(null);
+    } finally {
+      setEquityLoading(false);
+    }
+  }, [activeGameId, handIndex, hands, currentStreet]);
 
   const currentCardData = hands.length ? handToCardData(hands[handIndex]) : null;
 
   return (
     <div
+      ref={wrapperRef}
       data-testid="mobile-canvas"
       style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}
     >

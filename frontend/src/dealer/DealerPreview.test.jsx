@@ -20,12 +20,12 @@ vi.mock('../scenes/pokerScene.js', () => ({
   })),
 }));
 
-vi.mock('../api/client.js', () => ({
-  fetchEquity: vi.fn(() => Promise.resolve({ equities: [] })),
+vi.mock('../poker/evaluator.js', () => ({
+  calculateEquity: vi.fn(() => []),
 }));
 
 import { createPokerScene } from '../scenes/pokerScene.js';
-import { fetchEquity } from '../api/client.js';
+import { calculateEquity } from '../poker/evaluator.js';
 import { DealerPreview } from './DealerPreview.jsx';
 
 function renderToContainer(vnode) {
@@ -60,11 +60,12 @@ describe('DealerPreview', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    fetchEquity.mockResolvedValue({ equities: [] });
+    calculateEquity.mockReturnValue([]);
   });
 
-  it('renders a toggle button that defaults to collapsed', () => {
+  it('renders collapsed by default with Show Table button', async () => {
     const container = renderToContainer(<DealerPreview {...defaultProps} />);
+    await flush();
     const toggle = container.querySelector('[data-testid="preview-toggle"]');
     expect(toggle).toBeTruthy();
     expect(toggle.textContent).toContain('Show Table');
@@ -73,20 +74,24 @@ describe('DealerPreview', () => {
     cleanup(container);
   });
 
-  it('expands to show canvas when toggle is clicked', () => {
+  it('expands to show Hide Table when toggle is clicked', async () => {
     const container = renderToContainer(<DealerPreview {...defaultProps} />);
+    await flush();
     const toggle = container.querySelector('[data-testid="preview-toggle"]');
     act(() => { toggle.click(); });
+    await flush();
     expect(toggle.textContent).toContain('Hide Table');
-    const canvas = container.querySelector('canvas');
-    expect(canvas).toBeTruthy();
+    expect(container.querySelector('canvas')).toBeTruthy();
     cleanup(container);
   });
 
-  it('creates poker scene when expanded', () => {
+  it('creates poker scene after expanding', async () => {
     const container = renderToContainer(<DealerPreview {...defaultProps} />);
+    await flush();
+    expect(createPokerScene).not.toHaveBeenCalled();
     const toggle = container.querySelector('[data-testid="preview-toggle"]');
     act(() => { toggle.click(); });
+    await flush();
     expect(createPokerScene).toHaveBeenCalledTimes(1);
     const [canvas, options] = createPokerScene.mock.calls[0];
     expect(canvas).toBeInstanceOf(HTMLCanvasElement);
@@ -94,10 +99,12 @@ describe('DealerPreview', () => {
     cleanup(container);
   });
 
-  it('calls update when community cards change', () => {
+  it('calls update when community cards change after expanding', async () => {
     const container = renderToContainer(<DealerPreview {...defaultProps} />);
+    await flush();
     const toggle = container.querySelector('[data-testid="preview-toggle"]');
     act(() => { toggle.click(); });
+    await flush();
     mockUpdate.mockClear();
 
     const updatedCommunity = { flop1: 'Ah', flop2: 'Kd', flop3: '5c', turn: null, river: null, recorded: true };
@@ -107,10 +114,12 @@ describe('DealerPreview', () => {
     cleanup(container);
   });
 
-  it('calls update when player hole cards change', () => {
+  it('calls update when player hole cards change after expanding', async () => {
     const container = renderToContainer(<DealerPreview {...defaultProps} />);
+    await flush();
     const toggle = container.querySelector('[data-testid="preview-toggle"]');
     act(() => { toggle.click(); });
+    await flush();
     mockUpdate.mockClear();
 
     const updatedPlayers = [
@@ -123,48 +132,79 @@ describe('DealerPreview', () => {
     cleanup(container);
   });
 
-  it('calls dispose when unmounted', () => {
+  it('calls dispose when unmounted after expanding', async () => {
     const container = renderToContainer(<DealerPreview {...defaultProps} />);
+    await flush();
     const toggle = container.querySelector('[data-testid="preview-toggle"]');
     act(() => { toggle.click(); });
+    await flush();
     expect(createPokerScene).toHaveBeenCalledTimes(1);
     cleanup(container);
     expect(mockDispose).toHaveBeenCalledTimes(1);
   });
 
-  it('collapses back and disposes on second toggle click', () => {
+  it('expands, collapses, and re-expands with correct dispose/create', async () => {
     const container = renderToContainer(<DealerPreview {...defaultProps} />);
+    await flush();
     const toggle = container.querySelector('[data-testid="preview-toggle"]');
+    // Expand
     act(() => { toggle.click(); });
+    await flush();
     expect(createPokerScene).toHaveBeenCalledTimes(1);
+    expect(toggle.textContent).toContain('Hide Table');
+    // Collapse
     act(() => { toggle.click(); });
     expect(mockDispose).toHaveBeenCalledTimes(1);
     expect(toggle.textContent).toContain('Show Table');
     expect(container.querySelector('canvas')).toBeNull();
+    // Re-expand
+    act(() => { toggle.click(); });
+    await flush();
+    expect(createPokerScene).toHaveBeenCalledTimes(2);
+    expect(toggle.textContent).toContain('Hide Table');
     cleanup(container);
   });
 
-  it('canvas container has responsive width style', () => {
+  it('canvas container has responsive width style after expanding', async () => {
     const container = renderToContainer(<DealerPreview {...defaultProps} />);
+    await flush();
     const toggle = container.querySelector('[data-testid="preview-toggle"]');
     act(() => { toggle.click(); });
+    await flush();
     const wrapper = container.querySelector('[data-testid="preview-canvas-wrapper"]');
     expect(wrapper).toBeTruthy();
     expect(wrapper.style.width).toBe('100%');
     cleanup(container);
   });
 
-  it('passes correct seatCount based on players length', () => {
+  it('passes correct seatCount based on players length after expanding', async () => {
     const threePlayers = [
       { name: 'Alice', card1: null, card2: null, recorded: false, status: 'playing' },
       { name: 'Bob', card1: null, card2: null, recorded: false, status: 'playing' },
       { name: 'Carol', card1: null, card2: null, recorded: false, status: 'playing' },
     ];
     const container = renderToContainer(<DealerPreview {...defaultProps} players={threePlayers} />);
+    await flush();
     const toggle = container.querySelector('[data-testid="preview-toggle"]');
     act(() => { toggle.click(); });
+    await flush();
     const [, options] = createPokerScene.mock.calls[0];
     expect(options.seatCount).toBe(3);
+    cleanup(container);
+  });
+
+  it('creates seat labels for each player after expanding', async () => {
+    const container = renderToContainer(<DealerPreview {...defaultProps} />);
+    await flush();
+    const toggle = container.querySelector('[data-testid="preview-toggle"]');
+    act(() => { toggle.click(); });
+    await flush();
+    const label0 = container.querySelector('[data-testid="seat-label-0"]');
+    const label1 = container.querySelector('[data-testid="seat-label-1"]');
+    expect(label0).toBeTruthy();
+    expect(label0.textContent).toBe('Alice');
+    expect(label1).toBeTruthy();
+    expect(label1.textContent).toBe('Bob');
     cleanup(container);
   });
 });
@@ -178,28 +218,24 @@ describe('DealerPreview equity overlay', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    fetchEquity.mockResolvedValue({ equities: [] });
+    calculateEquity.mockReturnValue([]);
   });
 
-  it('fetches equity when >=2 players have hole cards', async () => {
-    fetchEquity.mockResolvedValue({
-      equities: [
-        { player_name: 'Alice', equity: 0.65 },
-        { player_name: 'Bob', equity: 0.35 },
-      ],
-    });
+  it('calculates equity when >=2 players have hole cards after expanding', async () => {
+    calculateEquity.mockReturnValue([
+      { equity: 0.65 },
+      { equity: 0.35 },
+    ]);
 
     const container = renderToContainer(
       <DealerPreview community={community} players={twoCardPlayers} gameId={1} handNumber={1} />,
     );
     await flush();
-
-    // Expand table to see badges
     const toggle = container.querySelector('[data-testid="preview-toggle"]');
     act(() => { toggle.click(); });
     await flush();
 
-    expect(fetchEquity).toHaveBeenCalledWith(1, 1);
+    expect(calculateEquity).toHaveBeenCalled();
     const badges = container.querySelector('[data-testid="equity-badges"]');
     expect(badges).toBeTruthy();
     expect(container.querySelector('[data-testid="equity-badge-Alice"]').textContent).toBe('Alice: 65%');
@@ -207,7 +243,7 @@ describe('DealerPreview equity overlay', () => {
     cleanup(container);
   });
 
-  it('does not fetch equity when <2 players have cards', async () => {
+  it('does not calculate equity when <2 players have cards', async () => {
     const oneCardPlayer = [
       { name: 'Alice', card1: 'Ah', card2: 'Kd', recorded: true, status: 'playing' },
       { name: 'Bob', card1: null, card2: null, recorded: false, status: 'playing' },
@@ -217,74 +253,70 @@ describe('DealerPreview equity overlay', () => {
       <DealerPreview community={community} players={oneCardPlayer} gameId={1} handNumber={1} />,
     );
     await flush();
-
-    expect(fetchEquity).not.toHaveBeenCalled();
-    expect(container.querySelector('[data-testid="equity-badges"]')).toBeNull();
-    cleanup(container);
-  });
-
-  it('hides badges when fetchEquity fails', async () => {
-    fetchEquity.mockRejectedValue(new Error('Server error'));
-
-    const container = renderToContainer(
-      <DealerPreview community={community} players={twoCardPlayers} gameId={1} handNumber={1} />,
-    );
-    await flush();
-
-    expect(container.querySelector('[data-testid="equity-badges"]')).toBeNull();
-    cleanup(container);
-  });
-
-  it('re-fetches equity when community cards change', async () => {
-    fetchEquity.mockResolvedValue({
-      equities: [
-        { player_name: 'Alice', equity: 0.65 },
-        { player_name: 'Bob', equity: 0.35 },
-      ],
-    });
-
-    const container = renderToContainer(
-      <DealerPreview community={community} players={twoCardPlayers} gameId={1} handNumber={1} />,
-    );
-    await flush();
-
-    // Expand table
     const toggle = container.querySelector('[data-testid="preview-toggle"]');
     act(() => { toggle.click(); });
     await flush();
-    expect(fetchEquity).toHaveBeenCalledTimes(1);
 
-    fetchEquity.mockResolvedValue({
-      equities: [
-        { player_name: 'Alice', equity: 0.72 },
-        { player_name: 'Bob', equity: 0.28 },
-      ],
-    });
+    expect(calculateEquity).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-testid="equity-badges"]')).toBeNull();
+    cleanup(container);
+  });
+
+  it('hides badges when calculateEquity throws', async () => {
+    calculateEquity.mockImplementation(() => { throw new Error('eval error'); });
+
+    const container = renderToContainer(
+      <DealerPreview community={community} players={twoCardPlayers} gameId={1} handNumber={1} />,
+    );
+    await flush();
+    const toggle = container.querySelector('[data-testid="preview-toggle"]');
+    act(() => { toggle.click(); });
+    await flush();
+
+    expect(container.querySelector('[data-testid="equity-badges"]')).toBeNull();
+    cleanup(container);
+  });
+
+  it('recalculates equity when community cards change', async () => {
+    calculateEquity.mockReturnValue([
+      { equity: 0.65 },
+      { equity: 0.35 },
+    ]);
+
+    const container = renderToContainer(
+      <DealerPreview community={community} players={twoCardPlayers} gameId={1} handNumber={1} />,
+    );
+    await flush();
+    const toggle = container.querySelector('[data-testid="preview-toggle"]');
+    act(() => { toggle.click(); });
+    await flush();
+    const callsBefore = calculateEquity.mock.calls.length;
+
+    calculateEquity.mockReturnValue([
+      { equity: 0.72 },
+      { equity: 0.28 },
+    ]);
 
     const updatedCommunity = { flop1: 'Ah', flop2: 'Kd', flop3: '5c', turn: null, river: null, recorded: true };
     act(() => { render(<DealerPreview community={updatedCommunity} players={twoCardPlayers} gameId={1} handNumber={1} />, container); });
     await flush();
 
-    expect(fetchEquity).toHaveBeenCalledTimes(2);
+    expect(calculateEquity.mock.calls.length).toBeGreaterThan(callsBefore);
     expect(container.querySelector('[data-testid="equity-badge-Alice"]').textContent).toBe('Alice: 72%');
     expect(container.querySelector('[data-testid="equity-badge-Bob"]').textContent).toBe('Bob: 28%');
     cleanup(container);
   });
 
   it('rounds equity percentages to nearest integer', async () => {
-    fetchEquity.mockResolvedValue({
-      equities: [
-        { player_name: 'Alice', equity: 0.6549 },
-        { player_name: 'Bob', equity: 0.3451 },
-      ],
-    });
+    calculateEquity.mockReturnValue([
+      { equity: 0.6549 },
+      { equity: 0.3451 },
+    ]);
 
     const container = renderToContainer(
       <DealerPreview community={community} players={twoCardPlayers} gameId={1} handNumber={1} />,
     );
     await flush();
-
-    // Expand table
     const toggle = container.querySelector('[data-testid="preview-toggle"]');
     act(() => { toggle.click(); });
     await flush();
@@ -294,31 +326,18 @@ describe('DealerPreview equity overlay', () => {
     cleanup(container);
   });
 
-  it('does not fetch equity when gameId or handNumber is missing', async () => {
-    const container = renderToContainer(
-      <DealerPreview community={community} players={twoCardPlayers} />,
-    );
-    await flush();
-
-    expect(fetchEquity).not.toHaveBeenCalled();
-    expect(container.querySelector('[data-testid="equity-badges"]')).toBeNull();
-    cleanup(container);
-  });
-
   it('equity badges only visible when table is expanded', async () => {
-    fetchEquity.mockResolvedValue({
-      equities: [
-        { player_name: 'Alice', equity: 0.65 },
-        { player_name: 'Bob', equity: 0.35 },
-      ],
-    });
+    calculateEquity.mockReturnValue([
+      { equity: 0.65 },
+      { equity: 0.35 },
+    ]);
 
     const container = renderToContainer(
       <DealerPreview community={community} players={twoCardPlayers} gameId={1} handNumber={1} />,
     );
     await flush();
 
-    // Collapsed — badges should NOT be visible
+    // Collapsed by default — badges should NOT be visible
     expect(container.querySelector('[data-testid="equity-badges"]')).toBeNull();
 
     // Expand
@@ -329,6 +348,20 @@ describe('DealerPreview equity overlay', () => {
     // Expanded — badges should be visible
     expect(container.querySelector('[data-testid="equity-badges"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="equity-badge-Alice"]').textContent).toBe('Alice: 65%');
+
+    // Collapse
+    act(() => { toggle.click(); });
+    await flush();
+
+    // Collapsed — badges should NOT be visible
+    expect(container.querySelector('[data-testid="equity-badges"]')).toBeNull();
+
+    // Re-expand
+    act(() => { toggle.click(); });
+    await flush();
+
+    // Expanded again — badges should be visible
+    expect(container.querySelector('[data-testid="equity-badges"]')).not.toBeNull();
 
     cleanup(container);
   });

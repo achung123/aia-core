@@ -22,6 +22,7 @@ class ResultEnum(str, Enum):
 
 
 class StreetEnum(str, Enum):
+    PREFLOP = 'preflop'
     FLOP = 'flop'
     TURN = 'turn'
     RIVER = 'river'

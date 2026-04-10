@@ -1,6 +1,6 @@
 const emptyCommunity = { flop1: null, flop2: null, flop3: null, turn: null, river: null, recorded: false };
 
-const STREET_ORDER = { flop: 0, turn: 1, river: 2 };
+const STREET_ORDER = { preflop: -1, flop: 0, turn: 1, river: 2 };
 
 export function validateOutcomeStreets(players) {
   const winners = players.filter((p) => p.status === 'won' && p.outcomeStreet);
@@ -46,7 +46,7 @@ export function reducer(state, action) {
         ...state,
         gameId,
         gameDate,
-        gameMode: gameMode || 'dealer_centric',
+        gameMode: gameMode || state.gameMode,
         players: players.map(initPlayer),
         community: { ...emptyCommunity },
         currentStep: gameMode === 'participation' ? 'qrCodes' : 'dashboard',
@@ -135,6 +135,9 @@ export function reducer(state, action) {
     case 'SET_STEP':
       return { ...state, currentStep: action.payload };
 
+    case 'SET_GAME_MODE':
+      return { ...state, gameMode: action.payload };
+
     case 'UPDATE_PARTICIPATION': {
       const statusMap = new Map(
         action.payload.players.map((p) => [p.name, p.participation_status]),
@@ -146,6 +149,8 @@ export function reducer(state, action) {
           if (ps == null) return p;
           // Don't let a stale poll reset a manually-recorded player to idle/playing
           if (p.recorded && (ps === 'idle' || ps === 'playing')) return p;
+          // Don't let poll revert a locally-set sit-out (not_playing) status
+          if (p.status === 'not_playing' && (ps === 'idle' || ps === 'playing')) return p;
           return { ...p, status: ps };
         }),
       };
@@ -153,5 +158,15 @@ export function reducer(state, action) {
 
     default:
       return state;
+
+    case 'RESTORE_STATE': {
+      const restored = { ...state, ...action.payload };
+      // Steps that depend on ephemeral local state (reviewData, outcomeTarget)
+      // cannot survive a restore — fall back to playerGrid
+      if (restored.currentStep === 'review' || restored.currentStep === 'outcome') {
+        restored.currentStep = 'playerGrid';
+      }
+      return restored;
+    }
   }
 }

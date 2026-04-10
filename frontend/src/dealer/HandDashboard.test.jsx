@@ -351,7 +351,7 @@ describe('HandDashboard', () => {
   it('QR code is hidden by default', async () => {
     fetchHands.mockResolvedValue(HANDS);
     const container = renderToContainer(
-      <HandDashboard gameId={42} onSelectHand={() => {}} onBack={() => {}} />
+      <HandDashboard gameId={42} gameMode="participation" players={['Alice', 'Bob']} onSelectHand={() => {}} onBack={() => {}} />
     );
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="toggle-qr-btn"]')).not.toBeNull();
@@ -363,7 +363,7 @@ describe('HandDashboard', () => {
   it('toggle button shows/hides QR code', async () => {
     fetchHands.mockResolvedValue(HANDS);
     const container = renderToContainer(
-      <HandDashboard gameId={42} onSelectHand={() => {}} onBack={() => {}} />
+      <HandDashboard gameId={42} gameMode="participation" players={['Alice', 'Bob']} onSelectHand={() => {}} onBack={() => {}} />
     );
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="toggle-qr-btn"]')).not.toBeNull();
@@ -382,5 +382,16 @@ describe('HandDashboard', () => {
       expect(container.querySelector('[data-testid="qr-code-display"]')).toBeNull();
     });
     expect(container.querySelector('[data-testid="toggle-qr-btn"]').textContent).toBe('Show QR');
+  });
+
+  it('hides QR toggle in dealer_centric mode', async () => {
+    fetchHands.mockResolvedValue(HANDS);
+    const container = renderToContainer(
+      <HandDashboard gameId={42} gameMode="dealer_centric" onSelectHand={() => {}} onBack={() => {}} />
+    );
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="hand-list"]')).not.toBeNull();
+    });
+    expect(container.querySelector('[data-testid="toggle-qr-btn"]')).toBeNull();
   });
 });

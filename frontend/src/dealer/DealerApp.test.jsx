@@ -59,6 +59,26 @@ vi.mock('./DetectionReview.jsx', () => ({
   ),
 }));
 
+vi.mock('../scenes/pokerScene.js', () => ({
+  createPokerScene: vi.fn(() => ({
+    scene: {},
+    camera: { aspect: 1, updateProjectionMatrix: vi.fn() },
+    renderer: { setSize: vi.fn() },
+    seatPositions: [],
+    dispose: vi.fn(),
+    update: vi.fn(),
+  })),
+}));
+
+vi.mock('../mobile/StreetScrubber.jsx', () => ({
+  StreetScrubber: () => null,
+  STREETS: ['Pre-Flop', 'Flop', 'Turn', 'River', 'Showdown'],
+}));
+
+vi.mock('../poker/evaluator.js', () => ({
+  calculateEquity: vi.fn(() => []),
+}));
+
 vi.mock('./dealerState.js', async () => {
   const actual = await vi.importActual('./dealerState.js');
   return {
@@ -79,7 +99,16 @@ vi.mock('./dealerState.js', async () => {
 });
 
 import { createHand, addPlayerToHand, updateHolecards, updateCommunityCards, patchPlayerResult, fetchHands, fetchHand, fetchHandStatus } from '../api/client.js';
+import { initialState } from './dealerState.js';
 import { DealerApp } from './DealerApp.jsx';
+
+// Clear persisted dealer state before AND after every test to prevent state leaking
+beforeEach(() => {
+  sessionStorage.clear();
+});
+afterEach(() => {
+  sessionStorage.clear();
+});
 
 function renderToContainer(vnode) {
   const container = document.createElement('div');
@@ -88,9 +117,10 @@ function renderToContainer(vnode) {
 }
 
 function findButton(container, text) {
-  return Array.from(container.querySelectorAll('button')).find(
-    (b) => b.textContent.includes(text),
-  );
+  const buttons = Array.from(container.querySelectorAll('button'));
+  // Prefer exact text match, fall back to includes
+  return buttons.find((b) => b.textContent.trim() === text)
+    || buttons.find((b) => b.textContent.includes(text));
 }
 
 describe('DealerApp per-player card collection', () => {
@@ -834,7 +864,9 @@ describe('DealerApp finish hand flow', () => {
 describe('DealerApp hand status polling', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionStorage.clear();
     vi.useFakeTimers();
+    initialState.gameMode = 'participation';
     fetchHands.mockResolvedValue([]);
     createHand.mockResolvedValue({ hand_number: 1 });
     fetchHand.mockResolvedValue({
@@ -859,6 +891,7 @@ describe('DealerApp hand status polling', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    initialState.gameMode = 'dealer_centric';
   });
 
   async function startHand(container) {
@@ -974,6 +1007,7 @@ describe('DealerApp hand status polling', () => {
 
   it('existing manual flow still works alongside polling', async () => {
     vi.useRealTimers();
+    initialState.gameMode = 'dealer_centric';
     const container = renderToContainer(<DealerApp />);
 
     await vi.waitFor(() => {
@@ -1052,6 +1086,7 @@ describe('DealerApp hand status polling', () => {
 
   it('manual action wins over stale poll response (recorded player not overwritten)', async () => {
     vi.useRealTimers();
+    initialState.gameMode = 'dealer_centric';
     const container = renderToContainer(<DealerApp />);
 
     await vi.waitFor(() => {
@@ -1094,5 +1129,35 @@ describe('DealerApp hand status polling', () => {
     expect(aliceRow).not.toBeNull();
     // Alice should not have the idle/playing background (#f3f4f6)
     expect(aliceRow.style.backgroundColor).not.toBe('#f3f4f6');
+  });
+
+  it('sit-out button marks player as not_playing in participation mode without API call', async () => {
+    const container = renderToContainer(<DealerApp />);
+    await startHand(container);
+
+    // Wait for player grid
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain('Select a Player');
+    });
+
+    // Alice should have a sit-out button (she's in 'playing' status)
+    const sitOutBtn = container.querySelector('[data-testid="sitout-btn-Alice"]');
+    expect(sitOutBtn).not.toBeNull();
+
+    // Click sit-out
+    sitOutBtn.click();
+
+    // Alice should now show "not playing"
+    await vi.waitFor(() => {
+      const aliceRow = container.querySelector('[data-testid="player-row-Alice"]');
+      expect(aliceRow.textContent).toContain('not playing');
+      expect(aliceRow.style.backgroundColor).toBe('#e5e7eb');
+    });
+
+    // Should NOT have made an API call for this
+    expect(addPlayerToHand).not.toHaveBeenCalledWith(
+      expect.anything(), expect.anything(), expect.objectContaining({ player_name: 'Alice' })
+    );
+    expect(patchPlayerResult).not.toHaveBeenCalled();
   });
 });

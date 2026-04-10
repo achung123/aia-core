@@ -28,7 +28,7 @@ describe('reducer', () => {
       expect(state.gameId).toBe(42);
       expect(state.gameDate).toBe('2026-04-08');
       expect(state.currentStep).toBe('dashboard');
-      expect(state.gameMode).toBe('dealer_centric');
+      expect(state.gameMode).toBe('dealer_centric'); // preserved from initialState
       expect(state.players).toEqual([
         { name: 'Alice', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null },
         { name: 'Bob', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null },
@@ -36,6 +36,20 @@ describe('reducer', () => {
       expect(state.community).toEqual({
         flop1: null, flop2: null, flop3: null, turn: null, river: null, recorded: false,
       });
+    });
+
+    it('preserves current gameMode when none is provided in payload', () => {
+      // Start with participation mode already set
+      const participationState = reducer(initialState, {
+        type: 'SET_GAME_MODE',
+        payload: 'participation',
+      });
+      const action = {
+        type: 'SET_GAME',
+        payload: { gameId: 42, players: ['Alice'], gameDate: '2026-04-08' },
+      };
+      const state = reducer(participationState, action);
+      expect(state.gameMode).toBe('participation');
     });
 
     it('sets step to qrCodes when gameMode is participation', () => {
@@ -430,8 +444,6 @@ describe('reducer', () => {
   });
 
   describe('validateOutcomeStreets', () => {
-    const STREET_ORDER = { flop: 0, turn: 1, river: 2 };
-
     it('returns null when all outcomes are on the same street', () => {
       const players = [
         { name: 'Alice', status: 'won', outcomeStreet: 'river' },
@@ -491,6 +503,24 @@ describe('reducer', () => {
         { name: 'Bob', status: 'lost', outcomeStreet: 'turn' },
       ];
       expect(validateOutcomeStreets(players)).toBeNull();
+    });
+
+    it('returns null when winner won preflop and folder folded preflop', () => {
+      const players = [
+        { name: 'Alice', status: 'won', outcomeStreet: 'preflop' },
+        { name: 'Bob', status: 'folded', outcomeStreet: 'preflop' },
+      ];
+      expect(validateOutcomeStreets(players)).toBeNull();
+    });
+
+    it('returns error when folder folded on flop but winner won preflop', () => {
+      const players = [
+        { name: 'Alice', status: 'won', outcomeStreet: 'preflop' },
+        { name: 'Bob', status: 'folded', outcomeStreet: 'flop' },
+      ];
+      const err = validateOutcomeStreets(players);
+      expect(err).toBeTruthy();
+      expect(err).toContain('Bob');
     });
   });
 
@@ -619,6 +649,64 @@ describe('reducer', () => {
       // Should keep 'won', not downgrade to 'playing'
       expect(state.players[0].status).toBe('won');
       expect(state.players[0].recorded).toBe(true);
+    });
+
+    it('does not let poll reset a sit-out (not_playing) player back to idle/playing', () => {
+      const gameState = reducer(initialState, {
+        type: 'SET_GAME',
+        payload: { gameId: 1, players: ['Alice', 'Bob'], gameDate: '2026-04-08' },
+      });
+
+      // Dealer clicks sit-out for Alice (sets status to not_playing, recorded stays false)
+      const withSitOut = reducer(gameState, {
+        type: 'SET_PLAYER_RESULT',
+        payload: { name: 'Alice', status: 'not_playing', outcomeStreet: null },
+      });
+
+      expect(withSitOut.players[0].status).toBe('not_playing');
+      expect(withSitOut.players[0].recorded).toBe(false);
+
+      // Poll response says Alice is idle (server doesn't know about local sit-out)
+      const state = reducer(withSitOut, {
+        type: 'UPDATE_PARTICIPATION',
+        payload: {
+          players: [
+            { name: 'Alice', participation_status: 'idle' },
+            { name: 'Bob', participation_status: 'pending' },
+          ],
+        },
+      });
+
+      // Alice should keep not_playing, not revert to idle
+      expect(state.players[0].status).toBe('not_playing');
+      // Bob should update normally
+      expect(state.players[1].status).toBe('pending');
+    });
+  });
+
+  describe('RESTORE_STATE', () => {
+    it('normalizes review step to playerGrid on restore', () => {
+      const state = reducer(initialState, {
+        type: 'RESTORE_STATE',
+        payload: { gameId: 1, currentStep: 'review', players: [], community: { flop1: null, flop2: null, flop3: null, turn: null, river: null, recorded: false } },
+      });
+      expect(state.currentStep).toBe('playerGrid');
+    });
+
+    it('normalizes outcome step to playerGrid on restore', () => {
+      const state = reducer(initialState, {
+        type: 'RESTORE_STATE',
+        payload: { gameId: 1, currentStep: 'outcome', players: [], community: { flop1: null, flop2: null, flop3: null, turn: null, river: null, recorded: false } },
+      });
+      expect(state.currentStep).toBe('playerGrid');
+    });
+
+    it('preserves safe steps like dashboard on restore', () => {
+      const state = reducer(initialState, {
+        type: 'RESTORE_STATE',
+        payload: { gameId: 1, currentStep: 'dashboard', players: [], community: { flop1: null, flop2: null, flop3: null, turn: null, river: null, recorded: false } },
+      });
+      expect(state.currentStep).toBe('dashboard');
     });
   });
 });

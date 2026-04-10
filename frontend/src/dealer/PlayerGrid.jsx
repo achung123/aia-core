@@ -12,11 +12,12 @@ const statusColors = {
 function formatStatus(status, outcomeStreet) {
   if (status === 'not_playing') return 'not playing';
   if (status === 'handed_back') return 'handed back';
+  if (status === 'idle') return 'playing';
   if (outcomeStreet) return `${status} on ${outcomeStreet}`;
   return status;
 }
 
-export function PlayerGrid({ players, communityRecorded, onTileSelect, onDirectOutcome, canFinish, onFinishHand, onBack }) {
+export function PlayerGrid({ players, communityRecorded, onTileSelect, onDirectOutcome, onMarkNotPlaying, gameMode, canFinish, onFinishHand, onBack }) {
   return (
     <div style={styles.container}>
       <h2 style={styles.heading}>Select a Player</h2>
@@ -36,34 +37,54 @@ export function PlayerGrid({ players, communityRecorded, onTileSelect, onDirectO
       </button>
 
       <div data-testid="player-list" style={styles.playerList}>
-        {players.map((p) => (
-          <div
-            key={p.name}
-            data-testid={`player-row-${p.name}`}
-            style={{ ...styles.playerRow, backgroundColor: statusColors[p.status] || '#ffffff' }}
-          >
-            <button
-              data-testid={`player-tile-${p.name}`}
-              style={styles.playerNameCol}
-              onClick={() => onTileSelect(p.name)}
+        {players.map((p) => {
+          const needsAction = gameMode === 'participation' && p.status === 'handed_back';
+          const showOutcomeBtn = onDirectOutcome && (gameMode !== 'participation' || needsAction);
+          const showSitOutBtn = onMarkNotPlaying && gameMode === 'participation' && (p.status === 'playing' || p.status === 'idle');
+          return (
+            <div
+              key={p.name}
+              data-testid={`player-row-${p.name}`}
+              style={{
+                ...styles.playerRow,
+                backgroundColor: statusColors[p.status] || '#ffffff',
+                ...(needsAction ? { borderColor: '#f59e0b', boxShadow: '0 0 0 2px #fbbf24' } : {}),
+              }}
             >
-              <span style={styles.tileName}>{p.name}</span>
-              {p.recorded && <span style={styles.inlineCheck}>✅</span>}
-            </button>
-            <div style={styles.statusCol}>
-              <span style={styles.statusText}>{formatStatus(p.status, p.outcomeStreet)}</span>
-              {onDirectOutcome && (
-                <button
-                  data-testid={`outcome-btn-${p.name}`}
-                  style={styles.outcomeButton}
-                  onClick={() => onDirectOutcome(p.name)}
-                >
-                  📋
-                </button>
-              )}
+              <button
+                data-testid={`player-tile-${p.name}`}
+                style={styles.playerNameCol}
+                onClick={() => onTileSelect(p.name)}
+              >
+                <span style={styles.tileName}>{p.name}</span>
+                {p.recorded && <span style={styles.inlineCheck}>✅</span>}
+              </button>
+              <div style={styles.statusCol}>
+                <span style={styles.statusText}>
+                  {needsAction ? '⚠️ Decide outcome' : formatStatus(p.status, p.outcomeStreet)}
+                </span>
+                {showOutcomeBtn && (
+                  <button
+                    data-testid={`outcome-btn-${p.name}`}
+                    style={styles.outcomeButton}
+                    onClick={() => onDirectOutcome(p.name)}
+                  >
+                    📋
+                  </button>
+                )}
+                {showSitOutBtn && (
+                  <button
+                    data-testid={`sitout-btn-${p.name}`}
+                    style={styles.sitOutButton}
+                    onClick={() => onMarkNotPlaying(p.name)}
+                  >
+                    Sit Out
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {canFinish && (
@@ -191,5 +212,17 @@ const styles = {
     color: '#fff',
     cursor: 'pointer',
     marginTop: '1rem',
+  },
+  sitOutButton: {
+    padding: '0.25rem 0.6rem',
+    fontSize: '0.75rem',
+    fontWeight: '600',
+    border: '1px solid #9ca3af',
+    borderRadius: '6px',
+    background: '#e5e7eb',
+    color: '#374151',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+    WebkitTapHighlightColor: 'transparent',
   },
 };

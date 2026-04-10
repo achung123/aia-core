@@ -165,3 +165,7 @@ export function fetchEquity(gameId, handNumber) {
 export function fetchHandStatus(gameId, handNumber, { signal } = {}) {
   return request(`/games/${gameId}/hands/${handNumber}/status`, { signal });
 }
+
+export function exportGameCsvUrl(gameId) {
+  return `${BASE_URL}/games/${gameId}/export/csv`;
+}

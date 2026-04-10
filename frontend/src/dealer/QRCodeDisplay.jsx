@@ -42,7 +42,7 @@ const styles = {
   },
   label: {
     fontSize: '0.8rem',
-    color: '#6b7280',
+    color: '#94a3b8',
     marginTop: '0.5rem',
     wordBreak: 'break-all',
     textAlign: 'center',
