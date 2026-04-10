@@ -9,6 +9,8 @@ import {
   updateCommunityCards,
   updateHolecards,
   exportGameCsvUrl,
+  deleteGame,
+  deleteHand,
 } from '../api/client.js';
 
 const SUIT_MAP = { H: '♥', D: '♦', C: '♣', S: '♠', h: '♥', d: '♦', c: '♣', s: '♠' };
@@ -483,6 +485,21 @@ async function handleRowClick(session, tr, tbody, columns, wrapper) {
     });
     actionBar.appendChild(exportCsvBtn);
 
+    const deleteGameBtn = el('button', { type: 'button', className: 'dv-btn dv-btn-sm dv-btn-danger' }, '🗑 Delete Game');
+    deleteGameBtn.addEventListener('click', async () => {
+      if (!confirm(`Delete game ${session.game_date} and all its hands? This cannot be undone.`)) return;
+      try {
+        await deleteGame(session.game_id);
+        fetchSessions().then(data => {
+          sessions = data;
+          buildTableBody(tbody, sortSessions(sessions), columns, wrapper);
+        });
+      } catch (err) {
+        alert(`Delete failed: ${err.message}`);
+      }
+    });
+    actionBar.appendChild(deleteGameBtn);
+
     detailsTd.appendChild(actionBar);
 
     if (!hands || hands.length === 0) {
@@ -517,8 +534,20 @@ async function handleRowClick(session, tr, tbody, columns, wrapper) {
           e.stopPropagation();
           showEditHandModal(wrapper, session.game_id, h, () => refreshAndExpand(session, tbody, columns, wrapper));
         });
-        const tdAction = el('td');
+        const deleteHandBtn = el('button', { type: 'button', className: 'dv-btn dv-btn-sm dv-btn-danger' }, '🗑');
+        deleteHandBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if (!confirm(`Delete hand #${h.hand_number}? This cannot be undone.`)) return;
+          try {
+            await deleteHand(session.game_id, h.hand_number);
+            refreshAndExpand(session, tbody, columns, wrapper);
+          } catch (err) {
+            alert(`Delete failed: ${err.message}`);
+          }
+        });
+        const tdAction = el('td', { style: { display: 'flex', gap: '0.25rem' } });
         tdAction.appendChild(editBtn);
+        tdAction.appendChild(deleteHandBtn);
         htr.appendChild(tdAction);
 
         handTbody.appendChild(htr);

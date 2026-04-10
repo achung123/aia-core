@@ -169,3 +169,19 @@ export function fetchHandStatus(gameId, handNumber, { signal } = {}) {
 export function exportGameCsvUrl(gameId) {
   return `${BASE_URL}/games/${gameId}/export/csv`;
 }
+
+export async function deleteGame(gameId) {
+  const response = await fetch(`${BASE_URL}/games/${gameId}`, { method: 'DELETE' });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`HTTP ${response.status}: ${text}`);
+  }
+}
+
+export async function deleteHand(gameId, handNumber) {
+  const response = await fetch(`${BASE_URL}/games/${gameId}/hands/${handNumber}`, { method: 'DELETE' });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`HTTP ${response.status}: ${text}`);
+  }
+}

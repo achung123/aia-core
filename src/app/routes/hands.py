@@ -539,6 +539,29 @@ def remove_player_from_hand(
     db.commit()
 
 
+@router.delete('/{game_id}/hands/{hand_number}', status_code=204)
+def delete_hand(
+    game_id: int,
+    hand_number: int,
+    db: Annotated[Session, Depends(get_db)],
+):
+    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
+    if game is None:
+        raise HTTPException(status_code=404, detail='Game session not found')
+
+    hand = (
+        db.query(Hand)
+        .filter(Hand.game_id == game_id, Hand.hand_number == hand_number)
+        .first()
+    )
+    if hand is None:
+        raise HTTPException(status_code=404, detail='Hand not found')
+
+    db.query(PlayerHand).filter(PlayerHand.hand_id == hand.hand_id).delete()
+    db.delete(hand)
+    db.commit()
+
+
 @router.post('/{game_id}/hands', status_code=201, response_model=HandResponse)
 def record_hand(
     game_id: int,

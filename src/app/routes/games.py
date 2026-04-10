@@ -12,7 +12,7 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.database.models import GamePlayer, GameSession, Hand, Player
+from app.database.models import GamePlayer, GameSession, Hand, Player, PlayerHand
 from app.database.session import get_db
 from pydantic_models.app_models import (
     CompleteGameRequest,
@@ -235,3 +235,21 @@ def export_game_csv(
         media_type='text/csv',
         headers={'Content-Disposition': f'attachment; filename="{filename}"'},
     )
+
+
+@router.delete('/{game_id}', status_code=204)
+def delete_game(
+    game_id: int,
+    db: Annotated[Session, Depends(get_db)],
+):
+    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
+    if game is None:
+        raise HTTPException(status_code=404, detail='Game session not found')
+
+    # Delete child records: player_hands → hands → game_players → game
+    for hand in game.hands:
+        db.query(PlayerHand).filter(PlayerHand.hand_id == hand.hand_id).delete()
+        db.delete(hand)
+    db.query(GamePlayer).filter(GamePlayer.game_id == game_id).delete()
+    db.delete(game)
+    db.commit()
