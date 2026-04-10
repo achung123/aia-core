@@ -316,7 +316,9 @@ class TestOutcomeStreetCrossValidation:
         assert resp.status_code == 400
         assert 'street' in resp.json()['detail'].lower()
 
-    def test_loser_on_different_street_from_winner_rejected(self, client, game_with_hand):
+    def test_loser_on_different_street_from_winner_rejected(
+        self, client, game_with_hand
+    ):
         """If Alice won on preflop, Bob cannot lose on flop."""
         game_id, hn = game_with_hand
         client.patch(
@@ -338,7 +340,9 @@ class TestOutcomeStreetCrossValidation:
         assert resp.status_code == 400
         assert 'street' in resp.json()['detail'].lower()
 
-    def test_winner_on_different_street_from_existing_loser_rejected(self, client, game_with_hand):
+    def test_winner_on_different_street_from_existing_loser_rejected(
+        self, client, game_with_hand
+    ):
         """If Bob lost on flop, Alice cannot win on turn (losers must match winner)."""
         game_id, hn = game_with_hand
         client.patch(
@@ -363,7 +367,9 @@ class TestOutcomeStreetCrossValidation:
         )
         assert resp.status_code == 400
 
-    def test_winner_after_existing_folder_on_earlier_street_ok(self, client, game_with_hand):
+    def test_winner_after_existing_folder_on_earlier_street_ok(
+        self, client, game_with_hand
+    ):
         """If Bob folded on flop, Alice can still win on river."""
         game_id, hn = game_with_hand
         client.patch(
@@ -425,7 +431,9 @@ class TestOutcomeStreetCrossValidation:
         )
         assert resp.status_code == 400
 
-    def test_multiple_folders_on_different_streets_before_winner_ok(self, client, game_with_hand):
+    def test_multiple_folders_on_different_streets_before_winner_ok(
+        self, client, game_with_hand
+    ):
         """Multiple players can fold on different streets, all before the winner."""
         game_id, hn = game_with_hand
         client.patch(
