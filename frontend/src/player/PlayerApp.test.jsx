@@ -1087,3 +1087,51 @@ describe('PlayerApp — polling edge cases', () => {
     });
   });
 });
+
+describe('PlayerApp — button alignment', () => {
+  let originalHash;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    originalHash = window.location.hash;
+    window.location.hash = '';
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    window.location.hash = originalHash;
+  });
+
+  it('capture-cards-btn is full width', async () => {
+    const container = document.createElement('div');
+    await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'pending') });
+    await vi.waitFor(() => {
+      const btn = container.querySelector('[data-testid="capture-cards-btn"]');
+      expect(btn).not.toBeNull();
+      expect(btn.style.width).toBe('100%');
+    });
+  });
+
+  it('change-player-btn is full width', async () => {
+    const container = document.createElement('div');
+    await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'pending') });
+    await vi.waitFor(() => {
+      const btn = container.querySelector('[data-testid="change-player-btn"]');
+      expect(btn).not.toBeNull();
+      expect(btn.style.width).toBe('100%');
+    });
+  });
+
+  it('capture-cards-btn and change-player-btn have the same minHeight', async () => {
+    const container = document.createElement('div');
+    await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'pending') });
+    await vi.waitFor(() => {
+      const capture = container.querySelector('[data-testid="capture-cards-btn"]');
+      const change = container.querySelector('[data-testid="change-player-btn"]');
+      expect(capture).not.toBeNull();
+      expect(change).not.toBeNull();
+      expect(capture.style.minHeight).toBe(change.style.minHeight);
+    });
+  });
+});

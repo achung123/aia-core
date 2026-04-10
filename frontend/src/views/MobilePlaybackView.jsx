@@ -84,8 +84,8 @@ export function MobilePlaybackView() {
           width: window.innerWidth,
           height: window.innerHeight,
         });
-        // Zoom out camera for a wider mobile view
-        sceneRef.current.camera.position.set(0, 10, 7);
+        // Near-top-down camera so cards are always visible above the scrubber
+        sceneRef.current.camera.position.set(0, 14, 3);
         sceneRef.current.camera.lookAt(0, 0, 0);
         sceneRef.current.camera.updateProjectionMatrix();
         if (sceneRef.current.controls) {

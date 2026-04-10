@@ -377,15 +377,13 @@ function PlayerStatusView({ status, onCapture, onHandBack, handingBack }) {
       return (
         <div>
           <p style={{ color: '#ca8a04' }}>Your turn! Capture your cards.</p>
-          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-            <button
+          <button
               data-testid="capture-cards-btn"
               style={styles.captureBtn}
               onClick={onCapture}
             >
               Capture Cards
             </button>
-          </div>
         </div>
       );
     case 'joined':
@@ -465,19 +463,23 @@ const styles = {
   },
   changeBtn: {
     marginTop: '1rem',
-    padding: '0.5rem 1rem',
+    padding: '0.75rem 1.5rem',
+    minHeight: '48px',
+    minWidth: '48px',
+    width: '100%',
     borderRadius: '8px',
     border: '1px solid #6b7280',
     background: '#f3f4f6',
     color: '#374151',
     cursor: 'pointer',
-    fontSize: '0.9rem',
+    fontSize: '1rem',
   },
   captureBtn: {
     marginTop: '0.5rem',
     padding: '0.75rem 1.5rem',
     minHeight: '48px',
     minWidth: '48px',
+    width: '100%',
     fontSize: '1rem',
     fontWeight: 'bold',
     border: 'none',
