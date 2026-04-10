@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, StaticPool
 from sqlalchemy.orm import sessionmaker
 
-from app.database.database_models import Base, Game, Community
+from app.database.models import Base
 from app.database.session import get_db
 from app.main import app
 
@@ -36,30 +36,3 @@ def client():
     app.dependency_overrides[get_db] = override_get_db
     yield TestClient(app)
     app.dependency_overrides.clear()
-
-
-@pytest.fixture
-def game_setup():
-    """Sets up a game in the database for testing."""
-    with SessionLocal() as db:
-        game = Game(game_date='01-10-2023', winner='', players='Adam,Matt,Zain')
-        db.add(game)
-        db.commit()
-
-
-@pytest.fixture
-def community_setup():
-    """Sets up a community in the database for testing."""
-    with SessionLocal() as db:
-        community_flop = Community(
-            game_date='01-10-2023',
-            hand_number=1,
-            flop_card_0='AS',
-            flop_card_1='KH',
-            flop_card_2='2D',
-            turn_card='None',
-            river_card='None',
-            players='Gil,Adam,Zain,Matt',
-        )
-        db.add(community_flop)
-        db.commit()

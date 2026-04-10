@@ -84,11 +84,3 @@ def test_app_instance_is_fastapi():
     from app.main import app
 
     assert isinstance(app, FastAPI), 'app.main.app is not a FastAPI instance'
-
-
-def test_old_game_router_still_exists():
-    """Verify the old game.py router is still present (temporary)."""
-    game_router_path = Path('src/app/routes/game.py')
-    assert game_router_path.exists(), (
-        'Old game.py router should still exist temporarily'
-    )

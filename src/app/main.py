@@ -3,7 +3,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routes import game, games, hands, images, players, upload, stats, search
+from .routes import games, hands, images, players, upload, stats, search
 
 app = FastAPI(title='All In Analytics Core Backend', version='1.0.0')
 
@@ -37,7 +37,6 @@ app.add_middleware(
 )
 
 # Include the routers
-app.include_router(game.router)
 app.include_router(games.router)
 app.include_router(hands.router)
 app.include_router(images.router)
