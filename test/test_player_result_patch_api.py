@@ -301,6 +301,11 @@ class TestPlayerResultPatchOutcomeStreet:
 
     def test_patch_with_outcome_street_turn(self, client, game_with_hand):
         game_id, hand_number = game_with_hand
+        # Deal turn card so outcome_street='turn' is valid
+        client.patch(
+            f'/games/{game_id}/hands/{hand_number}/turn',
+            json={'turn': {'rank': '3', 'suit': 'C'}},
+        )
         resp = client.patch(
             _url(game_id, hand_number, 'Alice'),
             json={'result': 'lost', 'outcome_street': 'turn'},
@@ -310,6 +315,15 @@ class TestPlayerResultPatchOutcomeStreet:
 
     def test_patch_with_outcome_street_river(self, client, game_with_hand):
         game_id, hand_number = game_with_hand
+        # Deal turn and river so outcome_street='river' is valid
+        client.patch(
+            f'/games/{game_id}/hands/{hand_number}/turn',
+            json={'turn': {'rank': '3', 'suit': 'C'}},
+        )
+        client.patch(
+            f'/games/{game_id}/hands/{hand_number}/river',
+            json={'river': {'rank': '4', 'suit': 'C'}},
+        )
         resp = client.patch(
             _url(game_id, hand_number, 'Alice'),
             json={'result': 'won', 'outcome_street': 'river'},

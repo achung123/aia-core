@@ -1,4 +1,4 @@
-# All In Analytics Core
+# All In Analytics
 
 All In Analytics is a poker session tracker and analysis tool for Texas Hold'em home games. It records hands, computes win probabilities in real time, and visualises everything on an interactive 3D table.
 

@@ -12,6 +12,7 @@ from app.services.equity import calculate_equity
 from pydantic_models.app_models import (
     CommunityCardsUpdate,
     EquityResponse,
+    FlopUpdate,
     HandCreate,
     HandResponse,
     HandStatusResponse,
@@ -21,6 +22,8 @@ from pydantic_models.app_models import (
     PlayerResultEntry,
     PlayerResultUpdate,
     PlayerStatusEntry,
+    RiverUpdate,
+    TurnUpdate,
 )
 from pydantic_models.card_validator import validate_no_duplicate_cards
 
@@ -311,6 +314,167 @@ def edit_community_cards(
         created_at=hand.created_at,
         player_hands=player_hand_responses,
     )
+
+
+def _build_hand_response(hand: Hand, db: Session) -> HandResponse:
+    """Build a HandResponse from a Hand ORM object."""
+    player_hand_responses: list[PlayerHandResponse] = []
+    for ph in hand.player_hands:
+        player = db.query(Player).filter(Player.player_id == ph.player_id).first()
+        player_hand_responses.append(
+            PlayerHandResponse(
+                player_hand_id=ph.player_hand_id,
+                hand_id=ph.hand_id,
+                player_id=ph.player_id,
+                player_name=player.name if player else '',
+                card_1=ph.card_1,
+                card_2=ph.card_2,
+                result=ph.result,
+                profit_loss=ph.profit_loss,
+                outcome_street=ph.outcome_street,
+            )
+        )
+    return HandResponse(
+        hand_id=hand.hand_id,
+        game_id=hand.game_id,
+        hand_number=hand.hand_number,
+        flop_1=hand.flop_1,
+        flop_2=hand.flop_2,
+        flop_3=hand.flop_3,
+        turn=hand.turn,
+        river=hand.river,
+        created_at=hand.created_at,
+        player_hands=player_hand_responses,
+    )
+
+
+def _get_game_and_hand(
+    game_id: int, hand_number: int, db: Session
+) -> tuple[GameSession, Hand]:
+    """Look up game + hand or raise 404."""
+    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
+    if game is None:
+        raise HTTPException(status_code=404, detail='Game session not found')
+    hand = (
+        db.query(Hand)
+        .filter(Hand.game_id == game_id, Hand.hand_number == hand_number)
+        .first()
+    )
+    if hand is None:
+        raise HTTPException(status_code=404, detail='Hand not found')
+    return game, hand
+
+
+@router.patch('/{game_id}/hands/{hand_number}/flop', response_model=HandResponse)
+def set_flop(
+    game_id: int,
+    hand_number: int,
+    payload: FlopUpdate,
+    db: Annotated[Session, Depends(get_db)],
+):
+    """Set the three flop cards for a hand."""
+    _game, hand = _get_game_and_hand(game_id, hand_number, db)
+
+    # Duplicate validation: new flop + existing turn/river + hole cards
+    all_cards = [str(payload.flop_1), str(payload.flop_2), str(payload.flop_3)]
+    if hand.turn is not None:
+        all_cards.append(hand.turn)
+    if hand.river is not None:
+        all_cards.append(hand.river)
+    for ph in hand.player_hands:
+        if ph.card_1 is not None:
+            all_cards.append(ph.card_1)
+        if ph.card_2 is not None:
+            all_cards.append(ph.card_2)
+    try:
+        validate_no_duplicate_cards(all_cards)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    hand.flop_1 = str(payload.flop_1)
+    hand.flop_2 = str(payload.flop_2)
+    hand.flop_3 = str(payload.flop_3)
+
+    db.commit()
+    db.refresh(hand)
+    return _build_hand_response(hand, db)
+
+
+@router.patch('/{game_id}/hands/{hand_number}/turn', response_model=HandResponse)
+def set_turn(
+    game_id: int,
+    hand_number: int,
+    payload: TurnUpdate,
+    db: Annotated[Session, Depends(get_db)],
+):
+    """Set the turn card for a hand. Requires flop to be dealt first."""
+    _game, hand = _get_game_and_hand(game_id, hand_number, db)
+
+    if hand.flop_1 is None:
+        raise HTTPException(
+            status_code=400,
+            detail='Cannot set turn before flop is dealt',
+        )
+
+    # Duplicate validation: existing flop + new turn + existing river + hole cards
+    all_cards = [hand.flop_1, hand.flop_2, hand.flop_3, str(payload.turn)]
+    if hand.river is not None:
+        all_cards.append(hand.river)
+    for ph in hand.player_hands:
+        if ph.card_1 is not None:
+            all_cards.append(ph.card_1)
+        if ph.card_2 is not None:
+            all_cards.append(ph.card_2)
+    try:
+        validate_no_duplicate_cards(all_cards)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    hand.turn = str(payload.turn)
+
+    db.commit()
+    db.refresh(hand)
+    return _build_hand_response(hand, db)
+
+
+@router.patch('/{game_id}/hands/{hand_number}/river', response_model=HandResponse)
+def set_river(
+    game_id: int,
+    hand_number: int,
+    payload: RiverUpdate,
+    db: Annotated[Session, Depends(get_db)],
+):
+    """Set the river card for a hand. Requires turn (and flop) to be dealt first."""
+    _game, hand = _get_game_and_hand(game_id, hand_number, db)
+
+    if hand.flop_1 is None:
+        raise HTTPException(
+            status_code=400,
+            detail='Cannot set river before flop is dealt',
+        )
+    if hand.turn is None:
+        raise HTTPException(
+            status_code=400,
+            detail='Cannot set river before turn is dealt',
+        )
+
+    # Duplicate validation: existing community + new river + hole cards
+    all_cards = [hand.flop_1, hand.flop_2, hand.flop_3, hand.turn, str(payload.river)]
+    for ph in hand.player_hands:
+        if ph.card_1 is not None:
+            all_cards.append(ph.card_1)
+        if ph.card_2 is not None:
+            all_cards.append(ph.card_2)
+    try:
+        validate_no_duplicate_cards(all_cards)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    hand.river = str(payload.river)
+
+    db.commit()
+    db.refresh(hand)
+    return _build_hand_response(hand, db)
 
 
 @router.patch(
@@ -722,6 +886,96 @@ def update_player_result(
             status_code=404,
             detail=f'Player {player_name!r} not found in this hand',
         )
+
+    # --- Outcome street validation ---
+    # 'handed_back' is a participation marker, not an outcome — skip validation
+    if payload.outcome_street and payload.result != 'handed_back':
+        street = payload.outcome_street
+
+        # 1. Validate community cards exist for the claimed street
+        if street == 'flop' and hand.flop_1 is None:
+            raise HTTPException(
+                status_code=400,
+                detail='Cannot set outcome_street to flop — flop cards have not been dealt',
+            )
+        if street == 'turn' and hand.turn is None:
+            raise HTTPException(
+                status_code=400,
+                detail='Cannot set outcome_street to turn — turn card has not been dealt',
+            )
+        if street == 'river' and hand.river is None:
+            raise HTTPException(
+                status_code=400,
+                detail='Cannot set outcome_street to river — river card has not been dealt',
+            )
+
+        # 2. Cross-validate outcome streets:
+        #    - Winners and losers (non-fold) must share the same outcome_street (showdown street)
+        #    - Folders may fold on any street on or before the showdown street
+        STREET_ORDER = {'preflop': 0, 'flop': 1, 'turn': 2, 'river': 3}
+        other_phs = (
+            db.query(PlayerHand)
+            .filter(
+                PlayerHand.hand_id == hand.hand_id,
+                PlayerHand.player_id != player.player_id,
+            )
+            .all()
+        )
+
+        # Collect showdown street (from won/lost results) and folder streets separately
+        showdown_streets = set()
+        folder_streets = []
+        for oph in other_phs:
+            if oph.outcome_street and oph.result in ('won', 'lost'):
+                showdown_streets.add(oph.outcome_street)
+            elif oph.outcome_street and oph.result == 'folded':
+                folder_streets.append(oph.outcome_street)
+
+        current_is_fold = payload.result == 'folded'
+        incoming_order = STREET_ORDER.get(street, -1)
+
+        if current_is_fold:
+            # Folder: must be on or before any existing showdown street
+            if showdown_streets:
+                showdown_order = max(STREET_ORDER.get(s, -1) for s in showdown_streets)
+                if incoming_order > showdown_order:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            f'Cannot fold on {street!r} — showdown street is '
+                            f'{next(iter(showdown_streets))!r}. '
+                            f'Folders must fold on or before the showdown street.'
+                        ),
+                    )
+        else:
+            # Winner/loser: must match existing showdown street exactly
+            if showdown_streets and street not in showdown_streets:
+                existing = ', '.join(sorted(showdown_streets))
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f'Winners and losers must share the same outcome_street. '
+                        f'Existing showdown street: {existing}. '
+                        f'Cannot set {player_name!r} to {street!r}.'
+                    ),
+                )
+            # Also check: if only folders exist, the new showdown street must be >= all folder streets
+            if folder_streets:
+                max_folder_order = max(STREET_ORDER.get(s, -1) for s in folder_streets)
+                if incoming_order < max_folder_order:
+                    offending = [
+                        s
+                        for s in folder_streets
+                        if STREET_ORDER.get(s, -1) > incoming_order
+                    ]
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            f'Cannot set showdown street to {street!r} — '
+                            f'existing fold(s) on later street(s): {", ".join(offending)}. '
+                            f'Folders must fold on or before the showdown street.'
+                        ),
+                    )
 
     ph.result = payload.result
     ph.profit_loss = payload.profit_loss

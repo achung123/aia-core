@@ -4,7 +4,7 @@ import { assembleHandPayload, validateNoDuplicates } from './handPayload.js';
 describe('assembleHandPayload', () => {
   it('maps community cards and players to the expected API shape', () => {
     const state = {
-      community: { flop1: '2h', flop2: '3c', flop3: '5d', turn: 'Js', river: 'Qh', recorded: true },
+      community: { flop1: '2h', flop2: '3c', flop3: '5d', turn: 'Js', river: 'Qh', flopRecorded: true, turnRecorded: true, riverRecorded: true },
       players: [
         { name: 'Alice', card1: 'Ah', card2: 'Kd', recorded: true },
         { name: 'Bob', card1: '9s', card2: 'Tc', recorded: true },
@@ -28,7 +28,7 @@ describe('assembleHandPayload', () => {
 
   it('sets turn and river to null when absent', () => {
     const state = {
-      community: { flop1: '2h', flop2: '3c', flop3: '5d', turn: null, river: null, recorded: true },
+      community: { flop1: '2h', flop2: '3c', flop3: '5d', turn: null, river: null, flopRecorded: true, turnRecorded: false, riverRecorded: false },
       players: [{ name: 'Alice', card1: 'Ah', card2: 'Kd', recorded: true }],
     };
 

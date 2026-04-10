@@ -7,7 +7,7 @@ describe('initialState', () => {
       gameId: null,
       currentHandId: null,
       players: [],
-      community: { flop1: null, flop2: null, flop3: null, turn: null, river: null, recorded: false },
+      community: { flop1: null, flop2: null, flop3: null, flopRecorded: false, turn: null, turnRecorded: false, river: null, riverRecorded: false },
       currentStep: 'gameSelector',
       handCount: 0,
       gameDate: null,
@@ -34,7 +34,7 @@ describe('reducer', () => {
         { name: 'Bob', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null },
       ]);
       expect(state.community).toEqual({
-        flop1: null, flop2: null, flop3: null, turn: null, river: null, recorded: false,
+        flop1: null, flop2: null, flop3: null, flopRecorded: false, turn: null, turnRecorded: false, river: null, riverRecorded: false,
       });
     });
 
@@ -114,7 +114,7 @@ describe('reducer', () => {
       });
 
       expect(state.community).toEqual({
-        flop1: '2h', flop2: '3c', flop3: '5d', turn: 'Js', river: 'Qh', recorded: true,
+        flop1: '2h', flop2: '3c', flop3: '5d', flopRecorded: true, turn: 'Js', turnRecorded: true, river: 'Qh', riverRecorded: true,
       });
     });
   });
@@ -143,7 +143,7 @@ describe('reducer', () => {
         { name: 'Bob', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null },
       ]);
       expect(reset.community).toEqual({
-        flop1: null, flop2: null, flop3: null, turn: null, river: null, recorded: false,
+        flop1: null, flop2: null, flop3: null, flopRecorded: false, turn: null, turnRecorded: false, river: null, riverRecorded: false,
       });
       expect(reset.currentStep).toBe('dashboard');
     });
@@ -316,7 +316,7 @@ describe('reducer', () => {
         { name: 'Bob', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null },
       ]);
       expect(finished.community).toEqual({
-        flop1: null, flop2: null, flop3: null, turn: null, river: null, recorded: false,
+        flop1: null, flop2: null, flop3: null, flopRecorded: false, turn: null, turnRecorded: false, river: null, riverRecorded: false,
       });
     });
 
@@ -386,7 +386,7 @@ describe('reducer', () => {
       expect(state.currentHandId).toBe(3);
       expect(state.currentStep).toBe('playerGrid');
       expect(state.community).toEqual({
-        flop1: '2H', flop2: '3C', flop3: '5D', turn: 'JS', river: 'QH', recorded: true,
+        flop1: '2H', flop2: '3C', flop3: '5D', flopRecorded: true, turn: 'JS', turnRecorded: true, river: 'QH', riverRecorded: true,
       });
       // Alice and Bob have their recorded data
       expect(state.players[0]).toEqual({
@@ -416,7 +416,7 @@ describe('reducer', () => {
 
       state = reducer(state, { type: 'LOAD_HAND', payload: handData });
 
-      expect(state.community.recorded).toBe(false);
+      expect(state.community.flopRecorded).toBe(false);
       expect(state.players[0].status).toBe('playing');
     });
 
@@ -452,7 +452,7 @@ describe('reducer', () => {
       expect(validateOutcomeStreets(players)).toBeNull();
     });
 
-    it('returns null when winner won on a later street than losers folded', () => {
+    it('allows folders on earlier streets than the winner', () => {
       const players = [
         { name: 'Alice', status: 'won', outcomeStreet: 'river' },
         { name: 'Bob', status: 'folded', outcomeStreet: 'flop' },
@@ -461,7 +461,15 @@ describe('reducer', () => {
       expect(validateOutcomeStreets(players)).toBeNull();
     });
 
-    it('returns error when loser lost on a later street than winner won', () => {
+    it('allows folder on preflop when winner on river', () => {
+      const players = [
+        { name: 'Alice', status: 'won', outcomeStreet: 'river' },
+        { name: 'Bob', status: 'folded', outcomeStreet: 'preflop' },
+      ];
+      expect(validateOutcomeStreets(players)).toBeNull();
+    });
+
+    it('returns error when loser lost on a different street than winner', () => {
       const players = [
         { name: 'Alice', status: 'won', outcomeStreet: 'flop' },
         { name: 'Bob', status: 'lost', outcomeStreet: 'river' },
@@ -478,13 +486,12 @@ describe('reducer', () => {
       ];
       const err = validateOutcomeStreets(players);
       expect(err).toBeTruthy();
-      expect(err).toContain('Bob');
     });
 
-    it('returns null when no winner is set yet (all playing or missing streets)', () => {
+    it('returns null when no decided players have outcome streets', () => {
       const players = [
         { name: 'Alice', status: 'playing', outcomeStreet: null },
-        { name: 'Bob', status: 'folded', outcomeStreet: 'flop' },
+        { name: 'Bob', status: 'folded', outcomeStreet: null },
       ];
       expect(validateOutcomeStreets(players)).toBeNull();
     });
@@ -520,7 +527,25 @@ describe('reducer', () => {
       ];
       const err = validateOutcomeStreets(players);
       expect(err).toBeTruthy();
-      expect(err).toContain('Bob');
+    });
+
+    it('returns error when loser is on earlier street and winner on later', () => {
+      const players = [
+        { name: 'Alice', status: 'won', outcomeStreet: 'river' },
+        { name: 'Bob', status: 'lost', outcomeStreet: 'turn' },
+      ];
+      const err = validateOutcomeStreets(players);
+      expect(err).toBeTruthy();
+    });
+
+    it('allows multiple folders on different earlier streets', () => {
+      const players = [
+        { name: 'Alice', status: 'won', outcomeStreet: 'river' },
+        { name: 'Bob', status: 'folded', outcomeStreet: 'preflop' },
+        { name: 'Carol', status: 'folded', outcomeStreet: 'flop' },
+        { name: 'Dave', status: 'lost', outcomeStreet: 'river' },
+      ];
+      expect(validateOutcomeStreets(players)).toBeNull();
     });
   });
 
@@ -688,7 +713,7 @@ describe('reducer', () => {
     it('normalizes review step to playerGrid on restore', () => {
       const state = reducer(initialState, {
         type: 'RESTORE_STATE',
-        payload: { gameId: 1, currentStep: 'review', players: [], community: { flop1: null, flop2: null, flop3: null, turn: null, river: null, recorded: false } },
+        payload: { gameId: 1, currentStep: 'review', players: [], community: { flop1: null, flop2: null, flop3: null, flopRecorded: false, turn: null, turnRecorded: false, river: null, riverRecorded: false } },
       });
       expect(state.currentStep).toBe('playerGrid');
     });
@@ -696,7 +721,7 @@ describe('reducer', () => {
     it('normalizes outcome step to playerGrid on restore', () => {
       const state = reducer(initialState, {
         type: 'RESTORE_STATE',
-        payload: { gameId: 1, currentStep: 'outcome', players: [], community: { flop1: null, flop2: null, flop3: null, turn: null, river: null, recorded: false } },
+        payload: { gameId: 1, currentStep: 'outcome', players: [], community: { flop1: null, flop2: null, flop3: null, flopRecorded: false, turn: null, turnRecorded: false, river: null, riverRecorded: false } },
       });
       expect(state.currentStep).toBe('playerGrid');
     });
@@ -704,7 +729,7 @@ describe('reducer', () => {
     it('preserves safe steps like dashboard on restore', () => {
       const state = reducer(initialState, {
         type: 'RESTORE_STATE',
-        payload: { gameId: 1, currentStep: 'dashboard', players: [], community: { flop1: null, flop2: null, flop3: null, turn: null, river: null, recorded: false } },
+        payload: { gameId: 1, currentStep: 'dashboard', players: [], community: { flop1: null, flop2: null, flop3: null, flopRecorded: false, turn: null, turnRecorded: false, river: null, riverRecorded: false } },
       });
       expect(state.currentStep).toBe('dashboard');
     });

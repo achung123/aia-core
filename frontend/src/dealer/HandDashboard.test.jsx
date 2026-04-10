@@ -214,6 +214,19 @@ describe('HandDashboard', () => {
     });
   });
 
+  it('hand row result badges wrap on narrow screens', async () => {
+    fetchHands.mockResolvedValue(HANDS);
+    const container = renderToContainer(
+      <HandDashboard gameId={42} onSelectHand={() => {}} onBack={() => {}} />
+    );
+    await vi.waitFor(() => {
+      const row = container.querySelector('[data-testid="hand-row"]');
+      const badgeContainer = row.querySelector('[data-testid="result-badges"]');
+      expect(badgeContainer).toBeTruthy();
+      expect(badgeContainer.style.flexWrap).toBe('wrap');
+    });
+  });
+
   it('renders End Game button', async () => {
     fetchHands.mockResolvedValue(HANDS);
     const container = renderToContainer(

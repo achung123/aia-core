@@ -17,7 +17,7 @@ function formatStatus(status, outcomeStreet) {
   return status;
 }
 
-export function PlayerGrid({ players, communityRecorded, onTileSelect, onDirectOutcome, onMarkNotPlaying, gameMode, canFinish, onFinishHand, onBack }) {
+export function PlayerGrid({ players, community, onTileSelect, onDirectOutcome, onMarkNotPlaying, gameMode, canFinish, onFinishHand, onBack }) {
   return (
     <div style={styles.container}>
       <h2 style={styles.heading}>Select a Player</h2>
@@ -27,14 +27,40 @@ export function PlayerGrid({ players, communityRecorded, onTileSelect, onDirectO
         </button>
       )}
 
-      <button
-        data-testid="table-tile"
-        style={styles.tableTile}
-        onClick={() => onTileSelect('community')}
-      >
-        <span style={styles.tileName}>Table</span>
-        {communityRecorded && <span style={styles.check}>✅</span>}
-      </button>
+      <div data-testid="street-buttons" style={styles.streetRow}>
+        <button
+          data-testid="flop-tile"
+          style={styles.streetTile}
+          onClick={() => onTileSelect('flop')}
+        >
+          <span style={styles.tileName}>Flop</span>
+          {community.flopRecorded && <span style={styles.check}>✅</span>}
+        </button>
+        <button
+          data-testid="turn-tile"
+          style={{
+            ...styles.streetTile,
+            ...(community.flopRecorded ? {} : styles.streetTileDisabled),
+          }}
+          onClick={() => community.flopRecorded && onTileSelect('turn')}
+          disabled={!community.flopRecorded}
+        >
+          <span style={styles.tileName}>Turn</span>
+          {community.turnRecorded && <span style={styles.check}>✅</span>}
+        </button>
+        <button
+          data-testid="river-tile"
+          style={{
+            ...styles.streetTile,
+            ...(community.turnRecorded ? {} : styles.streetTileDisabled),
+          }}
+          onClick={() => community.turnRecorded && onTileSelect('river')}
+          disabled={!community.turnRecorded}
+        >
+          <span style={styles.tileName}>River</span>
+          {community.riverRecorded && <span style={styles.check}>✅</span>}
+        </button>
+      </div>
 
       <div data-testid="player-list" style={styles.playerList}>
         {players.map((p) => {
@@ -114,6 +140,32 @@ const styles = {
     padding: '0.5rem 1rem',
     fontSize: '0.95rem',
     cursor: 'pointer',
+  },
+  streetRow: {
+    display: 'flex',
+    gap: '0.5rem',
+    marginBottom: '0.75rem',
+  },
+  streetTile: {
+    position: 'relative',
+    flex: 1,
+    minHeight: '60px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '1.1rem',
+    fontWeight: 'bold',
+    border: '2px solid #c7d2fe',
+    borderRadius: '12px',
+    background: '#eef2ff',
+    color: '#312e81',
+    cursor: 'pointer',
+    padding: '0.75rem 0.5rem',
+    WebkitTapHighlightColor: 'transparent',
+  },
+  streetTileDisabled: {
+    opacity: 0.4,
+    cursor: 'default',
   },
   tableTile: {
     position: 'relative',

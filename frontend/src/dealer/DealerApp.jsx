@@ -9,7 +9,7 @@ import { DetectionReview } from './DetectionReview.jsx';
 import { OutcomeButtons } from './OutcomeButtons.jsx';
 import { DealerPreview } from './DealerPreview.jsx';
 import { QRCodeDisplay } from './QRCodeDisplay.jsx';
-import { addPlayerToHand, updateHolecards, updateCommunityCards, patchPlayerResult, fetchGame, fetchHand, fetchHandStatus } from '../api/client.js';
+import { addPlayerToHand, updateHolecards, updateFlop, updateTurn, updateRiver, patchPlayerResult, fetchGame, fetchHand, fetchHandStatus } from '../api/client.js';
 
 const DEALER_STATE_KEY = 'aia_dealer_state';
 
@@ -154,8 +154,8 @@ export function DealerApp() {
   async function handleTileSelect(name) {
     setPatchError(null);
 
-    // Community tile: dealer always captures community cards
-    if (name === 'community') {
+    // Street tiles: dealer captures per-street community cards
+    if (name === 'flop' || name === 'turn' || name === 'river') {
       setCaptureTarget(name);
       return;
     }
@@ -205,7 +205,8 @@ export function DealerApp() {
   function handleDetectionResult(targetName, apiResponse, file) {
     setCaptureTarget(null);
     const imageUrl = URL.createObjectURL(file);
-    const mode = targetName === 'community' ? 'community' : 'player';
+    const streetTargets = ['flop', 'turn', 'river'];
+    const mode = streetTargets.includes(targetName) ? targetName : 'player';
     setReviewData({
       targetName,
       detections: apiResponse.detections,
@@ -222,32 +223,59 @@ export function DealerApp() {
   async function handleReviewConfirm(targetName, cardValues) {
     if (reviewData?.imageUrl) URL.revokeObjectURL(reviewData.imageUrl);
 
-    if (reviewData?.mode === 'community') {
-      const communityPayload = {
-        flop_1: cardValues[0] || null,
-        flop_2: cardValues[1] || null,
-        flop_3: cardValues[2] || null,
-        turn: cardValues[3] || null,
-        river: cardValues[4] || null,
-      };
+    if (reviewData?.mode === 'flop') {
       setReviewData(null);
       try {
-        await updateCommunityCards(state.gameId, state.currentHandId, communityPayload);
+        await updateFlop(state.gameId, state.currentHandId, {
+          flop_1: cardValues[0] || null,
+          flop_2: cardValues[1] || null,
+          flop_3: cardValues[2] || null,
+        });
         dispatch({
-          type: 'SET_COMMUNITY_CARDS',
+          type: 'SET_FLOP_CARDS',
           payload: {
             flop1: cardValues[0] || null,
             flop2: cardValues[1] || null,
             flop3: cardValues[2] || null,
-            turn: cardValues[3] || null,
-            river: cardValues[4] || null,
           },
         });
         setPatchError(null);
         dispatch({ type: 'SET_STEP', payload: 'playerGrid' });
       } catch (err) {
         dispatch({ type: 'SET_STEP', payload: 'playerGrid' });
-        setPatchError(err.message || 'Failed to save community cards');
+        setPatchError(err.message || 'Failed to save flop cards');
+      }
+    } else if (reviewData?.mode === 'turn') {
+      setReviewData(null);
+      try {
+        await updateTurn(state.gameId, state.currentHandId, {
+          turn: cardValues[0] || null,
+        });
+        dispatch({
+          type: 'SET_TURN_CARD',
+          payload: cardValues[0] || null,
+        });
+        setPatchError(null);
+        dispatch({ type: 'SET_STEP', payload: 'playerGrid' });
+      } catch (err) {
+        dispatch({ type: 'SET_STEP', payload: 'playerGrid' });
+        setPatchError(err.message || 'Failed to save turn card');
+      }
+    } else if (reviewData?.mode === 'river') {
+      setReviewData(null);
+      try {
+        await updateRiver(state.gameId, state.currentHandId, {
+          river: cardValues[0] || null,
+        });
+        dispatch({
+          type: 'SET_RIVER_CARD',
+          payload: cardValues[0] || null,
+        });
+        setPatchError(null);
+        dispatch({ type: 'SET_STEP', payload: 'playerGrid' });
+      } catch (err) {
+        dispatch({ type: 'SET_STEP', payload: 'playerGrid' });
+        setPatchError(err.message || 'Failed to save river card');
       }
     } else {
       const card1 = cardValues[0] || null;
@@ -326,11 +354,6 @@ export function DealerApp() {
   }
 
   function handleFinishHand() {
-    if (!state.community.recorded) {
-      alert('Community cards must be recorded before finishing the hand.');
-      return;
-    }
-
     // Validate outcome streets are consistent
     const validationError = validateOutcomeStreets(state.players);
     if (validationError) {
@@ -361,7 +384,6 @@ export function DealerApp() {
   }
 
   const canFinish =
-    state.community.recorded &&
     state.players.length > 0 &&
     state.players.some((p) => p.status !== 'playing');
 
@@ -413,7 +435,7 @@ export function DealerApp() {
           <DealerPreview community={state.community} players={state.players} gameId={state.gameId} handNumber={state.currentHandId} />
           <PlayerGrid
             players={state.players}
-            communityRecorded={state.community.recorded}
+            community={state.community}
             onTileSelect={handleTileSelect}
             onDirectOutcome={handleDirectOutcome}
             onMarkNotPlaying={handleMarkNotPlaying}

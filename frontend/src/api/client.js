@@ -89,6 +89,30 @@ export function updateCommunityCards(gameId, handNumber, data) {
   });
 }
 
+export function updateFlop(gameId, handNumber, data) {
+  return request(`/games/${gameId}/hands/${handNumber}/flop`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateTurn(gameId, handNumber, data) {
+  return request(`/games/${gameId}/hands/${handNumber}/turn`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateRiver(gameId, handNumber, data) {
+  return request(`/games/${gameId}/hands/${handNumber}/river`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+}
+
 export function patchPlayerResult(gameId, handNumber, playerName, data) {
   return request(`/games/${gameId}/hands/${handNumber}/players/${encodeURIComponent(playerName)}/result`, {
     method: 'PATCH',

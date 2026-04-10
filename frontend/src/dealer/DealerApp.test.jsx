@@ -7,6 +7,9 @@ vi.mock('../api/client.js', () => ({
   addPlayerToHand: vi.fn(),
   updateHolecards: vi.fn(),
   updateCommunityCards: vi.fn(),
+  updateFlop: vi.fn(),
+  updateTurn: vi.fn(),
+  updateRiver: vi.fn(),
   patchPlayerResult: vi.fn(),
   uploadImage: vi.fn(),
   getDetectionResults: vi.fn(),
@@ -48,8 +51,12 @@ vi.mock('./DetectionReview.jsx', () => ({
       <button
         data-testid="mock-confirm"
         onClick={() => {
-          const cards = mode === 'community'
+          const cards = mode === 'flop'
             ? ['Js', 'Tc', '5h']
+            : mode === 'turn'
+            ? ['Qd']
+            : mode === 'river'
+            ? ['9c']
             : ['Ah', 'Kd'];
           onConfirm(targetName, cards);
         }}
@@ -98,7 +105,7 @@ vi.mock('./dealerState.js', async () => {
   };
 });
 
-import { createHand, addPlayerToHand, updateHolecards, updateCommunityCards, patchPlayerResult, fetchHands, fetchHand, fetchHandStatus } from '../api/client.js';
+import { createHand, addPlayerToHand, updateHolecards, updateCommunityCards, updateFlop, updateTurn, updateRiver, patchPlayerResult, fetchHands, fetchHand, fetchHandStatus } from '../api/client.js';
 import { initialState } from './dealerState.js';
 import { DealerApp } from './DealerApp.jsx';
 
@@ -529,7 +536,9 @@ describe('DealerApp community card PATCH wiring', () => {
     createHand.mockResolvedValue({ hand_number: 1 });
     addPlayerToHand.mockResolvedValue({});
     updateHolecards.mockResolvedValue({});
-    updateCommunityCards.mockResolvedValue({});
+    updateFlop.mockResolvedValue({});
+    updateTurn.mockResolvedValue({});
+    updateRiver.mockResolvedValue({});
     patchPlayerResult.mockResolvedValue({});
   });
 
@@ -544,7 +553,7 @@ describe('DealerApp community card PATCH wiring', () => {
   }
 
   async function captureCommunityCards(container) {
-    container.querySelector('[data-testid="table-tile"]').click();
+    container.querySelector('[data-testid="flop-tile"]').click();
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="mock-detect"]')).not.toBeNull();
     });
@@ -555,47 +564,45 @@ describe('DealerApp community card PATCH wiring', () => {
     container.querySelector('[data-testid="mock-confirm"]').click();
   }
 
-  it('tapping Table tile opens camera capture for community cards', async () => {
+  it('tapping Flop tile opens camera capture for flop cards', async () => {
     const container = renderToContainer(<DealerApp />);
     await startHand(container);
 
-    container.querySelector('[data-testid="table-tile"]').click();
+    container.querySelector('[data-testid="flop-tile"]').click();
 
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="camera-capture"]')).not.toBeNull();
-      expect(container.querySelector('[data-testid="capture-target"]').textContent).toBe('community');
+      expect(container.querySelector('[data-testid="capture-target"]').textContent).toBe('flop');
     });
   });
 
-  it('after confirm, updateCommunityCards is called with correct payload', async () => {
+  it('after confirm, updateFlop is called with correct payload', async () => {
     const container = renderToContainer(<DealerApp />);
     await startHand(container);
     await captureCommunityCards(container);
 
     await vi.waitFor(() => {
-      expect(updateCommunityCards).toHaveBeenCalledWith(42, 1, {
+      expect(updateFlop).toHaveBeenCalledWith(42, 1, {
         flop_1: 'Js',
         flop_2: 'Tc',
         flop_3: '5h',
-        turn: null,
-        river: null,
       });
     });
   });
 
-  it('Table tile shows checkmark after successful PATCH', async () => {
+  it('Flop tile shows checkmark after successful PATCH', async () => {
     const container = renderToContainer(<DealerApp />);
     await startHand(container);
     await captureCommunityCards(container);
 
     await vi.waitFor(() => {
-      const tableTile = container.querySelector('[data-testid="table-tile"]');
-      expect(tableTile.textContent).toContain('✅');
+      const flopTile = container.querySelector('[data-testid="flop-tile"]');
+      expect(flopTile.textContent).toContain('✅');
     });
   });
 
-  it('shows error toast on community PATCH failure', async () => {
-    updateCommunityCards.mockRejectedValue(new Error('Duplicate card detected'));
+  it('shows error toast on flop PATCH failure', async () => {
+    updateFlop.mockRejectedValue(new Error('Duplicate card detected'));
 
     const container = renderToContainer(<DealerApp />);
     await startHand(container);
@@ -607,7 +614,7 @@ describe('DealerApp community card PATCH wiring', () => {
   });
 
   it('does not update community state on PATCH failure', async () => {
-    updateCommunityCards.mockRejectedValue(new Error('Server error'));
+    updateFlop.mockRejectedValue(new Error('Server error'));
 
     const container = renderToContainer(<DealerApp />);
     await startHand(container);
@@ -617,8 +624,8 @@ describe('DealerApp community card PATCH wiring', () => {
       expect(container.textContent).toContain('Server error');
     });
 
-    const tableTile = container.querySelector('[data-testid="table-tile"]');
-    expect(tableTile.textContent).not.toContain('✅');
+    const flopTile = container.querySelector('[data-testid="flop-tile"]');
+    expect(flopTile.textContent).not.toContain('✅');
   });
 });
 
@@ -629,7 +636,9 @@ describe('DealerApp finish hand flow', () => {
     createHand.mockResolvedValue({ hand_number: 1 });
     addPlayerToHand.mockResolvedValue({});
     updateHolecards.mockResolvedValue({});
-    updateCommunityCards.mockResolvedValue({});
+    updateFlop.mockResolvedValue({});
+    updateTurn.mockResolvedValue({});
+    updateRiver.mockResolvedValue({});
     patchPlayerResult.mockResolvedValue({});
   });
 
@@ -644,7 +653,7 @@ describe('DealerApp finish hand flow', () => {
   }
 
   async function captureCommunityCards(container) {
-    container.querySelector('[data-testid="table-tile"]').click();
+    container.querySelector('[data-testid="flop-tile"]').click();
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="mock-detect"]')).not.toBeNull();
     });
@@ -715,12 +724,12 @@ describe('DealerApp finish hand flow', () => {
     expect(findButton(container, 'Finish Hand')).toBeUndefined();
   });
 
-  it('does not show Finish Hand button when outcome recorded but no community cards', async () => {
+  it('shows Finish Hand button when outcome recorded without community cards', async () => {
     const container = renderToContainer(<DealerApp />);
     await startHand(container);
     await directOutcome(container, 'Alice', 'Folded');
 
-    expect(findButton(container, 'Finish Hand')).toBeUndefined();
+    expect(findButton(container, 'Finish Hand')).not.toBeUndefined();
   });
 
   it('shows Finish Hand button when community cards + at least one outcome recorded', async () => {

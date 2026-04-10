@@ -179,4 +179,20 @@ describe('GameSelector', () => {
     // game_id=1 has winner Alice
     expect(cards[2].textContent).toContain('Alice');
   });
+
+  it('game card details wrap on narrow screens', async () => {
+    fetchSessions.mockResolvedValue(SESSIONS);
+    const container = renderToContainer(
+      <GameSelector onSelectGame={() => {}} onNewGame={() => {}} />
+    );
+    await vi.waitFor(() => {
+      const cards = container.querySelectorAll('[data-testid="game-card"]');
+      expect(cards.length).toBe(3);
+    });
+
+    const card = container.querySelector('[data-testid="game-card"]');
+    const details = card.querySelector('[data-testid="card-details"]');
+    expect(details).toBeTruthy();
+    expect(details.style.flexWrap).toBe('wrap');
+  });
 });

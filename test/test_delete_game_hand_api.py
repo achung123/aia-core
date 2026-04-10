@@ -1,4 +1,5 @@
 """Tests for DELETE /games/{id} and DELETE /games/{id}/hands/{num}."""
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, StaticPool
@@ -79,7 +80,7 @@ def _seed_hand(client: TestClient, game_id: int):
 class TestDeleteHand:
     def test_delete_hand_returns_204(self, client):
         game = _seed_game(client)
-        hand_resp = _seed_hand(client, game['game_id'])
+        _seed_hand(client, game['game_id'])
         resp = client.delete(f'/games/{game["game_id"]}/hands/1')
         assert resp.status_code == 204
 

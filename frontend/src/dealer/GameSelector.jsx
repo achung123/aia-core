@@ -50,7 +50,7 @@ export function GameSelector({ onSelectGame, onNewGame }) {
               onClick={() => onSelectGame(s.game_id)}
             >
               <div style={styles.cardDate}>{s.game_date} <span style={styles.gameId}>#{s.game_id}</span></div>
-              <div style={styles.cardDetails}>
+              <div data-testid="card-details" style={styles.cardDetails}>
                 <span style={styles.badge}>
                   {isActive ? '● Active' : 'Complete'}
                 </span>
@@ -149,6 +149,7 @@ const styles = {
   },
   cardDetails: {
     display: 'flex',
+    flexWrap: 'wrap',
     gap: '1rem',
     fontSize: '0.9rem',
   },

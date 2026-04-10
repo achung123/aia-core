@@ -101,7 +101,7 @@ export function HandDashboard({ gameId, players: playerNames, gameMode, onSelect
             style={styles.row}
           >
             <div>Hand #{hand.hand_number}</div>
-            <div>
+            <div data-testid="result-badges" style={styles.resultBadges}>
               {hand.player_hands.map((ph) => (
                 <ResultBadge key={ph.player_hand_id} ph={ph} />
               ))}
@@ -225,6 +225,11 @@ const styles = {
     padding: '0.5rem',
     cursor: 'pointer',
     borderBottom: '1px solid #eee',
+  },
+  resultBadges: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '0.25rem',
   },
   button: {
     width: '100%',

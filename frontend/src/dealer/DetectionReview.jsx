@@ -11,22 +11,24 @@ function formatCard(detectedValue) {
   return { rank, suit: symbol };
 }
 
-const POSITION_LABELS = ['Flop', 'Flop', 'Flop', 'Turn', 'River'];
+const POSITION_LABELS_FLOP = ['Flop', 'Flop', 'Flop'];
+const MODE_CONFIG = {
+  flop: { maxCards: 3, expectedMin: 3, label: 'Flop (3 cards)' },
+  turn: { maxCards: 1, expectedMin: 1, label: 'Turn (1 card)' },
+  river: { maxCards: 1, expectedMin: 1, label: 'River (1 card)' },
+  community: { maxCards: 5, expectedMin: 3, label: 'Community Cards' },
+  player: { maxCards: 2, expectedMin: 2, label: null },
+};
 
 export function DetectionReview({ detections, imageUrl, mode, targetName, onConfirm, onRetake }) {
   const allCards = detections || [];
-  const maxCards = mode === 'community' ? 5 : 2;
+  const config = MODE_CONFIG[mode] || MODE_CONFIG.player;
+  const maxCards = config.maxCards;
 
-  // For community mode, sort by bbox_x (left-to-right) to predict flop/turn/river
-  let cards;
-  if (mode === 'community') {
-    const sorted = [...allCards].sort((a, b) => (a.bbox_x ?? 0) - (b.bbox_x ?? 0));
-    cards = sorted.slice(0, maxCards);
-  } else {
-    cards = allCards.slice(0, maxCards);
-  }
+  // No more bbox sorting — each street gets its own inference run
+  const cards = allCards.slice(0, maxCards);
 
-  const expectedMin = mode === 'community' ? 3 : 2;
+  const expectedMin = config.expectedMin;
   const countOk = cards.length >= expectedMin;
 
   const [corrections, setCorrections] = useState({});
@@ -49,13 +51,13 @@ export function DetectionReview({ detections, imageUrl, mode, targetName, onConf
   return (
     <div style={styles.container}>
       <h2 style={styles.heading}>Review Detection</h2>
-      <p style={styles.target}>{mode === 'community' ? 'Community Cards' : targetName}</p>
+      <p style={styles.target}>{config.label || targetName}</p>
 
       {imageUrl && <img src={imageUrl} alt="Captured" style={styles.image} />}
 
       {!countOk && (
         <p style={styles.warning}>
-          Expected {mode === 'community' ? '3–5' : '2'} cards, detected {cards.length}
+          Expected {expectedMin} card{expectedMin > 1 ? 's' : ''}, detected {cards.length}
         </p>
       )}
 
@@ -69,7 +71,7 @@ export function DetectionReview({ detections, imageUrl, mode, targetName, onConf
           const labelStyle = isCorrected
             ? { ...styles.cardLabel, borderColor: '#ea580c' }
             : styles.cardLabel;
-          const positionLabel = mode === 'community' ? POSITION_LABELS[i] : null;
+          const positionLabel = mode === 'flop' ? POSITION_LABELS_FLOP[i] : (mode === 'turn' ? 'Turn' : (mode === 'river' ? 'River' : null));
           return (
             <div key={i} style={labelStyle} onClick={() => setPickerIndex(i)}>
               {positionLabel && (

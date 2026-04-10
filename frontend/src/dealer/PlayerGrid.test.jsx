@@ -9,6 +9,8 @@ function renderToContainer(vnode) {
   return container;
 }
 
+const emptyCommunity = { flop1: null, flop2: null, flop3: null, flopRecorded: false, turn: null, turnRecorded: false, river: null, riverRecorded: false };
+
 const defaultProps = {
   players: [
     { name: 'Alice', recorded: false, status: 'playing', outcomeStreet: null },
@@ -17,7 +19,7 @@ const defaultProps = {
     { name: 'Dave', recorded: false, status: 'lost', outcomeStreet: 'turn' },
     { name: 'Eve', recorded: false, status: 'not_playing', outcomeStreet: null },
   ],
-  communityRecorded: false,
+  community: emptyCommunity,
   onTileSelect: vi.fn(),
   onBack: vi.fn(),
   canFinish: false,
@@ -76,23 +78,24 @@ describe('PlayerGrid', () => {
     expect(container.querySelector('[data-testid="outcome-btn-Eve"]')).not.toBeNull();
   });
 
-  it('shows ✅ on Table tile when community is recorded', () => {
+  it('shows ✅ on Flop tile when flop is recorded', () => {
+    const recordedCommunity = { ...emptyCommunity, flopRecorded: true, flop1: 'Ah', flop2: 'Kd', flop3: '5c' };
     const container = renderToContainer(
-      <PlayerGrid {...defaultProps} communityRecorded={true} />,
+      <PlayerGrid {...defaultProps} community={recordedCommunity} />,
     );
-    const tableTile = container.querySelector('button[data-testid="table-tile"]');
-    expect(tableTile).not.toBeNull();
-    expect(tableTile.textContent).toContain('Table');
-    expect(tableTile.textContent).toContain('✅');
+    const flopTile = container.querySelector('button[data-testid="flop-tile"]');
+    expect(flopTile).not.toBeNull();
+    expect(flopTile.textContent).toContain('Flop');
+    expect(flopTile.textContent).toContain('✅');
   });
 
-  it('does not show ✅ on Table tile when community is not recorded', () => {
+  it('does not show ✅ on Flop tile when flop is not recorded', () => {
     const container = renderToContainer(
-      <PlayerGrid {...defaultProps} communityRecorded={false} />,
+      <PlayerGrid {...defaultProps} community={emptyCommunity} />,
     );
-    const tableTile = container.querySelector('button[data-testid="table-tile"]');
-    expect(tableTile.textContent).toContain('Table');
-    expect(tableTile.textContent).not.toContain('✅');
+    const flopTile = container.querySelector('button[data-testid="flop-tile"]');
+    expect(flopTile.textContent).toContain('Flop');
+    expect(flopTile.textContent).not.toContain('✅');
   });
 
   it('shows ✅ on player tile when recorded', () => {
@@ -110,14 +113,15 @@ describe('PlayerGrid', () => {
     expect(onBack).toHaveBeenCalledTimes(1);
   });
 
-  it('renders Table tile full-width above the player rows', () => {
+  it('renders street tiles above the player rows', () => {
     const container = renderToContainer(<PlayerGrid {...defaultProps} />);
-    const tableTile = container.querySelector('[data-testid="table-tile"]');
-    // Table tile should NOT be inside the player list
+    const streetButtons = container.querySelector('[data-testid="street-buttons"]');
     const playerList = container.querySelector('[data-testid="player-list"]');
-    expect(tableTile).not.toBeNull();
+    expect(streetButtons).not.toBeNull();
     expect(playerList).not.toBeNull();
-    expect(playerList.contains(tableTile)).toBe(false);
+    const flopTile = container.querySelector('[data-testid="flop-tile"]');
+    expect(flopTile).not.toBeNull();
+    expect(playerList.contains(flopTile)).toBe(false);
   });
 
   it('renders each player as a row with name column and status column', () => {

@@ -242,6 +242,26 @@ class CommunityCardsUpdate(BaseModel):
     river: Card | None = None
 
 
+class FlopUpdate(BaseModel):
+    model_config = ConfigDict(use_enum_values=True)
+
+    flop_1: Card
+    flop_2: Card
+    flop_3: Card
+
+
+class TurnUpdate(BaseModel):
+    model_config = ConfigDict(use_enum_values=True)
+
+    turn: Card
+
+
+class RiverUpdate(BaseModel):
+    model_config = ConfigDict(use_enum_values=True)
+
+    river: Card
+
+
 class HoleCardsUpdate(BaseModel):
     model_config = ConfigDict(use_enum_values=True)
 

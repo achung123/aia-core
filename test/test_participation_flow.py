@@ -143,6 +143,24 @@ class TestMultiClientParticipationFlow:
         assert statuses['Bob'] == 'folded'
         assert statuses['Charlie'] == 'joined'
 
+        # --- Step 4b: Deal community cards so outcome_street='river' is valid ---
+        client.patch(
+            f'/games/{game_id}/hands/{hand_number}/flop',
+            json={
+                'flop_1': {'rank': '2', 'suit': 'S'},
+                'flop_2': {'rank': '3', 'suit': 'H'},
+                'flop_3': {'rank': '4', 'suit': 'D'},
+            },
+        )
+        client.patch(
+            f'/games/{game_id}/hands/{hand_number}/turn',
+            json={'turn': {'rank': '5', 'suit': 'S'}},
+        )
+        client.patch(
+            f'/games/{game_id}/hands/{hand_number}/river',
+            json={'river': {'rank': '6', 'suit': 'S'}},
+        )
+
         # --- Step 5: Dealer assigns final outcomes ---
         # Charlie won, Bob already folded — Alice handed_back stays as-is
         resp = client.patch(
