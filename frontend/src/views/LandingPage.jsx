@@ -18,9 +18,11 @@ export function LandingPage() {
   useEffect(() => {
     function check() { setGameActive(hasActiveDealerGame()); }
     window.addEventListener('storage', check);
+    window.addEventListener('dealer-state-change', check);
     document.addEventListener('visibilitychange', check);
     return () => {
       window.removeEventListener('storage', check);
+      window.removeEventListener('dealer-state-change', check);
       document.removeEventListener('visibilitychange', check);
     };
   }, []);

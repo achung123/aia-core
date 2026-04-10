@@ -46,14 +46,17 @@ export function initRouter(routes) {
   }
 
   window.addEventListener('hashchange', navigate);
-  // Re-check nav state on storage changes
+  // Re-check nav state on storage changes (cross-tab)
   window.addEventListener('storage', updateNavState);
+  // Re-check nav state on same-tab dealer state changes
+  window.addEventListener('dealer-state-change', updateNavState);
   navigate(); // Initial render
 
   return {
     dispose: () => {
       window.removeEventListener('hashchange', navigate);
       window.removeEventListener('storage', updateNavState);
+      window.removeEventListener('dealer-state-change', updateNavState);
     },
   };
 }

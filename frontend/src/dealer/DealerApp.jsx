@@ -68,6 +68,7 @@ export function DealerApp() {
     } else if (state.currentStep === 'gameSelector') {
       try { sessionStorage.removeItem(DEALER_STATE_KEY); } catch { /* ignore */ }
     }
+    window.dispatchEvent(new CustomEvent('dealer-state-change'));
   }, [state]);
 
   useEffect(() => {
