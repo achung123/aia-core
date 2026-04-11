@@ -1,6 +1,6 @@
 # All In Analytics — User Onboarding Guide
 
-Welcome to **All In Analytics**, a poker session tracker and analysis tool for Texas Hold'em home games. This guide walks you through how to use the app as a **player**, a **dealer**, or a **data analyst**.
+Welcome to **All In Analytics**, a poker session tracker and analysis tool for Texas Hold'em home games held at Bentley. This guide walks you through how to use the app as a **player**, a **dealer**, or a **data analyst**.
 
 ---
 
@@ -59,6 +59,8 @@ When you open the app, you'll see the **landing page** with four navigation card
 
 <!-- TODO: Screenshot of the landing page showing the four navigation cards -->
 
+<img src="aia-screen-grabs/aia-landing-page.jpg" alt="aia-landing-page" width="300">
+
 ---
 
 ## For Dealers
@@ -78,6 +80,8 @@ The dealer is the person running the game — creating the session, starting han
 
 <!-- TODO: Screenshot of the Game Create Form with player selection and mode toggle -->
 
+<img src="aia-screen-grabs/aia-game-creation.PNG" alt="aia-game-creation" width="300">
+
 ### Managing Hands
 
 After creating a game, you land on the **Hand Dashboard**:
@@ -88,18 +92,32 @@ After creating a game, you land on the **Hand Dashboard**:
 
 <!-- TODO: Screenshot of the Hand Dashboard showing a list of hands -->
 
+<img src="aia-screen-grabs/aia-hand-manager.PNG" alt="aia-hand-manager" width="300">
+
+
+
 ### Recording Cards (Camera)
 
 On the **Player Grid** screen, you'll see tiles for each street (Flop, Turn, River) and each player:
 
-1. **Community cards** — Tap the **Flop** tile to open the camera. Take a photo of the three flop cards. The app uses AI card detection (YOLO) to identify the cards automatically. Review the detected cards and confirm, edit, or retake.
+1. **Community cards** — Tap the **Flop** tile to open the camera. Take a photo of the three flop cards. The app uses AI card detection system backed by the YOLO ([You Only Look Once](https://arxiv.org/pdf/1506.02640)) model to identify the cards automatically. Review the detected cards and confirm, edit, or retake.
 2. After the flop is confirmed, the **Turn** tile unlocks. Same process — snap, review, confirm.
 3. Then the **River** tile unlocks.
 4. **Player hole cards** (dealer-centric mode) — Tap a player's tile to capture their two hole cards the same way.
 
 <!-- TODO: Screenshot of the Player Grid showing street tiles (Flop ✅, Turn, River) and player tiles -->
+
+<img src="aia-screen-grabs/aia-recording-cards-dealer-centric.PNG" alt="aia-recording-cards-dealer-centric" width="300">
+
 <!-- TODO: Screenshot of the Camera Capture screen -->
 <!-- TODO: Screenshot of the Detection Review screen showing detected cards with edit options -->
+
+<table><tr>
+<td><img src="aia-screen-grabs/aia-recording-cards-review.PNG" alt="aia-recording-cards-review" width="300"></td>
+<td><img src="aia-screen-grabs/aia-recording-cards-review-correct.PNG" alt="aia-recording-cards-review-correct" width="300"></td>
+<td><img src="aia-screen-grabs/aia-recording-cards-review-corrected.PNG" alt="aia-recording-cards-review-corrected" width="300"></td>
+</tr></table>
+
 
 ### Recording Outcomes
 
@@ -110,7 +128,14 @@ After cards are dealt, record what happened to each player:
 3. If the player won, folded, or lost, pick the **street** it happened on (Pre-Flop, Flop, Turn, or River).
 
 <!-- TODO: Screenshot of the Outcome Buttons showing Won/Folded/Lost/Not Playing options -->
+
 <!-- TODO: Screenshot of the street selection (Pre-Flop / Flop / Turn / River) -->
+
+<table><tr>
+<td><img src="aia-screen-grabs/aia-outcomes.PNG" alt="aia-outcomes" width="300"></td>
+<td><img src="aia-screen-grabs/aia-street.PNG" alt="aia-street" width="300"></td>
+</tr></table>
+
 
 ### Sharing the QR Code
 
@@ -121,6 +146,9 @@ The QR code encodes the game ID (and optionally a specific player name) into the
 > **Tip:** This is only available in the player participation mode.
 
 <!-- TODO: Screenshot of the QR Code Display -->
+
+<img src="aia-screen-grabs/aia-qr-codes.png" alt="aia-qr-codes" width="300">
+
 
 ### Participation Mode vs Dealer-Centric Mode
 
@@ -140,6 +168,8 @@ In **participation mode**, the flow is:
 
 <!-- TODO: Screenshot of the Player Grid in participation mode showing different player statuses (pending, joined, handed_back) -->
 
+<img src="aia-screen-grabs/aia-recording-cards-player-centric.PNG" alt="aia-recording-cards-player-centric" width="300">
+
 ### Ending a Game
 
 1. On the Hand Dashboard, tap **End Game**.
@@ -147,6 +177,8 @@ In **participation mode**, the flow is:
 3. Confirm — the game status changes to "completed" and it becomes available for playback and analysis.
 
 <!-- TODO: Screenshot of the End Game confirmation with winner selection -->
+
+<img src="aia-screen-grabs/aia-ending-game.PNG" alt="aia-ending-game" width="300">
 
 ---
 
@@ -166,6 +198,9 @@ After selecting a game, **pick your name** from the player list.
 <!-- TODO: Screenshot of the Player game selection screen showing active games -->
 <!-- TODO: Screenshot of the Player name selection screen -->
 
+<img src="aia-screen-grabs/aia-player.PNG" alt="aia-player" width="300">
+
+
 ### Capturing Your Hole Cards
 
 In **participation mode**, once the dealer activates you for a hand (this interface is identical to the dealers):
@@ -179,6 +214,11 @@ In **participation mode**, once the dealer activates you for a hand (this interf
 <!-- TODO: Screenshot of the Player view showing the Capture button -->
 <!-- TODO: Screenshot of the Player camera capture flow -->
 
+<table><tr>
+<td><img src="aia-screen-grabs/aia-player-waiting.png" alt="aia-player-waiting" width="300"></td>
+<td><img src="aia-screen-grabs/aia-player-capture.PNG" alt="aia-player-capture" width="300"></td>
+</tr></table>
+
 ### Handing Back Cards
 
 After capturing your cards and viewing them:
@@ -188,6 +228,8 @@ After capturing your cards and viewing them:
 3. The dealer can then record your outcome (won, folded, lost).
 
 <!-- TODO: Screenshot of the Player view showing the Hand Back button -->
+
+<img src="aia-screen-grabs/aia-player-hand-back-cards.PNG" alt="aia-player-hand-back-cards" width="300">
 
 ### Player Status Flow
 
@@ -234,7 +276,11 @@ Tap **Data** on the home screen to manage your game history.
 **Editing hands:**
 - Expand a session, click a hand row to edit community cards or individual player hole cards inline.
 
-<!-- TODO: Screenshot of the Data View showing the session table -->
+<table><tr>
+<td><img src="aia-screen-grabs/aia-data-view.PNG" alt="aia-data-view" width="300"></td>
+<td><img src="aia-screen-grabs/aia-data-view-detailed.PNG" alt="aia-data-view-detailed" width="300"></td>
+</tr></table>
+
 <!-- TODO: Screenshot of the CSV Import validation step -->
 <!-- TODO: Screenshot of an expanded session showing hand details -->
 
@@ -257,6 +303,13 @@ Tap **Playback** on the home screen to open the interactive 3D poker table.
 - **Right-click drag** to pan.
 
 <!-- TODO: Screenshot of the Playback View showing the 3D table with cards and chips -->
+
+<table><tr>
+<td><img src="aia-screen-grabs/aia-visualizer.PNG" alt="aia-visualizer" width="300"></td>
+<td><img src="aia-screen-grabs/aia-dealer-visualizer.png" alt="aia-dealer-visualizer" width="300"></td>
+</tr></table>
+
+
 <!-- TODO: Screenshot showing the hand scrubber and street scrubber controls -->
 <!-- TODO: Screenshot showing equity badges above player seats -->
 
