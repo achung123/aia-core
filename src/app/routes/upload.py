@@ -96,14 +96,17 @@ async def commit_csv(
 
             # --- Hand (community cards from first row) ---
             first_row = rows[0]
+            flop_1_val = first_row['flop_1'].strip() or None
+            flop_2_val = first_row['flop_2'].strip() or None
+            flop_3_val = first_row['flop_3'].strip() or None
             turn_val = first_row['turn'].strip() or None
             river_val = first_row['river'].strip() or None
             hand = Hand(
                 game_id=game_session.game_id,
                 hand_number=hand_number,
-                flop_1=first_row['flop_1'].strip(),
-                flop_2=first_row['flop_2'].strip(),
-                flop_3=first_row['flop_3'].strip(),
+                flop_1=flop_1_val,
+                flop_2=flop_2_val,
+                flop_3=flop_3_val,
                 turn=turn_val,
                 river=river_val,
             )

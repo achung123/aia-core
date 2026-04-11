@@ -378,6 +378,68 @@ class TestValidateCSVRows:
         errors = validate_csv_rows({})
         assert errors == []
 
+    def test_preflop_hand_no_community_cards_no_errors(self):
+        """Hands that end preflop have no community cards — should be valid."""
+        grouped = {
+            ('03-09-2026', '7'): [
+                {
+                    'game_date': '03-09-2026',
+                    'hand_number': '7',
+                    'player_name': 'Adam',
+                    'hole_card_1': 'AS',
+                    'hole_card_2': 'KH',
+                    'flop_1': '',
+                    'flop_2': '',
+                    'flop_3': '',
+                    'turn': '',
+                    'river': '',
+                    'result': 'folded',
+                    'profit_loss': '-10.0',
+                },
+                {
+                    'game_date': '03-09-2026',
+                    'hand_number': '7',
+                    'player_name': 'Gil',
+                    'hole_card_1': 'JD',
+                    'hole_card_2': 'QC',
+                    'flop_1': '',
+                    'flop_2': '',
+                    'flop_3': '',
+                    'turn': '',
+                    'river': '',
+                    'result': 'won',
+                    'profit_loss': '10.0',
+                },
+            ]
+        }
+        errors = validate_csv_rows(grouped)
+        assert errors == []
+
+    def test_partial_flop_cards_produces_error(self):
+        """If some flop cards present but not all 3, that's an error."""
+        grouped = {
+            ('03-09-2026', '1'): [
+                {
+                    'game_date': '03-09-2026',
+                    'hand_number': '1',
+                    'player_name': 'Adam',
+                    'hole_card_1': 'AS',
+                    'hole_card_2': 'KH',
+                    'flop_1': '2C',
+                    'flop_2': '',
+                    'flop_3': '4S',
+                    'turn': '',
+                    'river': '',
+                    'result': 'folded',
+                    'profit_loss': '-10.0',
+                },
+            ]
+        }
+        errors = validate_csv_rows(grouped)
+        assert len(errors) >= 1
+        fields = [e['field'] for e in errors]
+        assert 'flop_2' in fields
+
 
 # === GET /upload/csv/schema endpoint ===
 

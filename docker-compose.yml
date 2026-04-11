@@ -17,7 +17,7 @@ services:
     environment: &backend-env
       - PYTHONPATH=/app/src
       - DATABASE_URL=sqlite:///./poker.db
-      - SEED_DATA=1
+      - SEED_DATA=0
       - ALLOWED_ORIGINS=http://localhost:5173,http://0.0.0.0:5173,http://127.0.0.1:5173
     working_dir: /app
 
