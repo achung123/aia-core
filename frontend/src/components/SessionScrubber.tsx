@@ -44,6 +44,25 @@ export function SessionScrubber({ handCount, currentHand, onChange }: SessionScr
   const hasPrev = currentHand > 1;
   const hasNext = currentHand < handCount;
 
+  const thumbCss = `
+    .session-range::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: #4f46e5;
+      cursor: pointer;
+    }
+    .session-range::-moz-range-thumb {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: #4f46e5;
+      cursor: pointer;
+      border: none;
+    }
+  `;
+
   const ticks: React.ReactNode[] = [];
   for (let i = 0; i < handCount; i++) {
     const pct = handCount > 1 ? (i / (handCount - 1)) * 100 : 0;
@@ -62,6 +81,7 @@ export function SessionScrubber({ handCount, currentHand, onChange }: SessionScr
 
   return (
     <div data-testid="session-scrubber" style={styles.wrapper}>
+      <style>{thumbCss}</style>
       <button
         data-testid="session-prev"
         style={styles.button}
@@ -75,6 +95,8 @@ export function SessionScrubber({ handCount, currentHand, onChange }: SessionScr
           {ticks}
         </svg>
         <input
+          data-testid="session-slider"
+          className="session-range"
           type="range"
           min={1}
           max={handCount}

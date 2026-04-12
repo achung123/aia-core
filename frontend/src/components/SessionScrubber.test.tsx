@@ -64,4 +64,22 @@ describe('SessionScrubber', () => {
     const lines = container.querySelectorAll('svg line');
     expect(lines.length).toBe(4);
   });
+
+  it('injects a style tag with 48px thumb sizing', () => {
+    const { container } = render(
+      <SessionScrubber handCount={5} currentHand={2} onChange={() => {}} />,
+    );
+    const styleTag = container.querySelector('style');
+    expect(styleTag).toBeTruthy();
+    expect(styleTag!.textContent).toContain('48px');
+    expect(styleTag!.textContent).toContain('::-webkit-slider-thumb');
+    expect(styleTag!.textContent).toContain('::-moz-range-thumb');
+  });
+
+  it('slider has data-testid for integration targeting', () => {
+    render(<SessionScrubber handCount={5} currentHand={2} onChange={() => {}} />);
+    const slider = screen.getByTestId('session-slider');
+    expect(slider).toBeInTheDocument();
+    expect(slider.getAttribute('type')).toBe('range');
+  });
 });

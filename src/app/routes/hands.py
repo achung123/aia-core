@@ -1,8 +1,9 @@
 """Hands router - handles hand-related endpoints."""
 
+import hashlib
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -221,6 +222,8 @@ def get_hand_status(
     game_id: int,
     hand_number: int,
     db: Annotated[Session, Depends(get_db)],
+    response: Response,
+    if_none_match: Annotated[str | None, Header()] = None,
 ):
     game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
     if game is None:
@@ -255,11 +258,19 @@ def get_hand_status(
             )
         )
 
-    return HandStatusResponse(
+    body = HandStatusResponse(
         hand_number=hand.hand_number,
         community_recorded=community_recorded,
         players=players,
     )
+
+    etag = '"' + hashlib.md5(body.model_dump_json().encode()).hexdigest() + '"'
+
+    if if_none_match and if_none_match == etag:
+        return Response(status_code=304, headers={'etag': etag})
+
+    response.headers['etag'] = etag
+    return body
 
 
 @router.get('/{game_id}/hands', response_model=list[HandResponse])

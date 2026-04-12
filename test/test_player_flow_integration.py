@@ -196,7 +196,11 @@ class TestPlayerFlowIntegration:
         # Charlie already folded via action; set result explicitly
         charlie_result_resp = client.patch(
             f'/games/{game_id}/hands/{hand_number}/players/Charlie/result',
-            json={'result': 'folded', 'profit_loss': -10.0, 'outcome_street': 'preflop'},
+            json={
+                'result': 'folded',
+                'profit_loss': -10.0,
+                'outcome_street': 'preflop',
+            },
         )
         assert charlie_result_resp.status_code == 200
         assert charlie_result_resp.json()['result'] == 'folded'
