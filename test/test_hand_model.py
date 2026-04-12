@@ -105,13 +105,13 @@ class TestHandModelExists:
         fk_targets = {fk.target_fullname for fk in game_id_col.foreign_keys}
         assert 'game_sessions.game_id' in fk_targets
 
-    def test_flop_columns_are_not_nullable(self):
+    def test_flop_columns_are_nullable(self):
         from app.database.models import Hand
 
         mapper = inspect(Hand)
         for col_name in ('flop_1', 'flop_2', 'flop_3'):
             col = next(c for c in mapper.columns if c.key == col_name)
-            assert not col.nullable, f'{col_name} should not be nullable'
+            assert col.nullable, f'{col_name} should be nullable'
 
     def test_hand_can_be_created(self, db_session):
         from app.database.models import GameSession, Hand

@@ -5,8 +5,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, StaticPool
 from sqlalchemy.orm import sessionmaker
 
-from app.database.database_models import Base as LegacyBase
-from app.database.models import Base as ModelsBase, CardDetection, ImageUpload
+from app.database.models import Base, CardDetection, ImageUpload
 from app.database.session import get_db
 from app.main import app
 from app.routes.images import get_card_detector
@@ -29,16 +28,15 @@ def override_get_db():
 
 @pytest.fixture(autouse=True)
 def setup_db():
-    LegacyBase.metadata.create_all(bind=engine)
-    ModelsBase.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
     yield
-    ModelsBase.metadata.drop_all(bind=engine)
-    LegacyBase.metadata.drop_all(bind=engine)
+    Base.metadata.drop_all(bind=engine)
 
 
 @pytest.fixture
 def client():
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_card_detector] = lambda: MockCardDetector()
     yield TestClient(app)
     app.dependency_overrides.clear()
 
@@ -329,8 +327,14 @@ class TestCardDetectorDependencyInjection:
         detector = get_card_detector()
         assert isinstance(detector, CardDetector)
 
-    def test_get_card_detector_returns_mock_by_default(self):
-        """Default dependency returns MockCardDetector."""
+    def test_get_card_detector_returns_mock_when_no_weights(self, monkeypatch):
+        """get_card_detector returns MockCardDetector when weights file are missing."""
+        monkeypatch.setattr(
+            'app.routes.images._WEIGHTS_PATH', '/nonexistent/best_closeup.pt'
+        )
+        monkeypatch.setattr(
+            'app.routes.images._WEIGHTS_PATH_FALLBACK', '/nonexistent/best.pt'
+        )
         detector = get_card_detector()
         assert isinstance(detector, MockCardDetector)
 

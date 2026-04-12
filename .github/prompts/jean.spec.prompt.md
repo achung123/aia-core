@@ -1,5 +1,5 @@
 ---
-mode: agent
+mode: plan
 tools:
   - codebase
   - readFile
@@ -26,7 +26,8 @@ The spec is the **requirements source of truth** for the project. It is consumed
 
 1. **Read the input.** Parse the idea, design doc, or URL. If a `plan.md` or prior intake summary exists in the project folder, read that too.
 2. **Scan the workspace.** Understand existing domain models, routes, and conventions to write stories that fit the project.
-3. **Identify epics.** Group related functionality into 3–8 epics (fewer for small projects).
+3. **Run intake (unless already completed).** If confirmed requirements from a prior `@jean intake` or `@jean plan` session exist in the project folder or conversation, reference those and proceed. Otherwise, run intake: present up to 7 focused questions grouped by theme and wait for answers before generating anything.
+4. **Identify epics.** Group related functionality into 3–8 epics (fewer for small projects).
 4. **Write user stories.** For each epic, write stories in the format:
    - **Title** — short, descriptive
    - **Narrative** — "As a [role], I want [capability], so that [benefit]."
@@ -74,6 +75,8 @@ A REST API for managing a poker game lobby — players can create tables, join t
 
 ## Anti-patterns
 
+- **Do NOT skip intake** unless confirmed requirements already exist from a prior intake session. When in doubt, ask.
+- **Do NOT generate spec.md without confirming requirements first.** If no prior intake exists, run one.
 - **Do NOT include implementation details** in user stories. No API contracts, database schemas, or code snippets.
 - **Do NOT write stories that aren't testable.** "The system should be fast" is not a story — "Page loads in under 2 seconds" is.
 - **Do NOT skip acceptance criteria.** Every story must have at least 2 acceptance criteria.

@@ -49,33 +49,6 @@ class TestSessionModuleExists:
         )
 
 
-class TestNoDuplicateEngineCreation:
-    def test_game_router_does_not_create_engine(self):
-        """game.py must not create its own engine or sessionmaker."""
-        game_src = Path('src/app/routes/game.py').read_text()
-        assert 'create_engine' not in game_src, (
-            'game.py must not call create_engine (use shared session)'
-        )
-        assert 'SessionLocal = sessionmaker' not in game_src, (
-            'game.py must not define its own SessionLocal'
-        )
-
-    def test_game_router_uses_shared_get_db(self):
-        """game.py must import get_db from app.database.session."""
-        game_src = Path('src/app/routes/game.py').read_text()
-        assert 'from app.database.session import' in game_src, (
-            'game.py must import from app.database.session'
-        )
-        assert 'get_db' in game_src, 'game.py must use get_db'
-
-    def test_no_private_get_db_in_game_router(self):
-        """game.py must not define a private _get_db function."""
-        game_src = Path('src/app/routes/game.py').read_text()
-        assert 'def _get_db' not in game_src, (
-            'game.py must not define _get_db (use shared get_db from session.py)'
-        )
-
-
 class TestSharedGetDbWorksWithOverride:
     def test_conftest_overrides_shared_get_db(self):
         """conftest.py must override the shared get_db from session.py."""

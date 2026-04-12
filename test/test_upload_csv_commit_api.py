@@ -8,8 +8,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, StaticPool
 from sqlalchemy.orm import sessionmaker
 
-from app.database.database_models import Base as LegacyBase
-from app.database.models import Base as ModelsBase
+from app.database.models import Base
 from app.database.session import get_db
 from app.main import app
 from pydantic_models.csv_schema import CSV_COLUMNS
@@ -31,11 +30,9 @@ def override_get_db():
 
 @pytest.fixture(autouse=True)
 def setup_db():
-    LegacyBase.metadata.create_all(bind=engine)
-    ModelsBase.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
     yield
-    ModelsBase.metadata.drop_all(bind=engine)
-    LegacyBase.metadata.drop_all(bind=engine)
+    Base.metadata.drop_all(bind=engine)
 
 
 @pytest.fixture
@@ -71,7 +68,7 @@ ADAM_H1 = [
     '4S',
     '5H',
     '6C',
-    'win',
+    'won',
     '50.0',
 ]
 GIL_H1 = [
@@ -85,7 +82,7 @@ GIL_H1 = [
     '4S',
     '5H',
     '6C',
-    'loss',
+    'lost',
     '-50.0',
 ]
 
@@ -101,7 +98,7 @@ ADAM_H2 = [
     'KS',
     'QC',
     'JS',
-    'fold',
+    'folded',
     '-10.0',
 ]
 GIL_H2 = [
@@ -115,7 +112,7 @@ GIL_H2 = [
     'KS',
     'QC',
     'JS',
-    'win',
+    'won',
     '10.0',
 ]
 
@@ -131,7 +128,7 @@ ADAM_D2 = [
     '4S',
     '5H',
     '6C',
-    'win',
+    'won',
     '20.0',
 ]
 GIL_D2 = [
@@ -145,7 +142,7 @@ GIL_D2 = [
     '4S',
     '5H',
     '6C',
-    'loss',
+    'lost',
     '-20.0',
 ]
 
@@ -407,7 +404,7 @@ class TestCommitDatabaseRecords:
                 .filter(PlayerHand.player_id == adam.player_id)
                 .first()
             )
-            assert ph.result == 'win'
+            assert ph.result == 'won'
             assert ph.profit_loss == pytest.approx(50.0)
         finally:
             db.close()
@@ -426,7 +423,7 @@ class TestCommitDatabaseRecords:
             '4S',
             '',
             '',
-            'fold',
+            'folded',
             '-10.0',
         ]
         csv_bytes = _make_csv([row])
@@ -487,7 +484,7 @@ class TestCommitValidationErrors:
             '4S',
             '5H',
             '6C',
-            'win',
+            'won',
             '0',
         ]
         csv_bytes = _make_csv([row])
@@ -511,7 +508,7 @@ class TestCommitValidationErrors:
             '4S',
             '5H',
             '6C',
-            'win',
+            'won',
             '0',
         ]
         csv_bytes = _make_csv([row])
@@ -539,7 +536,7 @@ class TestCommitValidationErrors:
             '4S',
             '5H',
             '6C',
-            'win',
+            'won',
             '0',
         ]
         csv_bytes = _make_csv([row])
@@ -566,7 +563,7 @@ class TestCommitValidationErrors:
             '4S',
             '5H',
             '6C',
-            'win',
+            'won',
             '0',
         ]
         dup_row_2 = [
@@ -580,7 +577,7 @@ class TestCommitValidationErrors:
             '4S',
             '5H',
             '6C',
-            'loss',
+            'lost',
             '0',
         ]
         csv_bytes = _make_csv([dup_row_1, dup_row_2])
@@ -670,7 +667,7 @@ class TestCommitValidationErrorDetails:
             '4S',
             '5H',
             '6C',
-            'win',
+            'won',
             '0',
         ]
         csv_bytes = _make_csv([row])
@@ -698,7 +695,7 @@ class TestCommitValidationErrorDetails:
             '4S',
             '5H',
             '6C',
-            'win',
+            'won',
             '0',
         ]
         dup_row_2 = [
@@ -712,7 +709,7 @@ class TestCommitValidationErrorDetails:
             '4S',
             '5H',
             '6C',
-            'loss',
+            'lost',
             '0',
         ]
         csv_bytes = _make_csv([dup_row_1, dup_row_2])
@@ -764,3 +761,118 @@ class TestCommitSecondAppend:
         # Second commit should match both players, create none
         assert data['players_created'] == 0
         assert data['players_matched'] == 2
+
+
+# ---------------------------------------------------------------------------
+# Result validation: invalid result strings rejected at commit
+# ---------------------------------------------------------------------------
+
+
+class TestCommitRejectsInvalidResults:
+    """Commit endpoint rejects CSV with invalid result enum values."""
+
+    def _row_with_result(self, result: str) -> list[str]:
+        return [
+            '03-09-2026',
+            '1',
+            'Adam',
+            'AS',
+            'KH',
+            '2C',
+            '3D',
+            '4S',
+            '5H',
+            '6C',
+            result,
+            '50.0',
+        ]
+
+    def test_arbitrary_result_rejected_with_400(self, client):
+        csv_bytes = _make_csv([self._row_with_result('destroyed')])
+        response = client.post(
+            '/upload/csv/commit',
+            files={'file': ('hands.csv', csv_bytes, 'text/csv')},
+        )
+        assert response.status_code == 400
+
+    def test_legacy_win_rejected(self, client):
+        csv_bytes = _make_csv([self._row_with_result('win')])
+        response = client.post(
+            '/upload/csv/commit',
+            files={'file': ('hands.csv', csv_bytes, 'text/csv')},
+        )
+        assert response.status_code == 400
+
+    def test_legacy_loss_rejected(self, client):
+        csv_bytes = _make_csv([self._row_with_result('loss')])
+        response = client.post(
+            '/upload/csv/commit',
+            files={'file': ('hands.csv', csv_bytes, 'text/csv')},
+        )
+        assert response.status_code == 400
+
+    def test_legacy_fold_rejected(self, client):
+        csv_bytes = _make_csv([self._row_with_result('fold')])
+        response = client.post(
+            '/upload/csv/commit',
+            files={'file': ('hands.csv', csv_bytes, 'text/csv')},
+        )
+        assert response.status_code == 400
+
+    def test_valid_results_still_commit_successfully(self, client):
+        row_won = [
+            '03-09-2026',
+            '1',
+            'Adam',
+            'AS',
+            'KH',
+            '2C',
+            '3D',
+            '4S',
+            '5H',
+            '6C',
+            'won',
+            '50.0',
+        ]
+        row_lost = [
+            '03-09-2026',
+            '1',
+            'Gil',
+            'JH',
+            'QD',
+            '2C',
+            '3D',
+            '4S',
+            '5H',
+            '6C',
+            'lost',
+            '-50.0',
+        ]
+        csv_bytes = _make_csv([row_won, row_lost])
+        response = client.post(
+            '/upload/csv/commit',
+            files={'file': ('hands.csv', csv_bytes, 'text/csv')},
+        )
+        assert response.status_code == 201
+
+    def test_empty_result_commits_successfully(self, client):
+        row = [
+            '03-09-2026',
+            '1',
+            'Adam',
+            'AS',
+            'KH',
+            '2C',
+            '3D',
+            '4S',
+            '5H',
+            '6C',
+            '',
+            '50.0',
+        ]
+        csv_bytes = _make_csv([row])
+        response = client.post(
+            '/upload/csv/commit',
+            files={'file': ('hands.csv', csv_bytes, 'text/csv')},
+        )
+        assert response.status_code == 201

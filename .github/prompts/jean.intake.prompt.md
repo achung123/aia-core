@@ -1,5 +1,5 @@
 ---
-mode: agent
+mode: plan
 tools:
   - codebase
   - readFile
@@ -17,7 +17,7 @@ Conduct a structured intake interview with the user to clarify an abstract idea 
 
 ## Context
 
-Jean uses intake as a gating step. Not every idea arrives fully formed — most need 5–10 minutes of targeted questioning to become actionable. The intake phase prevents wasted effort by catching ambiguities, missing scope, and unstated assumptions before any documents are written.
+Jean uses intake as a **mandatory** gating step for every planning session. Even well-specified input contains implicit assumptions, unstated priorities, and scope boundaries that benefit from explicit confirmation. The intake phase prevents wasted effort by catching ambiguities, missing scope, and unstated assumptions before any documents are written.
 
 ---
 
@@ -37,9 +37,9 @@ Jean uses intake as a gating step. Not every idea arrives fully formed — most 
    - **Users** — Who uses this, what are their roles
    - **Technical** — Stack preferences, integrations, infrastructure
    - **Constraints** — Deadlines, budget, compliance, platform
-5. **Present no more than 7 questions** in the first round. Number them. Be specific — not "tell me more" but "should X support Y?"
-6. **Wait for answers.** Do not proceed until the user responds.
-7. **Evaluate answers.** If answers introduce new ambiguity, ask **one follow-up round** of max 3 questions.
+5. **Present no more than 7 questions** in the first round. Format every question as **multiple choice** with 3–4 lettered options (`A)`, `B)`, `C)`, `D)`) that cover the most likely answers, plus a final `Other: ___` option. Keep each question to 1 line of text + the options below it. No paragraph-length explanations per question.
+6. **Wait for answers.** The user can reply with just letters (e.g. `1:B, 2:A, 3:Other: Vite`). Do not proceed until they respond.
+7. **Evaluate answers.** If answers introduce new ambiguity, ask **one follow-up round** of max 3 questions in the same multiple-choice format.
 8. **Summarize confirmed requirements.** Present a concise bullet list of what was decided, grouped by theme.
 9. **Recommend next step.** Suggest running `@jean plan <idea>` with the confirmed requirements to generate all three documents.
 
@@ -51,20 +51,29 @@ Jean uses intake as a gating step. Not every idea arrives fully formed — most 
 
 ```
 **Scope**
-1. <question>
-2. <question>
+1. <question>?
+   A) <option>  B) <option>  C) <option>  D) Other: ___
+
+2. <question>?
+   A) <option>  B) <option>  C) Other: ___
 
 **Users**
-3. <question>
+3. <question>?
+   A) <option>  B) <option>  C) Other: ___
 
 **Technical**
-4. <question>
-5. <question>
+4. <question>?
+   A) <option>  B) <option>  C) <option>  D) Other: ___
+
+5. <question>?
+   A) <option>  B) <option>  C) Other: ___
 
 **Constraints**
-6. <question>
-7. <question>
+6. <question>?
+   A) <option>  B) <option>  C) Other: ___
 ```
+
+> Reply with just the letters, e.g. `1:A, 2:B, 3:C` — or fill in `Other: ___` for anything not listed.
 
 **After answers — Confirmed Requirements:**
 

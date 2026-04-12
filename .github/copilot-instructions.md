@@ -107,9 +107,16 @@ Never use bare `python -m pytest` or `PYTHONPATH=src/`. Always use `uv run`.
 
 ---
 
+## Library Documentation
+
+When writing code that uses third-party libraries (FastAPI, SQLAlchemy, Pydantic, Alembic, pytest, ruff, ultralytics, etc.), **use Context7 MCP to fetch up-to-date documentation** rather than relying on training data. See `.github/instructions/context7-mcp.instructions.md` for tool usage and pre-resolved library IDs.
+
+---
+
 ## What Agents Should Always Do
 
 - **Read before writing** — scan relevant files before making any edit
+- **Use Context7 for library docs** — look up current API signatures and patterns via Context7 MCP instead of guessing from training data
 - **Scope changes tightly** — one task = one focused unit of work; no drive-by refactors
 - **Match existing patterns** — naming, imports, error handling, and structure should be consistent with the existing codebase
 - **Run tests after changes** — `uv run pytest test/` must pass before any task is closed or PR is created

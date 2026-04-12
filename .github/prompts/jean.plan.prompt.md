@@ -1,5 +1,5 @@
 ---
-mode: agent
+mode: plan
 tools:
   - codebase
   - readFile
@@ -12,7 +12,7 @@ description: Full planning pipeline — intake questions, then generates spec.md
 
 ## Goal
 
-Transform an abstract idea or design document into three structured project artifacts (`spec.md`, `plan.md`, `tasks.md`) placed in `specs/<project-name>-<project-id>/`. Run intake questions first if the input is ambiguous.
+Transform an abstract idea or design document into three structured project artifacts (`spec.md`, `plan.md`, `tasks.md`) placed in `specs/<project-name>-<project-id>/`. **Always** run intake questions first to confirm requirements with the user before generating any documents.
 
 ---
 
@@ -32,13 +32,9 @@ Before generating anything, Jean must understand the workspace's existing tech s
 
 1. **Read the input.** If the user provided a file path, read it. If a URL, fetch it. If inline text, parse it carefully.
 2. **Scan the workspace.** Use `codebase`, `listDirectory`, and `readFile` to understand the existing project structure, tech stack (check `pyproject.toml`, `package.json`, `Dockerfile`, etc.), and conventions.
-3. **Evaluate clarity.** Determine if the input is clear enough to produce documents. Check for:
-   - Defined scope boundaries
-   - Clear user roles / personas
-   - Known integrations and external dependencies
-   - Explicit constraints (timeline, budget, platform)
-4. **If unclear → run intake.** Present up to 7 focused questions grouped by theme. Wait for answers. One follow-up round of max 3 questions if needed.
-5. **If clear → announce.** State the project name and ID you'll use, confirm the output folder path, and proceed.
+3. **Run intake — always.** Even if the input appears detailed, there are implicit choices and assumptions worth confirming. Present up to 7 focused questions grouped by theme (Scope, Users, Technical, Constraints). **Format every question as multiple choice** with 3–4 lettered options (`A)`, `B)`, `C)`, `D)`) covering likely answers, plus `Other: ___`. Keep questions short — 1 line of text, options below. No paragraph prose per question. End the block with a reminder like `Reply with just the letters, e.g. 1:A, 2:B`.
+4. **Wait for answers.** Do not proceed until the user responds. One follow-up round of max 3 questions (same multiple-choice format) if answers introduce new ambiguity.
+5. **Announce.** State the project name and ID you'll use, confirm the output folder path, and proceed.
 6. **Generate `spec.md`.** Write user stories grouped by epic. Each story has a title, narrative ("As a… I want… So that…"), and acceptance criteria. Follow `jean.spec.template.md`.
 7. **Generate `plan.md`.** Write the high-level plan: tech stack decisions, architecture components, project phases, risks, and external dependencies. Follow `jean.plan.template.md`.
 8. **Generate `tasks.md`.** Break the spec into atomic tasks. Each task gets a unique ID, title, description, dependency list, acceptance criteria, and estimated scope (one agent interaction). Order by dependency chain. Follow `jean.tasks.template.md`.
@@ -75,7 +71,7 @@ Build a real-time multiplayer poker game with lobby system, hand history, and pl
 
 **Expected output:**
 ```
-Input is ambiguous — running intake questions:
+Before I plan this out, let me confirm a few things:
 
 **Scope**
 1. Should the poker game support multiple variants (Texas Hold'em, Omaha) or just one?
@@ -99,7 +95,7 @@ Input is ambiguous — running intake questions:
 
 ## Anti-patterns
 
-- **Do NOT skip intake when the input is vague.** Even if you can guess, ask — wrong assumptions waste more time than a few questions.
+- **Do NOT skip intake.** Intake is mandatory for every planning session — even when the input seems thorough. There are always implicit assumptions worth confirming.
 - **Do NOT generate a single monolithic task.** Every task must be completable in one focused agent session.
 - **Do NOT invent technologies** the project doesn't already use (or the user hasn't approved). Check the workspace first.
 - **Do NOT produce documents outside** the `specs/<project-name>-<project-id>/` folder.

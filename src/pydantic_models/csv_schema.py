@@ -6,7 +6,7 @@ import csv
 import io
 from collections import defaultdict
 
-from pydantic_models.app_models import CardRank, CardSuit
+from pydantic_models.app_models import CardRank, CardSuit, ResultEnum
 
 CSV_COLUMNS = [
     'game_date',
@@ -34,16 +34,18 @@ CSV_COLUMN_FORMATS = {
     'flop_3': 'card (e.g. AS, KH, 10D)',
     'turn': 'card or empty',
     'river': 'card or empty',
-    'result': 'win | loss | fold',
+    'result': 'won | lost | folded',
     'profit_loss': 'decimal number',
 }
 
 
-REQUIRED_CARD_FIELDS = ['hole_card_1', 'hole_card_2', 'flop_1', 'flop_2', 'flop_3']
+REQUIRED_CARD_FIELDS = ['hole_card_1', 'hole_card_2']
+FLOP_CARD_FIELDS = ['flop_1', 'flop_2', 'flop_3']
 OPTIONAL_CARD_FIELDS = ['turn', 'river']
 
 _VALID_RANKS = {r.value for r in CardRank}
 _VALID_SUITS = {s.value for s in CardSuit}
+_VALID_RESULTS = {r.value for r in ResultEnum}
 
 
 def is_valid_card(card_str: str) -> bool:
@@ -95,6 +97,23 @@ def validate_csv_rows(
                         }
                     )
 
+            # Flop cards: all 3 must be present or all 3 empty (preflop hand).
+            flop_values = [row.get(f, '').strip() for f in FLOP_CARD_FIELDS]
+            flop_present = [v for v in flop_values if v]
+            if flop_present:
+                # Some flop cards present — validate all 3
+                for field in FLOP_CARD_FIELDS:
+                    value = row.get(field, '').strip()
+                    if not is_valid_card(value):
+                        errors.append(
+                            {
+                                'row': row_index,
+                                'field': field,
+                                'value': value,
+                                'message': f'Invalid card value: {value}',
+                            }
+                        )
+
             for field in OPTIONAL_CARD_FIELDS:
                 value = row.get(field, '').strip()
                 if value and not is_valid_card(value):
@@ -106,6 +125,21 @@ def validate_csv_rows(
                             'message': f'Invalid card value: {value}',
                         }
                     )
+
+            # Validate result against ResultEnum
+            result_value = row.get('result', '').strip()
+            if result_value and result_value not in _VALID_RESULTS:
+                errors.append(
+                    {
+                        'row': row_index,
+                        'field': 'result',
+                        'value': result_value,
+                        'message': (
+                            f'Invalid result: {result_value}. '
+                            f'Must be one of: {", ".join(sorted(_VALID_RESULTS))}'
+                        ),
+                    }
+                )
 
             # Add community cards once (from first row) and hole cards per player.
             if not community_added:

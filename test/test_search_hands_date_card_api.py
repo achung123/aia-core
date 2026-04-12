@@ -5,8 +5,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, StaticPool
 from sqlalchemy.orm import sessionmaker
 
-from app.database.database_models import Base as LegacyBase
-from app.database.models import Base as ModelsBase
+from app.database.models import Base
 from app.database.session import get_db
 from app.main import app
 
@@ -27,11 +26,9 @@ def override_get_db():
 
 @pytest.fixture(autouse=True)
 def setup_db():
-    LegacyBase.metadata.create_all(bind=engine)
-    ModelsBase.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
     yield
-    ModelsBase.metadata.drop_all(bind=engine)
-    LegacyBase.metadata.drop_all(bind=engine)
+    Base.metadata.drop_all(bind=engine)
 
 
 @pytest.fixture
@@ -69,14 +66,14 @@ EARLY_HAND_PAYLOAD = {
             'player_name': 'Alice',
             'card_1': {'rank': '7', 'suit': 'S'},
             'card_2': {'rank': '8', 'suit': 'S'},
-            'result': 'win',
+            'result': 'won',
             'profit_loss': 50.0,
         },
         {
             'player_name': 'Bob',
             'card_1': {'rank': '9', 'suit': 'H'},
             'card_2': {'rank': '10', 'suit': 'H'},
-            'result': 'loss',
+            'result': 'lost',
             'profit_loss': -50.0,
         },
     ],
@@ -91,14 +88,14 @@ LATE_HAND_PAYLOAD = {
             'player_name': 'Alice',
             'card_1': {'rank': 'A', 'suit': 'S'},  # AS — hole card
             'card_2': {'rank': '2', 'suit': 'C'},
-            'result': 'win',
+            'result': 'won',
             'profit_loss': 100.0,
         },
         {
             'player_name': 'Carol',
             'card_1': {'rank': '3', 'suit': 'D'},
             'card_2': {'rank': '4', 'suit': 'D'},
-            'result': 'loss',
+            'result': 'lost',
             'profit_loss': -100.0,
         },
     ],

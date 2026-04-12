@@ -5,8 +5,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import StaticPool, create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.database.database_models import Base as LegacyBase
-from app.database.models import Base as ModelsBase
+from app.database.models import Base
 from app.database.session import get_db
 from app.main import app
 
@@ -27,11 +26,9 @@ def override_get_db():
 
 @pytest.fixture(autouse=True)
 def setup_db():
-    LegacyBase.metadata.create_all(bind=engine)
-    ModelsBase.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
     yield
-    ModelsBase.metadata.drop_all(bind=engine)
-    LegacyBase.metadata.drop_all(bind=engine)
+    Base.metadata.drop_all(bind=engine)
 
 
 @pytest.fixture
@@ -100,8 +97,8 @@ def seeded_client(client):
     r1 = client.patch(
         f'/games/{gid1}/hands/{hn1}/results',
         json=[
-            {'player_name': 'Alice', 'result': 'win', 'profit_loss': 30.0},
-            {'player_name': 'Bob', 'result': 'loss', 'profit_loss': -30.0},
+            {'player_name': 'Alice', 'result': 'won', 'profit_loss': 30.0},
+            {'player_name': 'Bob', 'result': 'lost', 'profit_loss': -30.0},
         ],
     )
     assert r1.status_code == 200
@@ -133,8 +130,8 @@ def seeded_client(client):
     r2 = client.patch(
         f'/games/{gid1}/hands/{hn2}/results',
         json=[
-            {'player_name': 'Alice', 'result': 'fold', 'profit_loss': 0.0},
-            {'player_name': 'Bob', 'result': 'win', 'profit_loss': 10.0},
+            {'player_name': 'Alice', 'result': 'folded', 'profit_loss': 0.0},
+            {'player_name': 'Bob', 'result': 'won', 'profit_loss': 10.0},
         ],
     )
     assert r2.status_code == 200
@@ -174,8 +171,8 @@ def seeded_client(client):
     r3 = client.patch(
         f'/games/{gid2}/hands/{hn3}/results',
         json=[
-            {'player_name': 'Alice', 'result': 'win', 'profit_loss': 50.0},
-            {'player_name': 'Bob', 'result': 'loss', 'profit_loss': -50.0},
+            {'player_name': 'Alice', 'result': 'won', 'profit_loss': 50.0},
+            {'player_name': 'Bob', 'result': 'lost', 'profit_loss': -50.0},
         ],
     )
     assert r3.status_code == 200
@@ -406,3 +403,60 @@ class TestPlayerStatsResponseFields:
         ]
         for field in required_fields:
             assert field in body, f'Missing field: {field}'
+
+
+class TestPlayerStatsExcludesHandedBack:
+    """handed_back results should not count in win/loss/fold totals."""
+
+    def test_handed_back_excluded_from_totals(self, seeded_client):
+        """Add a handed_back result and verify it is invisible to stats."""
+        # Seed a new hand with handed_back for Alice in game 1
+        # First find game 1
+        g = seeded_client.post(
+            '/games',
+            json={'game_date': '2026-03-01', 'player_names': ['Alice', 'Bob']},
+        )
+        assert g.status_code == 201
+        gid = g.json()['game_id']
+
+        h = seeded_client.post(
+            f'/games/{gid}/hands',
+            json={
+                'flop_1': {'rank': '2', 'suit': 'C'},
+                'flop_2': {'rank': '3', 'suit': 'C'},
+                'flop_3': {'rank': '4', 'suit': 'C'},
+                'player_entries': [
+                    {
+                        'player_name': 'Alice',
+                        'card_1': {'rank': '5', 'suit': 'C'},
+                        'card_2': {'rank': '6', 'suit': 'C'},
+                    },
+                    {
+                        'player_name': 'Bob',
+                        'card_1': {'rank': '7', 'suit': 'C'},
+                        'card_2': {'rank': '8', 'suit': 'C'},
+                    },
+                ],
+            },
+        )
+        assert h.status_code == 201
+        hn = h.json()['hand_number']
+        r = seeded_client.patch(
+            f'/games/{gid}/hands/{hn}/results',
+            json=[
+                {'player_name': 'Alice', 'result': 'handed_back', 'profit_loss': 0.0},
+                {'player_name': 'Bob', 'result': 'won', 'profit_loss': 20.0},
+            ],
+        )
+        assert r.status_code == 200
+
+        # Alice stats should be unchanged from the seeded_client fixture
+        # (3 hands: 2 won, 0 lost, 1 folded — the handed_back is invisible)
+        resp = seeded_client.get('/stats/players/Alice')
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body['total_hands_played'] == 3
+        assert body['hands_won'] == 2
+        assert body['hands_lost'] == 0
+        assert body['hands_folded'] == 1
+        assert abs(body['win_rate'] - 66.67) < 0.01

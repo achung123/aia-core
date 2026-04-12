@@ -3,26 +3,26 @@ from __future__ import annotations
 from datetime import date, datetime
 from enum import Enum
 
-from dateutil.parser import parse
-from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    model_validator,
+)
 
 
-class GameState(str, Enum):
-    """
-    Enumeration for the state of the game.
+class ResultEnum(str, Enum):
+    WON = 'won'
+    FOLDED = 'folded'
+    LOST = 'lost'
+    HANDED_BACK = 'handed_back'
 
-    Attributes:
-        FLOP (str): The state of the game after the flop.
-        TURN (str): The state of the game after the turn.
-        RIVER (str): The state of the game after the river.
-        BAD_MOVE (str): The state of the game after an invalid move.
 
-    """
-
+class StreetEnum(str, Enum):
+    PREFLOP = 'preflop'
     FLOP = 'flop'
     TURN = 'turn'
     RIVER = 'river'
-    BAD_GAME_STATE = 'bad_game_state'
 
 
 class CardRank(str, Enum):
@@ -94,119 +94,21 @@ class Card(BaseModel):
     rank: CardRank
     suit: CardSuit
 
+    @model_validator(mode='before')
+    @classmethod
+    def _parse_string(cls, data):
+        if isinstance(data, str):
+            s = data.strip().upper()
+            if len(s) == 3 and s[:2] == '10':
+                return {'rank': '10', 'suit': s[2]}
+            if len(s) == 2:
+                return {'rank': s[0], 'suit': s[1]}
+            msg = f'Invalid card string: {data!r}'
+            raise ValueError(msg)
+        return data
+
     def __str__(self) -> str:
         return f'{self.rank}{self.suit}'
-
-
-class GameRequest(BaseModel):
-    game_date: str = Field(..., description='Date in MM-DD-YYYY format')
-    players: list[str] = Field(..., description='List of player names')
-
-    @field_validator('game_date')
-    @classmethod
-    def validate_game_date(cls, value: str) -> str:
-        """Ensure game_date follows MM-DD-YYYY format and is a valid date."""
-        try:
-            parse(value, dayfirst=False, yearfirst=False)  # Validate the date
-        except ValueError as e:
-            msg = 'game_date must be a valid date in MM-DD-YYYY format'
-            raise ValueError(msg) from e
-        return value
-
-
-class GameResponse(BaseModel):
-    game_id: int
-    game_date: str
-    winner: str
-    losers: str
-
-
-class CommunityState(BaseModel):
-    """
-    Model representing the community in a game. We define the community cards as a list of cards.
-    and the active players as a list of strings.
-
-    Attributes:
-        active_players (list[str]): The active players in the game.
-        flop_card_0 (Card): The first card in the flop.
-        flop_card_1 (Card): The second card in the flop.
-        flop_card_2 (Card): The third card in the flop.
-        turn_card (Card | None): The turn card.
-        river_card (Card | None): The river card.
-
-    """
-
-    model_config = ConfigDict(use_enum_values=True)
-
-    active_players: list[str]
-
-    flop_card_0: Card
-    flop_card_1: Card
-    flop_card_2: Card
-
-    turn_card: Card | None = None
-    river_card: Card | None = None
-
-    @computed_field
-    @property
-    def game_state(self) -> str:
-        if self.river_card and self.turn_card:
-            return GameState.RIVER.value
-        if self.turn_card and not self.river_card:
-            return GameState.TURN.value
-        if not self.turn_card and not self.river_card:
-            return GameState.FLOP.value
-        return GameState.BAD_GAME_STATE.value
-
-
-class CommunityRequest(BaseModel):
-    """
-    Model representing the community cards in a game.
-
-    Attributes:
-        game_date (str): The date of the game.
-        hand_number (int): The number of the hand.
-        community_info (CommunityInfo): The community cards.
-
-    """
-
-    community_state: CommunityState
-
-
-class CommunityResponse(BaseModel):
-    """
-    Model representing the community cards in a game.
-
-    Attributes:
-        game_date (str): The date of the game.
-        hand_number (int): The number of the hand.
-        flop_card_0 (Card): The first card in the flop.
-        flop_card_1 (Card): The second card in the flop.
-        flop_card_2 (Card): The third card in the flop.
-        turn_card (Card): The turn card.
-        river_card (Card): The river card.
-
-    """
-
-    status: str
-    message: str
-    game_date: str
-    hand_number: int
-    community_states: list[CommunityState]
-
-
-class CommunityErrorResponse(BaseModel):
-    """
-    Model representing an error response for the community cards endpoint.
-
-    Attributes:
-        status (str): The status of the response.
-        message (str): The error message.
-
-    """
-
-    status: str
-    message: str
 
 
 # === Game/Hand/Player Request/Response Models ===
@@ -225,6 +127,7 @@ class GameSessionListItem(BaseModel):
     status: str
     player_count: int
     hand_count: int
+    winners: list[str] = []
 
 
 class GameSessionResponse(BaseModel):
@@ -236,6 +139,11 @@ class GameSessionResponse(BaseModel):
     created_at: datetime
     player_names: list[str]
     hand_count: int
+    winners: list[str] = []
+
+
+class CompleteGameRequest(BaseModel):
+    winners: list[str] = Field(default_factory=list, max_length=2)
 
 
 class PlayerCreate(BaseModel):
@@ -254,21 +162,21 @@ class PlayerHandEntry(BaseModel):
     model_config = ConfigDict(use_enum_values=True)
 
     player_name: str
-    card_1: Card
-    card_2: Card
-    result: str | None = None
+    card_1: Card | None = None
+    card_2: Card | None = None
+    result: ResultEnum | None = None
     profit_loss: float | None = None
 
 
 class HandCreate(BaseModel):
     model_config = ConfigDict(use_enum_values=True)
 
-    flop_1: Card
-    flop_2: Card
-    flop_3: Card
+    flop_1: Card | None = None
+    flop_2: Card | None = None
+    flop_3: Card | None = None
     turn: Card | None = None
     river: Card | None = None
-    player_entries: list[PlayerHandEntry] = Field(..., min_length=1)
+    player_entries: list[PlayerHandEntry] = []
 
 
 class PlayerHandResponse(BaseModel):
@@ -278,10 +186,11 @@ class PlayerHandResponse(BaseModel):
     hand_id: int
     player_id: int
     player_name: str
-    card_1: str
-    card_2: str
+    card_1: str | None = None
+    card_2: str | None = None
     result: str | None = None
     profit_loss: float | None = None
+    outcome_street: str | None = None
 
 
 class HandResponse(BaseModel):
@@ -290,9 +199,9 @@ class HandResponse(BaseModel):
     hand_id: int
     game_id: int
     hand_number: int
-    flop_1: str
-    flop_2: str
-    flop_3: str
+    flop_1: str | None = None
+    flop_2: str | None = None
+    flop_3: str | None = None
     turn: str | None = None
     river: str | None = None
     source_upload_id: int | None = None
@@ -301,14 +210,26 @@ class HandResponse(BaseModel):
 
 
 class HandResultUpdate(BaseModel):
-    result: str
+    model_config = ConfigDict(use_enum_values=True)
+
+    result: ResultEnum | None = None
     profit_loss: float
 
 
 class PlayerResultEntry(BaseModel):
+    model_config = ConfigDict(use_enum_values=True)
+
     player_name: str
-    result: str
+    result: ResultEnum | None = None
     profit_loss: float
+
+
+class PlayerResultUpdate(BaseModel):
+    model_config = ConfigDict(use_enum_values=True)
+
+    result: ResultEnum
+    profit_loss: float | None = None
+    outcome_street: StreetEnum | None = None
 
 
 class CommunityCardsUpdate(BaseModel):
@@ -321,11 +242,31 @@ class CommunityCardsUpdate(BaseModel):
     river: Card | None = None
 
 
+class FlopUpdate(BaseModel):
+    model_config = ConfigDict(use_enum_values=True)
+
+    flop_1: Card
+    flop_2: Card
+    flop_3: Card
+
+
+class TurnUpdate(BaseModel):
+    model_config = ConfigDict(use_enum_values=True)
+
+    turn: Card
+
+
+class RiverUpdate(BaseModel):
+    model_config = ConfigDict(use_enum_values=True)
+
+    river: Card
+
+
 class HoleCardsUpdate(BaseModel):
     model_config = ConfigDict(use_enum_values=True)
 
-    card_1: Card
-    card_2: Card
+    card_1: Card | None = None
+    card_2: Card | None = None
 
 
 class PlayerStatsResponse(BaseModel):
@@ -425,3 +366,27 @@ class CSVCommitSummary(BaseModel):
     hands_created: int
     players_created: int
     players_matched: int
+
+
+class PlayerEquityEntry(BaseModel):
+    player_name: str
+    equity: float
+
+
+class EquityResponse(BaseModel):
+    equities: list[PlayerEquityEntry] = []
+
+
+class PlayerStatusEntry(BaseModel):
+    name: str
+    participation_status: str
+    card_1: str | None = None
+    card_2: str | None = None
+    result: str | None = None
+    outcome_street: str | None = None
+
+
+class HandStatusResponse(BaseModel):
+    hand_number: int
+    community_recorded: bool
+    players: list[PlayerStatusEntry]

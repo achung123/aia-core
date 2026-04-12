@@ -78,8 +78,8 @@ Each cycle follows this exact sequence:
 5. If Hank reports a blocker or failure → log it, skip to Phase 4 as a finding
 
 ### Phase 3 — Review
-6. Invoke **Scott** → `@scott check <id>` to review the implementation — this outputs findings directly in the chat window without writing a report file, which keeps the loop fully in-context
-7. Parse Scott's findings for severity (CRITICAL, HIGH, MEDIUM, LOW)
+6. Invoke **Scott** → `@scott loop-review <id> --cycle N` to review the implementation — this writes a report to `docs/agent/reviews/cycle-<N>-<task-id>-YYYY-MM-DD.md` **and** outputs findings inline in the chat window for immediate parsing, keeping the loop fully in-context while also producing a persistent record
+7. Parse Scott's inline findings for severity (CRITICAL, HIGH, MEDIUM, LOW)
 8. If **zero findings** → proceed to close the task (Phase 5)
 9. If **findings exist** → proceed to Phase 4
 

@@ -19,7 +19,7 @@ from app.database.models import (
     PlayerHand,
 )
 from app.database.session import get_db
-from app.services.card_detector import CardDetector, MockCardDetector
+from app.services.card_detector import CardDetector, MockCardDetector, YoloCardDetector
 from pydantic_models.app_models import (
     ConfirmDetectionRequest,
     HandResponse,
@@ -37,8 +37,16 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 JPEG_MAGIC = b'\xff\xd8\xff'
 PNG_MAGIC = b'\x89PNG\r\n\x1a\n'
 
+_MODELS_DIR = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'models')
+_WEIGHTS_PATH = os.path.join(_MODELS_DIR, 'best_closeup.pt')
+_WEIGHTS_PATH_FALLBACK = os.path.join(_MODELS_DIR, 'best.pt')
+
 
 def get_card_detector() -> CardDetector:
+    if os.path.exists(_WEIGHTS_PATH):
+        return YoloCardDetector(_WEIGHTS_PATH)
+    if os.path.exists(_WEIGHTS_PATH_FALLBACK):
+        return YoloCardDetector(_WEIGHTS_PATH_FALLBACK)
     return MockCardDetector()
 
 
@@ -165,6 +173,10 @@ def get_detection_results(
                     card_position=r['card_position'],
                     detected_value=r['detected_value'],
                     confidence=r['confidence'],
+                    bbox_x=r.get('bbox_x'),
+                    bbox_y=r.get('bbox_y'),
+                    bbox_width=r.get('bbox_width'),
+                    bbox_height=r.get('bbox_height'),
                 )
                 db.add(detection)
             upload.status = 'detected'
@@ -243,8 +255,10 @@ def confirm_detection(
     if cc.river is not None:
         all_cards.append(str(cc.river))
     for entry in payload.player_hands:
-        all_cards.append(str(entry.card_1))
-        all_cards.append(str(entry.card_2))
+        if entry.card_1 is not None:
+            all_cards.append(str(entry.card_1))
+        if entry.card_2 is not None:
+            all_cards.append(str(entry.card_2))
     try:
         validate_no_duplicate_cards(all_cards)
     except ValueError as exc:
@@ -300,8 +314,8 @@ def confirm_detection(
         ph = PlayerHand(
             hand_id=hand.hand_id,
             player_id=player.player_id,
-            card_1=str(entry.card_1),
-            card_2=str(entry.card_2),
+            card_1=str(entry.card_1) if entry.card_1 is not None else None,
+            card_2=str(entry.card_2) if entry.card_2 is not None else None,
         )
         db.add(ph)
         db.flush()
@@ -316,6 +330,7 @@ def confirm_detection(
                 card_2=ph.card_2,
                 result=ph.result,
                 profit_loss=ph.profit_loss,
+                outcome_street=ph.outcome_street,
             )
         )
 
@@ -342,12 +357,20 @@ def confirm_detection(
     # Map player hole cards — use hole_1/hole_2 for first player,
     # hole_3/hole_4 for second, etc.
     for i, entry in enumerate(payload.player_hands):
-        confirmed_map[f'hole_{i * 2 + 1}'] = str(entry.card_1)
-        confirmed_map[f'hole_{i * 2 + 2}'] = str(entry.card_2)
+        confirmed_map[f'hole_{i * 2 + 1}'] = (
+            str(entry.card_1) if entry.card_1 is not None else None
+        )
+        confirmed_map[f'hole_{i * 2 + 2}'] = (
+            str(entry.card_2) if entry.card_2 is not None else None
+        )
 
     for position, confirmed_value in confirmed_map.items():
         detected_value = detection_map.get(position)
-        if detected_value is not None and detected_value != confirmed_value:
+        if (
+            detected_value is not None
+            and confirmed_value is not None
+            and detected_value != confirmed_value
+        ):
             db.add(
                 DetectionCorrection(
                     upload_id=upload_id,

@@ -14,8 +14,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import StaticPool, create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.database.database_models import Base as LegacyBase
-from app.database.models import Base as ModelsBase
+from app.database.models import Base
 from app.database.session import get_db
 from app.main import app
 
@@ -36,11 +35,9 @@ def override_get_db():
 
 @pytest.fixture(autouse=True)
 def setup_db():
-    LegacyBase.metadata.create_all(bind=engine)
-    ModelsBase.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
     yield
-    ModelsBase.metadata.drop_all(bind=engine)
-    LegacyBase.metadata.drop_all(bind=engine)
+    Base.metadata.drop_all(bind=engine)
 
 
 @pytest.fixture
@@ -252,13 +249,13 @@ class TestCaseInsensitivePlayerLookup:
         client.post(f'/games/{game_with_players}/hands', json=FLOP_ONLY_PAYLOAD)
         resp = client.patch(
             f'/games/{game_with_players}/hands/1/results',
-            json=[{'player_name': 'alice', 'result': 'win', 'profit_loss': 25.0}],
+            json=[{'player_name': 'alice', 'result': 'won', 'profit_loss': 25.0}],
         )
         assert resp.status_code == 200
         alice = next(
             ph for ph in resp.json()['player_hands'] if ph['player_name'] == 'Alice'
         )
-        assert alice['result'] == 'win'
+        assert alice['result'] == 'won'
 
 
 # ── Single-player hand ─────────────────────────────────────────────────────
@@ -316,18 +313,18 @@ class TestRecordHandResultEdgeCases:
         # First update
         client.patch(
             f'/games/{game_with_players}/hands/1/results',
-            json=[{'player_name': 'Alice', 'result': 'win', 'profit_loss': 50.0}],
+            json=[{'player_name': 'Alice', 'result': 'won', 'profit_loss': 50.0}],
         )
         # Second update with different values
         resp = client.patch(
             f'/games/{game_with_players}/hands/1/results',
-            json=[{'player_name': 'Alice', 'result': 'loss', 'profit_loss': -20.0}],
+            json=[{'player_name': 'Alice', 'result': 'lost', 'profit_loss': -20.0}],
         )
         assert resp.status_code == 200
         alice = next(
             ph for ph in resp.json()['player_hands'] if ph['player_name'] == 'Alice'
         )
-        assert alice['result'] == 'loss'
+        assert alice['result'] == 'lost'
         assert alice['profit_loss'] == -20.0
 
     def test_update_result_zero_profit_loss(self, client, game_with_players):
@@ -335,7 +332,7 @@ class TestRecordHandResultEdgeCases:
         client.post(f'/games/{game_with_players}/hands', json=FLOP_ONLY_PAYLOAD)
         resp = client.patch(
             f'/games/{game_with_players}/hands/1/results',
-            json=[{'player_name': 'Alice', 'result': 'win', 'profit_loss': 0.0}],
+            json=[{'player_name': 'Alice', 'result': 'won', 'profit_loss': 0.0}],
         )
         assert resp.status_code == 200
         alice = next(
@@ -365,7 +362,7 @@ class TestRecordHandResultEdgeCases:
         # Try to update Bob's result — he's in the game but not in this hand
         resp = client.patch(
             f'/games/{game_with_players}/hands/1/results',
-            json=[{'player_name': 'Bob', 'result': 'win', 'profit_loss': 50.0}],
+            json=[{'player_name': 'Bob', 'result': 'won', 'profit_loss': 50.0}],
         )
         assert resp.status_code == 404
 
@@ -375,8 +372,8 @@ class TestRecordHandResultEdgeCases:
         resp = client.patch(
             f'/games/{game_with_players}/hands/1/results',
             json=[
-                {'player_name': 'Alice', 'result': 'win', 'profit_loss': 100.0},
-                {'player_name': 'Bob', 'result': 'loss', 'profit_loss': -100.0},
+                {'player_name': 'Alice', 'result': 'won', 'profit_loss': 100.0},
+                {'player_name': 'Bob', 'result': 'lost', 'profit_loss': -100.0},
             ],
         )
         body = resp.json()
@@ -402,16 +399,16 @@ class TestHandManagementIntegration:
         client.patch(
             f'/games/{game_with_players}/hands/1/results',
             json=[
-                {'player_name': 'Alice', 'result': 'win', 'profit_loss': 75.0},
-                {'player_name': 'Bob', 'result': 'loss', 'profit_loss': -75.0},
+                {'player_name': 'Alice', 'result': 'won', 'profit_loss': 75.0},
+                {'player_name': 'Bob', 'result': 'lost', 'profit_loss': -75.0},
             ],
         )
         resp = client.get(f'/games/{game_with_players}/hands/1')
         assert resp.status_code == 200
         players = {ph['player_name']: ph for ph in resp.json()['player_hands']}
-        assert players['Alice']['result'] == 'win'
+        assert players['Alice']['result'] == 'won'
         assert players['Alice']['profit_loss'] == 75.0
-        assert players['Bob']['result'] == 'loss'
+        assert players['Bob']['result'] == 'lost'
         assert players['Bob']['profit_loss'] == -75.0
 
     def test_results_visible_in_list_hands(self, client, game_with_players):
@@ -420,14 +417,14 @@ class TestHandManagementIntegration:
         client.patch(
             f'/games/{game_with_players}/hands/1/results',
             json=[
-                {'player_name': 'Alice', 'result': 'win', 'profit_loss': 75.0},
+                {'player_name': 'Alice', 'result': 'won', 'profit_loss': 75.0},
             ],
         )
         resp = client.get(f'/games/{game_with_players}/hands')
         assert resp.status_code == 200
         hand = resp.json()[0]
         alice = next(ph for ph in hand['player_hands'] if ph['player_name'] == 'Alice')
-        assert alice['result'] == 'win'
+        assert alice['result'] == 'won'
         assert alice['profit_loss'] == 75.0
 
     def test_multiple_hands_independent_numbering(self, client, game_with_players):
@@ -459,7 +456,7 @@ class TestHandManagementIntegration:
         # Updating results on hand 1 doesn't affect hand 2
         client.patch(
             f'/games/{game_with_players}/hands/1/results',
-            json=[{'player_name': 'Alice', 'result': 'win', 'profit_loss': 50.0}],
+            json=[{'player_name': 'Alice', 'result': 'won', 'profit_loss': 50.0}],
         )
         hand2 = client.get(f'/games/{game_with_players}/hands/2').json()
         alice_h2 = next(
@@ -486,8 +483,8 @@ class TestHandManagementIntegration:
         result_resp = client.patch(
             f'/games/{game_with_players}/hands/{hand_number}/results',
             json=[
-                {'player_name': 'Alice', 'result': 'win', 'profit_loss': 100.0},
-                {'player_name': 'Bob', 'result': 'loss', 'profit_loss': -100.0},
+                {'player_name': 'Alice', 'result': 'won', 'profit_loss': 100.0},
+                {'player_name': 'Bob', 'result': 'lost', 'profit_loss': -100.0},
             ],
         )
         assert result_resp.status_code == 200
@@ -498,8 +495,8 @@ class TestHandManagementIntegration:
         hands = list_resp.json()
         assert len(hands) == 1
         players = {ph['player_name']: ph for ph in hands[0]['player_hands']}
-        assert players['Alice']['result'] == 'win'
-        assert players['Bob']['result'] == 'loss'
+        assert players['Alice']['result'] == 'won'
+        assert players['Bob']['result'] == 'lost'
 
     def test_hand_cards_reusable_across_hands(self, client, game_with_players):
         """The same cards can appear in different hands (validation is per-hand)."""

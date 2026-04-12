@@ -3,8 +3,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app.database.database_models import Base as LegacyBase
-from app.database.models import Base as ModelsBase
+from app.database.models import Base
 from app.database.session import get_db
 from app.main import app
 from sqlalchemy import create_engine, StaticPool
@@ -27,11 +26,9 @@ def override_get_db():
 
 @pytest.fixture(autouse=True)
 def setup_db():
-    LegacyBase.metadata.create_all(bind=engine)
-    ModelsBase.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
     yield
-    ModelsBase.metadata.drop_all(bind=engine)
-    LegacyBase.metadata.drop_all(bind=engine)
+    Base.metadata.drop_all(bind=engine)
 
 
 @pytest.fixture
