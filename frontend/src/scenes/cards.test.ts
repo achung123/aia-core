@@ -102,4 +102,44 @@ describe('createCard', () => {
     expect(() => mesh.flip()).not.toThrow();
     expect(() => mesh.cancelFlip()).not.toThrow();
   });
+
+  it('flip on a face-down card schedules a requestAnimationFrame', () => {
+    const rafSpy = vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation(() => 1);
+    const mesh = createCard('K', '♥', false) as CardMesh;
+    mesh.flip();
+    expect(rafSpy).toHaveBeenCalled();
+    rafSpy.mockRestore();
+  });
+
+  it('flip swaps material to MeshLambertMaterial after completion', () => {
+    // Simulate RAF by calling the callback immediately with a far-future time
+    let rafCallback: ((time: number) => void) | null = null;
+    vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((cb) => {
+      rafCallback = cb as (time: number) => void;
+      return 1;
+    });
+    vi.spyOn(performance, 'now').mockReturnValue(0);
+
+    const mesh = createCard('Q', '♦', false) as CardMesh;
+    expect(mesh.material).toBeInstanceOf(THREE.MeshBasicMaterial);
+
+    mesh.flip();
+    // Advance past the 300ms duration
+    vi.spyOn(performance, 'now').mockReturnValue(350);
+    rafCallback!(350);
+
+    expect(mesh.material).toBeInstanceOf(THREE.MeshLambertMaterial);
+    vi.restoreAllMocks();
+  });
+
+  it('cancelFlip stops the animation', () => {
+    const cancelSpy = vi.spyOn(globalThis, 'cancelAnimationFrame').mockImplementation(() => {});
+    vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation(() => 42);
+
+    const mesh = createCard('J', '♣', false) as CardMesh;
+    mesh.flip();
+    mesh.cancelFlip();
+    expect(cancelSpy).toHaveBeenCalledWith(42);
+    vi.restoreAllMocks();
+  });
 });

@@ -137,6 +137,16 @@ describe('TableView', () => {
   });
 
   it('updates the scene with hand data showing only player cards face-up', async () => {
+    // Use a hand without showdown results — only viewing player's cards shown
+    const noResultHands: HandResponse[] = [{
+      ...HANDS[0],
+      player_hands: [
+        { player_hand_id: 1, hand_id: 1, player_id: 1, player_name: 'Alice', card_1: '2h', card_2: '3h', result: null, profit_loss: 0, outcome_street: null },
+        { player_hand_id: 2, hand_id: 1, player_id: 2, player_name: 'Bob', card_1: '4d', card_2: '5d', result: null, profit_loss: 0, outcome_street: null },
+        { player_hand_id: 3, hand_id: 1, player_id: 3, player_name: 'Carol', card_1: null, card_2: null, result: null, profit_loss: 0, outcome_street: null },
+      ],
+    }];
+    vi.mocked(fetchHands).mockResolvedValue(noResultHands);
     renderTableView('?game=5&player=Alice');
     await waitFor(() => {
       expect(mockSceneUpdate).toHaveBeenCalled();
@@ -147,7 +157,7 @@ describe('TableView', () => {
       (p: { player_name: string }) => p.player_name === 'Alice',
     );
     expect(alice.hole_cards).not.toBeNull();
-    // Bob's cards should be masked (null)
+    // Bob's cards should be masked (null) — no showdown
     const bob = call.cardData.player_hands.find(
       (p: { player_name: string }) => p.player_name === 'Bob',
     );
@@ -179,5 +189,62 @@ describe('TableView', () => {
   it('shows error when game param missing', () => {
     renderTableView('?player=Alice');
     expect(screen.getByText(/missing game/i)).toBeTruthy();
+  });
+
+  it('reveals all non-folded players cards at showdown', async () => {
+    // HANDS fixture already has won/lost results — it's a showdown hand
+    vi.mocked(fetchHands).mockResolvedValue(HANDS);
+    renderTableView('?game=5&player=Alice');
+    await waitFor(() => {
+      expect(mockSceneUpdate).toHaveBeenCalled();
+    });
+    const call = mockSceneUpdate.mock.calls[0][0];
+    // Alice (won) should have cards
+    const alice = call.cardData.player_hands.find(
+      (p: { player_name: string }) => p.player_name === 'Alice',
+    );
+    expect(alice.hole_cards).not.toBeNull();
+    // Bob (lost, not folded) should also have cards revealed at showdown
+    const bob = call.cardData.player_hands.find(
+      (p: { player_name: string }) => p.player_name === 'Bob',
+    );
+    expect(bob.hole_cards).not.toBeNull();
+    // Carol (folded) should still be null
+    const carol = call.cardData.player_hands.find(
+      (p: { player_name: string }) => p.player_name === 'Carol',
+    );
+    expect(carol.hole_cards).toBeNull();
+  });
+
+  it('sets streetIndex to 4 (showdown) when results include won/lost', async () => {
+    vi.mocked(fetchHands).mockResolvedValue(HANDS);
+    renderTableView('?game=5&player=Alice');
+    await waitFor(() => {
+      expect(mockSceneUpdate).toHaveBeenCalled();
+    });
+    const call = mockSceneUpdate.mock.calls[0][0];
+    expect(call.streetIndex).toBe(4);
+  });
+
+  it('does not reveal other players cards when no showdown results', async () => {
+    const noShowdownHands: HandResponse[] = [{
+      ...HANDS[0],
+      player_hands: [
+        { player_hand_id: 1, hand_id: 1, player_id: 1, player_name: 'Alice', card_1: '2h', card_2: '3h', result: null, profit_loss: 0, outcome_street: null },
+        { player_hand_id: 2, hand_id: 1, player_id: 2, player_name: 'Bob', card_1: '4d', card_2: '5d', result: null, profit_loss: 0, outcome_street: null },
+      ],
+    }];
+    vi.mocked(fetchHands).mockResolvedValue(noShowdownHands);
+    renderTableView('?game=5&player=Alice');
+    await waitFor(() => {
+      expect(mockSceneUpdate).toHaveBeenCalled();
+    });
+    const call = mockSceneUpdate.mock.calls[0][0];
+    const bob = call.cardData.player_hands.find(
+      (p: { player_name: string }) => p.player_name === 'Bob',
+    );
+    expect(bob.hole_cards).toBeNull();
+    // streetIndex should not be 4
+    expect(call.streetIndex).not.toBe(4);
   });
 });

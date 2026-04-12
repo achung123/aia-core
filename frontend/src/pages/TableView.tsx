@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { fetchHands } from '../api/client.ts';
 import type { HandResponse } from '../api/types.ts';
 import { createPokerScene } from '../scenes/pokerScene.ts';
+import { isShowdown } from '../scenes/showdown.ts';
 
 /* ── Card-parsing helpers (same as MobilePlaybackView) ──────── */
 
@@ -41,27 +42,39 @@ const RESULT_MAP: Record<string, string> = { won: 'win', folded: 'fold', lost: '
 /**
  * Build card data for the 3D scene from the player's perspective:
  * - The viewing player's hole cards are shown face-up
+ * - At showdown (any won/lost result), all non-folded players' cards are revealed
  * - All other players' cards are masked (null = face-down)
  */
 function handToPlayerCardData(hand: HandResponse, viewingPlayer: string): CardData {
+  const showdown = isShowdown(hand.player_hands || []);
   return {
     flop: [parseCard(hand.flop_1), parseCard(hand.flop_2), parseCard(hand.flop_3)],
     turn: parseCard(hand.turn),
     river: parseCard(hand.river),
-    player_hands: (hand.player_hands || []).map(ph => ({
-      player_name: ph.player_name,
-      hole_cards:
-        ph.player_name === viewingPlayer && ph.card_1 && ph.card_2
+    player_hands: (hand.player_hands || []).map(ph => {
+      const result = RESULT_MAP[ph.result ?? ''] || ph.result || '';
+      const isViewing = ph.player_name === viewingPlayer;
+      const hasCards = ph.card_1 && ph.card_2;
+      const isFolded = result === 'fold';
+
+      // Show cards for: viewing player always, or non-folded players at showdown
+      const showCards = hasCards && (isViewing || (showdown && !isFolded));
+
+      return {
+        player_name: ph.player_name,
+        hole_cards: showCards
           ? ([parseCard(ph.card_1)!, parseCard(ph.card_2)!] as [ParsedCard, ParsedCard])
           : null,
-      result: RESULT_MAP[ph.result ?? ''] || ph.result || '',
-    })),
+        result,
+      };
+    }),
   };
 }
 
 /* ── Street index ─────────────────────────────────────────────── */
 
 function computeStreetIndex(hand: HandResponse): number {
+  if (isShowdown(hand.player_hands || [])) return 4;
   if (hand.river) return 3;
   if (hand.turn) return 2;
   if (hand.flop_1) return 1;

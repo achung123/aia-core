@@ -31,7 +31,7 @@ function renderCardFace(rank: string, suit: string): THREE.CanvasTexture {
   return new THREE.CanvasTexture(canvas);
 }
 
-export function createCard(rank: string, suit: string, faceUp: boolean = true): THREE.Mesh {
+export function createCard(rank: string, suit: string, faceUp: boolean = true): CardMesh {
   // PlaneGeometry has simple, reliable UV mapping (U→X, V→Y)
   const geom = new THREE.PlaneGeometry(0.45, 0.65);
 
@@ -47,9 +47,50 @@ export function createCard(rank: string, suit: string, faceUp: boolean = true): 
   // PlaneGeometry faces +Z; rotate so it faces +Y (upward, visible from camera)
   mesh.rotation.x = -Math.PI / 2;
 
+  let flipRafId: number | null = null;
+
   const cardMesh = mesh as unknown as CardMesh;
-  cardMesh.flip = function () {};
-  cardMesh.cancelFlip = function () {};
+
+  cardMesh.flip = function (): void {
+    if (flipRafId !== null) return; // already flipping
+
+    const duration = 300;
+    const startTime = performance.now();
+    let swapped = false;
+
+    function animate(now: number): void {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+
+      // Rotate around local z-axis for a card-flip visual
+      cardMesh.rotation.z = progress * Math.PI;
+
+      // Swap material at midpoint
+      if (!swapped && progress >= 0.5) {
+        swapped = true;
+        const faceTex = renderCardFace(rank, suit);
+        const oldMat = cardMesh.material as THREE.Material;
+        cardMesh.material = new THREE.MeshLambertMaterial({ map: faceTex });
+        oldMat.dispose();
+      }
+
+      if (progress < 1) {
+        flipRafId = requestAnimationFrame(animate);
+      } else {
+        cardMesh.rotation.z = 0;
+        flipRafId = null;
+      }
+    }
+
+    flipRafId = requestAnimationFrame(animate);
+  };
+
+  cardMesh.cancelFlip = function (): void {
+    if (flipRafId !== null) {
+      cancelAnimationFrame(flipRafId);
+      flipRafId = null;
+    }
+  };
 
   return cardMesh;
 }
