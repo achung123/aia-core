@@ -34,9 +34,9 @@ describe('App', () => {
   it('defines routes for all 5 pages', () => {
     render(<App />);
     expect(screen.getByText('Home')).toBeTruthy();
-    expect(screen.getByText('Playback')).toBeTruthy();
-    expect(screen.getByText('Data')).toBeTruthy();
-    expect(screen.getByText('Dealer')).toBeTruthy();
-    expect(screen.getByText('Player')).toBeTruthy();
+    expect(screen.getAllByText('Playback').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Data').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Dealer').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Player').length).toBeGreaterThanOrEqual(1);
   });
 });

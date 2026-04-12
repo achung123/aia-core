@@ -1,46 +1,31 @@
-import { h } from 'preact';
-import { useState, useEffect } from 'preact/hooks';
-
-const DEALER_STATE_KEY = 'aia_dealer_state';
-
-function hasActiveDealerGame() {
-  try {
-    const raw = sessionStorage.getItem(DEALER_STATE_KEY);
-    if (!raw) return false;
-    const saved = JSON.parse(raw);
-    return !!(saved && saved.gameId && saved.currentStep && saved.currentStep !== 'gameSelector');
-  } catch { return false; }
-}
+import { type CSSProperties, type MouseEvent } from 'react';
+import { useDealerStore } from '../stores/dealerStore';
 
 export function LandingPage() {
-  const [gameActive, setGameActive] = useState(hasActiveDealerGame());
+  const gameId = useDealerStore((s) => s.gameId);
+  const currentStep = useDealerStore((s) => s.currentStep);
+  const gameActive = gameId !== null && currentStep !== 'gameSelector';
 
-  useEffect(() => {
-    function check() { setGameActive(hasActiveDealerGame()); }
-    window.addEventListener('storage', check);
-    window.addEventListener('dealer-state-change', check);
-    document.addEventListener('visibilitychange', check);
-    return () => {
-      window.removeEventListener('storage', check);
-      window.removeEventListener('dealer-state-change', check);
-      document.removeEventListener('visibilitychange', check);
-    };
-  }, []);
+  const handlePlaybackClick = (e: MouseEvent<HTMLAnchorElement>): void => {
+    if (gameActive) e.preventDefault();
+  };
 
   return (
     <div data-testid="landing-page" style={styles.container}>
       <h1 style={styles.title}>All In Analytics</h1>
-      <p style={styles.subtitle}>Poker session tracking & analysis</p>
+      <p style={styles.subtitle}>Poker session tracking &amp; analysis</p>
       <div style={styles.links}>
         <a
           href={gameActive ? undefined : '#/playback'}
           style={{ ...styles.card, ...(gameActive ? styles.cardDisabled : {}) }}
           data-testid="nav-playback"
-          onClick={gameActive ? (e) => e.preventDefault() : undefined}
+          onClick={handlePlaybackClick}
         >
           <div style={styles.cardIcon}>🎬</div>
           <div style={styles.cardTitle}>Playback</div>
-          <div style={styles.cardDesc}>{gameActive ? 'Locked — game in progress' : 'Review recorded sessions'}</div>
+          <div style={styles.cardDesc}>
+            {gameActive ? 'Locked — game in progress' : 'Review recorded sessions'}
+          </div>
         </a>
         <a href="#/dealer" style={styles.card} data-testid="nav-dealer">
           <div style={styles.cardIcon}>🃏</div>
@@ -55,14 +40,14 @@ export function LandingPage() {
         <a href="#/data" style={styles.card} data-testid="nav-data">
           <div style={styles.cardIcon}>📊</div>
           <div style={styles.cardTitle}>Data</div>
-          <div style={styles.cardDesc}>Import & export</div>
+          <div style={styles.cardDesc}>Import &amp; export</div>
         </a>
       </div>
     </div>
   );
 }
 
-const styles = {
+const styles: Record<string, CSSProperties> = {
   container: {
     display: 'flex',
     flexDirection: 'column',
@@ -109,7 +94,7 @@ const styles = {
     opacity: 0.35,
     cursor: 'not-allowed',
     filter: 'grayscale(0.6)',
-    pointerEvents: 'auto',
+    pointerEvents: 'auto' as const,
   },
   cardIcon: {
     fontSize: '2rem',

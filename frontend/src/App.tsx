@@ -1,19 +1,11 @@
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import NavBar from './NavBar';
+import { LandingPage } from './views/LandingPage';
+import { DataView } from './views/DataView';
 
-// Route target placeholders — these import existing JSX components.
-// They will be converted to proper TSX in later tasks.
-// For now, use lazy wrappers or simple placeholder components.
-function LandingPagePlaceholder() {
-  return <div>Landing Page</div>;
-}
 
 function PlaybackPlaceholder() {
   return <div>Playback View</div>;
-}
-
-function DataPlaceholder() {
-  return <div>Data View</div>;
 }
 
 function DealerPlaceholder() {
@@ -30,9 +22,9 @@ export default function App() {
       <div id="app-root">
         <NavBar />
         <Routes>
-          <Route path="/" element={<LandingPagePlaceholder />} />
+          <Route path="/" element={<LandingPage />} />
           <Route path="/playback" element={<PlaybackPlaceholder />} />
-          <Route path="/data" element={<DataPlaceholder />} />
+          <Route path="/data" element={<DataView />} />
           <Route path="/dealer" element={<DealerPlaceholder />} />
           <Route path="/player" element={<PlayerPlaceholder />} />
         </Routes>
