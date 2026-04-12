@@ -1,25 +1,30 @@
-import { h } from 'preact';
-import { useState, useEffect } from 'preact/hooks';
-import { fetchPlayers, createPlayer, createSession } from '../api/client.js';
+import { useState, useEffect } from 'react';
+import { fetchPlayers, createPlayer, createSession } from '../api/client.ts';
+import type { PlayerResponse } from '../api/types.ts';
+import type { GameMode } from '../stores/dealerStore.ts';
 
-function todayStr() {
+export interface GameCreateFormProps {
+  onGameCreated: (gameId: number, playerNames: string[], gameDate: string, gameMode: GameMode) => void;
+}
+
+function todayStr(): string {
   const d = new Date();
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
   return `${d.getFullYear()}-${mm}-${dd}`;
 }
 
-export function GameCreateForm({ onGameCreated }) {
+export function GameCreateForm({ onGameCreated }: GameCreateFormProps) {
   const [date, setDate] = useState(todayStr);
-  const [players, setPlayers] = useState([]);
-  const [selected, setSelected] = useState(new Set());
+  const [players, setPlayers] = useState<PlayerResponse[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const [newPlayerName, setNewPlayerName] = useState('');
   const [addingPlayer, setAddingPlayer] = useState(false);
-  const [addPlayerError, setAddPlayerError] = useState(null);
-  const [gameMode, setGameMode] = useState('dealer_centric');
+  const [addPlayerError, setAddPlayerError] = useState<string | null>(null);
+  const [gameMode, setGameMode] = useState<GameMode>('dealer_centric');
 
   useEffect(() => {
     fetchPlayers()
@@ -28,7 +33,7 @@ export function GameCreateForm({ onGameCreated }) {
       .finally(() => setLoading(false));
   }, []);
 
-  function togglePlayer(name) {
+  function togglePlayer(name: string) {
     setSelected(prev => {
       const next = new Set(prev);
       if (next.has(name)) next.delete(name);
@@ -37,7 +42,7 @@ export function GameCreateForm({ onGameCreated }) {
     });
   }
 
-  async function handleAddPlayer(e) {
+  async function handleAddPlayer(e: React.MouseEvent) {
     e.preventDefault();
     const trimmed = newPlayerName.trim();
     if (!trimmed) return;
@@ -49,17 +54,17 @@ export function GameCreateForm({ onGameCreated }) {
       setSelected(prev => new Set([...prev, player.name]));
       setNewPlayerName('');
     } catch (err) {
-      if (err.message.includes('409')) {
+      if (err instanceof Error && err.message.includes('409')) {
         setAddPlayerError('A player with that name already exists.');
       } else {
-        setAddPlayerError(err.message);
+        setAddPlayerError(err instanceof Error ? err.message : String(err));
       }
     } finally {
       setAddingPlayer(false);
     }
   }
 
-  async function handleSubmit(e) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
@@ -70,7 +75,7 @@ export function GameCreateForm({ onGameCreated }) {
       });
       onGameCreated(result.game_id, result.player_names, result.game_date, gameMode);
     } catch (err) {
-      setError(err.message);
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setSubmitting(false);
     }
@@ -87,7 +92,7 @@ export function GameCreateForm({ onGameCreated }) {
         <input
           type="date"
           value={date}
-          onInput={e => setDate(e.target.value)}
+          onChange={e => setDate(e.target.value)}
           style={styles.dateInput}
         />
       </label>
@@ -118,7 +123,7 @@ export function GameCreateForm({ onGameCreated }) {
             type="text"
             placeholder="New player name"
             value={newPlayerName}
-            onInput={e => { setNewPlayerName(e.target.value); setAddPlayerError(null); }}
+            onChange={e => { setNewPlayerName(e.target.value); setAddPlayerError(null); }}
             style={styles.addPlayerInput}
           />
           <button
@@ -186,7 +191,7 @@ export function GameCreateForm({ onGameCreated }) {
   );
 }
 
-const styles = {
+const styles: Record<string, React.CSSProperties> = {
   form: {
     maxWidth: '480px',
     margin: '0 auto',
@@ -284,7 +289,7 @@ const styles = {
     border: '1px solid var(--border)',
     background: 'var(--bg)',
     color: 'var(--text-h)',
-    boxSizing: 'border-box',
+    boxSizing: 'border-box' as const,
   },
   addPlayerBtn: {
     padding: '8px 16px',

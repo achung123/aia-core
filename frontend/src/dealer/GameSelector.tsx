@@ -1,11 +1,16 @@
-import { h } from 'preact';
-import { useState, useEffect } from 'preact/hooks';
-import { fetchSessions } from '../api/client.js';
+import { useState, useEffect } from 'react';
+import { fetchSessions } from '../api/client.ts';
+import type { GameSessionListItem } from '../api/types.ts';
 
-export function GameSelector({ onSelectGame, onNewGame }) {
-  const [sessions, setSessions] = useState([]);
+export interface GameSelectorProps {
+  onSelectGame: (gameId: number) => void;
+  onNewGame: () => void;
+}
+
+export function GameSelector({ onSelectGame, onNewGame }: GameSelectorProps) {
+  const [sessions, setSessions] = useState<GameSessionListItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchSessions()
@@ -70,7 +75,7 @@ export function GameSelector({ onSelectGame, onNewGame }) {
   );
 }
 
-const styles = {
+const styles: Record<string, React.CSSProperties> = {
   container: {
     maxWidth: '480px',
     margin: '0 auto',

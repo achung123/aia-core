@@ -1,7 +1,7 @@
 import { useReducer, useState, useEffect } from 'preact/hooks';
 import { reducer, initialState, validateOutcomeStreets } from './dealerState.ts';
-import { GameSelector } from './GameSelector.jsx';
-import { GameCreateForm } from './GameCreateForm.jsx';
+import { GameSelector } from './GameSelector.tsx';
+import { GameCreateForm } from './GameCreateForm.tsx';
 import { HandDashboard } from './HandDashboard.jsx';
 import { PlayerGrid } from './PlayerGrid.jsx';
 import { CameraCapture } from './CameraCapture.jsx';
