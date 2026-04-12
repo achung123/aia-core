@@ -14,6 +14,7 @@ import type {
 } from '../api/types.ts';
 import { CameraCapture } from '../dealer/CameraCapture.tsx';
 import { DetectionReview } from '../dealer/DetectionReview.tsx';
+import { PlayerActionButtons } from './PlayerActionButtons.tsx';
 
 type PlayerStep = 'gameSelect' | 'namePick' | 'playing';
 type CaptureStep = null | 'camera' | 'review';
@@ -104,6 +105,7 @@ export function PlayerApp() {
   const [handingBack, setHandingBack] = useState(false);
   const [handBackError, setHandBackError] = useState<string | null>(null);
   const [noActiveHand, setNoActiveHand] = useState(false);
+  const [communityCardCount, setCommunityCardCount] = useState(0);
   const [pollError, setPollError] = useState<string | null>(null);
   const handNumberRef = useRef<number | null>(null);
 
@@ -269,6 +271,9 @@ export function PlayerApp() {
             handNumberRef.current = latest.hand_number;
             setPlayerStatus('idle');
           }
+          const ccCount = [latest.flop_1, latest.flop_2, latest.flop_3, latest.turn, latest.river]
+            .filter(c => c != null).length;
+          setCommunityCardCount(ccCount);
           return fetchHandStatus(gameId!, latest.hand_number, { signal });
         })
         .then(data => {
@@ -339,6 +344,14 @@ export function PlayerApp() {
               onHandBack={handleHandBack}
               handingBack={handingBack}
             />
+            {playerStatus === 'joined' && handNumber && (
+              <PlayerActionButtons
+                gameId={gameId!}
+                handNumber={handNumber}
+                playerName={playerName!}
+                communityCardCount={communityCardCount}
+              />
+            )}
             {captureError && (
               <div style={styles.error}>
                 <p>{captureError}</p>
