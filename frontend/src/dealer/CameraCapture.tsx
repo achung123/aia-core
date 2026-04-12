@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { uploadImage, getDetectionResults } from '../api/client.ts';
 import type { CardDetectionEntry } from '../api/types.ts';
 
@@ -9,10 +9,28 @@ export interface CameraCaptureProps {
   onCancel: () => void;
 }
 
+function formatFileSize(bytes: number): string {
+  if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)} MB`;
+  if (bytes >= 1_000) return `${(bytes / 1_000).toFixed(1)} KB`;
+  return `${bytes} B`;
+}
+
+type Phase = 'idle' | 'preview' | 'uploading' | 'error';
+
 export function CameraCapture({ gameId, targetName, onDetectionResult, onCancel }: CameraCaptureProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [loading, setLoading] = useState(false);
+  const [phase, setPhase] = useState<Phase>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [capturedFile, setCapturedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [resolution, setResolution] = useState<string | null>(null);
+
+  // Clean up blob URL on unmount or when preview changes
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
 
   function triggerInput(): void {
     if (inputRef.current) {
@@ -21,29 +39,53 @@ export function CameraCapture({ gameId, targetName, onDetectionResult, onCancel 
     }
   }
 
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>): Promise<void> {
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>): void {
     const file = e.target.files?.[0];
     if (!file) {
       onCancel();
       return;
     }
 
-    setLoading(true);
+    const url = URL.createObjectURL(file);
+    setCapturedFile(file);
+    setPreviewUrl(url);
+    setResolution(null);
+    setPhase('preview');
+  }
+
+  function handleImageLoad(e: React.SyntheticEvent<HTMLImageElement>): void {
+    const img = e.currentTarget;
+    setResolution(`${img.naturalWidth} × ${img.naturalHeight}`);
+  }
+
+  async function handleUsePhoto(): Promise<void> {
+    if (!capturedFile) return;
+
+    setPhase('uploading');
     setError(null);
 
     try {
-      const upload = await uploadImage(gameId, file);
+      const upload = await uploadImage(gameId, capturedFile);
       const detections = await getDetectionResults(gameId, upload.upload_id);
-      onDetectionResult(targetName, detections.detections, file);
+      onDetectionResult(targetName, detections.detections, capturedFile);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Upload failed';
       setError(message);
-      setLoading(false);
+      setPhase('error');
     }
+  }
+
+  function handleRetake(): void {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setCapturedFile(null);
+    setPreviewUrl(null);
+    setResolution(null);
+    setPhase('idle');
   }
 
   function handleRetry(): void {
     setError(null);
+    setPhase('idle');
     triggerInput();
   }
 
@@ -57,29 +99,48 @@ export function CameraCapture({ gameId, targetName, onDetectionResult, onCancel 
         onChange={handleFileChange}
       />
 
-      {!loading && !error && (
+      {phase === 'idle' && (
         <div style={styles.card}>
           <p style={styles.text}>Tap to open camera</p>
           <div style={styles.buttonRow}>
-            <button style={styles.retryButton} onClick={triggerInput}>Open Camera</button>
-            <button style={styles.cancelButton} onClick={onCancel}>Cancel</button>
+            <button style={styles.primaryButton} onClick={triggerInput}>Open Camera</button>
+            <button style={styles.secondaryButton} onClick={onCancel}>Cancel</button>
           </div>
         </div>
       )}
 
-      {loading && !error && (
+      {phase === 'preview' && previewUrl && capturedFile && (
+        <div style={styles.previewCard}>
+          <img
+            src={previewUrl}
+            alt="Captured preview"
+            onLoad={handleImageLoad}
+            style={styles.previewImage}
+          />
+          <div style={styles.infoRow}>
+            <span style={styles.infoText}>{formatFileSize(capturedFile.size)}</span>
+            {resolution && <span style={styles.infoText}>{resolution}</span>}
+          </div>
+          <div style={styles.buttonRow}>
+            <button style={styles.primaryButton} onClick={handleUsePhoto}>Use Photo</button>
+            <button style={styles.secondaryButton} onClick={handleRetake}>Retake</button>
+          </div>
+        </div>
+      )}
+
+      {phase === 'uploading' && (
         <div style={styles.card}>
           <div style={styles.spinner} />
           <p style={styles.text}>Uploading &amp; detecting cards…</p>
         </div>
       )}
 
-      {error && (
+      {phase === 'error' && (
         <div style={styles.card}>
           <p style={styles.errorText}>{error}</p>
           <div style={styles.buttonRow}>
-            <button style={styles.retryButton} onClick={handleRetry}>Retry</button>
-            <button style={styles.cancelButton} onClick={onCancel}>Cancel</button>
+            <button style={styles.primaryButton} onClick={handleRetry}>Retry</button>
+            <button style={styles.secondaryButton} onClick={onCancel}>Cancel</button>
           </div>
         </div>
       )}
@@ -108,6 +169,35 @@ const styles: Record<string, React.CSSProperties> = {
     maxWidth: '320px',
     width: '90%',
   },
+  previewCard: {
+    background: '#fff',
+    borderRadius: '12px',
+    padding: '1rem',
+    textAlign: 'center' as const,
+    maxWidth: '420px',
+    width: '95%',
+    maxHeight: '90vh',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  previewImage: {
+    maxWidth: '100%',
+    maxHeight: '60vh',
+    borderRadius: '8px',
+    objectFit: 'contain' as const,
+  },
+  infoRow: {
+    display: 'flex',
+    gap: '1rem',
+    justifyContent: 'center',
+    margin: '0.5rem 0',
+  },
+  infoText: {
+    fontSize: '0.85rem',
+    color: '#6b7280',
+  },
   spinner: {
     width: '40px',
     height: '40px',
@@ -131,7 +221,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '0.75rem',
     justifyContent: 'center',
   },
-  retryButton: {
+  primaryButton: {
     padding: '0.5rem 1.25rem',
     minHeight: '48px',
     minWidth: '48px',
@@ -143,7 +233,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#fff',
     cursor: 'pointer',
   },
-  cancelButton: {
+  secondaryButton: {
     padding: '0.5rem 1.25rem',
     minHeight: '48px',
     minWidth: '48px',

@@ -52,9 +52,33 @@ export function DetectionReview({ detections, imageUrl, mode, targetName, onConf
 
   const [corrections, setCorrections] = useState<Record<number, string>>({});
   const [pickerIndex, setPickerIndex] = useState<number | null>(null);
+  const [altIndex, setAltIndex] = useState<number | null>(null);
 
   function getCorrectedValue(index: number): string | undefined {
     return corrections[index] || cards[index]?.detected_value;
+  }
+
+  function handleCardTap(index: number): void {
+    const card = cards[index];
+    if (card?.alternatives && card.alternatives.length > 0) {
+      setAltIndex(index);
+      setPickerIndex(null);
+    } else {
+      setPickerIndex(index);
+      setAltIndex(null);
+    }
+  }
+
+  function handleAltSelect(cardValue: string): void {
+    if (altIndex !== null) {
+      setCorrections((prev) => ({ ...prev, [altIndex]: cardValue }));
+      setAltIndex(null);
+    }
+  }
+
+  function handleAllCards(): void {
+    setPickerIndex(altIndex);
+    setAltIndex(null);
   }
 
   function handlePickerSelect(cardCode: string): void {
@@ -94,7 +118,7 @@ export function DetectionReview({ detections, imageUrl, mode, targetName, onConf
             : styles.cardLabel;
           const positionLabel = mode === 'flop' ? POSITION_LABELS_FLOP[i] : (mode === 'turn' ? 'Turn' : (mode === 'river' ? 'River' : null));
           return (
-            <div key={i} style={labelStyle} onClick={() => setPickerIndex(i)}>
+            <div key={i} data-testid={`detection-card-${i}`} style={labelStyle} onClick={() => handleCardTap(i)}>
               {positionLabel && (
                 <span data-testid={`card-position-${i}`} style={styles.positionLabel}>{positionLabel}</span>
               )}
@@ -104,6 +128,29 @@ export function DetectionReview({ detections, imageUrl, mode, targetName, onConf
           );
         })}
       </div>
+
+      {altIndex !== null && cards[altIndex]?.alternatives && (
+        <div data-testid="alternatives-panel" style={styles.altPanel}>
+          <div style={styles.altScroll}>
+            {cards[altIndex].alternatives!.map((alt, i) => {
+              const { rank, suit } = formatCard(alt.value);
+              const color = SUIT_COLORS[suit] || '#1e293b';
+              return (
+                <button
+                  key={i}
+                  data-testid={`alt-card-${i}`}
+                  style={{ ...styles.altButton, color }}
+                  onClick={() => handleAltSelect(alt.value)}
+                >
+                  <span style={styles.altCardText}>{rank}{suit}</span>
+                  <span style={styles.altConfidence}>{Math.round(alt.confidence * 100)}%</span>
+                </button>
+              );
+            })}
+          </div>
+          <button style={styles.allCardsButton} onClick={handleAllCards}>All Cards</button>
+        </div>
+      )}
 
       {pickerIndex !== null && (
         <CardPicker
@@ -220,6 +267,56 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '8px',
     background: '#4f46e5',
     color: '#fff',
+    cursor: 'pointer',
+  },
+  altPanel: {
+    marginBottom: '1rem',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    gap: '0.5rem',
+    overflowX: 'auto' as const,
+  },
+  altScroll: {
+    display: 'flex',
+    gap: '0.5rem',
+    overflowX: 'auto' as const,
+    maxWidth: '100%',
+    padding: '0.25rem',
+  },
+  altButton: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: '48px',
+    minHeight: '48px',
+    padding: '0.5rem 0.75rem',
+    border: '2px solid #a5b4fc',
+    borderRadius: '8px',
+    background: '#eef2ff',
+    cursor: 'pointer',
+    flexShrink: 0,
+    WebkitTapHighlightColor: 'transparent',
+  },
+  altCardText: {
+    fontSize: '1.2rem',
+    fontWeight: 'bold',
+    lineHeight: 1,
+  },
+  altConfidence: {
+    fontSize: '0.7rem',
+    color: '#6b7280',
+    marginTop: '0.15rem',
+  },
+  allCardsButton: {
+    padding: '0.5rem 1rem',
+    fontSize: '0.85rem',
+    fontWeight: '600',
+    border: '1px solid #d1d5db',
+    borderRadius: '6px',
+    background: '#fff',
+    color: '#4f46e5',
     cursor: 'pointer',
   },
 };

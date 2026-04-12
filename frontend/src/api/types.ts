@@ -242,6 +242,11 @@ export interface ImageUploadResponse {
   status: string;
 }
 
+export interface CardAlternative {
+  value: string;
+  confidence: number;
+}
+
 export interface CardDetectionEntry {
   card_position: string;
   detected_value: string;
@@ -250,6 +255,7 @@ export interface CardDetectionEntry {
   bbox_y?: number | null;
   bbox_width?: number | null;
   bbox_height?: number | null;
+  alternatives?: CardAlternative[];
 }
 
 export interface DetectionResultsResponse {

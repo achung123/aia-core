@@ -678,6 +678,13 @@ describe('PlayerApp — camera capture flow', () => {
     Object.defineProperty(fileInput, 'files', { value: [file], writable: false });
     await act(async () => { fileInput.dispatchEvent(new Event('change', { bubbles: true })); });
 
+    // Preview step — click Use Photo to proceed
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain('Use Photo');
+    });
+    const usePhotoBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent === 'Use Photo');
+    await act(async () => { usePhotoBtn!.click(); });
+
     // After upload + detection, should show DetectionReview
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Review Detection');
@@ -724,6 +731,13 @@ describe('PlayerApp — camera capture flow', () => {
     Object.defineProperty(fileInput, 'files', { value: [file], writable: false });
     await act(async () => { fileInput.dispatchEvent(new Event('change', { bubbles: true })); });
 
+    // Preview step — click Use Photo to proceed
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain('Use Photo');
+    });
+    const usePhotoBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent === 'Use Photo');
+    await act(async () => { usePhotoBtn!.click(); });
+
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Review Detection');
     });
@@ -767,6 +781,13 @@ describe('PlayerApp — camera capture flow', () => {
     const file = new File(['img'], 'photo.jpg', { type: 'image/jpeg' });
     Object.defineProperty(fileInput, 'files', { value: [file], writable: false });
     await act(async () => { fileInput.dispatchEvent(new Event('change', { bubbles: true })); });
+
+    // Preview step — click Use Photo to proceed
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain('Use Photo');
+    });
+    const usePhotoBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent === 'Use Photo');
+    await act(async () => { usePhotoBtn!.click(); });
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Review Detection');

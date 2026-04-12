@@ -54,6 +54,16 @@ export function ActiveHandDashboard({
   patchError,
 }: ActiveHandDashboardProps) {
   const [blinds, setBlinds] = useState<{ small_blind: number; big_blind: number } | null>(null);
+  const [isWide, setIsWide] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(min-width: 600px)').matches,
+  );
+
+  useEffect(() => {
+    const mql = window.matchMedia('(min-width: 600px)');
+    const handler = (e: MediaQueryListEvent) => setIsWide(e.matches);
+    mql.addEventListener('change', handler);
+    return () => mql.removeEventListener('change', handler);
+  }, []);
 
   useEffect(() => {
     fetchBlinds(gameId)
@@ -70,9 +80,9 @@ export function ActiveHandDashboard({
   ];
 
   return (
-    <div style={styles.container}>
+    <div style={isWide ? styles.containerWide : styles.container}>
       {/* Blind Info Bar */}
-      <div data-testid="blind-info-bar" style={styles.blindBar}>
+      <div data-testid="blind-info-bar" style={styles.blindBarSticky}>
         <span style={styles.blindLevel}>
           {blinds ? `Blinds: $${blinds.small_blind.toFixed(2)} / $${blinds.big_blind.toFixed(2)}` : 'Blinds: –'}
         </span>
@@ -83,131 +93,138 @@ export function ActiveHandDashboard({
         </span>
       </div>
 
-      {/* Community Board */}
-      <div data-testid="community-board" style={styles.board}>
-        {boardCards.map((card, i) => (
-          <div key={i} data-testid={`board-slot-${i}`} style={{
-            ...styles.boardSlot,
-            ...(card ? styles.boardSlotFilled : {}),
-          }}>
-            {card || ''}
-          </div>
-        ))}
-      </div>
-
-      {/* Street Buttons */}
-      {onBack && (
-        <button data-testid="back-btn" onClick={onBack} style={styles.backButton}>
-          Back to Hands
-        </button>
-      )}
-
-      <div data-testid="street-buttons" style={styles.streetRow}>
-        <button
-          data-testid="flop-tile"
-          style={styles.streetTile}
-          onClick={() => onTileSelect('flop')}
-        >
-          <span style={styles.tileName}>Flop</span>
-          {community.flopRecorded && <span style={styles.check}>✅</span>}
-        </button>
-        <button
-          data-testid="turn-tile"
-          style={{
-            ...styles.streetTile,
-            ...(community.flopRecorded ? {} : styles.streetTileDisabled),
-          }}
-          onClick={() => community.flopRecorded && onTileSelect('turn')}
-          disabled={!community.flopRecorded}
-        >
-          <span style={styles.tileName}>Turn</span>
-          {community.turnRecorded && <span style={styles.check}>✅</span>}
-        </button>
-        <button
-          data-testid="river-tile"
-          style={{
-            ...styles.streetTile,
-            ...(community.turnRecorded ? {} : styles.streetTileDisabled),
-          }}
-          onClick={() => community.turnRecorded && onTileSelect('river')}
-          disabled={!community.turnRecorded}
-        >
-          <span style={styles.tileName}>River</span>
-          {community.riverRecorded && <span style={styles.check}>✅</span>}
-        </button>
-        <button
-          data-testid="showdown-btn"
-          style={{
-            ...styles.streetTile,
-            ...(isShowdownEnabled(community, players) ? {} : styles.streetTileDisabled),
-          }}
-          onClick={() => isShowdownEnabled(community, players) && onShowdown?.()}
-          disabled={!isShowdownEnabled(community, players)}
-        >
-          <span style={styles.tileName}>Showdown</span>
-        </button>
-      </div>
-
-      {/* Player Tiles */}
-      <div data-testid="player-list" style={styles.playerList}>
-        {players.map((p) => {
-          const needsAction = p.status === 'handed_back';
-          const showOutcomeBtn = onDirectOutcome && needsAction;
-          const showSitOutBtn = onMarkNotPlaying && (p.status === 'playing' || p.status === 'idle');
-          return (
-            <div
-              key={p.name}
-              data-testid={`player-row-${p.name}`}
-              style={{
-                ...styles.playerRow,
-                backgroundColor: statusColors[p.status] || '#ffffff',
-                ...(needsAction ? { borderColor: '#f59e0b', boxShadow: '0 0 0 2px #fbbf24' } : {}),
-              }}
-            >
-              <button
-                data-testid={`player-tile-${p.name}`}
-                style={styles.playerNameCol}
-                onClick={() => onTileSelect(p.name)}
-              >
-                <span style={styles.tileName}>{p.name}</span>
-                {p.recorded && <span style={styles.inlineCheck}>✅</span>}
-              </button>
-              <div style={styles.statusCol}>
-                <span style={styles.statusText}>
-                  {needsAction ? '⚠️ Decide outcome' : formatStatus(p.status, p.outcomeStreet)}
-                </span>
-                {showOutcomeBtn && (
-                  <button
-                    data-testid={`outcome-btn-${p.name}`}
-                    style={styles.outcomeButton}
-                    onClick={() => onDirectOutcome(p.name)}
-                  >
-                    📋
-                  </button>
-                )}
-                {showSitOutBtn && (
-                  <button
-                    data-testid={`sitout-btn-${p.name}`}
-                    style={styles.sitOutButton}
-                    onClick={() => onMarkNotPlaying(p.name)}
-                  >
-                    Sit Out
-                  </button>
-                )}
+      <div data-testid="active-hand-layout" style={isWide ? styles.splitLayout : styles.stackedLayout}>
+        {/* Board Panel — community cards + street buttons */}
+        <div data-testid="board-panel" style={isWide ? styles.panelScroll : styles.panelStack}>
+          {/* Community Board */}
+          <div data-testid="community-board" style={styles.board}>
+            {boardCards.map((card, i) => (
+              <div key={i} data-testid={`board-slot-${i}`} style={{
+                ...styles.boardSlot,
+                ...(card ? styles.boardSlotFilled : {}),
+              }}>
+                {card || ''}
               </div>
-            </div>
-          );
-        })}
-      </div>
+            ))}
+          </div>
 
-      {canFinish && (
-        <button
-          style={styles.finishButton}
-          onClick={onFinishHand}
-        >
-          Finish Hand
-        </button>
-      )}
+          {/* Street Buttons */}
+          {onBack && (
+            <button data-testid="back-btn" onClick={onBack} style={styles.backButton}>
+              Back to Hands
+            </button>
+          )}
+
+          <div data-testid="street-buttons" style={styles.streetRow}>
+            <button
+              data-testid="flop-tile"
+              style={styles.streetTile}
+              onClick={() => onTileSelect('flop')}
+            >
+              <span style={styles.tileName}>Flop</span>
+              {community.flopRecorded && <span style={styles.check}>✅</span>}
+            </button>
+            <button
+              data-testid="turn-tile"
+              style={{
+                ...styles.streetTile,
+                ...(community.flopRecorded ? {} : styles.streetTileDisabled),
+              }}
+              onClick={() => community.flopRecorded && onTileSelect('turn')}
+              disabled={!community.flopRecorded}
+            >
+              <span style={styles.tileName}>Turn</span>
+              {community.turnRecorded && <span style={styles.check}>✅</span>}
+            </button>
+            <button
+              data-testid="river-tile"
+              style={{
+                ...styles.streetTile,
+                ...(community.turnRecorded ? {} : styles.streetTileDisabled),
+              }}
+              onClick={() => community.turnRecorded && onTileSelect('river')}
+              disabled={!community.turnRecorded}
+            >
+              <span style={styles.tileName}>River</span>
+              {community.riverRecorded && <span style={styles.check}>✅</span>}
+            </button>
+            <button
+              data-testid="showdown-btn"
+              style={{
+                ...styles.streetTile,
+                ...(isShowdownEnabled(community, players) ? {} : styles.streetTileDisabled),
+              }}
+              onClick={() => isShowdownEnabled(community, players) && onShowdown?.()}
+              disabled={!isShowdownEnabled(community, players)}
+            >
+              <span style={styles.tileName}>Showdown</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Player Panel — player tiles + finish button */}
+        <div data-testid="player-panel" style={isWide ? styles.panelScroll : styles.panelStack}>
+          <div data-testid="player-list" style={styles.playerList}>
+            {players.map((p) => {
+              const needsAction = p.status === 'handed_back';
+              const showOutcomeBtn = onDirectOutcome && needsAction;
+              const showSitOutBtn = onMarkNotPlaying && (p.status === 'playing' || p.status === 'idle');
+              return (
+                <div
+                  key={p.name}
+                  data-testid={`player-row-${p.name}`}
+                  style={{
+                    ...styles.playerRow,
+                    backgroundColor: statusColors[p.status] || '#ffffff',
+                    ...(needsAction ? { borderColor: '#f59e0b', boxShadow: '0 0 0 2px #fbbf24' } : {}),
+                  }}
+                >
+                  <button
+                    data-testid={`player-tile-${p.name}`}
+                    style={styles.playerNameCol}
+                    onClick={() => onTileSelect(p.name)}
+                  >
+                    <span style={styles.tileName}>{p.name}</span>
+                    {p.recorded && <span style={styles.inlineCheck}>✅</span>}
+                  </button>
+                  <div style={styles.statusCol}>
+                    <span style={styles.statusText}>
+                      {needsAction ? '⚠️ Decide outcome' : formatStatus(p.status, p.outcomeStreet)}
+                    </span>
+                    {showOutcomeBtn && (
+                      <button
+                        data-testid={`outcome-btn-${p.name}`}
+                        style={styles.outcomeButton}
+                        onClick={() => onDirectOutcome(p.name)}
+                      >
+                        📋
+                      </button>
+                    )}
+                    {showSitOutBtn && (
+                      <button
+                        data-testid={`sitout-btn-${p.name}`}
+                        style={styles.sitOutButton}
+                        onClick={() => onMarkNotPlaying(p.name)}
+                      >
+                        Sit Out
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {canFinish && (
+            <button
+              style={styles.finishButton}
+              onClick={onFinishHand}
+            >
+              Finish Hand
+            </button>
+          )}
+        </div>
+      </div>
 
       {patchError && (
         <div style={styles.toast}>{patchError}</div>
@@ -222,7 +239,15 @@ const styles: Record<string, React.CSSProperties> = {
     margin: '0 auto',
     padding: '1rem',
   },
-  blindBar: {
+  containerWide: {
+    display: 'flex',
+    flexDirection: 'column',
+    height: '100vh',
+    maxWidth: '600px',
+    margin: '0 auto',
+    padding: '1rem',
+  },
+  blindBarSticky: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -233,6 +258,28 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: '0.75rem',
     fontSize: '0.9rem',
     fontWeight: 600,
+    position: 'sticky',
+    top: 0,
+    zIndex: 10,
+  },
+  splitLayout: {
+    display: 'flex',
+    flexDirection: 'column',
+    flex: 1,
+    minHeight: 0,
+  },
+  stackedLayout: {
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  panelScroll: {
+    flex: 1,
+    overflowY: 'auto',
+    minHeight: 0,
+    padding: '0.25rem 0',
+  },
+  panelStack: {
+    padding: '0.25rem 0',
   },
   blindLevel: {
     whiteSpace: 'nowrap',

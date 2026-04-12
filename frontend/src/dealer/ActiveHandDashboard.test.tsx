@@ -298,4 +298,80 @@ describe('ActiveHandDashboard', () => {
     const btn = screen.queryByText('Finish Hand');
     expect(btn).toBeNull();
   });
+
+  // T-053: Split-screen dealer input layout
+  describe('Split-screen layout', () => {
+    function mockMatchMedia(matches: boolean) {
+      Object.defineProperty(window, 'matchMedia', {
+        writable: true,
+        value: vi.fn().mockImplementation((query: string) => ({
+          matches,
+          media: query,
+          onchange: null,
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+          addListener: vi.fn(),
+          removeListener: vi.fn(),
+          dispatchEvent: vi.fn(),
+        })),
+      });
+    }
+
+    // AC1: ≥600px splits into board-panel (top) and player-panel (bottom)
+    it('renders split layout panels with independent scroll on wide viewports', () => {
+      mockMatchMedia(true);
+      render(<ActiveHandDashboard {...defaultProps} />);
+      const boardPanel = screen.getByTestId('board-panel');
+      const playerPanel = screen.getByTestId('player-panel');
+      expect(boardPanel).toBeTruthy();
+      expect(playerPanel).toBeTruthy();
+      // AC3: independent scroll
+      expect(boardPanel.style.overflowY).toBe('auto');
+      expect(playerPanel.style.overflowY).toBe('auto');
+    });
+
+    // AC2: <600px stacked single-column (no split overflow)
+    it('renders stacked layout without split scroll on narrow viewports', () => {
+      mockMatchMedia(false);
+      render(<ActiveHandDashboard {...defaultProps} />);
+      const boardPanel = screen.getByTestId('board-panel');
+      const playerPanel = screen.getByTestId('player-panel');
+      // In narrow mode, panels exist but no independent scroll
+      expect(boardPanel.style.overflowY).not.toBe('auto');
+      expect(playerPanel.style.overflowY).not.toBe('auto');
+    });
+
+    // AC4: Blind info bar sticky
+    it('blind info bar has sticky positioning', () => {
+      mockMatchMedia(true);
+      render(<ActiveHandDashboard {...defaultProps} />);
+      const bar = screen.getByTestId('blind-info-bar');
+      expect(bar.style.position).toBe('sticky');
+      expect(bar.style.top).toBe('0px');
+    });
+
+    // AC5: CSS flexbox layout
+    it('uses flexbox for the split layout container', () => {
+      mockMatchMedia(true);
+      render(<ActiveHandDashboard {...defaultProps} />);
+      const layout = screen.getByTestId('active-hand-layout');
+      expect(layout.style.display).toBe('flex');
+    });
+
+    // AC1+AC2: container fills viewport height on wide, normal on narrow
+    it('wide container fills viewport height', () => {
+      mockMatchMedia(true);
+      render(<ActiveHandDashboard {...defaultProps} />);
+      const layout = screen.getByTestId('active-hand-layout');
+      expect(layout.style.flexDirection).toBe('column');
+      expect(layout.style.flex).toContain('1');
+    });
+
+    it('narrow container does not force split flex', () => {
+      mockMatchMedia(false);
+      render(<ActiveHandDashboard {...defaultProps} />);
+      const layout = screen.getByTestId('active-hand-layout');
+      expect(layout.style.flex).not.toBe('1');
+    });
+  });
 });
