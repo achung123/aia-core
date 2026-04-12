@@ -1,14 +1,27 @@
-const SUITS = [
+import type React from 'react';
+
+interface Suit {
+  code: string;
+  symbol: string;
+  color: string;
+}
+
+const SUITS: Suit[] = [
   { code: 's', symbol: '♠', color: '#1e293b' },
   { code: 'h', symbol: '♥', color: '#dc2626' },
   { code: 'd', symbol: '♦', color: '#dc2626' },
   { code: 'c', symbol: '♣', color: '#1e293b' },
 ];
 
-const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'] as const;
 
-export function CardPicker({ onSelect, onClose }) {
-  function handleOverlayClick(e) {
+export interface CardPickerProps {
+  onSelect: (cardCode: string) => void;
+  onClose: () => void;
+}
+
+export function CardPicker({ onSelect, onClose }: CardPickerProps) {
+  function handleOverlayClick(e: React.MouseEvent<HTMLDivElement>) {
     if (e.target === e.currentTarget) onClose();
   }
 
@@ -37,7 +50,7 @@ export function CardPicker({ onSelect, onClose }) {
   );
 }
 
-const styles = {
+const styles: Record<string, React.CSSProperties> = {
   overlay: {
     position: 'fixed',
     inset: 0,

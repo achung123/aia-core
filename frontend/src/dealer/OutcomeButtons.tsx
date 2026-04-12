@@ -1,13 +1,25 @@
-import { useState } from 'preact/hooks';
+import { useState } from 'react';
+import type React from 'react';
 
-export function OutcomeButtons({ playerName, onSelect, onCancel, error, submitting }) {
-  const [selectedResult, setSelectedResult] = useState(null);
+export type OutcomeResult = 'won' | 'folded' | 'lost' | 'not_playing';
+export type OutcomeStreet = 'preflop' | 'flop' | 'turn' | 'river';
 
-  function handleStreetSelect(street) {
-    onSelect(selectedResult, street);
+export interface OutcomeButtonsProps {
+  playerName: string;
+  onSelect: (result: OutcomeResult, street: OutcomeStreet | null) => void;
+  onCancel?: () => void;
+  error?: string | null;
+  submitting?: boolean;
+}
+
+export function OutcomeButtons({ playerName, onSelect, onCancel, error, submitting }: OutcomeButtonsProps) {
+  const [selectedResult, setSelectedResult] = useState<OutcomeResult | null>(null);
+
+  function handleStreetSelect(street: OutcomeStreet): void {
+    onSelect(selectedResult!, street);
   }
 
-  function handleNotPlaying() {
+  function handleNotPlaying(): void {
     onSelect('not_playing', null);
   }
 
@@ -93,7 +105,7 @@ export function OutcomeButtons({ playerName, onSelect, onCancel, error, submitti
   );
 }
 
-const styles = {
+const styles: Record<string, React.CSSProperties> = {
   container: {
     maxWidth: '480px',
     margin: '0 auto',

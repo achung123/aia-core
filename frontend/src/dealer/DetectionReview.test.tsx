@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 
-vi.mock('./CardPicker.jsx', () => ({
+vi.mock('./CardPicker.tsx', () => ({
   CardPicker: () => <div data-testid="card-picker" />,
 }));
 
