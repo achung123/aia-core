@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { fetchHands, startHand, completeGame } from '../api/client.ts';
 import { QRCodeDisplay } from './QRCodeDisplay.tsx';
+import { GamePlayerManagement } from './GamePlayerManagement.tsx';
 import type { HandResponse, PlayerHandResponse } from '../api/types.ts';
 
 const resultColors: Record<string, string> = {
@@ -109,6 +110,7 @@ export function HandDashboard({ gameId, players: playerNames, onSelectHand, onBa
       <button data-testid="back-btn" onClick={onBack} style={styles.backButton}>
         Back to Games
       </button>
+      <GamePlayerManagement gameId={gameId} />
       <div data-testid="hand-list" style={styles.handList}>
         {hands.map((hand) => (
           <div

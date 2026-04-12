@@ -14,6 +14,11 @@ vi.mock('./QRCodeDisplay.jsx', () => ({
     visible ? <div data-testid="qr-code-display">QR:{gameId}</div> : null,
 }));
 
+vi.mock('./GamePlayerManagement.tsx', () => ({
+  GamePlayerManagement: ({ gameId }: { gameId: number }) =>
+    <div data-testid="game-player-management">Players:{gameId}</div>,
+}));
+
 import { fetchHands, startHand, completeGame } from '../api/client.ts';
 
 const mockedFetchHands = fetchHands as ReturnType<typeof vi.fn>;

@@ -17,12 +17,20 @@ export interface GameSessionListItem {
   winners: string[];
 }
 
+export interface PlayerInfo {
+  name: string;
+  is_active: boolean;
+  seat_number: number | null;
+  buy_in: number | null;
+}
+
 export interface GameSessionResponse {
   game_id: number;
   game_date: string;
   status: string;
   created_at: string;
   player_names: string[];
+  players?: PlayerInfo[];
   hand_count: number;
   winners: string[];
 }

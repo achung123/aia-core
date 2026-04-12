@@ -51,6 +51,11 @@ vi.mock('../poker/evaluator.js', () => ({
   calculateEquity: vi.fn(() => []),
 }));
 
+vi.mock('./GamePlayerManagement.tsx', () => ({
+  GamePlayerManagement: ({ gameId }: { gameId: number }) =>
+    <div data-testid="game-player-management">Players:{gameId}</div>,
+}));
+
 // Use real dealerState (no mock override) — initialState.currentStep should be 'gameSelector'
 
 import {

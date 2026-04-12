@@ -97,6 +97,11 @@ vi.mock('../poker/evaluator.js', () => ({
   calculateEquity: vi.fn(() => []),
 }));
 
+vi.mock('./GamePlayerManagement.tsx', () => ({
+  GamePlayerManagement: ({ gameId }: { gameId: number }) =>
+    <div data-testid="game-player-management">Players:{gameId}</div>,
+}));
+
 import { startHand as startHandApi, addPlayerToHand, updateHolecards, updateFlop, updateTurn, updateRiver, patchPlayerResult, fetchHands, fetchHand, fetchHandStatus, fetchSessions, fetchEquity } from '../api/client.ts';
 import { DealerApp } from './DealerApp.tsx';
 
