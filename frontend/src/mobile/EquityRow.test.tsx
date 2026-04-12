@@ -1,26 +1,15 @@
 /** @vitest-environment happy-dom */
 import { describe, it, expect, afterEach } from 'vitest';
-import { createRoot } from 'react-dom/client';
-import type { Root } from 'react-dom/client';
-import { act } from 'react';
+import { render, cleanup } from '@testing-library/react';
 import { EquityRow } from './EquityRow.tsx';
 
-let root: Root | null = null;
-let container: HTMLDivElement | null = null;
-
-function renderToContainer(element: React.ReactElement): HTMLDivElement {
-  container = document.createElement('div');
-  root = createRoot(container);
-  act(() => { root!.render(element); });
+function renderToContainer(element: React.ReactElement): HTMLElement {
+  const { container } = render(element);
   return container;
 }
 
 afterEach(() => {
-  if (root) {
-    act(() => { root!.unmount(); });
-    root = null;
-  }
-  container = null;
+  cleanup();
 });
 
 describe('EquityRow', () => {

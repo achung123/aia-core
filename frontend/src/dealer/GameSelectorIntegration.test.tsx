@@ -1,7 +1,6 @@
 /** @vitest-environment happy-dom */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createRoot } from 'react-dom/client';
-import { act } from 'react';
+import { render, cleanup } from '@testing-library/react';
 import { useDealerStore } from '../stores/dealerStore.ts';
 
 vi.mock('../api/client.js', () => ({
@@ -63,14 +62,15 @@ import {
 } from '../api/client.ts';
 import { DealerApp } from './DealerApp.tsx';
 
-let activeRoot = null;
+const mockedCreateSession = createSession as ReturnType<typeof vi.fn>;
+const mockedFetchPlayers = fetchPlayers as ReturnType<typeof vi.fn>;
+const mockedFetchSessions = fetchSessions as ReturnType<typeof vi.fn>;
+const mockedFetchHands = fetchHands as ReturnType<typeof vi.fn>;
+const mockedFetchGame = fetchGame as ReturnType<typeof vi.fn>;
+const mockedFetchHand = fetchHand as ReturnType<typeof vi.fn>;
 
-function renderToContainer(vnode) {
-  const container = document.createElement('div');
-  act(() => {
-    activeRoot = createRoot(container);
-    activeRoot.render(vnode);
-  });
+function renderApp(): HTMLElement {
+  const { container } = render(<DealerApp />);
   return container;
 }
 
@@ -88,13 +88,13 @@ describe('GameSelector integration in DealerApp', () => {
       gameDate: null,
       gameMode: 'dealer_centric',
     });
-    fetchSessions.mockResolvedValue([]);
-    fetchPlayers.mockResolvedValue([
+    mockedFetchSessions.mockResolvedValue([]);
+    mockedFetchPlayers.mockResolvedValue([
       { player_id: 1, name: 'Alice' },
       { player_id: 2, name: 'Bob' },
     ]);
-    fetchHands.mockResolvedValue([]);
-    fetchHand.mockResolvedValue({
+    mockedFetchHands.mockResolvedValue([]);
+    mockedFetchHand.mockResolvedValue({
       hand_number: 1,
       flop_1: null, flop_2: null, flop_3: null,
       turn: null, river: null,
@@ -103,12 +103,7 @@ describe('GameSelector integration in DealerApp', () => {
   });
 
   afterEach(() => {
-    if (activeRoot) {
-      act(() => {
-        activeRoot?.unmount();
-        activeRoot = null;
-      });
-    }
+    cleanup();
     sessionStorage.clear();
   });
 
@@ -117,7 +112,7 @@ describe('GameSelector integration in DealerApp', () => {
   });
 
   it('renders GameSelector on initial load', async () => {
-    const container = renderToContainer(<DealerApp />);
+    const container = renderApp();
 
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="new-game-btn"]')).not.toBeNull();
@@ -126,13 +121,13 @@ describe('GameSelector integration in DealerApp', () => {
   });
 
   it('tapping New Game transitions to GameCreateForm', async () => {
-    const container = renderToContainer(<DealerApp />);
+    const container = renderApp();
 
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="new-game-btn"]')).not.toBeNull();
     });
 
-    container.querySelector('[data-testid="new-game-btn"]').click();
+    container.querySelector<HTMLElement>('[data-testid="new-game-btn"]')!.click();
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('New Game');
@@ -142,13 +137,13 @@ describe('GameSelector integration in DealerApp', () => {
   });
 
   it('after game creation, transitions to HandDashboard', async () => {
-    createSession.mockResolvedValue({
+    mockedCreateSession.mockResolvedValue({
       game_id: 99,
       player_names: ['Alice', 'Bob'],
       game_date: '2026-04-09',
     });
 
-    const container = renderToContainer(<DealerApp />);
+    const container = renderApp();
 
     // Start at GameSelector
     await vi.waitFor(() => {
@@ -156,7 +151,7 @@ describe('GameSelector integration in DealerApp', () => {
     });
 
     // Go to GameCreateForm
-    container.querySelector('[data-testid="new-game-btn"]').click();
+    container.querySelector<HTMLElement>('[data-testid="new-game-btn"]')!.click();
     await vi.waitFor(() => {
       expect(container.querySelector('input[type="date"]')).not.toBeNull();
     });
@@ -169,21 +164,21 @@ describe('GameSelector integration in DealerApp', () => {
     });
 
     // Select 2 players
-    Array.from(container.querySelectorAll('button[type="button"]'))
-      .find(b => b.textContent === 'Alice').click();
-    Array.from(container.querySelectorAll('button[type="button"]'))
-      .find(b => b.textContent === 'Bob').click();
+    (Array.from(container.querySelectorAll('button[type="button"]'))
+      .find(b => b.textContent === 'Alice') as HTMLButtonElement).click();
+    (Array.from(container.querySelectorAll('button[type="button"]'))
+      .find(b => b.textContent === 'Bob') as HTMLButtonElement).click();
 
     // Wait for submit button to become enabled
     await vi.waitFor(() => {
       const btn = Array.from(container.querySelectorAll('button[type="submit"]'))
-        .find(b => b.textContent.includes('Create Game'));
+        .find(b => b.textContent?.includes('Create Game'));
       expect(btn).not.toBeUndefined();
-      expect(btn.disabled).toBe(false);
+      expect((btn as HTMLButtonElement).disabled).toBe(false);
     });
 
     // Submit the form (happy-dom doesn't trigger form submit from button.click)
-    container.querySelector('form').dispatchEvent(
+    container.querySelector('form')!.dispatchEvent(
       new Event('submit', { bubbles: true, cancelable: true })
     );
 
@@ -194,10 +189,10 @@ describe('GameSelector integration in DealerApp', () => {
   });
 
   it('clicking an existing game card transitions to HandDashboard', async () => {
-    fetchSessions.mockResolvedValue([
+    mockedFetchSessions.mockResolvedValue([
       { game_id: 42, game_date: '2026-04-08', status: 'active', player_count: 3, hand_count: 5 },
     ]);
-    fetchGame.mockResolvedValue({
+    mockedFetchGame.mockResolvedValue({
       game_id: 42,
       game_date: '2026-04-08',
       status: 'active',
@@ -205,7 +200,7 @@ describe('GameSelector integration in DealerApp', () => {
       hand_count: 5,
     });
 
-    const container = renderToContainer(<DealerApp />);
+    const container = renderApp();
 
     // Wait for game card to appear
     await vi.waitFor(() => {
@@ -213,7 +208,7 @@ describe('GameSelector integration in DealerApp', () => {
     });
 
     // Click the game card
-    container.querySelector('[data-testid="game-card"]').click();
+    container.querySelector<HTMLElement>('[data-testid="game-card"]')!.click();
 
     // Should transition to HandDashboard
     await vi.waitFor(() => {
@@ -222,27 +217,27 @@ describe('GameSelector integration in DealerApp', () => {
   });
 
   it('selecting existing game fetches players and shows them on playerGrid', async () => {
-    fetchSessions.mockResolvedValue([
+    mockedFetchSessions.mockResolvedValue([
       { game_id: 42, game_date: '2026-04-08', status: 'active', player_count: 3, hand_count: 1 },
     ]);
-    fetchGame.mockResolvedValue({
+    mockedFetchGame.mockResolvedValue({
       game_id: 42,
       game_date: '2026-04-08',
       status: 'active',
       player_names: ['Alice', 'Bob', 'Charlie'],
       hand_count: 1,
     });
-    fetchHands.mockResolvedValue([
+    mockedFetchHands.mockResolvedValue([
       { hand_number: 1, hand_id: 1, player_hands: [] },
     ]);
 
-    const container = renderToContainer(<DealerApp />);
+    const container = renderApp();
 
     // Select the game
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="game-card"]')).not.toBeNull();
     });
-    container.querySelector('[data-testid="game-card"]').click();
+    container.querySelector<HTMLElement>('[data-testid="game-card"]')!.click();
 
     // Wait for dashboard
     await vi.waitFor(() => {
@@ -250,7 +245,7 @@ describe('GameSelector integration in DealerApp', () => {
     });
 
     // Click the hand to go to playerGrid
-    container.querySelector('[data-testid="hand-row"]').click();
+    container.querySelector<HTMLElement>('[data-testid="hand-row"]')!.click();
 
     // Player tiles should be visible
     await vi.waitFor(() => {
@@ -261,23 +256,23 @@ describe('GameSelector integration in DealerApp', () => {
   });
 
   it('selecting existing hand hydrates player tiles with terminal state', async () => {
-    fetchSessions.mockResolvedValue([
+    mockedFetchSessions.mockResolvedValue([
       { game_id: 42, game_date: '2026-04-08', status: 'active', player_count: 2, hand_count: 1 },
     ]);
-    fetchGame.mockResolvedValue({
+    mockedFetchGame.mockResolvedValue({
       game_id: 42,
       game_date: '2026-04-08',
       status: 'active',
       player_names: ['Alice', 'Bob'],
       hand_count: 1,
     });
-    fetchHands.mockResolvedValue([
+    mockedFetchHands.mockResolvedValue([
       { hand_number: 1, hand_id: 1, player_hands: [
         { player_hand_id: 1, player_name: 'Alice', result: 'won' },
         { player_hand_id: 2, player_name: 'Bob', result: 'lost' },
       ]},
     ]);
-    fetchHand.mockResolvedValue({
+    mockedFetchHand.mockResolvedValue({
       hand_number: 1,
       flop_1: '2H', flop_2: '3C', flop_3: '5D',
       turn: 'JS', river: null,
@@ -287,13 +282,13 @@ describe('GameSelector integration in DealerApp', () => {
       ],
     });
 
-    const container = renderToContainer(<DealerApp />);
+    const container = renderApp();
 
     // Select the game
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="game-card"]')).not.toBeNull();
     });
-    container.querySelector('[data-testid="game-card"]').click();
+    container.querySelector<HTMLElement>('[data-testid="game-card"]')!.click();
 
     // Wait for dashboard with hand row
     await vi.waitFor(() => {
@@ -301,38 +296,38 @@ describe('GameSelector integration in DealerApp', () => {
     });
 
     // Click the hand
-    container.querySelector('[data-testid="hand-row"]').click();
+    container.querySelector<HTMLElement>('[data-testid="hand-row"]')!.click();
 
     // Player tiles should show terminal status, not "playing"
     await vi.waitFor(() => {
       const aliceRow = container.querySelector('[data-testid="player-row-Alice"]');
       expect(aliceRow).not.toBeNull();
-      expect(aliceRow.textContent).toContain('won');
+      expect(aliceRow!.textContent).toContain('won');
 
       const bobRow = container.querySelector('[data-testid="player-row-Bob"]');
       expect(bobRow).not.toBeNull();
-      expect(bobRow.textContent).toContain('lost');
+      expect(bobRow!.textContent).toContain('lost');
     });
 
     // Community should show as recorded (check mark on flop tile)
     const flopTile = container.querySelector('[data-testid="flop-tile"]');
-    expect(flopTile.textContent).toContain('✅');
+    expect(flopTile!.textContent).toContain('✅');
   });
 
   it('HandDashboard Back button returns to GameSelector', async () => {
-    createSession.mockResolvedValue({
+    mockedCreateSession.mockResolvedValue({
       game_id: 99,
       player_names: ['Alice', 'Bob'],
       game_date: '2026-04-09',
     });
 
-    const container = renderToContainer(<DealerApp />);
+    const container = renderApp();
 
     // Navigate: GameSelector → Create → Dashboard
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="new-game-btn"]')).not.toBeNull();
     });
-    container.querySelector('[data-testid="new-game-btn"]').click();
+    container.querySelector<HTMLElement>('[data-testid="new-game-btn"]')!.click();
     await vi.waitFor(() => {
       expect(container.querySelector('input[type="date"]')).not.toBeNull();
     });
@@ -344,18 +339,18 @@ describe('GameSelector integration in DealerApp', () => {
     });
 
     // Select players
-    Array.from(container.querySelectorAll('button[type="button"]'))
-      .find(b => b.textContent === 'Alice').click();
-    Array.from(container.querySelectorAll('button[type="button"]'))
-      .find(b => b.textContent === 'Bob').click();
+    (Array.from(container.querySelectorAll('button[type="button"]'))
+      .find(b => b.textContent === 'Alice') as HTMLButtonElement).click();
+    (Array.from(container.querySelectorAll('button[type="button"]'))
+      .find(b => b.textContent === 'Bob') as HTMLButtonElement).click();
 
     // Wait for submit to be enabled and click
     await vi.waitFor(() => {
       const btn = Array.from(container.querySelectorAll('button[type="submit"]'))
-        .find(b => b.textContent.includes('Create Game'));
-      expect(btn.disabled).toBe(false);
+        .find(b => b.textContent?.includes('Create Game'));
+      expect((btn as HTMLButtonElement).disabled).toBe(false);
     });
-    container.querySelector('form').dispatchEvent(
+    container.querySelector('form')!.dispatchEvent(
       new Event('submit', { bubbles: true, cancelable: true })
     );
 
@@ -364,7 +359,7 @@ describe('GameSelector integration in DealerApp', () => {
     });
 
     // Click Back — should return to GameSelector
-    container.querySelector('[data-testid="back-btn"]').click();
+    container.querySelector<HTMLElement>('[data-testid="back-btn"]')!.click();
 
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="new-game-btn"]')).not.toBeNull();

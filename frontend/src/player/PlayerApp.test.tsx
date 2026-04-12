@@ -1,7 +1,6 @@
 /** @vitest-environment happy-dom */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createRoot } from 'react-dom/client';
-import type { Root } from 'react-dom/client';
+import { render, cleanup } from '@testing-library/react';
 import { act } from 'react';
 import { PlayerApp } from './PlayerApp.tsx';
 
@@ -36,12 +35,8 @@ const mockGetDetectionResults = getDetectionResults as ReturnType<typeof vi.fn>;
 const mockUpdateHolecards = updateHolecards as ReturnType<typeof vi.fn>;
 const mockPatchPlayerResult = patchPlayerResult as ReturnType<typeof vi.fn>;
 
-let root: Root | null = null;
-
-function renderToContainer(element: React.ReactElement): HTMLDivElement {
-  const container = document.createElement('div');
-  root = createRoot(container);
-  act(() => { root!.render(element); });
+function renderToContainer(element: React.ReactElement): HTMLElement {
+  const { container } = render(element);
   return container;
 }
 
@@ -62,7 +57,7 @@ describe('PlayerApp', () => {
   });
 
   afterEach(() => {
-    if (root) { act(() => { root!.unmount(); }); root = null; }
+    cleanup();
     window.location.hash = originalHash;
   });
 
@@ -199,7 +194,7 @@ describe('PlayerApp — name picker', () => {
   });
 
   afterEach(() => {
-    if (root) { act(() => { root!.unmount(); }); root = null; }
+    cleanup();
     window.location.hash = originalHash;
   });
 
@@ -344,7 +339,7 @@ describe('PlayerApp — name picker', () => {
 });
 
 /* ---- Helper: navigate to playing step ---- */
-async function goToPlaying(container: HTMLDivElement, playerIndex = 1, { hands, handStatus }: { hands?: { hand_number: number }[]; handStatus?: Record<string, unknown> } = {}) {
+async function goToPlaying(playerIndex = 1, { hands, handStatus }: { hands?: { hand_number: number }[]; handStatus?: Record<string, unknown> } = {}): Promise<HTMLElement> {
   mockFetchSessions.mockResolvedValue(SESSIONS);
   mockFetchGame.mockResolvedValue(GAME_DETAIL);
   mockFetchHands.mockResolvedValue(hands || [{ hand_number: 1 }]);
@@ -365,8 +360,7 @@ async function goToPlaying(container: HTMLDivElement, playerIndex = 1, { hands, 
     });
   }
 
-  root = createRoot(container);
-  act(() => { root!.render(<PlayerApp />); });
+  const { container } = render(<PlayerApp />);
   await vi.waitFor(() => {
     expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(2);
   });
@@ -375,6 +369,7 @@ async function goToPlaying(container: HTMLDivElement, playerIndex = 1, { hands, 
     expect(container.querySelectorAll('[data-testid="player-name-btn"]').length).toBe(3);
   });
   act(() => { container.querySelectorAll('[data-testid="player-name-btn"]')[playerIndex].dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+  return container;
 }
 
 const HAND_STATUS_IDLE = {
@@ -417,14 +412,13 @@ describe('PlayerApp — polling and status', () => {
   });
 
   afterEach(() => {
-    if (root) { act(() => { root!.unmount(); }); root = null; }
+    cleanup();
     vi.useRealTimers();
     window.location.hash = originalHash;
   });
 
   it('fetches hands list and starts polling hand status after name selection', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container);
+    const container = await goToPlaying();
 
     await vi.waitFor(() => {
       expect(mockFetchHands).toHaveBeenCalledWith(3, expect.objectContaining({ signal: expect.any(AbortSignal) }));
@@ -436,8 +430,7 @@ describe('PlayerApp — polling and status', () => {
   });
 
   it('polls hand status every 3 seconds', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container);
+    const container = await goToPlaying();
 
     await vi.waitFor(() => {
       expect(mockFetchHandStatus).toHaveBeenCalledTimes(1);
@@ -456,16 +449,14 @@ describe('PlayerApp — polling and status', () => {
   });
 
   it('stops polling on unmount (no leaked intervals)', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container);
+    const container = await goToPlaying();
 
     await vi.waitFor(() => {
       expect(mockFetchHandStatus).toHaveBeenCalledTimes(1);
     });
 
     // Unmount
-    act(() => { root!.unmount(); });
-    root = null;
+    cleanup();
 
     const callsBefore = mockFetchHandStatus.mock.calls.length;
     act(() => { vi.advanceTimersByTime(6000); });
@@ -473,8 +464,7 @@ describe('PlayerApp — polling and status', () => {
   });
 
   it('shows "Waiting for hand…" when status is idle', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container, 1); // Bob
+    const container = await goToPlaying(1); // Bob
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Waiting for hand');
@@ -482,8 +472,7 @@ describe('PlayerApp — polling and status', () => {
   });
 
   it('shows "Your turn!" when status is pending', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'pending') });
+    const container = await goToPlaying(1, { handStatus: makeStatus('Bob', 'pending') });
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Your turn');
@@ -491,8 +480,7 @@ describe('PlayerApp — polling and status', () => {
   });
 
   it('shows "Cards submitted" when status is joined', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'joined', { card_1: 'Ah', card_2: 'Ks' }) });
+    const container = await goToPlaying(1, { handStatus: makeStatus('Bob', 'joined', { card_1: 'Ah', card_2: 'Ks' }) });
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Cards submitted');
@@ -500,8 +488,7 @@ describe('PlayerApp — polling and status', () => {
   });
 
   it('shows "Folded" when status is folded', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'folded', { result: 'folded' }) });
+    const container = await goToPlaying(1, { handStatus: makeStatus('Bob', 'folded', { result: 'folded' }) });
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Folded');
@@ -509,8 +496,7 @@ describe('PlayerApp — polling and status', () => {
   });
 
   it('shows "Waiting for dealer" when status is handed_back', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'handed_back', { result: 'handed_back' }) });
+    const container = await goToPlaying(1, { handStatus: makeStatus('Bob', 'handed_back', { result: 'handed_back' }) });
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Waiting for dealer');
@@ -518,8 +504,7 @@ describe('PlayerApp — polling and status', () => {
   });
 
   it('shows "You won!" when status is won', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'won', { result: 'won' }) });
+    const container = await goToPlaying(1, { handStatus: makeStatus('Bob', 'won', { result: 'won' }) });
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('You won');
@@ -527,8 +512,7 @@ describe('PlayerApp — polling and status', () => {
   });
 
   it('shows "You lost" when status is lost', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'lost', { result: 'lost' }) });
+    const container = await goToPlaying(1, { handStatus: makeStatus('Bob', 'lost', { result: 'lost' }) });
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('You lost');
@@ -536,8 +520,7 @@ describe('PlayerApp — polling and status', () => {
   });
 
   it('uses the latest hand number from fetchHands', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container, 1, {
+    const container = await goToPlaying(1, {
       hands: [{ hand_number: 1 }, { hand_number: 2 }, { hand_number: 3 }],
       handStatus: { ...HAND_STATUS_IDLE, hand_number: 3 },
     });
@@ -548,8 +531,7 @@ describe('PlayerApp — polling and status', () => {
   });
 
   it('updates UI when status changes on subsequent polls', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container, 1); // Bob
+    const container = await goToPlaying(1); // Bob
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Waiting for hand');
@@ -565,8 +547,7 @@ describe('PlayerApp — polling and status', () => {
   });
 
   it('stops polling when returning to name picker via Change Player', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container, 1);
+    const container = await goToPlaying(1);
 
     await vi.waitFor(() => {
       expect(mockFetchHandStatus).toHaveBeenCalled();
@@ -595,14 +576,13 @@ describe('PlayerApp — camera capture flow', () => {
   });
 
   afterEach(() => {
-    if (root) { act(() => { root!.unmount(); }); root = null; }
+    cleanup();
     vi.useRealTimers();
     window.location.hash = originalHash;
   });
 
   it('shows Capture Cards button when status is pending', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'pending') });
+    const container = await goToPlaying(1, { handStatus: makeStatus('Bob', 'pending') });
 
     await vi.waitFor(() => {
       const btn = container.querySelector('[data-testid="capture-cards-btn"]');
@@ -612,8 +592,7 @@ describe('PlayerApp — camera capture flow', () => {
   });
 
   it('does NOT show Capture Cards button when status is idle', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container, 1);
+    const container = await goToPlaying(1);
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Waiting for hand');
@@ -624,8 +603,7 @@ describe('PlayerApp — camera capture flow', () => {
   });
 
   it('does NOT show Capture Cards button when status is joined', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'joined') });
+    const container = await goToPlaying(1, { handStatus: makeStatus('Bob', 'joined') });
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Cards submitted');
@@ -636,8 +614,7 @@ describe('PlayerApp — camera capture flow', () => {
   });
 
   it('tapping Capture Cards opens camera capture overlay', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'pending') });
+    const container = await goToPlaying(1, { handStatus: makeStatus('Bob', 'pending') });
 
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="capture-cards-btn"]')).not.toBeNull();
@@ -652,8 +629,7 @@ describe('PlayerApp — camera capture flow', () => {
   });
 
   it('cancelling camera capture returns to pending state', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'pending') });
+    const container = await goToPlaying(1, { handStatus: makeStatus('Bob', 'pending') });
 
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="capture-cards-btn"]')).not.toBeNull();
@@ -676,8 +652,7 @@ describe('PlayerApp — camera capture flow', () => {
   });
 
   it('after detection, shows review screen and confirm submits cards', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'pending') });
+    const container = await goToPlaying(1, { handStatus: makeStatus('Bob', 'pending') });
 
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="capture-cards-btn"]')).not.toBeNull();
@@ -724,8 +699,7 @@ describe('PlayerApp — camera capture flow', () => {
   });
 
   it('shows error message when updateHolecards fails and allows retry', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'pending') });
+    const container = await goToPlaying(1, { handStatus: makeStatus('Bob', 'pending') });
 
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="capture-cards-btn"]')).not.toBeNull();
@@ -769,8 +743,7 @@ describe('PlayerApp — camera capture flow', () => {
   });
 
   it('on success returns to polling state', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'pending') });
+    const container = await goToPlaying(1, { handStatus: makeStatus('Bob', 'pending') });
 
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="capture-cards-btn"]')).not.toBeNull();
@@ -824,14 +797,13 @@ describe('PlayerApp — hand back cards action', () => {
   });
 
   afterEach(() => {
-    if (root) { act(() => { root!.unmount(); }); root = null; }
+    cleanup();
     vi.useRealTimers();
     window.location.hash = originalHash;
   });
 
   it('shows Hand Back Cards button when status is joined', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'joined', { card_1: 'Ah', card_2: 'Ks' }) });
+    const container = await goToPlaying(1, { handStatus: makeStatus('Bob', 'joined', { card_1: 'Ah', card_2: 'Ks' }) });
 
     await vi.waitFor(() => {
       const btn = container.querySelector('[data-testid="hand-back-btn"]');
@@ -841,8 +813,7 @@ describe('PlayerApp — hand back cards action', () => {
   });
 
   it('does NOT show Hand Back Cards button when status is idle', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container, 1);
+    const container = await goToPlaying(1);
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Waiting for hand');
@@ -852,8 +823,7 @@ describe('PlayerApp — hand back cards action', () => {
   });
 
   it('does NOT show Hand Back Cards button when status is pending', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'pending') });
+    const container = await goToPlaying(1, { handStatus: makeStatus('Bob', 'pending') });
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Your turn');
@@ -863,8 +833,7 @@ describe('PlayerApp — hand back cards action', () => {
   });
 
   it('does NOT show Hand Back Cards button when status is handed_back', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'handed_back', { result: 'handed_back' }) });
+    const container = await goToPlaying(1, { handStatus: makeStatus('Bob', 'handed_back', { result: 'handed_back' }) });
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Waiting for dealer');
@@ -875,8 +844,7 @@ describe('PlayerApp — hand back cards action', () => {
 
   it('calls patchPlayerResult with handed_back on tap', async () => {
     mockPatchPlayerResult.mockResolvedValue({});
-    const container = document.createElement('div');
-    await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'joined', { card_1: 'Ah', card_2: 'Ks' }) });
+    const container = await goToPlaying(1, { handStatus: makeStatus('Bob', 'joined', { card_1: 'Ah', card_2: 'Ks' }) });
 
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="hand-back-btn"]')).not.toBeNull();
@@ -891,8 +859,7 @@ describe('PlayerApp — hand back cards action', () => {
 
   it('shows error and retry when hand-back API fails', async () => {
     mockPatchPlayerResult.mockRejectedValue(new Error('Server error'));
-    const container = document.createElement('div');
-    await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'joined', { card_1: 'Ah', card_2: 'Ks' }) });
+    const container = await goToPlaying(1, { handStatus: makeStatus('Bob', 'joined', { card_1: 'Ah', card_2: 'Ks' }) });
 
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="hand-back-btn"]')).not.toBeNull();
@@ -920,8 +887,7 @@ describe('PlayerApp — hand back cards action', () => {
   it('disables button while API call is in-flight', async () => {
     let resolveApi: (value: unknown) => void;
     mockPatchPlayerResult.mockImplementation(() => new Promise(r => { resolveApi = r; }));
-    const container = document.createElement('div');
-    await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'joined', { card_1: 'Ah', card_2: 'Ks' }) });
+    const container = await goToPlaying(1, { handStatus: makeStatus('Bob', 'joined', { card_1: 'Ah', card_2: 'Ks' }) });
 
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="hand-back-btn"]')).not.toBeNull();
@@ -940,8 +906,7 @@ describe('PlayerApp — hand back cards action', () => {
 
   it('polling picks up handed_back status and shows waiting message', async () => {
     mockPatchPlayerResult.mockResolvedValue({});
-    const container = document.createElement('div');
-    await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'joined', { card_1: 'Ah', card_2: 'Ks' }) });
+    const container = await goToPlaying(1, { handStatus: makeStatus('Bob', 'joined', { card_1: 'Ah', card_2: 'Ks' }) });
 
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="hand-back-btn"]')).not.toBeNull();
@@ -977,14 +942,13 @@ describe('PlayerApp — polling edge cases', () => {
   });
 
   afterEach(() => {
-    if (root) { act(() => { root!.unmount(); }); root = null; }
+    cleanup();
     vi.useRealTimers();
     window.location.hash = originalHash;
   });
 
   it('shows "No hands yet" when fetchHands returns empty array', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container, 1, { hands: [] });
+    const container = await goToPlaying(1, { hands: [] });
 
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="no-active-hand"]')).not.toBeNull();
@@ -996,8 +960,7 @@ describe('PlayerApp — polling edge cases', () => {
   });
 
   it('recovers from empty hands when a new hand appears', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container, 1, { hands: [] });
+    const container = await goToPlaying(1, { hands: [] });
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('No hands yet');
@@ -1015,8 +978,7 @@ describe('PlayerApp — polling edge cases', () => {
   });
 
   it('detects hand number change and resets status', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'joined', { card_1: 'Ah', card_2: 'Ks' }) });
+    const container = await goToPlaying(1, { handStatus: makeStatus('Bob', 'joined', { card_1: 'Ah', card_2: 'Ks' }) });
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Cards submitted');
@@ -1044,8 +1006,7 @@ describe('PlayerApp — polling edge cases', () => {
   });
 
   it('handles network error on fetchHands without crashing', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container, 1);
+    const container = await goToPlaying(1);
 
     await vi.waitFor(() => {
       expect(mockFetchHandStatus).toHaveBeenCalled();
@@ -1066,8 +1027,7 @@ describe('PlayerApp — polling edge cases', () => {
   });
 
   it('handles network error on fetchHandStatus without crashing', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container, 1);
+    const container = await goToPlaying(1);
 
     await vi.waitFor(() => {
       expect(mockFetchHandStatus).toHaveBeenCalled();
@@ -1093,8 +1053,7 @@ describe('PlayerApp — polling edge cases', () => {
   });
 
   it('clears poll error on successful recovery', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container, 1);
+    const container = await goToPlaying(1);
 
     await vi.waitFor(() => {
       expect(mockFetchHandStatus).toHaveBeenCalled();
@@ -1130,14 +1089,13 @@ describe('PlayerApp — button alignment', () => {
   });
 
   afterEach(() => {
-    if (root) { act(() => { root!.unmount(); }); root = null; }
+    cleanup();
     vi.useRealTimers();
     window.location.hash = originalHash;
   });
 
   it('capture-cards-btn is full width', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'pending') });
+    const container = await goToPlaying(1, { handStatus: makeStatus('Bob', 'pending') });
     await vi.waitFor(() => {
       const btn = container.querySelector('[data-testid="capture-cards-btn"]') as HTMLElement;
       expect(btn).not.toBeNull();
@@ -1146,8 +1104,7 @@ describe('PlayerApp — button alignment', () => {
   });
 
   it('change-player-btn is full width', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'pending') });
+    const container = await goToPlaying(1, { handStatus: makeStatus('Bob', 'pending') });
     await vi.waitFor(() => {
       const btn = container.querySelector('[data-testid="change-player-btn"]') as HTMLElement;
       expect(btn).not.toBeNull();
@@ -1156,8 +1113,7 @@ describe('PlayerApp — button alignment', () => {
   });
 
   it('capture-cards-btn and change-player-btn have the same minHeight', async () => {
-    const container = document.createElement('div');
-    await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'pending') });
+    const container = await goToPlaying(1, { handStatus: makeStatus('Bob', 'pending') });
     await vi.waitFor(() => {
       const capture = container.querySelector('[data-testid="capture-cards-btn"]') as HTMLElement;
       const change = container.querySelector('[data-testid="change-player-btn"]') as HTMLElement;

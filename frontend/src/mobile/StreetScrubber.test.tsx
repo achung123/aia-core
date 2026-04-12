@@ -1,26 +1,16 @@
 /** @vitest-environment happy-dom */
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { createRoot } from 'react-dom/client';
-import type { Root } from 'react-dom/client';
+import { render, cleanup } from '@testing-library/react';
 import { act } from 'react';
 import { StreetScrubber, STREETS } from './StreetScrubber.tsx';
 
-let root: Root | null = null;
-let container: HTMLDivElement | null = null;
-
-function renderToContainer(element: React.ReactElement): HTMLDivElement {
-  container = document.createElement('div');
-  root = createRoot(container);
-  act(() => { root!.render(element); });
+function renderToContainer(element: React.ReactElement): HTMLElement {
+  const { container } = render(element);
   return container;
 }
 
 afterEach(() => {
-  if (root) {
-    act(() => { root!.unmount(); });
-    root = null;
-  }
-  container = null;
+  cleanup();
 });
 
 const FULL_HAND = {

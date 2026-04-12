@@ -1,6 +1,6 @@
 /** @vitest-environment happy-dom */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createRoot, type Root } from 'react-dom/client';
+import { render, cleanup } from '@testing-library/react';
 import { act } from 'react';
 import { useDealerStore } from '../stores/dealerStore.ts';
 import type { DealerState, Player, CommunityCards } from '../stores/dealerStore.ts';
@@ -126,24 +126,12 @@ beforeEach(() => {
   useDealerStore.setState({ ...defaultTestState, players: defaultTestPlayers.map((p) => ({ ...p })), community: { ...emptyCommunity } });
 });
 afterEach(() => {
-  // Unmount the active root to trigger effect cleanup (e.g., clear polling intervals)
-  if (activeRoot) {
-    act(() => {
-      activeRoot?.unmount();
-      activeRoot = null;
-    });
-  }
+  cleanup();
   sessionStorage.clear();
 });
 
-let activeRoot: Root | null = null;
-
-function renderToContainer(vnode: React.ReactElement): HTMLDivElement {
-  const container = document.createElement('div');
-  act(() => {
-    activeRoot = createRoot(container);
-    activeRoot.render(vnode);
-  });
+function renderToContainer(vnode: React.ReactElement): HTMLElement {
+  const { container } = render(vnode);
   return container;
 }
 
@@ -1178,8 +1166,7 @@ describe('DealerApp hand status polling', () => {
     });
 
     act(() => {
-      activeRoot?.unmount();
-      activeRoot = null;
+      cleanup();
     });
 
     const callsAtUnmount = (fetchHandStatus as ReturnType<typeof vi.fn>).mock.calls.length;
