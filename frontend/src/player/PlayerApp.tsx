@@ -1,49 +1,119 @@
-import { h } from 'preact';
-import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
-import { fetchSessions, fetchGame, fetchHands, fetchHandStatus, updateHolecards, patchPlayerResult } from '../api/client.js';
+import { useState, useEffect, useRef, useCallback, type CSSProperties } from 'react';
+import {
+  fetchSessions,
+  fetchGame,
+  fetchHands,
+  fetchHandStatus,
+  updateHolecards,
+  patchPlayerResult,
+} from '../api/client.ts';
+import type {
+  GameSessionListItem,
+  HandStatusResponse,
+  CardDetectionEntry,
+} from '../api/types.ts';
 import { CameraCapture } from '../dealer/CameraCapture.tsx';
 import { DetectionReview } from '../dealer/DetectionReview.tsx';
 
-function parseGameIdFromHash() {
+type PlayerStep = 'gameSelect' | 'namePick' | 'playing';
+type CaptureStep = null | 'camera' | 'review';
+type ParticipationStatus = 'idle' | 'pending' | 'joined' | 'folded' | 'handed_back' | 'won' | 'lost';
+
+interface ReviewData {
+  targetName: string;
+  detections: CardDetectionEntry[];
+  imageUrl: string;
+}
+
+function parseGameIdFromHash(): number | null {
   const hash = window.location.hash || '';
   const match = hash.match(/[?&]game=(\d+)/);
   return match ? Number(match[1]) : null;
 }
 
-function parsePlayerFromHash() {
+function parsePlayerFromHash(): string | null {
   const hash = window.location.hash || '';
   const match = hash.match(/[?&]player=([^&]+)/);
   return match ? decodeURIComponent(match[1]) : null;
 }
 
-export function PlayerApp() {
-  const [step, setStep] = useState('gameSelect');
-  const [gameId, setGameId] = useState(null);
-  const [sessions, setSessions] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [players, setPlayers] = useState([]);
-  const [playersLoading, setPlayersLoading] = useState(false);
-  const [playerName, setPlayerName] = useState(null);
-  const [playerStatus, setPlayerStatus] = useState('idle');
-  const [communityRecorded, setCommunityRecorded] = useState(false);
-  const [handNumber, setHandNumber] = useState(null);
-  const [captureStep, setCaptureStep] = useState(null); // null | 'camera' | 'review'
-  const [reviewData, setReviewData] = useState(null);
-  const [captureError, setCaptureError] = useState(null);
-  const [handingBack, setHandingBack] = useState(false);
-  const [handBackError, setHandBackError] = useState(null);
-  const [noActiveHand, setNoActiveHand] = useState(false);
-  const [pollError, setPollError] = useState(null);
-  const handNumberRef = useRef(null);
+interface PlayerStatusViewProps {
+  status: ParticipationStatus;
+  onCapture: () => void;
+  onHandBack: () => void;
+  handingBack: boolean;
+}
 
-  function loadPlayers(id) {
+function PlayerStatusView({ status, onCapture, onHandBack, handingBack }: PlayerStatusViewProps) {
+  switch (status) {
+    case 'pending':
+      return (
+        <div>
+          <p style={{ color: '#ca8a04' }}>Your turn! Capture your cards.</p>
+          <button
+            data-testid="capture-cards-btn"
+            style={styles.captureBtn}
+            onClick={onCapture}
+          >
+            Capture Cards
+          </button>
+        </div>
+      );
+    case 'joined':
+      return (
+        <div>
+          <p style={{ color: '#16a34a' }}>Cards submitted ✓</p>
+          <button
+            data-testid="hand-back-btn"
+            style={styles.handBackBtn}
+            onClick={onHandBack}
+            disabled={handingBack}
+          >
+            {handingBack ? 'Handing back…' : 'Hand Back Cards'}
+          </button>
+        </div>
+      );
+    case 'folded':
+      return <p style={{ color: '#dc2626' }}>Folded</p>;
+    case 'handed_back':
+      return <p style={{ color: '#2563eb' }}>Waiting for dealer decision…</p>;
+    case 'won':
+      return <p style={{ color: '#16a34a' }}>You won!</p>;
+    case 'lost':
+      return <p style={{ color: '#6b7280' }}>You lost.</p>;
+    default:
+      return <p style={{ color: '#6b7280' }}>Waiting for hand…</p>;
+  }
+}
+
+export function PlayerApp() {
+  const [step, setStep] = useState<PlayerStep>('gameSelect');
+  const [gameId, setGameId] = useState<number | null>(null);
+  const [sessions, setSessions] = useState<GameSessionListItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [players, setPlayers] = useState<string[]>([]);
+  const [playersLoading, setPlayersLoading] = useState(false);
+  const [playerName, setPlayerName] = useState<string | null>(null);
+  const [playerStatus, setPlayerStatus] = useState<ParticipationStatus>('idle');
+  const [, setCommunityRecorded] = useState(false);
+  const [handNumber, setHandNumber] = useState<number | null>(null);
+  const [captureStep, setCaptureStep] = useState<CaptureStep>(null);
+  const [reviewData, setReviewData] = useState<ReviewData | null>(null);
+  const [captureError, setCaptureError] = useState<string | null>(null);
+  const [handingBack, setHandingBack] = useState(false);
+  const [handBackError, setHandBackError] = useState<string | null>(null);
+  const [noActiveHand, setNoActiveHand] = useState(false);
+  const [pollError, setPollError] = useState<string | null>(null);
+  const handNumberRef = useRef<number | null>(null);
+
+  const loadPlayers = useCallback(function loadPlayers(id: number) {
     setPlayersLoading(true);
     fetchGame(id)
       .then(data => setPlayers(data.player_names || []))
       .catch(err => setError(err.message))
       .finally(() => setPlayersLoading(false));
-  }
+  }, []);
 
   useEffect(() => {
     const urlGameId = parseGameIdFromHash();
@@ -87,15 +157,15 @@ export function PlayerApp() {
       })
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
-  }, []);
+  }, [loadPlayers]);
 
-  function handleSelectGame(id) {
+  function handleSelectGame(id: number) {
     setGameId(id);
     setStep('namePick');
     loadPlayers(id);
   }
 
-  function handleSelectPlayer(name) {
+  function handleSelectPlayer(name: string) {
     setPlayerName(name);
     setPlayerStatus('idle');
     setStep('playing');
@@ -119,12 +189,12 @@ export function PlayerApp() {
     setCaptureError(null);
   }
 
-  function handleDetectionResult(targetName, apiResponse, file) {
+  function handleDetectionResult(targetName: string, apiResponse: CardDetectionEntry[], file: File) {
     setCaptureStep('review');
     const imageUrl = URL.createObjectURL(file);
     setReviewData({
       targetName,
-      detections: apiResponse.detections,
+      detections: apiResponse,
       imageUrl,
     });
   }
@@ -134,22 +204,23 @@ export function PlayerApp() {
     setReviewData(null);
   }
 
-  async function handleReviewConfirm(targetName, cardValues) {
+  async function handleReviewConfirm(_targetName: string, cardValues: string[]) {
     if (reviewData?.imageUrl) URL.revokeObjectURL(reviewData.imageUrl);
     const card1 = cardValues[0] || null;
     const card2 = cardValues[1] || null;
     try {
-      await updateHolecards(gameId, handNumber, playerName, {
+      await updateHolecards(gameId!, handNumber!, playerName!, {
         card_1: card1,
         card_2: card2,
       });
       setCaptureStep(null);
       setReviewData(null);
       setCaptureError(null);
-    } catch (err) {
+    } catch (err: unknown) {
       setCaptureStep(null);
       setReviewData(null);
-      setCaptureError(err.message || 'Failed to submit cards');
+      const message = err instanceof Error ? err.message : 'Failed to submit cards';
+      setCaptureError(message);
     }
   }
 
@@ -163,9 +234,10 @@ export function PlayerApp() {
     setHandingBack(true);
     setHandBackError(null);
     try {
-      await patchPlayerResult(gameId, handNumber, playerName, { result: 'handed_back' });
-    } catch (err) {
-      setHandBackError(err.message || 'Failed to hand back cards');
+      await patchPlayerResult(gameId!, handNumber!, playerName!, { result: 'handed_back' });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to hand back cards';
+      setHandBackError(message);
     } finally {
       setHandingBack(false);
     }
@@ -176,10 +248,10 @@ export function PlayerApp() {
 
     const controller = new AbortController();
     const { signal } = controller;
-    let intervalId = null;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
 
     function pollCycle() {
-      fetchHands(gameId, { signal })
+      fetchHands(gameId!, { signal })
         .then(hands => {
           if (signal.aborted) return;
           if (!hands || hands.length === 0) {
@@ -197,19 +269,19 @@ export function PlayerApp() {
             handNumberRef.current = latest.hand_number;
             setPlayerStatus('idle');
           }
-          return fetchHandStatus(gameId, latest.hand_number, { signal });
+          return fetchHandStatus(gameId!, latest.hand_number, { signal });
         })
         .then(data => {
           if (!data || signal.aborted) return;
           setPollError(null);
-          setCommunityRecorded(data.community_recorded);
-          const me = data.players.find(p => p.name === playerName);
+          setCommunityRecorded((data as HandStatusResponse).community_recorded);
+          const me = (data as HandStatusResponse).players.find(p => p.name === playerName);
           if (me) {
-            setPlayerStatus(me.participation_status);
+            setPlayerStatus(me.participation_status as ParticipationStatus);
           }
         })
         .catch(err => {
-          if (err.name === 'AbortError') return;
+          if ((err as Error).name === 'AbortError') return;
           setPollError('Connection issue — retrying…');
         });
     }
@@ -234,7 +306,7 @@ export function PlayerApp() {
         {captureStep === 'camera' && gameId && (
           <CameraCapture
             gameId={gameId}
-            targetName={playerName}
+            targetName={playerName!}
             onDetectionResult={handleDetectionResult}
             onCancel={handleCaptureCancel}
           />
@@ -371,49 +443,7 @@ export function PlayerApp() {
   );
 }
 
-function PlayerStatusView({ status, onCapture, onHandBack, handingBack }) {
-  switch (status) {
-    case 'pending':
-      return (
-        <div>
-          <p style={{ color: '#ca8a04' }}>Your turn! Capture your cards.</p>
-          <button
-              data-testid="capture-cards-btn"
-              style={styles.captureBtn}
-              onClick={onCapture}
-            >
-              Capture Cards
-            </button>
-        </div>
-      );
-    case 'joined':
-      return (
-        <div>
-          <p style={{ color: '#16a34a' }}>Cards submitted ✓</p>
-          <button
-            data-testid="hand-back-btn"
-            style={styles.handBackBtn}
-            onClick={onHandBack}
-            disabled={handingBack}
-          >
-            {handingBack ? 'Handing back…' : 'Hand Back Cards'}
-          </button>
-        </div>
-      );
-    case 'folded':
-      return <p style={{ color: '#dc2626' }}>Folded</p>;
-    case 'handed_back':
-      return <p style={{ color: '#2563eb' }}>Waiting for dealer decision…</p>;
-    case 'won':
-      return <p style={{ color: '#16a34a' }}>You won!</p>;
-    case 'lost':
-      return <p style={{ color: '#6b7280' }}>You lost.</p>;
-    default:
-      return <p style={{ color: '#6b7280' }}>Waiting for hand…</p>;
-  }
-}
-
-const styles = {
+const styles: Record<string, CSSProperties> = {
   container: {
     maxWidth: '480px',
     margin: '0 auto',

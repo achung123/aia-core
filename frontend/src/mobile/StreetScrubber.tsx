@@ -1,6 +1,22 @@
-const STREETS = ['Pre-Flop', 'Flop', 'Turn', 'River', 'Showdown'];
+import type React from 'react';
 
-const styles = {
+export const STREETS = ['Pre-Flop', 'Flop', 'Turn', 'River', 'Showdown'] as const;
+export type Street = (typeof STREETS)[number];
+
+export interface StreetHandData {
+  flop?: unknown[] | null;
+  turn?: unknown;
+  river?: unknown;
+  [key: string]: unknown;
+}
+
+export interface StreetScrubberProps {
+  currentStreet: string;
+  handData: StreetHandData;
+  onStreetChange: (street: string) => void;
+}
+
+const styles: Record<string, React.CSSProperties> = {
   wrapper: {
     display: 'flex',
     alignItems: 'center',
@@ -36,7 +52,7 @@ const styles = {
   },
 };
 
-function isStreetAvailable(streetIndex, handData) {
+function isStreetAvailable(streetIndex: number, handData: StreetHandData): boolean {
   if (streetIndex === 0) return true; // Pre-Flop always available
   if (streetIndex === 1) return !!(handData.flop && handData.flop.some(Boolean)); // Flop
   if (streetIndex === 2) return !!handData.turn; // Turn
@@ -45,9 +61,7 @@ function isStreetAvailable(streetIndex, handData) {
   return false;
 }
 
-export { STREETS };
-
-export function StreetScrubber({ currentStreet, handData, onStreetChange }) {
+export function StreetScrubber({ currentStreet, handData, onStreetChange }: StreetScrubberProps): React.ReactElement {
   return (
     <div data-testid="street-scrubber" style={styles.wrapper}>
       {STREETS.map((name, i) => {

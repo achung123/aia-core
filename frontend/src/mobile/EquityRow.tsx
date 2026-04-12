@@ -1,6 +1,11 @@
-import { h } from 'preact';
+import type React from 'react';
 
-const styles = {
+export interface EquityRowProps {
+  equityMap: Record<string, number> | null;
+  loading?: boolean;
+}
+
+const styles: Record<string, React.CSSProperties> = {
   row: {
     display: 'flex',
     gap: '6px',
@@ -34,13 +39,13 @@ const styles = {
   },
 };
 
-function equityColor(eq) {
+function equityColor(eq: number): string {
   if (eq >= 0.5) return '#4ade80'; // green
   if (eq >= 0.25) return '#facc15'; // yellow
   return '#f87171'; // red
 }
 
-export function EquityRow({ equityMap, loading }) {
+export function EquityRow({ equityMap, loading }: EquityRowProps): React.ReactElement | null {
   if (loading) {
     return (
       <div data-testid="equity-row" style={styles.row}>

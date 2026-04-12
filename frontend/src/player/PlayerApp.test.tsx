@@ -1,9 +1,11 @@
 /** @vitest-environment happy-dom */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render } from 'preact';
-import { PlayerApp } from './PlayerApp.jsx';
+import { createRoot } from 'react-dom/client';
+import type { Root } from 'react-dom/client';
+import { act } from 'react';
+import { PlayerApp } from './PlayerApp.tsx';
 
-vi.mock('../api/client.js', () => ({
+vi.mock('../api/client.ts', () => ({
   fetchSessions: vi.fn(),
   fetchGame: vi.fn(),
   fetchHands: vi.fn(),
@@ -14,11 +16,32 @@ vi.mock('../api/client.js', () => ({
   patchPlayerResult: vi.fn(),
 }));
 
-import { fetchSessions, fetchGame, fetchHands, fetchHandStatus, uploadImage, getDetectionResults, updateHolecards, patchPlayerResult } from '../api/client.js';
+import {
+  fetchSessions,
+  fetchGame,
+  fetchHands,
+  fetchHandStatus,
+  uploadImage,
+  getDetectionResults,
+  updateHolecards,
+  patchPlayerResult,
+} from '../api/client.ts';
 
-function renderToContainer(vnode) {
+const mockFetchSessions = fetchSessions as ReturnType<typeof vi.fn>;
+const mockFetchGame = fetchGame as ReturnType<typeof vi.fn>;
+const mockFetchHands = fetchHands as ReturnType<typeof vi.fn>;
+const mockFetchHandStatus = fetchHandStatus as ReturnType<typeof vi.fn>;
+const mockUploadImage = uploadImage as ReturnType<typeof vi.fn>;
+const mockGetDetectionResults = getDetectionResults as ReturnType<typeof vi.fn>;
+const mockUpdateHolecards = updateHolecards as ReturnType<typeof vi.fn>;
+const mockPatchPlayerResult = patchPlayerResult as ReturnType<typeof vi.fn>;
+
+let root: Root | null = null;
+
+function renderToContainer(element: React.ReactElement): HTMLDivElement {
   const container = document.createElement('div');
-  render(vnode, container);
+  root = createRoot(container);
+  act(() => { root!.render(element); });
   return container;
 }
 
@@ -30,7 +53,7 @@ const SESSIONS = [
 ];
 
 describe('PlayerApp', () => {
-  let originalHash;
+  let originalHash: string;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -39,17 +62,18 @@ describe('PlayerApp', () => {
   });
 
   afterEach(() => {
+    if (root) { act(() => { root!.unmount(); }); root = null; }
     window.location.hash = originalHash;
   });
 
   it('shows loading state initially', () => {
-    fetchSessions.mockReturnValue(new Promise(() => {}));
+    mockFetchSessions.mockReturnValue(new Promise(() => {}));
     const container = renderToContainer(<PlayerApp />);
     expect(container.textContent).toContain('Loading');
   });
 
   it('renders only active games (no completed games)', async () => {
-    fetchSessions.mockResolvedValue(SESSIONS);
+    mockFetchSessions.mockResolvedValue(SESSIONS);
     const container = renderToContainer(<PlayerApp />);
     await vi.waitFor(() => {
       expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(2);
@@ -65,7 +89,7 @@ describe('PlayerApp', () => {
   });
 
   it('sorts active games by game_id descending', async () => {
-    fetchSessions.mockResolvedValue(SESSIONS);
+    mockFetchSessions.mockResolvedValue(SESSIONS);
     const container = renderToContainer(<PlayerApp />);
     await vi.waitFor(() => {
       expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(2);
@@ -77,15 +101,15 @@ describe('PlayerApp', () => {
   });
 
   it('selecting a game transitions to name picker step', async () => {
-    fetchSessions.mockResolvedValue(SESSIONS);
-    fetchGame.mockResolvedValue({ game_id: 3, player_names: ['Alice', 'Bob'] });
+    mockFetchSessions.mockResolvedValue(SESSIONS);
+    mockFetchGame.mockResolvedValue({ game_id: 3, player_names: ['Alice', 'Bob'] });
     const container = renderToContainer(<PlayerApp />);
     await vi.waitFor(() => {
       expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(2);
     });
 
     const cards = container.querySelectorAll('[data-testid="game-card"]');
-    cards[0].click();
+    act(() => { (cards[0] as HTMLElement).click(); });
 
     await vi.waitFor(() => {
       // After clicking, should no longer show game cards
@@ -97,8 +121,8 @@ describe('PlayerApp', () => {
 
   it('auto-selects game from ?game= URL param and skips picker', async () => {
     window.location.hash = '#/player?game=2';
-    fetchSessions.mockResolvedValue(SESSIONS);
-    fetchGame.mockResolvedValue({ game_id: 2, player_names: ['Dan', 'Eve'] });
+    mockFetchSessions.mockResolvedValue(SESSIONS);
+    mockFetchGame.mockResolvedValue({ game_id: 2, player_names: ['Dan', 'Eve'] });
     const container = renderToContainer(<PlayerApp />);
     await vi.waitFor(() => {
       // Should not show game cards — auto-selected
@@ -109,7 +133,7 @@ describe('PlayerApp', () => {
 
   it('shows error when ?game= references an invalid game', async () => {
     window.location.hash = '#/player?game=999';
-    fetchSessions.mockResolvedValue(SESSIONS);
+    mockFetchSessions.mockResolvedValue(SESSIONS);
     const container = renderToContainer(<PlayerApp />);
     await vi.waitFor(() => {
       expect(container.textContent).toContain('not found');
@@ -117,7 +141,7 @@ describe('PlayerApp', () => {
   });
 
   it('shows error when fetchSessions fails', async () => {
-    fetchSessions.mockRejectedValue(new Error('Network error'));
+    mockFetchSessions.mockRejectedValue(new Error('Network error'));
     const container = renderToContainer(<PlayerApp />);
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Network error');
@@ -125,7 +149,7 @@ describe('PlayerApp', () => {
   });
 
   it('shows empty message when no active games', async () => {
-    fetchSessions.mockResolvedValue([
+    mockFetchSessions.mockResolvedValue([
       { game_id: 1, game_date: '2026-03-01', status: 'complete', player_count: 4, hand_count: 12, winners: ['Alice'] },
     ]);
     const container = renderToContainer(<PlayerApp />);
@@ -135,7 +159,7 @@ describe('PlayerApp', () => {
   });
 
   it('displays game date and player count on cards', async () => {
-    fetchSessions.mockResolvedValue(SESSIONS);
+    mockFetchSessions.mockResolvedValue(SESSIONS);
     const container = renderToContainer(<PlayerApp />);
     await vi.waitFor(() => {
       expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(2);
@@ -159,15 +183,15 @@ const GAME_DETAIL = {
 };
 
 describe('PlayerApp — name picker', () => {
-  let originalHash;
+  let originalHash: string;
 
   beforeEach(() => {
     vi.clearAllMocks();
     originalHash = window.location.hash;
     window.location.hash = '';
     // Default mocks so polling in 'playing' step doesn't crash
-    fetchHands.mockResolvedValue([{ hand_number: 1 }]);
-    fetchHandStatus.mockResolvedValue({
+    mockFetchHands.mockResolvedValue([{ hand_number: 1 }]);
+    mockFetchHandStatus.mockResolvedValue({
       hand_number: 1,
       community_recorded: false,
       players: [],
@@ -175,18 +199,19 @@ describe('PlayerApp — name picker', () => {
   });
 
   afterEach(() => {
+    if (root) { act(() => { root!.unmount(); }); root = null; }
     window.location.hash = originalHash;
   });
 
   it('fetches game details and shows player names as buttons', async () => {
-    fetchSessions.mockResolvedValue(SESSIONS);
-    fetchGame.mockResolvedValue(GAME_DETAIL);
+    mockFetchSessions.mockResolvedValue(SESSIONS);
+    mockFetchGame.mockResolvedValue(GAME_DETAIL);
     const container = renderToContainer(<PlayerApp />);
     await vi.waitFor(() => {
       expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(2);
     });
 
-    container.querySelectorAll('[data-testid="game-card"]')[0].click();
+    act(() => { container.querySelectorAll('[data-testid="game-card"]')[0].dispatchEvent(new MouseEvent('click', { bubbles: true })); });
 
     await vi.waitFor(() => {
       const playerBtns = container.querySelectorAll('[data-testid="player-name-btn"]');
@@ -198,14 +223,14 @@ describe('PlayerApp — name picker', () => {
   });
 
   it('shows loading while fetching players', async () => {
-    fetchSessions.mockResolvedValue(SESSIONS);
-    fetchGame.mockReturnValue(new Promise(() => {}));
+    mockFetchSessions.mockResolvedValue(SESSIONS);
+    mockFetchGame.mockReturnValue(new Promise(() => {}));
     const container = renderToContainer(<PlayerApp />);
     await vi.waitFor(() => {
       expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(2);
     });
 
-    container.querySelectorAll('[data-testid="game-card"]')[0].click();
+    act(() => { container.querySelectorAll('[data-testid="game-card"]')[0].dispatchEvent(new MouseEvent('click', { bubbles: true })); });
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Loading players');
@@ -213,14 +238,14 @@ describe('PlayerApp — name picker', () => {
   });
 
   it('shows message when game has no players', async () => {
-    fetchSessions.mockResolvedValue(SESSIONS);
-    fetchGame.mockResolvedValue({ ...GAME_DETAIL, player_names: [] });
+    mockFetchSessions.mockResolvedValue(SESSIONS);
+    mockFetchGame.mockResolvedValue({ ...GAME_DETAIL, player_names: [] });
     const container = renderToContainer(<PlayerApp />);
     await vi.waitFor(() => {
       expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(2);
     });
 
-    container.querySelectorAll('[data-testid="game-card"]')[0].click();
+    act(() => { container.querySelectorAll('[data-testid="game-card"]')[0].dispatchEvent(new MouseEvent('click', { bubbles: true })); });
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('No players');
@@ -228,20 +253,20 @@ describe('PlayerApp — name picker', () => {
   });
 
   it('selecting a name transitions to playing step with welcome message', async () => {
-    fetchSessions.mockResolvedValue(SESSIONS);
-    fetchGame.mockResolvedValue(GAME_DETAIL);
+    mockFetchSessions.mockResolvedValue(SESSIONS);
+    mockFetchGame.mockResolvedValue(GAME_DETAIL);
     const container = renderToContainer(<PlayerApp />);
     await vi.waitFor(() => {
       expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(2);
     });
 
-    container.querySelectorAll('[data-testid="game-card"]')[0].click();
+    act(() => { container.querySelectorAll('[data-testid="game-card"]')[0].dispatchEvent(new MouseEvent('click', { bubbles: true })); });
 
     await vi.waitFor(() => {
       expect(container.querySelectorAll('[data-testid="player-name-btn"]').length).toBe(3);
     });
 
-    container.querySelectorAll('[data-testid="player-name-btn"]')[1].click();
+    act(() => { container.querySelectorAll('[data-testid="player-name-btn"]')[1].dispatchEvent(new MouseEvent('click', { bubbles: true })); });
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Bob');
@@ -250,26 +275,26 @@ describe('PlayerApp — name picker', () => {
   });
 
   it('Change Player button returns to name picker', async () => {
-    fetchSessions.mockResolvedValue(SESSIONS);
-    fetchGame.mockResolvedValue(GAME_DETAIL);
+    mockFetchSessions.mockResolvedValue(SESSIONS);
+    mockFetchGame.mockResolvedValue(GAME_DETAIL);
     const container = renderToContainer(<PlayerApp />);
     await vi.waitFor(() => {
       expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(2);
     });
 
-    container.querySelectorAll('[data-testid="game-card"]')[0].click();
+    act(() => { container.querySelectorAll('[data-testid="game-card"]')[0].dispatchEvent(new MouseEvent('click', { bubbles: true })); });
 
     await vi.waitFor(() => {
       expect(container.querySelectorAll('[data-testid="player-name-btn"]').length).toBe(3);
     });
 
-    container.querySelectorAll('[data-testid="player-name-btn"]')[0].click();
+    act(() => { container.querySelectorAll('[data-testid="player-name-btn"]')[0].dispatchEvent(new MouseEvent('click', { bubbles: true })); });
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Alice');
     });
 
-    container.querySelector('[data-testid="change-player-btn"]').click();
+    act(() => { container.querySelector<HTMLElement>('[data-testid="change-player-btn"]')!.click(); });
 
     await vi.waitFor(() => {
       expect(container.querySelectorAll('[data-testid="player-name-btn"]').length).toBe(3);
@@ -278,8 +303,8 @@ describe('PlayerApp — name picker', () => {
 
   it('auto-selected game via URL also fetches players', async () => {
     window.location.hash = '#/player?game=2';
-    fetchSessions.mockResolvedValue(SESSIONS);
-    fetchGame.mockResolvedValue({
+    mockFetchSessions.mockResolvedValue(SESSIONS);
+    mockFetchGame.mockResolvedValue({
       ...GAME_DETAIL,
       game_id: 2,
       player_names: ['Dan', 'Eve'],
@@ -296,9 +321,9 @@ describe('PlayerApp — name picker', () => {
 
   it('auto-selects game AND player when both are in URL, skipping name pick', async () => {
     window.location.hash = '#/player?game=2&player=Bob';
-    fetchSessions.mockResolvedValue(SESSIONS);
-    fetchHands.mockResolvedValue([{ hand_number: 1 }]);
-    fetchHandStatus.mockResolvedValue({
+    mockFetchSessions.mockResolvedValue(SESSIONS);
+    mockFetchHands.mockResolvedValue([{ hand_number: 1 }]);
+    mockFetchHandStatus.mockResolvedValue({
       hand_number: 1,
       community_recorded: false,
       players: [
@@ -319,14 +344,14 @@ describe('PlayerApp — name picker', () => {
 });
 
 /* ---- Helper: navigate to playing step ---- */
-async function goToPlaying(container, playerIndex = 1, { hands, handStatus } = {}) {
-  fetchSessions.mockResolvedValue(SESSIONS);
-  fetchGame.mockResolvedValue(GAME_DETAIL);
-  fetchHands.mockResolvedValue(hands || [{ hand_number: 1 }]);
+async function goToPlaying(container: HTMLDivElement, playerIndex = 1, { hands, handStatus }: { hands?: { hand_number: number }[]; handStatus?: Record<string, unknown> } = {}) {
+  mockFetchSessions.mockResolvedValue(SESSIONS);
+  mockFetchGame.mockResolvedValue(GAME_DETAIL);
+  mockFetchHands.mockResolvedValue(hands || [{ hand_number: 1 }]);
   if (handStatus) {
-    fetchHandStatus.mockResolvedValue(handStatus);
-  } else if (!fetchHandStatus.getMockImplementation()) {
-    fetchHandStatus.mockResolvedValue({
+    mockFetchHandStatus.mockResolvedValue(handStatus);
+  } else if (!mockFetchHandStatus.getMockImplementation()) {
+    mockFetchHandStatus.mockResolvedValue({
       hand_number: 1,
       community_recorded: false,
       players: GAME_DETAIL.player_names.map(name => ({
@@ -340,15 +365,16 @@ async function goToPlaying(container, playerIndex = 1, { hands, handStatus } = {
     });
   }
 
-  render(<PlayerApp />, container);
+  root = createRoot(container);
+  act(() => { root!.render(<PlayerApp />); });
   await vi.waitFor(() => {
     expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(2);
   });
-  container.querySelectorAll('[data-testid="game-card"]')[0].click();
+  act(() => { container.querySelectorAll('[data-testid="game-card"]')[0].dispatchEvent(new MouseEvent('click', { bubbles: true })); });
   await vi.waitFor(() => {
     expect(container.querySelectorAll('[data-testid="player-name-btn"]').length).toBe(3);
   });
-  container.querySelectorAll('[data-testid="player-name-btn"]')[playerIndex].click();
+  act(() => { container.querySelectorAll('[data-testid="player-name-btn"]')[playerIndex].dispatchEvent(new MouseEvent('click', { bubbles: true })); });
 }
 
 const HAND_STATUS_IDLE = {
@@ -364,7 +390,7 @@ const HAND_STATUS_IDLE = {
   })),
 };
 
-function makeStatus(playerName, status, extras = {}) {
+function makeStatus(playerName: string, status: string, extras: Record<string, unknown> = {}) {
   return {
     hand_number: 1,
     community_recorded: false,
@@ -381,7 +407,7 @@ function makeStatus(playerName, status, extras = {}) {
 }
 
 describe('PlayerApp — polling and status', () => {
-  let originalHash;
+  let originalHash: string;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -391,6 +417,7 @@ describe('PlayerApp — polling and status', () => {
   });
 
   afterEach(() => {
+    if (root) { act(() => { root!.unmount(); }); root = null; }
     vi.useRealTimers();
     window.location.hash = originalHash;
   });
@@ -400,11 +427,11 @@ describe('PlayerApp — polling and status', () => {
     await goToPlaying(container);
 
     await vi.waitFor(() => {
-      expect(fetchHands).toHaveBeenCalledWith(3, expect.objectContaining({ signal: expect.any(AbortSignal) }));
+      expect(mockFetchHands).toHaveBeenCalledWith(3, expect.objectContaining({ signal: expect.any(AbortSignal) }));
     });
 
     await vi.waitFor(() => {
-      expect(fetchHandStatus).toHaveBeenCalledWith(3, 1, expect.objectContaining({ signal: expect.any(AbortSignal) }));
+      expect(mockFetchHandStatus).toHaveBeenCalledWith(3, 1, expect.objectContaining({ signal: expect.any(AbortSignal) }));
     });
   });
 
@@ -413,18 +440,18 @@ describe('PlayerApp — polling and status', () => {
     await goToPlaying(container);
 
     await vi.waitFor(() => {
-      expect(fetchHandStatus).toHaveBeenCalledTimes(1);
+      expect(mockFetchHandStatus).toHaveBeenCalledTimes(1);
     });
 
-    fetchHandStatus.mockResolvedValue(HAND_STATUS_IDLE);
-    vi.advanceTimersByTime(3000);
+    mockFetchHandStatus.mockResolvedValue(HAND_STATUS_IDLE);
+    act(() => { vi.advanceTimersByTime(3000); });
     await vi.waitFor(() => {
-      expect(fetchHandStatus).toHaveBeenCalledTimes(2);
+      expect(mockFetchHandStatus).toHaveBeenCalledTimes(2);
     });
 
-    vi.advanceTimersByTime(3000);
+    act(() => { vi.advanceTimersByTime(3000); });
     await vi.waitFor(() => {
-      expect(fetchHandStatus).toHaveBeenCalledTimes(3);
+      expect(mockFetchHandStatus).toHaveBeenCalledTimes(3);
     });
   });
 
@@ -433,15 +460,16 @@ describe('PlayerApp — polling and status', () => {
     await goToPlaying(container);
 
     await vi.waitFor(() => {
-      expect(fetchHandStatus).toHaveBeenCalledTimes(1);
+      expect(mockFetchHandStatus).toHaveBeenCalledTimes(1);
     });
 
     // Unmount
-    render(null, container);
+    act(() => { root!.unmount(); });
+    root = null;
 
-    const callsBefore = fetchHandStatus.mock.calls.length;
-    vi.advanceTimersByTime(6000);
-    expect(fetchHandStatus).toHaveBeenCalledTimes(callsBefore);
+    const callsBefore = mockFetchHandStatus.mock.calls.length;
+    act(() => { vi.advanceTimersByTime(6000); });
+    expect(mockFetchHandStatus).toHaveBeenCalledTimes(callsBefore);
   });
 
   it('shows "Waiting for hand…" when status is idle', async () => {
@@ -515,7 +543,7 @@ describe('PlayerApp — polling and status', () => {
     });
 
     await vi.waitFor(() => {
-      expect(fetchHandStatus).toHaveBeenCalledWith(3, 3, expect.objectContaining({ signal: expect.any(AbortSignal) }));
+      expect(mockFetchHandStatus).toHaveBeenCalledWith(3, 3, expect.objectContaining({ signal: expect.any(AbortSignal) }));
     });
   });
 
@@ -528,8 +556,8 @@ describe('PlayerApp — polling and status', () => {
     });
 
     // Next poll returns pending
-    fetchHandStatus.mockResolvedValue(makeStatus('Bob', 'pending'));
-    vi.advanceTimersByTime(3000);
+    mockFetchHandStatus.mockResolvedValue(makeStatus('Bob', 'pending'));
+    act(() => { vi.advanceTimersByTime(3000); });
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Your turn');
@@ -541,23 +569,23 @@ describe('PlayerApp — polling and status', () => {
     await goToPlaying(container, 1);
 
     await vi.waitFor(() => {
-      expect(fetchHandStatus).toHaveBeenCalled();
+      expect(mockFetchHandStatus).toHaveBeenCalled();
     });
 
-    container.querySelector('[data-testid="change-player-btn"]').click();
+    act(() => { container.querySelector<HTMLElement>('[data-testid="change-player-btn"]')!.click(); });
 
     await vi.waitFor(() => {
       expect(container.querySelectorAll('[data-testid="player-name-btn"]').length).toBe(3);
     });
 
-    const callsBefore = fetchHandStatus.mock.calls.length;
-    vi.advanceTimersByTime(6000);
-    expect(fetchHandStatus).toHaveBeenCalledTimes(callsBefore);
+    const callsBefore = mockFetchHandStatus.mock.calls.length;
+    act(() => { vi.advanceTimersByTime(6000); });
+    expect(mockFetchHandStatus).toHaveBeenCalledTimes(callsBefore);
   });
 });
 
 describe('PlayerApp — camera capture flow', () => {
-  let originalHash;
+  let originalHash: string;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -567,6 +595,7 @@ describe('PlayerApp — camera capture flow', () => {
   });
 
   afterEach(() => {
+    if (root) { act(() => { root!.unmount(); }); root = null; }
     vi.useRealTimers();
     window.location.hash = originalHash;
   });
@@ -578,7 +607,7 @@ describe('PlayerApp — camera capture flow', () => {
     await vi.waitFor(() => {
       const btn = container.querySelector('[data-testid="capture-cards-btn"]');
       expect(btn).not.toBeNull();
-      expect(btn.textContent).toContain('Capture Cards');
+      expect(btn!.textContent).toContain('Capture Cards');
     });
   });
 
@@ -614,7 +643,7 @@ describe('PlayerApp — camera capture flow', () => {
       expect(container.querySelector('[data-testid="capture-cards-btn"]')).not.toBeNull();
     });
 
-    container.querySelector('[data-testid="capture-cards-btn"]').click();
+    act(() => { container.querySelector<HTMLElement>('[data-testid="capture-cards-btn"]')!.click(); });
 
     await vi.waitFor(() => {
       // CameraCapture renders an overlay with "Open Camera" button
@@ -630,7 +659,7 @@ describe('PlayerApp — camera capture flow', () => {
       expect(container.querySelector('[data-testid="capture-cards-btn"]')).not.toBeNull();
     });
 
-    container.querySelector('[data-testid="capture-cards-btn"]').click();
+    act(() => { container.querySelector<HTMLElement>('[data-testid="capture-cards-btn"]')!.click(); });
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Open Camera');
@@ -638,7 +667,7 @@ describe('PlayerApp — camera capture flow', () => {
 
     // Click the Cancel button in CameraCapture
     const cancelBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent === 'Cancel');
-    cancelBtn.click();
+    act(() => { cancelBtn!.click(); });
 
     await vi.waitFor(() => {
       // Should be back to showing Capture Cards button
@@ -654,25 +683,25 @@ describe('PlayerApp — camera capture flow', () => {
       expect(container.querySelector('[data-testid="capture-cards-btn"]')).not.toBeNull();
     });
 
-    uploadImage.mockResolvedValue({ upload_id: 'u1' });
-    getDetectionResults.mockResolvedValue({
+    mockUploadImage.mockResolvedValue({ upload_id: 'u1' });
+    mockGetDetectionResults.mockResolvedValue({
       detections: [
         { detected_value: 'Ah', confidence: 0.95, bbox_x: 10 },
         { detected_value: 'Ks', confidence: 0.90, bbox_x: 50 },
       ],
     });
 
-    container.querySelector('[data-testid="capture-cards-btn"]').click();
+    act(() => { container.querySelector<HTMLElement>('[data-testid="capture-cards-btn"]')!.click(); });
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Open Camera');
     });
 
     // Simulate file input change
-    const fileInput = container.querySelector('input[type="file"]');
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
     const file = new File(['img'], 'photo.jpg', { type: 'image/jpeg' });
     Object.defineProperty(fileInput, 'files', { value: [file], writable: false });
-    fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+    await act(async () => { fileInput.dispatchEvent(new Event('change', { bubbles: true })); });
 
     // After upload + detection, should show DetectionReview
     await vi.waitFor(() => {
@@ -681,13 +710,13 @@ describe('PlayerApp — camera capture flow', () => {
     });
 
     // Confirm the detection
-    updateHolecards.mockResolvedValue({});
+    mockUpdateHolecards.mockResolvedValue({});
 
     const confirmBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent === 'Confirm');
-    confirmBtn.click();
+    await act(async () => { confirmBtn!.click(); });
 
     await vi.waitFor(() => {
-      expect(updateHolecards).toHaveBeenCalledWith(3, 1, 'Bob', {
+      expect(mockUpdateHolecards).toHaveBeenCalledWith(3, 1, 'Bob', {
         card_1: 'Ah',
         card_2: 'Ks',
       });
@@ -702,33 +731,33 @@ describe('PlayerApp — camera capture flow', () => {
       expect(container.querySelector('[data-testid="capture-cards-btn"]')).not.toBeNull();
     });
 
-    uploadImage.mockResolvedValue({ upload_id: 'u1' });
-    getDetectionResults.mockResolvedValue({
+    mockUploadImage.mockResolvedValue({ upload_id: 'u1' });
+    mockGetDetectionResults.mockResolvedValue({
       detections: [
         { detected_value: 'Ah', confidence: 0.95, bbox_x: 10 },
         { detected_value: 'Ks', confidence: 0.90, bbox_x: 50 },
       ],
     });
 
-    container.querySelector('[data-testid="capture-cards-btn"]').click();
+    act(() => { container.querySelector<HTMLElement>('[data-testid="capture-cards-btn"]')!.click(); });
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Open Camera');
     });
 
-    const fileInput = container.querySelector('input[type="file"]');
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
     const file = new File(['img'], 'photo.jpg', { type: 'image/jpeg' });
     Object.defineProperty(fileInput, 'files', { value: [file], writable: false });
-    fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+    await act(async () => { fileInput.dispatchEvent(new Event('change', { bubbles: true })); });
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Review Detection');
     });
 
-    updateHolecards.mockRejectedValue(new Error('Server error'));
+    mockUpdateHolecards.mockRejectedValue(new Error('Server error'));
 
     const confirmBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent === 'Confirm');
-    confirmBtn.click();
+    await act(async () => { confirmBtn!.click(); });
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Server error');
@@ -747,34 +776,34 @@ describe('PlayerApp — camera capture flow', () => {
       expect(container.querySelector('[data-testid="capture-cards-btn"]')).not.toBeNull();
     });
 
-    uploadImage.mockResolvedValue({ upload_id: 'u1' });
-    getDetectionResults.mockResolvedValue({
+    mockUploadImage.mockResolvedValue({ upload_id: 'u1' });
+    mockGetDetectionResults.mockResolvedValue({
       detections: [
         { detected_value: 'Ah', confidence: 0.95, bbox_x: 10 },
         { detected_value: 'Ks', confidence: 0.90, bbox_x: 50 },
       ],
     });
 
-    container.querySelector('[data-testid="capture-cards-btn"]').click();
+    act(() => { container.querySelector<HTMLElement>('[data-testid="capture-cards-btn"]')!.click(); });
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Open Camera');
     });
 
-    const fileInput = container.querySelector('input[type="file"]');
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
     const file = new File(['img'], 'photo.jpg', { type: 'image/jpeg' });
     Object.defineProperty(fileInput, 'files', { value: [file], writable: false });
-    fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+    await act(async () => { fileInput.dispatchEvent(new Event('change', { bubbles: true })); });
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Review Detection');
     });
 
-    updateHolecards.mockResolvedValue({});
-    fetchHandStatus.mockResolvedValue(makeStatus('Bob', 'joined', { card_1: 'Ah', card_2: 'Ks' }));
+    mockUpdateHolecards.mockResolvedValue({});
+    mockFetchHandStatus.mockResolvedValue(makeStatus('Bob', 'joined', { card_1: 'Ah', card_2: 'Ks' }));
 
     const confirmBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent === 'Confirm');
-    confirmBtn.click();
+    await act(async () => { confirmBtn!.click(); });
 
     // After success, should go back to status view (no review/camera screen)
     await vi.waitFor(() => {
@@ -785,7 +814,7 @@ describe('PlayerApp — camera capture flow', () => {
 });
 
 describe('PlayerApp — hand back cards action', () => {
-  let originalHash;
+  let originalHash: string;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -795,6 +824,7 @@ describe('PlayerApp — hand back cards action', () => {
   });
 
   afterEach(() => {
+    if (root) { act(() => { root!.unmount(); }); root = null; }
     vi.useRealTimers();
     window.location.hash = originalHash;
   });
@@ -806,7 +836,7 @@ describe('PlayerApp — hand back cards action', () => {
     await vi.waitFor(() => {
       const btn = container.querySelector('[data-testid="hand-back-btn"]');
       expect(btn).not.toBeNull();
-      expect(btn.textContent).toContain('Hand Back Cards');
+      expect(btn!.textContent).toContain('Hand Back Cards');
     });
   });
 
@@ -844,7 +874,7 @@ describe('PlayerApp — hand back cards action', () => {
   });
 
   it('calls patchPlayerResult with handed_back on tap', async () => {
-    patchPlayerResult.mockResolvedValue({});
+    mockPatchPlayerResult.mockResolvedValue({});
     const container = document.createElement('div');
     await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'joined', { card_1: 'Ah', card_2: 'Ks' }) });
 
@@ -852,15 +882,15 @@ describe('PlayerApp — hand back cards action', () => {
       expect(container.querySelector('[data-testid="hand-back-btn"]')).not.toBeNull();
     });
 
-    container.querySelector('[data-testid="hand-back-btn"]').click();
+    await act(async () => { container.querySelector<HTMLElement>('[data-testid="hand-back-btn"]')!.click(); });
 
     await vi.waitFor(() => {
-      expect(patchPlayerResult).toHaveBeenCalledWith(3, 1, 'Bob', { result: 'handed_back' });
+      expect(mockPatchPlayerResult).toHaveBeenCalledWith(3, 1, 'Bob', { result: 'handed_back' });
     });
   });
 
   it('shows error and retry when hand-back API fails', async () => {
-    patchPlayerResult.mockRejectedValue(new Error('Server error'));
+    mockPatchPlayerResult.mockRejectedValue(new Error('Server error'));
     const container = document.createElement('div');
     await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'joined', { card_1: 'Ah', card_2: 'Ks' }) });
 
@@ -868,7 +898,7 @@ describe('PlayerApp — hand back cards action', () => {
       expect(container.querySelector('[data-testid="hand-back-btn"]')).not.toBeNull();
     });
 
-    container.querySelector('[data-testid="hand-back-btn"]').click();
+    await act(async () => { container.querySelector<HTMLElement>('[data-testid="hand-back-btn"]')!.click(); });
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Server error');
@@ -879,17 +909,17 @@ describe('PlayerApp — hand back cards action', () => {
     expect(retryBtn).not.toBeNull();
 
     // Retry should call API again
-    patchPlayerResult.mockResolvedValue({});
-    retryBtn.click();
+    mockPatchPlayerResult.mockResolvedValue({});
+    await act(async () => { (retryBtn as HTMLElement).click(); });
 
     await vi.waitFor(() => {
-      expect(patchPlayerResult).toHaveBeenCalledTimes(2);
+      expect(mockPatchPlayerResult).toHaveBeenCalledTimes(2);
     });
   });
 
   it('disables button while API call is in-flight', async () => {
-    let resolveApi;
-    patchPlayerResult.mockImplementation(() => new Promise(r => { resolveApi = r; }));
+    let resolveApi: (value: unknown) => void;
+    mockPatchPlayerResult.mockImplementation(() => new Promise(r => { resolveApi = r; }));
     const container = document.createElement('div');
     await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'joined', { card_1: 'Ah', card_2: 'Ks' }) });
 
@@ -897,19 +927,19 @@ describe('PlayerApp — hand back cards action', () => {
       expect(container.querySelector('[data-testid="hand-back-btn"]')).not.toBeNull();
     });
 
-    container.querySelector('[data-testid="hand-back-btn"]').click();
+    act(() => { container.querySelector<HTMLElement>('[data-testid="hand-back-btn"]')!.click(); });
 
     await vi.waitFor(() => {
-      const btn = container.querySelector('[data-testid="hand-back-btn"]');
+      const btn = container.querySelector('[data-testid="hand-back-btn"]') as HTMLButtonElement;
       expect(btn.disabled).toBe(true);
       expect(btn.textContent).toContain('Handing back');
     });
 
-    resolveApi({});
+    await act(async () => { resolveApi!({}); });
   });
 
   it('polling picks up handed_back status and shows waiting message', async () => {
-    patchPlayerResult.mockResolvedValue({});
+    mockPatchPlayerResult.mockResolvedValue({});
     const container = document.createElement('div');
     await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'joined', { card_1: 'Ah', card_2: 'Ks' }) });
 
@@ -917,15 +947,15 @@ describe('PlayerApp — hand back cards action', () => {
       expect(container.querySelector('[data-testid="hand-back-btn"]')).not.toBeNull();
     });
 
-    container.querySelector('[data-testid="hand-back-btn"]').click();
+    await act(async () => { container.querySelector<HTMLElement>('[data-testid="hand-back-btn"]')!.click(); });
 
     await vi.waitFor(() => {
-      expect(patchPlayerResult).toHaveBeenCalled();
+      expect(mockPatchPlayerResult).toHaveBeenCalled();
     });
 
     // Next poll returns handed_back status
-    fetchHandStatus.mockResolvedValue(makeStatus('Bob', 'handed_back', { result: 'handed_back' }));
-    vi.advanceTimersByTime(3000);
+    mockFetchHandStatus.mockResolvedValue(makeStatus('Bob', 'handed_back', { result: 'handed_back' }));
+    act(() => { vi.advanceTimersByTime(3000); });
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Waiting for dealer');
@@ -937,7 +967,7 @@ describe('PlayerApp — hand back cards action', () => {
 });
 
 describe('PlayerApp — polling edge cases', () => {
-  let originalHash;
+  let originalHash: string;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -947,6 +977,7 @@ describe('PlayerApp — polling edge cases', () => {
   });
 
   afterEach(() => {
+    if (root) { act(() => { root!.unmount(); }); root = null; }
     vi.useRealTimers();
     window.location.hash = originalHash;
   });
@@ -973,9 +1004,9 @@ describe('PlayerApp — polling edge cases', () => {
     });
 
     // Next poll cycle: a hand now exists
-    fetchHands.mockResolvedValue([{ hand_number: 1 }]);
-    fetchHandStatus.mockResolvedValue(makeStatus('Bob', 'pending'));
-    vi.advanceTimersByTime(3000);
+    mockFetchHands.mockResolvedValue([{ hand_number: 1 }]);
+    mockFetchHandStatus.mockResolvedValue(makeStatus('Bob', 'pending'));
+    act(() => { vi.advanceTimersByTime(3000); });
 
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="no-active-hand"]')).toBeNull();
@@ -992,8 +1023,8 @@ describe('PlayerApp — polling edge cases', () => {
     });
 
     // New hand starts — hand_number changes from 1 to 2
-    fetchHands.mockResolvedValue([{ hand_number: 1 }, { hand_number: 2 }]);
-    fetchHandStatus.mockResolvedValue({
+    mockFetchHands.mockResolvedValue([{ hand_number: 1 }, { hand_number: 2 }]);
+    mockFetchHandStatus.mockResolvedValue({
       hand_number: 2,
       community_recorded: false,
       players: GAME_DETAIL.player_names.map(name => ({
@@ -1005,7 +1036,7 @@ describe('PlayerApp — polling edge cases', () => {
         outcome_street: null,
       })),
     });
-    vi.advanceTimersByTime(3000);
+    act(() => { vi.advanceTimersByTime(3000); });
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Waiting for hand');
@@ -1017,12 +1048,12 @@ describe('PlayerApp — polling edge cases', () => {
     await goToPlaying(container, 1);
 
     await vi.waitFor(() => {
-      expect(fetchHandStatus).toHaveBeenCalled();
+      expect(mockFetchHandStatus).toHaveBeenCalled();
     });
 
     // Next poll: fetchHands network error
-    fetchHands.mockRejectedValue(new Error('Network error'));
-    vi.advanceTimersByTime(3000);
+    mockFetchHands.mockRejectedValue(new Error('Network error'));
+    act(() => { vi.advanceTimersByTime(3000); });
 
     // Should show poll error but not crash
     await vi.waitFor(() => {
@@ -1039,21 +1070,21 @@ describe('PlayerApp — polling edge cases', () => {
     await goToPlaying(container, 1);
 
     await vi.waitFor(() => {
-      expect(fetchHandStatus).toHaveBeenCalled();
+      expect(mockFetchHandStatus).toHaveBeenCalled();
     });
 
     // Next poll: fetchHandStatus network error
-    fetchHandStatus.mockRejectedValue(new Error('Server error'));
-    vi.advanceTimersByTime(3000);
+    mockFetchHandStatus.mockRejectedValue(new Error('Server error'));
+    act(() => { vi.advanceTimersByTime(3000); });
 
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="poll-error"]')).not.toBeNull();
     });
 
     // Should recover on next successful poll
-    fetchHands.mockResolvedValue([{ hand_number: 1 }]);
-    fetchHandStatus.mockResolvedValue(makeStatus('Bob', 'pending'));
-    vi.advanceTimersByTime(3000);
+    mockFetchHands.mockResolvedValue([{ hand_number: 1 }]);
+    mockFetchHandStatus.mockResolvedValue(makeStatus('Bob', 'pending'));
+    act(() => { vi.advanceTimersByTime(3000); });
 
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="poll-error"]')).toBeNull();
@@ -1066,21 +1097,21 @@ describe('PlayerApp — polling edge cases', () => {
     await goToPlaying(container, 1);
 
     await vi.waitFor(() => {
-      expect(fetchHandStatus).toHaveBeenCalled();
+      expect(mockFetchHandStatus).toHaveBeenCalled();
     });
 
     // Error poll
-    fetchHands.mockRejectedValue(new Error('Timeout'));
-    vi.advanceTimersByTime(3000);
+    mockFetchHands.mockRejectedValue(new Error('Timeout'));
+    act(() => { vi.advanceTimersByTime(3000); });
 
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="poll-error"]')).not.toBeNull();
     });
 
     // Recovery poll
-    fetchHands.mockResolvedValue([{ hand_number: 1 }]);
-    fetchHandStatus.mockResolvedValue(HAND_STATUS_IDLE);
-    vi.advanceTimersByTime(3000);
+    mockFetchHands.mockResolvedValue([{ hand_number: 1 }]);
+    mockFetchHandStatus.mockResolvedValue(HAND_STATUS_IDLE);
+    act(() => { vi.advanceTimersByTime(3000); });
 
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="poll-error"]')).toBeNull();
@@ -1089,7 +1120,7 @@ describe('PlayerApp — polling edge cases', () => {
 });
 
 describe('PlayerApp — button alignment', () => {
-  let originalHash;
+  let originalHash: string;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -1099,6 +1130,7 @@ describe('PlayerApp — button alignment', () => {
   });
 
   afterEach(() => {
+    if (root) { act(() => { root!.unmount(); }); root = null; }
     vi.useRealTimers();
     window.location.hash = originalHash;
   });
@@ -1107,7 +1139,7 @@ describe('PlayerApp — button alignment', () => {
     const container = document.createElement('div');
     await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'pending') });
     await vi.waitFor(() => {
-      const btn = container.querySelector('[data-testid="capture-cards-btn"]');
+      const btn = container.querySelector('[data-testid="capture-cards-btn"]') as HTMLElement;
       expect(btn).not.toBeNull();
       expect(btn.style.width).toBe('100%');
     });
@@ -1117,7 +1149,7 @@ describe('PlayerApp — button alignment', () => {
     const container = document.createElement('div');
     await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'pending') });
     await vi.waitFor(() => {
-      const btn = container.querySelector('[data-testid="change-player-btn"]');
+      const btn = container.querySelector('[data-testid="change-player-btn"]') as HTMLElement;
       expect(btn).not.toBeNull();
       expect(btn.style.width).toBe('100%');
     });
@@ -1127,8 +1159,8 @@ describe('PlayerApp — button alignment', () => {
     const container = document.createElement('div');
     await goToPlaying(container, 1, { handStatus: makeStatus('Bob', 'pending') });
     await vi.waitFor(() => {
-      const capture = container.querySelector('[data-testid="capture-cards-btn"]');
-      const change = container.querySelector('[data-testid="change-player-btn"]');
+      const capture = container.querySelector('[data-testid="capture-cards-btn"]') as HTMLElement;
+      const change = container.querySelector('[data-testid="change-player-btn"]') as HTMLElement;
       expect(capture).not.toBeNull();
       expect(change).not.toBeNull();
       expect(capture.style.minHeight).toBe(change.style.minHeight);

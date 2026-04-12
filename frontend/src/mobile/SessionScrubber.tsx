@@ -1,6 +1,12 @@
-import { h } from 'preact';
+import type React from 'react';
 
-const styles = {
+export interface SessionScrubberProps {
+  current: number;
+  total: number;
+  onchange: (value: number) => void;
+}
+
+const styles: Record<string, React.CSSProperties> = {
   wrapper: {
     display: 'flex',
     alignItems: 'center',
@@ -35,7 +41,7 @@ const styles = {
   },
 };
 
-export function SessionScrubber({ current, total, onchange }) {
+export function SessionScrubber({ current, total, onchange }: SessionScrubberProps): React.ReactElement {
   const hasPrev = current > 1;
   const hasNext = current < total;
 
