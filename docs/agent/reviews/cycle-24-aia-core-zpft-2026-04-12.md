@@ -177,7 +177,7 @@ const winnerGlowTimers = new Set<ReturnType<typeof setTimeout>>();
 
 ## Overall Assessment
 
-The TypeScript conversion is **well-executed**. All 5 acceptance criteria are satisfied: modules use explicit Three.js types, zero `any` usage, old `.js` files deleted, 605 tests pass, and 38+ new tests added. 
+The TypeScript conversion is **well-executed**. All 5 acceptance criteria are satisfied: modules use explicit Three.js types, zero `any` usage, old `.js` files deleted, 605 tests pass, and 38+ new tests added.
 
 No CRITICAL or HIGH findings. The 3 MEDIUM findings are minor design observations (incomplete standalone dispose in `table.ts`, a localized double-cast in `cards.ts`, and a documentation note about geometry ownership). The 3 LOW findings cover a cosmetic type cast, vestigial dead code, and the uncommitted working tree.
 
