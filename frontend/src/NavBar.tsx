@@ -1,10 +1,9 @@
 import { NavLink } from 'react-router-dom';
-
-// Placeholder for Zustand store (T-008). Replace with actual store import when available.
-const useDealerGameActive = (): boolean => false;
+import { useDealerStore } from './stores/dealerStore';
 
 export default function NavBar() {
-  const dealerGameActive = useDealerGameActive();
+  const gameId = useDealerStore((s) => s.gameId);
+  const dealerGameActive = gameId !== null;
 
   return (
     <nav>
