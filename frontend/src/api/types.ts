@@ -1,0 +1,250 @@
+// Response interfaces matching backend Pydantic models (src/pydantic_models/app_models.py)
+
+// --- Enums ---
+
+export type ResultEnum = 'won' | 'folded' | 'lost' | 'handed_back';
+export type StreetEnum = 'preflop' | 'flop' | 'turn' | 'river';
+export type LeaderboardMetric = 'total_profit_loss' | 'win_rate' | 'hands_played';
+
+// --- Game Session ---
+
+export interface GameSessionListItem {
+  game_id: number;
+  game_date: string;
+  status: string;
+  player_count: number;
+  hand_count: number;
+  winners: string[];
+}
+
+export interface GameSessionResponse {
+  game_id: number;
+  game_date: string;
+  status: string;
+  created_at: string;
+  player_names: string[];
+  hand_count: number;
+  winners: string[];
+}
+
+export interface GameSessionCreate {
+  game_date: string;
+  player_names: string[];
+}
+
+export interface CompleteGameRequest {
+  winners: string[];
+}
+
+// --- Player ---
+
+export interface PlayerResponse {
+  player_id: number;
+  name: string;
+  created_at: string;
+}
+
+export interface PlayerCreate {
+  name: string;
+}
+
+// --- Hand ---
+
+export interface PlayerHandResponse {
+  player_hand_id: number;
+  hand_id: number;
+  player_id: number;
+  player_name: string;
+  card_1: string | null;
+  card_2: string | null;
+  result: string | null;
+  profit_loss: number | null;
+  outcome_street: string | null;
+}
+
+export interface HandResponse {
+  hand_id: number;
+  game_id: number;
+  hand_number: number;
+  flop_1: string | null;
+  flop_2: string | null;
+  flop_3: string | null;
+  turn: string | null;
+  river: string | null;
+  source_upload_id: number | null;
+  created_at: string;
+  player_hands: PlayerHandResponse[];
+}
+
+export interface HandCreate {
+  flop_1?: string | null;
+  flop_2?: string | null;
+  flop_3?: string | null;
+  turn?: string | null;
+  river?: string | null;
+  player_entries?: PlayerHandEntry[];
+}
+
+export interface PlayerHandEntry {
+  player_name: string;
+  card_1?: string | null;
+  card_2?: string | null;
+  result?: ResultEnum | null;
+  profit_loss?: number | null;
+}
+
+export interface AddPlayerToHandRequest {
+  player_name: string;
+  card_1?: string | null;
+  card_2?: string | null;
+}
+
+export interface HoleCardsUpdate {
+  card_1?: string | null;
+  card_2?: string | null;
+}
+
+export interface CommunityCardsUpdate {
+  flop_1: string;
+  flop_2: string;
+  flop_3: string;
+  turn?: string | null;
+  river?: string | null;
+}
+
+export interface FlopUpdate {
+  flop_1: string;
+  flop_2: string;
+  flop_3: string;
+}
+
+export interface TurnUpdate {
+  turn: string;
+}
+
+export interface RiverUpdate {
+  river: string;
+}
+
+export interface PlayerResultUpdate {
+  result: ResultEnum;
+  profit_loss?: number | null;
+  outcome_street?: StreetEnum | null;
+}
+
+// --- Stats ---
+
+export interface PlayerStatsResponse {
+  player_name: string;
+  total_hands_played: number;
+  hands_won: number;
+  hands_lost: number;
+  hands_folded: number;
+  win_rate: number;
+  total_profit_loss: number;
+  avg_profit_loss_per_hand: number;
+  avg_profit_loss_per_session: number;
+  flop_pct: number;
+  turn_pct: number;
+  river_pct: number;
+}
+
+export interface GameStatsPlayerEntry {
+  player_name: string;
+  hands_played: number;
+  hands_won: number;
+  hands_lost: number;
+  hands_folded: number;
+  win_rate: number;
+  profit_loss: number;
+}
+
+export interface GameStatsResponse {
+  game_id: number;
+  game_date: string;
+  total_hands: number;
+  player_stats: GameStatsPlayerEntry[];
+}
+
+export interface LeaderboardEntry {
+  rank: number;
+  player_name: string;
+  total_profit_loss: number;
+  win_rate: number;
+  hands_played: number;
+}
+
+// --- Hand Status ---
+
+export interface PlayerStatusEntry {
+  name: string;
+  participation_status: string;
+  card_1: string | null;
+  card_2: string | null;
+  result: string | null;
+  outcome_street: string | null;
+}
+
+export interface HandStatusResponse {
+  hand_number: number;
+  community_recorded: boolean;
+  players: PlayerStatusEntry[];
+}
+
+// --- Equity ---
+
+export interface PlayerEquityEntry {
+  player_name: string;
+  equity: number;
+}
+
+export interface EquityResponse {
+  equities: PlayerEquityEntry[];
+}
+
+// --- CSV Upload ---
+
+export interface CsvValidationResponse {
+  valid: boolean;
+  total_rows: number;
+  error_count: number;
+  errors: string[];
+}
+
+export interface CSVCommitSummary {
+  games_created: number;
+  hands_created: number;
+  players_created: number;
+  players_matched: number;
+}
+
+export interface CsvSchemaResponse {
+  columns: string[];
+  formats: Record<string, string>;
+}
+
+// --- Image Upload / Detection ---
+
+export interface ImageUploadResponse {
+  upload_id: number;
+  game_id: number;
+  file_path: string;
+  status: string;
+}
+
+export interface CardDetectionEntry {
+  card_position: string;
+  detected_value: string;
+  confidence: number;
+  bbox_x?: number | null;
+  bbox_y?: number | null;
+  bbox_width?: number | null;
+  bbox_height?: number | null;
+}
+
+export interface DetectionResultsResponse {
+  upload_id: number;
+  game_id: number;
+  status: string;
+  detections: CardDetectionEntry[];
+}

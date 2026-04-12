@@ -53,6 +53,7 @@ dev = [
 test = [
     { name = "pytest" },
     { name = "pytest-mock" },
+    { name = "pyyaml" },
 ]
 
 [package.metadata]
@@ -82,6 +83,7 @@ dev = [
 test = [
     { name = "pytest" },
     { name = "pytest-mock" },
+    { name = "pyyaml" },
 ]
 
 [[package]]

@@ -33,6 +33,7 @@ torchvision = { index = "pytorch-cpu" }
 test = [
     "pytest",
     "pytest-mock",
+    "pyyaml",
 ]
 dev = [
     "ruff",
