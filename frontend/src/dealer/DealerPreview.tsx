@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, type CSSProperties } from 'react';
 import { createPokerScene } from '../scenes/pokerScene.js';
 import { calculateEquity, type Card } from '../poker/evaluator';
-import { StreetScrubber } from '../mobile/StreetScrubber.jsx';
+import { StreetScrubber } from '../mobile/StreetScrubber.tsx';
 
 const SUIT_SYMBOL: Record<string, string> = { h: '♥', d: '♦', c: '♣', s: '♠', H: '♥', D: '♦', C: '♣', S: '♠' };
 const RESULT_MAP: Record<string, string> = { won: 'win', folded: 'fold', lost: 'loss' };

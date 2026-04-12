@@ -1,6 +1,8 @@
 /** @vitest-environment happy-dom */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render } from 'preact';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { createRoot } from 'react-dom/client';
+import { act } from 'react';
+import { useDealerStore } from '../stores/dealerStore.ts';
 
 vi.mock('../api/client.js', () => ({
   createHand: vi.fn(),
@@ -58,13 +60,17 @@ import {
   fetchHands,
   fetchGame,
   fetchHand,
-} from '../api/client.js';
-import { DealerApp } from './DealerApp.jsx';
-import { initialState } from './dealerState.ts';
+} from '../api/client.ts';
+import { DealerApp } from './DealerApp.tsx';
+
+let activeRoot = null;
 
 function renderToContainer(vnode) {
   const container = document.createElement('div');
-  render(vnode, container);
+  act(() => {
+    activeRoot = createRoot(container);
+    activeRoot.render(vnode);
+  });
   return container;
 }
 
@@ -72,6 +78,16 @@ describe('GameSelector integration in DealerApp', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     sessionStorage.clear();
+    useDealerStore.setState({
+      gameId: null,
+      currentHandId: null,
+      players: [],
+      community: { flop1: null, flop2: null, flop3: null, flopRecorded: false, turn: null, turnRecorded: false, river: null, riverRecorded: false },
+      currentStep: 'gameSelector',
+      handCount: 0,
+      gameDate: null,
+      gameMode: 'dealer_centric',
+    });
     fetchSessions.mockResolvedValue([]);
     fetchPlayers.mockResolvedValue([
       { player_id: 1, name: 'Alice' },
@@ -86,8 +102,18 @@ describe('GameSelector integration in DealerApp', () => {
     });
   });
 
+  afterEach(() => {
+    if (activeRoot) {
+      act(() => {
+        activeRoot?.unmount();
+        activeRoot = null;
+      });
+    }
+    sessionStorage.clear();
+  });
+
   it('initialState starts at gameSelector step', () => {
-    expect(initialState.currentStep).toBe('gameSelector');
+    expect(useDealerStore.getState().currentStep).toBe('gameSelector');
   });
 
   it('renders GameSelector on initial load', async () => {
