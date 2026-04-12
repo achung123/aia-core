@@ -1,5 +1,6 @@
 /** @vitest-environment happy-dom */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
+import type { PokerSceneResult, PokerSceneOptions } from './pokerScene.ts';
 
 // Mock OrbitControls
 const mockOrbitControls = {
@@ -7,14 +8,14 @@ const mockOrbitControls = {
   enableZoom: false,
   enableRotate: false,
   enablePan: false,
-  touches: {},
-  target: null,
+  touches: {} as Record<string, number>,
+  target: null as unknown,
   update: vi.fn(),
   dispose: vi.fn(),
   saveState: vi.fn(),
   reset: vi.fn(),
 };
-const OrbitControlsCtor = vi.fn(function () {
+const OrbitControlsCtor: Mock = vi.fn(function (this: typeof mockOrbitControls) {
   Object.assign(this, mockOrbitControls);
   return mockOrbitControls;
 });
@@ -29,26 +30,30 @@ vi.mock('three', () => {
     set() { return this; }
   }
   class Vector3 {
+    x: number; y: number; z: number;
     constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; }
-    set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; }
+    set(x: number, y: number, z: number) { this.x = x; this.y = y; this.z = z; return this; }
     clone() { return new Vector3(this.x, this.y, this.z); }
     project() { return this; }
-    lerpVectors(a, b, t) { this.x = a.x + (b.x - a.x) * t; this.y = a.y + (b.y - a.y) * t; this.z = a.z + (b.z - a.z) * t; return this; }
+    lerpVectors(a: Vector3, b: Vector3, t: number) { this.x = a.x + (b.x - a.x) * t; this.y = a.y + (b.y - a.y) * t; this.z = a.z + (b.z - a.z) * t; return this; }
   }
   class PerspectiveCamera {
-    constructor() { this.position = new Vector3(); this.aspect = 1; }
+    position = new Vector3();
+    aspect = 1;
     lookAt() {}
     updateProjectionMatrix() {}
   }
   class AmbientLight {}
-  class DirectionalLight { constructor() { this.position = new Vector3(); } }
+  class DirectionalLight { position = new Vector3(); }
   class Scene {
-    constructor() { this.background = null; this.children = []; }
-    add(obj) { this.children.push(obj); }
-    remove(obj) { const i = this.children.indexOf(obj); if (i >= 0) this.children.splice(i, 1); }
+    background: Color | null = null;
+    children: unknown[] = [];
+    add(obj: unknown) { this.children.push(obj); }
+    remove(obj: unknown) { const i = this.children.indexOf(obj); if (i >= 0) this.children.splice(i, 1); }
   }
   class WebGLRenderer {
-    constructor(opts) { this.domElement = opts?.canvas || {}; }
+    domElement: HTMLCanvasElement | Record<string, never>;
+    constructor(opts?: { canvas?: HTMLCanvasElement }) { this.domElement = opts?.canvas || {}; }
     setPixelRatio() {}
     setSize() {}
     render() {}
@@ -56,25 +61,35 @@ vi.mock('three', () => {
   }
   class CylinderGeometry { scale() {} dispose() {} }
   class PlaneGeometry { dispose() {} }
-  class MeshLambertMaterial { constructor() { this.color = new Color(); } dispose() {} }
-  class MeshBasicMaterial { constructor() {} dispose() {} }
-  class SpriteMaterial { constructor() { this.map = null; } dispose() {} }
+  class MeshLambertMaterial {
+    color = new Color();
+    dispose() {}
+  }
+  class MeshBasicMaterial {
+    dispose() {}
+  }
+  class SpriteMaterial {
+    map: unknown = null;
+    dispose() {}
+  }
   class Mesh {
-    constructor() {
-      this.position = new Vector3();
-      this.rotation = { x: 0, y: 0, z: 0 };
-      this.geometry = { dispose: vi.fn() };
-      this.material = { dispose: vi.fn(), map: null };
-      this.flip = vi.fn();
-      this.cancelFlip = vi.fn();
-    }
+    position = new Vector3();
+    rotation = { x: 0, y: 0, z: 0 };
+    geometry = { dispose: vi.fn() };
+    material: { dispose: Mock; map: unknown } = { dispose: vi.fn(), map: null };
+    flip = vi.fn();
+    cancelFlip = vi.fn();
   }
   class Sprite {
-    constructor() { this.position = new Vector3(); this.scale = new Vector3(); this.material = new SpriteMaterial(); }
+    position = new Vector3();
+    scale = new Vector3();
+    material = new SpriteMaterial();
   }
   class Group {
-    constructor() { this.position = new Vector3(); this.scale = new Vector3(1, 1, 1); this.children = []; }
-    add(c) { this.children.push(c); }
+    position = new Vector3();
+    scale = new Vector3(1, 1, 1);
+    children: unknown[] = [];
+    add(c: unknown) { this.children.push(c); }
   }
   class CanvasTexture { dispose() {} }
 
@@ -99,33 +114,38 @@ vi.mock('three', () => {
   };
 });
 
+interface RafEntry { id: number; cb: FrameRequestCallback }
+
 // Stub requestAnimationFrame / cancelAnimationFrame
-let rafCallbacks = [];
+let rafCallbacks: RafEntry[] = [];
 let rafIdCounter = 0;
 beforeEach(() => {
   rafCallbacks = [];
   rafIdCounter = 0;
-  vi.stubGlobal('requestAnimationFrame', (cb) => { rafIdCounter++; rafCallbacks.push({ id: rafIdCounter, cb }); return rafIdCounter; });
-  vi.stubGlobal('cancelAnimationFrame', (id) => { rafCallbacks = rafCallbacks.filter(r => r.id !== id); });
+  vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback): number => { rafIdCounter++; rafCallbacks.push({ id: rafIdCounter, cb }); return rafIdCounter; });
+  vi.stubGlobal('cancelAnimationFrame', (id: number): void => { rafCallbacks = rafCallbacks.filter(r => r.id !== id); });
   vi.stubGlobal('devicePixelRatio', 1);
 
   // Stub canvas 2D context for card rendering (happy-dom doesn't support it)
   const origCreateElement = document.createElement.bind(document);
-  vi.spyOn(document, 'createElement').mockImplementation((tag, ...args) => {
-    const el = origCreateElement(tag, ...args);
-    if (tag === 'canvas' && !el.getContext.__mocked) {
-      el.getContext = () => ({
-        fillStyle: '',
-        strokeStyle: '',
-        lineWidth: 0,
-        font: '',
-        textAlign: '',
-        textBaseline: '',
-        fillRect: vi.fn(),
-        strokeRect: vi.fn(),
-        fillText: vi.fn(),
-      });
-      el.getContext.__mocked = true;
+  vi.spyOn(document, 'createElement').mockImplementation((tag: string, ...args: unknown[]) => {
+    const el = origCreateElement(tag, ...(args as [ElementCreationOptions?]));
+    if (tag === 'canvas') {
+      const canvasEl = el as HTMLCanvasElement & { __mocked?: boolean };
+      if (!canvasEl.__mocked) {
+        canvasEl.getContext = (() => ({
+          fillStyle: '',
+          strokeStyle: '',
+          lineWidth: 0,
+          font: '',
+          textAlign: '',
+          textBaseline: '',
+          fillRect: vi.fn(),
+          strokeRect: vi.fn(),
+          fillText: vi.fn(),
+        })) as unknown as typeof canvasEl.getContext;
+        canvasEl.__mocked = true;
+      }
     }
     return el;
   });
@@ -135,7 +155,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function makeCanvas(w = 800, h = 600) {
+function makeCanvas(w = 800, h = 600): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   // happy-dom may not set clientWidth/clientHeight, so we override
   Object.defineProperty(canvas, 'clientWidth', { value: w, configurable: true });
@@ -144,7 +164,7 @@ function makeCanvas(w = 800, h = 600) {
 }
 
 describe('createPokerScene', () => {
-  let createPokerScene;
+  let createPokerScene: (canvas: HTMLCanvasElement, options?: PokerSceneOptions) => PokerSceneResult;
 
   beforeEach(async () => {
     ({ createPokerScene } = await import('./pokerScene.ts'));
@@ -241,7 +261,7 @@ describe('createPokerScene', () => {
 });
 
 describe('touch controls', () => {
-  let createPokerScene;
+  let createPokerScene: (canvas: HTMLCanvasElement, options?: PokerSceneOptions) => PokerSceneResult;
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -287,7 +307,6 @@ describe('touch controls', () => {
     const canvas = makeCanvas();
     const result = createPokerScene(canvas);
 
-    // OrbitControls TOUCH enum:  ROTATE = 0, PAN = 1, DOLLY_PAN = 2, DOLLY_ROTATE = 3
     expect(mockOrbitControls.touches).toEqual({
       ONE: THREE.TOUCH?.ROTATE ?? 0,
       TWO: THREE.TOUCH?.DOLLY_ROTATE ?? 3,
@@ -316,7 +335,7 @@ describe('touch controls', () => {
     const result = createPokerScene(canvas);
 
     const singleFingerEnd = () => Object.assign(new Event('touchend'), {
-      touches: [],
+      touches: [] as Touch[],
       changedTouches: [{}],
     });
 
@@ -337,7 +356,7 @@ describe('touch controls', () => {
     const result = createPokerScene(canvas);
 
     canvas.dispatchEvent(Object.assign(new Event('touchend'), {
-      touches: [],
+      touches: [] as Touch[],
       changedTouches: [{}],
     }));
     vi.advanceTimersByTime(400); // too slow for double-tap
@@ -361,7 +380,7 @@ describe('touch controls', () => {
     vi.advanceTimersByTime(50);
     // Second finger lifts — changedTouches has > 1 (multi-finger lift)
     canvas.dispatchEvent(Object.assign(new Event('touchend'), {
-      touches: [],
+      touches: [] as Touch[],
       changedTouches: [{}, {}],
     }));
 

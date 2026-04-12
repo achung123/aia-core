@@ -15,9 +15,23 @@ const COLOR_NEUTRAL = 0x999999;
 // Natural height of a stack (DISC_COUNT discs + gaps, unscaled)
 const NATURAL_HEIGHT = DISC_COUNT * (DISC_THICKNESS + BASE_GAP) - BASE_GAP;
 
-export function createChipStack(scene, position) {
+export interface ChipStack {
+  group: THREE.Group;
+  setHeight: (targetHeight: number, color: number, duration?: number) => void;
+  dispose: () => void;
+}
+
+export interface ChipStacks {
+  updateChipStacks: (
+    playerPLMap: Map<string, number | null> | Record<string, number | null>,
+    newSeatPlayerMap?: Record<number, string>,
+  ) => void;
+  dispose: () => void;
+}
+
+export function createChipStack(scene: THREE.Scene, position: THREE.Vector3): ChipStack {
   const group = new THREE.Group();
-  const materials = [];
+  const materials: THREE.MeshLambertMaterial[] = [];
 
   const discGeom = new THREE.CylinderGeometry(DISC_RADIUS, DISC_RADIUS, DISC_THICKNESS, 16);
 
@@ -33,9 +47,9 @@ export function createChipStack(scene, position) {
   group.scale.y = NEUTRAL_HEIGHT / NATURAL_HEIGHT;
   scene.add(group);
 
-  let animId = null;
+  let animId: number | null = null;
 
-  function setHeight(targetHeight, color, duration = ANIM_DURATION) {
+  function setHeight(targetHeight: number, color: number, duration: number = ANIM_DURATION): void {
     const col = new THREE.Color(color);
     materials.forEach((m) => m.color.set(col));
 
@@ -48,7 +62,7 @@ export function createChipStack(scene, position) {
     const targetScaleY = targetHeight / NATURAL_HEIGHT;
     const startTime = performance.now();
 
-    function animate(now) {
+    function animate(now: number): void {
       const t = Math.min((now - startTime) / duration, 1);
       group.scale.y = startScaleY + (targetScaleY - startScaleY) * t;
       if (t < 1) {
@@ -61,7 +75,7 @@ export function createChipStack(scene, position) {
     animId = requestAnimationFrame(animate);
   }
 
-  function dispose() {
+  function dispose(): void {
     if (animId !== null) {
       cancelAnimationFrame(animId);
       animId = null;
@@ -74,17 +88,24 @@ export function createChipStack(scene, position) {
   return { group, setHeight, dispose };
 }
 
-export function createChipStacks(scene, seatPositions, seatPlayerMap = {}) {
+export function createChipStacks(
+  scene: THREE.Scene,
+  seatPositions: THREE.Vector3[],
+  seatPlayerMap: Record<number, string> = {},
+): ChipStacks {
   const stacks = seatPositions.map((pos) => createChipStack(scene, pos));
-  let _seatPlayerMap = { ...seatPlayerMap };
+  let _seatPlayerMap: Record<number, string> = { ...seatPlayerMap };
 
-  function updateChipStacks(playerPLMap, newSeatPlayerMap) {
+  function updateChipStacks(
+    playerPLMap: Map<string, number | null> | Record<string, number | null>,
+    newSeatPlayerMap?: Record<number, string>,
+  ): void {
     if (newSeatPlayerMap) {
       _seatPlayerMap = { ...newSeatPlayerMap };
     }
 
     // Normalize playerPLMap to a plain object
-    const plObj = {};
+    const plObj: Record<string, number | null> = {};
     if (playerPLMap instanceof Map) {
       playerPLMap.forEach((v, k) => {
         plObj[k] = v;
@@ -119,7 +140,6 @@ export function createChipStacks(scene, seatPositions, seatPlayerMap = {}) {
         stack.setHeight(NEUTRAL_HEIGHT, COLOR_NEUTRAL);
       } else if (pl < 0) {
         // Negative P/L — smaller red-tinted stack
-        // Scale from NEUTRAL_HEIGHT (at 0 loss) down to NEUTRAL_HEIGHT * 0.3 (at maxLoss)
         const ratio = maxLoss > 0 ? Math.abs(pl) / maxLoss : 1;
         const height = Math.max(NEUTRAL_HEIGHT * (1 - ratio * 0.7), 0.05);
         stack.setHeight(height, COLOR_NEGATIVE);
@@ -132,7 +152,7 @@ export function createChipStacks(scene, seatPositions, seatPlayerMap = {}) {
     });
   }
 
-  function dispose() {
+  function dispose(): void {
     stacks.forEach((s) => s.dispose());
   }
 

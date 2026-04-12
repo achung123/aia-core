@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { addPokerTable, computeSeatPositions } from './tableGeometry.ts';
-import { createChipStacks } from './chipStacks.js';
-import { createCommunityCards } from './communityCards.js';
-import { createHoleCards } from './holeCards.js';
+import { createChipStacks } from './chipStacks.ts';
+import { createCommunityCards } from './communityCards.ts';
+import { createHoleCards } from './holeCards.ts';
 
 export interface PokerSceneOptions {
   width?: number;

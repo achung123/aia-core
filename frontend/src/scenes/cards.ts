@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 
-const RED_SUITS = ['♥', '♦'];
+const RED_SUITS: string[] = ['♥', '♦'];
 
-function renderCardFace(rank, suit) {
+function renderCardFace(rank: string, suit: string): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 256;
   canvas.height = 384;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d')!;
 
   // White background
   ctx.fillStyle = '#ffffff';
@@ -31,11 +31,11 @@ function renderCardFace(rank, suit) {
   return new THREE.CanvasTexture(canvas);
 }
 
-export function createCard(rank, suit, faceUp = true) {
+export function createCard(rank: string, suit: string, faceUp: boolean = true): THREE.Mesh {
   // PlaneGeometry has simple, reliable UV mapping (U→X, V→Y)
   const geom = new THREE.PlaneGeometry(0.45, 0.65);
 
-  let mat;
+  let mat: THREE.MeshLambertMaterial | THREE.MeshBasicMaterial;
   if (faceUp) {
     const faceTex = renderCardFace(rank, suit);
     mat = new THREE.MeshLambertMaterial({ map: faceTex });
@@ -47,8 +47,15 @@ export function createCard(rank, suit, faceUp = true) {
   // PlaneGeometry faces +Z; rotate so it faces +Y (upward, visible from camera)
   mesh.rotation.x = -Math.PI / 2;
 
-  mesh.flip = function () {};
-  mesh.cancelFlip = function () {};
+  const cardMesh = mesh as unknown as CardMesh;
+  cardMesh.flip = function () {};
+  cardMesh.cancelFlip = function () {};
 
-  return mesh;
+  return cardMesh;
+}
+
+/** Extended Mesh with flip/cancelFlip helpers attached at runtime. */
+export interface CardMesh extends THREE.Mesh {
+  flip: () => void;
+  cancelFlip: () => void;
 }

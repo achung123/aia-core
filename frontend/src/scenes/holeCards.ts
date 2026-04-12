@@ -1,16 +1,38 @@
 import * as THREE from 'three';
-import { createCard } from './cards.js';
+import { createCard, type CardMesh } from './cards.ts';
 
 // Card layout per seat: 2 cards, slightly offset from each other
 const CARD_OFFSET_X = 0.25;   // left/right spread
 const CARD_OFFSET_Y = 0.01;   // above table surface
-const CARD_OFFSET_Z = -0.30;  // inward toward table center from seat
 
-function createFoldSprite() {
+export interface PlayerHand {
+  player_name: string;
+  hole_cards: { rank: string; suit: string }[] | null;
+  result: 'win' | 'loss' | 'fold';
+}
+
+export interface HoleCardHandData {
+  player_hands: PlayerHand[];
+}
+
+interface SeatEntry {
+  cards: CardMesh[];
+  sprite: THREE.Sprite | null;
+  playerHand: PlayerHand | null;
+}
+
+export interface HoleCards {
+  initHand: (handData: HoleCardHandData, seatPlayerMap: Record<number, string>) => void;
+  goToShowdown: () => void;
+  goToPreFlop: () => void;
+  dispose: () => void;
+}
+
+function createFoldSprite(): THREE.Sprite {
   const canvas = document.createElement('canvas');
   canvas.width = 128;
   canvas.height = 32;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d')!;
 
   ctx.fillStyle = '#000000';
   ctx.fillRect(0, 0, 128, 32);
@@ -28,26 +50,25 @@ function createFoldSprite() {
   return sprite;
 }
 
-export function createHoleCards(scene, seatPositions) {
-  // Map<seatIndex, { cards: Mesh[], sprite: Sprite|null, playerHand: object|null }>
-  const seatData = new Map();
-  const winnerGlowTimers = new Set();
+export function createHoleCards(scene: THREE.Scene, seatPositions: THREE.Vector3[]): HoleCards {
+  const seatData = new Map<number, SeatEntry>();
+  const winnerGlowTimers = new Set<ReturnType<typeof setTimeout>>();
 
-  function disposeCards(seatIndex) {
+  function disposeCards(seatIndex: number): void {
     const data = seatData.get(seatIndex);
     if (!data) return;
     for (const card of data.cards) {
       card.cancelFlip();
       scene.remove(card);
       card.geometry.dispose();
-      const mat = card.material;
+      const mat = card.material as THREE.MeshLambertMaterial;
       if (mat.map) mat.map.dispose();
       mat.dispose();
     }
     data.cards = [];
   }
 
-  function removeSprite(seatIndex) {
+  function removeSprite(seatIndex: number): void {
     const data = seatData.get(seatIndex);
     if (!data || !data.sprite) return;
     scene.remove(data.sprite);
@@ -56,10 +77,15 @@ export function createHoleCards(scene, seatPositions) {
     data.sprite = null;
   }
 
-  function placeCards(seatIndex, rank0, suit0, rank1, suit1, faceUp) {
+  function placeCards(
+    seatIndex: number,
+    rank0: string, suit0: string,
+    rank1: string, suit1: string,
+    faceUp: boolean,
+  ): void {
     const seatPos = seatPositions[seatIndex];
-    const card0 = createCard(rank0, suit0, faceUp);
-    const card1 = createCard(rank1, suit1, faceUp);
+    const card0 = createCard(rank0, suit0, faceUp) as CardMesh;
+    const card1 = createCard(rank1, suit1, faceUp) as CardMesh;
 
     // Direction from seat toward table center (origin)
     const dirX = -seatPos.x;
@@ -78,40 +104,42 @@ export function createHoleCards(scene, seatPositions) {
     card0.position.set(
       baseX - px * CARD_OFFSET_X,
       CARD_OFFSET_Y,
-      baseZ - pz * CARD_OFFSET_X
+      baseZ - pz * CARD_OFFSET_X,
     );
     card1.position.set(
       baseX + px * CARD_OFFSET_X,
       CARD_OFFSET_Y,
-      baseZ + pz * CARD_OFFSET_X
+      baseZ + pz * CARD_OFFSET_X,
     );
 
     scene.add(card0);
     scene.add(card1);
 
     const data = seatData.get(seatIndex);
-    data.cards = [card0, card1];
+    data!.cards = [card0, card1];
   }
 
-  function dimCards(seatIndex) {
+  function dimCards(seatIndex: number): void {
     const data = seatData.get(seatIndex);
     if (!data) return;
     for (const card of data.cards) {
-      card.material.opacity = 0.5;
-      card.material.transparent = true;
+      const mat = card.material as THREE.MeshLambertMaterial;
+      mat.opacity = 0.5;
+      mat.transparent = true;
     }
   }
 
-  function glowWinnerCards(seatIndex) {
+  function glowWinnerCards(seatIndex: number): void {
     const data = seatData.get(seatIndex);
     if (!data) return;
     for (const card of data.cards) {
-      card.material.emissive = new THREE.Color(0xffd700);
-      card.material.emissiveIntensity = 0.4;
+      const mat = card.material as THREE.MeshLambertMaterial;
+      mat.emissive = new THREE.Color(0xffd700);
+      mat.emissiveIntensity = 0.4;
     }
   }
 
-  function addFoldSprite(seatIndex) {
+  function addFoldSprite(seatIndex: number): void {
     const data = seatData.get(seatIndex);
     if (!data) return;
     const seatPos = seatPositions[seatIndex];
@@ -122,12 +150,7 @@ export function createHoleCards(scene, seatPositions) {
   }
 
   return {
-    /**
-     * Set up hole card state for a new hand.
-     * @param {object} handData - has .player_hands: [{player_name, hole_cards: [{rank,suit},{rank,suit}]|null, result: 'win'|'loss'|'fold'}]
-     * @param {object} seatPlayerMap - { seatIndex: playerName }
-     */
-    initHand(handData, seatPlayerMap) {
+    initHand(handData: HoleCardHandData, seatPlayerMap: Record<number, string>): void {
       winnerGlowTimers.forEach(id => clearTimeout(id));
       winnerGlowTimers.clear();
       // Clean up any previous state
@@ -157,41 +180,34 @@ export function createHoleCards(scene, seatPositions) {
       }
     },
 
-    /**
-     * AC2-4: Showdown — dim folds with FOLD sprite, glow winners.
-     * Cards are already face-up from initHand.
-     */
-    goToShowdown() {
+    goToShowdown(): void {
       for (const [seatIndex, data] of seatData) {
         const playerHand = data.playerHand;
 
-        // AC3: Fold dimming + FOLD sprite
+        // Fold dimming + FOLD sprite
         if (playerHand && playerHand.result === 'fold') {
           dimCards(seatIndex);
           addFoldSprite(seatIndex);
         }
 
-        // AC4: Winner glow
+        // Winner glow
         if (playerHand && playerHand.result === 'win') {
           glowWinnerCards(seatIndex);
         }
       }
     },
 
-    /**
-     * Scrub back to Pre-Flop: restore face-down placeholder cards.
-     */
-    goToPreFlop() {
+    goToPreFlop(): void {
       winnerGlowTimers.forEach(id => clearTimeout(id));
       winnerGlowTimers.clear();
-      for (const [seatIndex, data] of seatData) {
+      for (const [seatIndex] of seatData) {
         removeSprite(seatIndex);
         disposeCards(seatIndex);
         placeCards(seatIndex, 'A', 'S', 'A', 'S', false);
       }
     },
 
-    dispose() {
+    dispose(): void {
       winnerGlowTimers.forEach(id => clearTimeout(id));
       winnerGlowTimers.clear();
       for (const [seatIndex] of seatData) {

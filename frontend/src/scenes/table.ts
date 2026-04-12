@@ -1,10 +1,17 @@
 import * as THREE from 'three';
 
-export function initScene(canvasElement) {
+export interface InitSceneResult {
+  renderer: THREE.WebGLRenderer;
+  scene: THREE.Scene;
+  camera: THREE.PerspectiveCamera;
+  dispose: () => void;
+}
+
+export function initScene(canvasElement: HTMLCanvasElement): InitSceneResult {
   const renderer = new THREE.WebGLRenderer({ canvas: canvasElement, antialias: true });
   renderer.setPixelRatio(window.devicePixelRatio);
-  const w = canvasElement.clientWidth || canvasElement.parentElement.clientWidth || 800;
-  const h = canvasElement.clientHeight || canvasElement.parentElement.clientHeight || 600;
+  const w = canvasElement.clientWidth || canvasElement.parentElement?.clientWidth || 800;
+  const h = canvasElement.clientHeight || canvasElement.parentElement?.clientHeight || 600;
   renderer.setSize(w, h);
 
   const scene = new THREE.Scene();
@@ -28,24 +35,24 @@ export function initScene(canvasElement) {
   scene.add(dirLight);
 
   // Resize handler
-  function onResize() {
-    const w = canvasElement.clientWidth;
-    const h = canvasElement.clientHeight;
-    renderer.setSize(w, h);
-    camera.aspect = w / h;
+  function onResize(): void {
+    const rw = canvasElement.clientWidth;
+    const rh = canvasElement.clientHeight;
+    renderer.setSize(rw, rh);
+    camera.aspect = rw / rh;
     camera.updateProjectionMatrix();
   }
   window.addEventListener('resize', onResize);
 
   // Animation loop
-  let rafId;
-  function animate() {
+  let rafId: number;
+  function animate(): void {
     rafId = requestAnimationFrame(animate);
     renderer.render(scene, camera);
   }
   animate();
 
-  function dispose() {
+  function dispose(): void {
     cancelAnimationFrame(rafId);
     window.removeEventListener('resize', onResize);
   }
