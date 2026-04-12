@@ -3,8 +3,8 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 
 // Mock heavy child components to isolate App routing tests
-vi.mock('./views/PlaybackView', () => ({
-  PlaybackView: () => <div data-testid="playback-view">PlaybackView loaded</div>,
+vi.mock('./views/MobilePlaybackView', () => ({
+  MobilePlaybackView: () => <div data-testid="mobile-playback-view">MobilePlaybackView loaded</div>,
 }));
 vi.mock('./dealer/DealerApp', () => ({
   DealerApp: () => <div data-testid="dealer-app">DealerApp loaded</div>,
@@ -52,10 +52,10 @@ describe('App', () => {
     expect(screen.getAllByText('Player').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('renders real PlaybackView at /playback (not a placeholder)', () => {
+  it('renders MobilePlaybackView at /playback (matches pre-migration behavior)', () => {
     window.location.hash = '#/playback';
     render(<App />);
-    expect(screen.getByTestId('playback-view')).toBeTruthy();
+    expect(screen.getByTestId('mobile-playback-view')).toBeTruthy();
   });
 
   it('renders real DealerApp at /dealer (not a placeholder)', () => {

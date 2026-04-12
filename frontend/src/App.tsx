@@ -1,7 +1,7 @@
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import NavBar from './NavBar';
 import { LandingPage } from './views/LandingPage';
-import { PlaybackView } from './views/PlaybackView';
+import { MobilePlaybackView } from './views/MobilePlaybackView';
 import { DataView } from './views/DataView';
 import { DealerApp } from './dealer/DealerApp';
 import { PlayerApp } from './player/PlayerApp';
@@ -13,7 +13,7 @@ export default function App() {
         <NavBar />
         <Routes>
           <Route path="/" element={<LandingPage />} />
-          <Route path="/playback" element={<PlaybackView />} />
+          <Route path="/playback" element={<MobilePlaybackView />} />
           <Route path="/data" element={<DataView />} />
           <Route path="/dealer" element={<DealerApp />} />
           <Route path="/player" element={<PlayerApp />} />
