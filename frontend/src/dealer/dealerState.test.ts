@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { reducer, initialState, validateOutcomeStreets } from './dealerState.js';
+import { reducer, initialState, validateOutcomeStreets } from './dealerState.ts';
 
 describe('initialState', () => {
   it('has the correct shape', () => {
@@ -20,7 +20,7 @@ describe('reducer', () => {
   describe('SET_GAME', () => {
     it('sets gameId, initializes players, resets community, sets step to dashboard', () => {
       const action = {
-        type: 'SET_GAME',
+        type: 'SET_GAME' as const,
         payload: { gameId: 42, players: ['Alice', 'Bob'], gameDate: '2026-04-08' },
       };
       const state = reducer(initialState, action);
@@ -41,11 +41,11 @@ describe('reducer', () => {
     it('preserves current gameMode when none is provided in payload', () => {
       // Start with participation mode already set
       const participationState = reducer(initialState, {
-        type: 'SET_GAME_MODE',
-        payload: 'participation',
+        type: 'SET_GAME_MODE' as const,
+        payload: 'participation' as const,
       });
       const action = {
-        type: 'SET_GAME',
+        type: 'SET_GAME' as const,
         payload: { gameId: 42, players: ['Alice'], gameDate: '2026-04-08' },
       };
       const state = reducer(participationState, action);
@@ -54,8 +54,8 @@ describe('reducer', () => {
 
     it('sets step to qrCodes when gameMode is participation', () => {
       const action = {
-        type: 'SET_GAME',
-        payload: { gameId: 42, players: ['Alice', 'Bob'], gameDate: '2026-04-08', gameMode: 'participation' },
+        type: 'SET_GAME' as const,
+        payload: { gameId: 42, players: ['Alice', 'Bob'], gameDate: '2026-04-08', gameMode: 'participation' as const },
       };
       const state = reducer(initialState, action);
 
@@ -67,12 +67,12 @@ describe('reducer', () => {
   describe('SET_PLAYER_CARDS', () => {
     it('updates a specific player and marks them recorded: true', () => {
       const gameState = reducer(initialState, {
-        type: 'SET_GAME',
+        type: 'SET_GAME' as const,
         payload: { gameId: 1, players: ['Alice', 'Bob'], gameDate: '2026-04-08' },
       });
 
       const state = reducer(gameState, {
-        type: 'SET_PLAYER_CARDS',
+        type: 'SET_PLAYER_CARDS' as const,
         payload: { name: 'Alice', card1: 'Ah', card2: 'Kd' },
       });
 
@@ -87,12 +87,12 @@ describe('reducer', () => {
 
     it('does not mutate the original state', () => {
       const gameState = reducer(initialState, {
-        type: 'SET_GAME',
+        type: 'SET_GAME' as const,
         payload: { gameId: 1, players: ['Alice'], gameDate: '2026-04-08' },
       });
 
       const newState = reducer(gameState, {
-        type: 'SET_PLAYER_CARDS',
+        type: 'SET_PLAYER_CARDS' as const,
         payload: { name: 'Alice', card1: 'Ah', card2: 'Kd' },
       });
 
@@ -104,12 +104,12 @@ describe('reducer', () => {
   describe('SET_COMMUNITY_CARDS', () => {
     it('stores community cards and marks recorded: true', () => {
       const gameState = reducer(initialState, {
-        type: 'SET_GAME',
+        type: 'SET_GAME' as const,
         payload: { gameId: 1, players: ['Alice'], gameDate: '2026-04-08' },
       });
 
       const state = reducer(gameState, {
-        type: 'SET_COMMUNITY_CARDS',
+        type: 'SET_COMMUNITY_CARDS' as const,
         payload: { flop1: '2h', flop2: '3c', flop3: '5d', turn: 'Js', river: 'Qh' },
       });
 
@@ -122,19 +122,19 @@ describe('reducer', () => {
   describe('RESET_HAND', () => {
     it('clears all card data but preserves gameId, player names, and gameDate', () => {
       let state = reducer(initialState, {
-        type: 'SET_GAME',
+        type: 'SET_GAME' as const,
         payload: { gameId: 7, players: ['Alice', 'Bob'], gameDate: '2026-04-08' },
       });
       state = reducer(state, {
-        type: 'SET_PLAYER_CARDS',
+        type: 'SET_PLAYER_CARDS' as const,
         payload: { name: 'Alice', card1: 'Ah', card2: 'Kd' },
       });
       state = reducer(state, {
-        type: 'SET_COMMUNITY_CARDS',
+        type: 'SET_COMMUNITY_CARDS' as const,
         payload: { flop1: '2h', flop2: '3c', flop3: '5d', turn: 'Js', river: 'Qh' },
       });
 
-      const reset = reducer(state, { type: 'RESET_HAND' });
+      const reset = reducer(state, { type: 'RESET_HAND' as const });
 
       expect(reset.gameId).toBe(7);
       expect(reset.gameDate).toBe('2026-04-08');
@@ -150,14 +150,14 @@ describe('reducer', () => {
 
     it('increments handCount', () => {
       let state = reducer(initialState, {
-        type: 'SET_GAME',
+        type: 'SET_GAME' as const,
         payload: { gameId: 7, players: ['Alice'], gameDate: '2026-04-08' },
       });
 
-      state = reducer(state, { type: 'RESET_HAND' });
+      state = reducer(state, { type: 'RESET_HAND' as const });
       expect(state.handCount).toBe(1);
 
-      state = reducer(state, { type: 'RESET_HAND' });
+      state = reducer(state, { type: 'RESET_HAND' as const });
       expect(state.handCount).toBe(2);
     });
   });
@@ -165,7 +165,7 @@ describe('reducer', () => {
   describe('SET_STEP', () => {
     it('updates currentStep', () => {
       const state = reducer(initialState, {
-        type: 'SET_STEP',
+        type: 'SET_STEP' as const,
         payload: 'playerGrid',
       });
 
@@ -176,12 +176,12 @@ describe('reducer', () => {
   describe('SET_PLAYER_RESULT', () => {
     it('sets a player status to won with outcomeStreet', () => {
       const gameState = reducer(initialState, {
-        type: 'SET_GAME',
+        type: 'SET_GAME' as const,
         payload: { gameId: 1, players: ['Alice', 'Bob'], gameDate: '2026-04-08' },
       });
 
       const state = reducer(gameState, {
-        type: 'SET_PLAYER_RESULT',
+        type: 'SET_PLAYER_RESULT' as const,
         payload: { name: 'Alice', status: 'won', outcomeStreet: 'river' },
       });
 
@@ -193,12 +193,12 @@ describe('reducer', () => {
 
     it('sets a player status to folded with outcomeStreet', () => {
       const gameState = reducer(initialState, {
-        type: 'SET_GAME',
+        type: 'SET_GAME' as const,
         payload: { gameId: 1, players: ['Alice'], gameDate: '2026-04-08' },
       });
 
       const state = reducer(gameState, {
-        type: 'SET_PLAYER_RESULT',
+        type: 'SET_PLAYER_RESULT' as const,
         payload: { name: 'Alice', status: 'folded', outcomeStreet: 'flop' },
       });
 
@@ -208,12 +208,12 @@ describe('reducer', () => {
 
     it('sets a player status to lost with outcomeStreet', () => {
       const gameState = reducer(initialState, {
-        type: 'SET_GAME',
+        type: 'SET_GAME' as const,
         payload: { gameId: 1, players: ['Alice'], gameDate: '2026-04-08' },
       });
 
       const state = reducer(gameState, {
-        type: 'SET_PLAYER_RESULT',
+        type: 'SET_PLAYER_RESULT' as const,
         payload: { name: 'Alice', status: 'lost', outcomeStreet: 'turn' },
       });
 
@@ -223,12 +223,12 @@ describe('reducer', () => {
 
     it('sets not_playing status with null outcomeStreet', () => {
       const gameState = reducer(initialState, {
-        type: 'SET_GAME',
+        type: 'SET_GAME' as const,
         payload: { gameId: 1, players: ['Alice'], gameDate: '2026-04-08' },
       });
 
       const state = reducer(gameState, {
-        type: 'SET_PLAYER_RESULT',
+        type: 'SET_PLAYER_RESULT' as const,
         payload: { name: 'Alice', status: 'not_playing', outcomeStreet: null },
       });
 
@@ -238,12 +238,12 @@ describe('reducer', () => {
 
     it('does not mutate the original state', () => {
       const gameState = reducer(initialState, {
-        type: 'SET_GAME',
+        type: 'SET_GAME' as const,
         payload: { gameId: 1, players: ['Alice'], gameDate: '2026-04-08' },
       });
 
       const newState = reducer(gameState, {
-        type: 'SET_PLAYER_RESULT',
+        type: 'SET_PLAYER_RESULT' as const,
         payload: { name: 'Alice', status: 'won' },
       });
 
@@ -253,12 +253,12 @@ describe('reducer', () => {
 
     it('leaves unmatched players unchanged', () => {
       const gameState = reducer(initialState, {
-        type: 'SET_GAME',
+        type: 'SET_GAME' as const,
         payload: { gameId: 1, players: ['Alice', 'Bob', 'Charlie'], gameDate: '2026-04-08' },
       });
 
       const state = reducer(gameState, {
-        type: 'SET_PLAYER_RESULT',
+        type: 'SET_PLAYER_RESULT' as const,
         payload: { name: 'Bob', status: 'folded' },
       });
 
@@ -271,7 +271,7 @@ describe('reducer', () => {
   describe('SET_HAND_ID', () => {
     it('stores the hand ID', () => {
       const state = reducer(initialState, {
-        type: 'SET_HAND_ID',
+        type: 'SET_HAND_ID' as const,
         payload: 123,
       });
 
@@ -279,8 +279,8 @@ describe('reducer', () => {
     });
 
     it('overwrites a previous hand ID', () => {
-      let state = reducer(initialState, { type: 'SET_HAND_ID', payload: 100 });
-      state = reducer(state, { type: 'SET_HAND_ID', payload: 200 });
+      let state = reducer(initialState, { type: 'SET_HAND_ID' as const, payload: 100 });
+      state = reducer(state, { type: 'SET_HAND_ID' as const, payload: 200 });
 
       expect(state.currentHandId).toBe(200);
     });
@@ -289,24 +289,24 @@ describe('reducer', () => {
   describe('FINISH_HAND', () => {
     it('resets cards, statuses, currentHandId, and goes to dashboard', () => {
       let state = reducer(initialState, {
-        type: 'SET_GAME',
+        type: 'SET_GAME' as const,
         payload: { gameId: 7, players: ['Alice', 'Bob'], gameDate: '2026-04-08' },
       });
-      state = reducer(state, { type: 'SET_HAND_ID', payload: 42 });
+      state = reducer(state, { type: 'SET_HAND_ID' as const, payload: 42 });
       state = reducer(state, {
-        type: 'SET_PLAYER_CARDS',
+        type: 'SET_PLAYER_CARDS' as const,
         payload: { name: 'Alice', card1: 'Ah', card2: 'Kd' },
       });
       state = reducer(state, {
-        type: 'SET_PLAYER_RESULT',
+        type: 'SET_PLAYER_RESULT' as const,
         payload: { name: 'Alice', status: 'won' },
       });
       state = reducer(state, {
-        type: 'SET_COMMUNITY_CARDS',
+        type: 'SET_COMMUNITY_CARDS' as const,
         payload: { flop1: '2h', flop2: '3c', flop3: '5d', turn: 'Js', river: 'Qh' },
       });
 
-      const finished = reducer(state, { type: 'FINISH_HAND' });
+      const finished = reducer(state, { type: 'FINISH_HAND' as const });
 
       expect(finished.gameId).toBe(7);
       expect(finished.currentHandId).toBeNull();
@@ -322,23 +322,23 @@ describe('reducer', () => {
 
     it('increments handCount', () => {
       let state = reducer(initialState, {
-        type: 'SET_GAME',
+        type: 'SET_GAME' as const,
         payload: { gameId: 7, players: ['Alice'], gameDate: '2026-04-08' },
       });
 
-      state = reducer(state, { type: 'FINISH_HAND' });
+      state = reducer(state, { type: 'FINISH_HAND' as const });
       expect(state.handCount).toBe(1);
 
-      state = reducer(state, { type: 'FINISH_HAND' });
+      state = reducer(state, { type: 'FINISH_HAND' as const });
       expect(state.handCount).toBe(2);
     });
 
     it('preserves gameDate', () => {
       let state = reducer(initialState, {
-        type: 'SET_GAME',
+        type: 'SET_GAME' as const,
         payload: { gameId: 1, players: ['Alice'], gameDate: '2026-04-08' },
       });
-      state = reducer(state, { type: 'FINISH_HAND' });
+      state = reducer(state, { type: 'FINISH_HAND' as const });
 
       expect(state.gameDate).toBe('2026-04-08');
     });
@@ -347,11 +347,11 @@ describe('reducer', () => {
   describe('RESET_HAND clears currentHandId', () => {
     it('resets currentHandId to null', () => {
       let state = reducer(initialState, {
-        type: 'SET_GAME',
+        type: 'SET_GAME' as const,
         payload: { gameId: 1, players: ['Alice'], gameDate: '2026-04-08' },
       });
-      state = reducer(state, { type: 'SET_HAND_ID', payload: 99 });
-      state = reducer(state, { type: 'RESET_HAND' });
+      state = reducer(state, { type: 'SET_HAND_ID' as const, payload: 99 });
+      state = reducer(state, { type: 'RESET_HAND' as const });
 
       expect(state.currentHandId).toBeNull();
     });
@@ -359,7 +359,8 @@ describe('reducer', () => {
 
   describe('unknown action', () => {
     it('returns state unchanged', () => {
-      const state = reducer(initialState, { type: 'UNKNOWN' });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const state = reducer(initialState, { type: 'UNKNOWN' } as any);
       expect(state).toBe(initialState);
     });
   });
@@ -367,7 +368,7 @@ describe('reducer', () => {
   describe('LOAD_HAND', () => {
     it('hydrates players and community from API hand data', () => {
       let state = reducer(initialState, {
-        type: 'SET_GAME',
+        type: 'SET_GAME' as const,
         payload: { gameId: 1, players: ['Alice', 'Bob', 'Charlie'], gameDate: '2026-04-08' },
       });
 
@@ -381,7 +382,7 @@ describe('reducer', () => {
         ],
       };
 
-      state = reducer(state, { type: 'LOAD_HAND', payload: handData });
+      state = reducer(state, { type: 'LOAD_HAND' as const, payload: handData });
 
       expect(state.currentHandId).toBe(3);
       expect(state.currentStep).toBe('playerGrid');
@@ -403,7 +404,7 @@ describe('reducer', () => {
 
     it('handles hand with no community cards', () => {
       let state = reducer(initialState, {
-        type: 'SET_GAME',
+        type: 'SET_GAME' as const,
         payload: { gameId: 1, players: ['Alice'], gameDate: '2026-04-08' },
       });
 
@@ -414,7 +415,7 @@ describe('reducer', () => {
         player_hands: [],
       };
 
-      state = reducer(state, { type: 'LOAD_HAND', payload: handData });
+      state = reducer(state, { type: 'LOAD_HAND' as const, payload: handData });
 
       expect(state.community.flopRecorded).toBe(false);
       expect(state.players[0].status).toBe('playing');
@@ -422,7 +423,7 @@ describe('reducer', () => {
 
     it('handles player with null cards (folded without showing)', () => {
       let state = reducer(initialState, {
-        type: 'SET_GAME',
+        type: 'SET_GAME' as const,
         payload: { gameId: 1, players: ['Alice'], gameDate: '2026-04-08' },
       });
 
@@ -435,7 +436,7 @@ describe('reducer', () => {
         ],
       };
 
-      state = reducer(state, { type: 'LOAD_HAND', payload: handData });
+      state = reducer(state, { type: 'LOAD_HAND' as const, payload: handData });
 
       expect(state.players[0]).toEqual({
         name: 'Alice', card1: null, card2: null, recorded: true, status: 'folded', outcomeStreet: null,
@@ -446,33 +447,33 @@ describe('reducer', () => {
   describe('validateOutcomeStreets', () => {
     it('returns null when all outcomes are on the same street', () => {
       const players = [
-        { name: 'Alice', status: 'won', outcomeStreet: 'river' },
-        { name: 'Bob', status: 'lost', outcomeStreet: 'river' },
+        { name: 'Alice', card1: null, card2: null, recorded: false, status: 'won', outcomeStreet: 'river' },
+        { name: 'Bob', card1: null, card2: null, recorded: false, status: 'lost', outcomeStreet: 'river' },
       ];
       expect(validateOutcomeStreets(players)).toBeNull();
     });
 
     it('allows folders on earlier streets than the winner', () => {
       const players = [
-        { name: 'Alice', status: 'won', outcomeStreet: 'river' },
-        { name: 'Bob', status: 'folded', outcomeStreet: 'flop' },
-        { name: 'Carol', status: 'folded', outcomeStreet: 'turn' },
+        { name: 'Alice', card1: null, card2: null, recorded: false, status: 'won', outcomeStreet: 'river' },
+        { name: 'Bob', card1: null, card2: null, recorded: false, status: 'folded', outcomeStreet: 'flop' },
+        { name: 'Carol', card1: null, card2: null, recorded: false, status: 'folded', outcomeStreet: 'turn' },
       ];
       expect(validateOutcomeStreets(players)).toBeNull();
     });
 
     it('allows folder on preflop when winner on river', () => {
       const players = [
-        { name: 'Alice', status: 'won', outcomeStreet: 'river' },
-        { name: 'Bob', status: 'folded', outcomeStreet: 'preflop' },
+        { name: 'Alice', card1: null, card2: null, recorded: false, status: 'won', outcomeStreet: 'river' },
+        { name: 'Bob', card1: null, card2: null, recorded: false, status: 'folded', outcomeStreet: 'preflop' },
       ];
       expect(validateOutcomeStreets(players)).toBeNull();
     });
 
     it('returns error when loser lost on a different street than winner', () => {
       const players = [
-        { name: 'Alice', status: 'won', outcomeStreet: 'flop' },
-        { name: 'Bob', status: 'lost', outcomeStreet: 'river' },
+        { name: 'Alice', card1: null, card2: null, recorded: false, status: 'won', outcomeStreet: 'flop' },
+        { name: 'Bob', card1: null, card2: null, recorded: false, status: 'lost', outcomeStreet: 'river' },
       ];
       const err = validateOutcomeStreets(players);
       expect(err).toBeTruthy();
@@ -481,8 +482,8 @@ describe('reducer', () => {
 
     it('returns error when folder folded after the winner won', () => {
       const players = [
-        { name: 'Alice', status: 'won', outcomeStreet: 'flop' },
-        { name: 'Bob', status: 'folded', outcomeStreet: 'turn' },
+        { name: 'Alice', card1: null, card2: null, recorded: false, status: 'won', outcomeStreet: 'flop' },
+        { name: 'Bob', card1: null, card2: null, recorded: false, status: 'folded', outcomeStreet: 'turn' },
       ];
       const err = validateOutcomeStreets(players);
       expect(err).toBeTruthy();
@@ -490,40 +491,40 @@ describe('reducer', () => {
 
     it('returns null when no decided players have outcome streets', () => {
       const players = [
-        { name: 'Alice', status: 'playing', outcomeStreet: null },
-        { name: 'Bob', status: 'folded', outcomeStreet: null },
+        { name: 'Alice', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null },
+        { name: 'Bob', card1: null, card2: null, recorded: false, status: 'folded', outcomeStreet: null },
       ];
       expect(validateOutcomeStreets(players)).toBeNull();
     });
 
     it('returns null when there are not_playing players', () => {
       const players = [
-        { name: 'Alice', status: 'won', outcomeStreet: 'river' },
-        { name: 'Bob', status: 'not_playing', outcomeStreet: null },
+        { name: 'Alice', card1: null, card2: null, recorded: false, status: 'won', outcomeStreet: 'river' },
+        { name: 'Bob', card1: null, card2: null, recorded: false, status: 'not_playing', outcomeStreet: null },
       ];
       expect(validateOutcomeStreets(players)).toBeNull();
     });
 
     it('allows losers on the same street as the winner', () => {
       const players = [
-        { name: 'Alice', status: 'won', outcomeStreet: 'turn' },
-        { name: 'Bob', status: 'lost', outcomeStreet: 'turn' },
+        { name: 'Alice', card1: null, card2: null, recorded: false, status: 'won', outcomeStreet: 'turn' },
+        { name: 'Bob', card1: null, card2: null, recorded: false, status: 'lost', outcomeStreet: 'turn' },
       ];
       expect(validateOutcomeStreets(players)).toBeNull();
     });
 
     it('returns null when winner won preflop and folder folded preflop', () => {
       const players = [
-        { name: 'Alice', status: 'won', outcomeStreet: 'preflop' },
-        { name: 'Bob', status: 'folded', outcomeStreet: 'preflop' },
+        { name: 'Alice', card1: null, card2: null, recorded: false, status: 'won', outcomeStreet: 'preflop' },
+        { name: 'Bob', card1: null, card2: null, recorded: false, status: 'folded', outcomeStreet: 'preflop' },
       ];
       expect(validateOutcomeStreets(players)).toBeNull();
     });
 
     it('returns error when folder folded on flop but winner won preflop', () => {
       const players = [
-        { name: 'Alice', status: 'won', outcomeStreet: 'preflop' },
-        { name: 'Bob', status: 'folded', outcomeStreet: 'flop' },
+        { name: 'Alice', card1: null, card2: null, recorded: false, status: 'won', outcomeStreet: 'preflop' },
+        { name: 'Bob', card1: null, card2: null, recorded: false, status: 'folded', outcomeStreet: 'flop' },
       ];
       const err = validateOutcomeStreets(players);
       expect(err).toBeTruthy();
@@ -531,8 +532,8 @@ describe('reducer', () => {
 
     it('returns error when loser is on earlier street and winner on later', () => {
       const players = [
-        { name: 'Alice', status: 'won', outcomeStreet: 'river' },
-        { name: 'Bob', status: 'lost', outcomeStreet: 'turn' },
+        { name: 'Alice', card1: null, card2: null, recorded: false, status: 'won', outcomeStreet: 'river' },
+        { name: 'Bob', card1: null, card2: null, recorded: false, status: 'lost', outcomeStreet: 'turn' },
       ];
       const err = validateOutcomeStreets(players);
       expect(err).toBeTruthy();
@@ -540,10 +541,10 @@ describe('reducer', () => {
 
     it('allows multiple folders on different earlier streets', () => {
       const players = [
-        { name: 'Alice', status: 'won', outcomeStreet: 'river' },
-        { name: 'Bob', status: 'folded', outcomeStreet: 'preflop' },
-        { name: 'Carol', status: 'folded', outcomeStreet: 'flop' },
-        { name: 'Dave', status: 'lost', outcomeStreet: 'river' },
+        { name: 'Alice', card1: null, card2: null, recorded: false, status: 'won', outcomeStreet: 'river' },
+        { name: 'Bob', card1: null, card2: null, recorded: false, status: 'folded', outcomeStreet: 'preflop' },
+        { name: 'Carol', card1: null, card2: null, recorded: false, status: 'folded', outcomeStreet: 'flop' },
+        { name: 'Dave', card1: null, card2: null, recorded: false, status: 'lost', outcomeStreet: 'river' },
       ];
       expect(validateOutcomeStreets(players)).toBeNull();
     });
@@ -552,12 +553,12 @@ describe('reducer', () => {
   describe('UPDATE_PARTICIPATION', () => {
     it('maps participation_status onto matching players', () => {
       const gameState = reducer(initialState, {
-        type: 'SET_GAME',
+        type: 'SET_GAME' as const,
         payload: { gameId: 1, players: ['Alice', 'Bob'], gameDate: '2026-04-08' },
       });
 
       const state = reducer(gameState, {
-        type: 'UPDATE_PARTICIPATION',
+        type: 'UPDATE_PARTICIPATION' as const,
         payload: {
           players: [
             { name: 'Alice', participation_status: 'joined' },
@@ -572,12 +573,12 @@ describe('reducer', () => {
 
     it('leaves unmatched players unchanged', () => {
       const gameState = reducer(initialState, {
-        type: 'SET_GAME',
+        type: 'SET_GAME' as const,
         payload: { gameId: 1, players: ['Alice', 'Bob'], gameDate: '2026-04-08' },
       });
 
       const state = reducer(gameState, {
-        type: 'UPDATE_PARTICIPATION',
+        type: 'UPDATE_PARTICIPATION' as const,
         payload: {
           players: [
             { name: 'Alice', participation_status: 'joined' },
@@ -591,17 +592,17 @@ describe('reducer', () => {
 
     it('preserves other player fields (cards, recorded, outcomeStreet)', () => {
       const gameState = reducer(initialState, {
-        type: 'SET_GAME',
+        type: 'SET_GAME' as const,
         payload: { gameId: 1, players: ['Alice'], gameDate: '2026-04-08' },
       });
 
       const withCards = reducer(gameState, {
-        type: 'SET_PLAYER_CARDS',
+        type: 'SET_PLAYER_CARDS' as const,
         payload: { name: 'Alice', card1: 'Ah', card2: 'Kd' },
       });
 
       const state = reducer(withCards, {
-        type: 'UPDATE_PARTICIPATION',
+        type: 'UPDATE_PARTICIPATION' as const,
         payload: {
           players: [
             { name: 'Alice', participation_status: 'joined' },
@@ -617,19 +618,19 @@ describe('reducer', () => {
 
     it('does not let stale poll reset recorded player to idle', () => {
       const gameState = reducer(initialState, {
-        type: 'SET_GAME',
+        type: 'SET_GAME' as const,
         payload: { gameId: 1, players: ['Alice', 'Bob'], gameDate: '2026-04-08' },
       });
 
       // Dealer manually captures Alice's cards
       const withCards = reducer(gameState, {
-        type: 'SET_PLAYER_CARDS',
+        type: 'SET_PLAYER_CARDS' as const,
         payload: { name: 'Alice', card1: 'Ah', card2: 'Kd' },
       });
 
       // Stale poll response says Alice is idle (request was before manual capture)
       const state = reducer(withCards, {
-        type: 'UPDATE_PARTICIPATION',
+        type: 'UPDATE_PARTICIPATION' as const,
         payload: {
           players: [
             { name: 'Alice', participation_status: 'idle' },
@@ -647,23 +648,23 @@ describe('reducer', () => {
 
     it('does not let stale poll reset recorded player to playing', () => {
       const gameState = reducer(initialState, {
-        type: 'SET_GAME',
+        type: 'SET_GAME' as const,
         payload: { gameId: 1, players: ['Alice'], gameDate: '2026-04-08' },
       });
 
       const withCards = reducer(gameState, {
-        type: 'SET_PLAYER_CARDS',
+        type: 'SET_PLAYER_CARDS' as const,
         payload: { name: 'Alice', card1: 'Ah', card2: 'Kd' },
       });
 
       const withResult = reducer(withCards, {
-        type: 'SET_PLAYER_RESULT',
+        type: 'SET_PLAYER_RESULT' as const,
         payload: { name: 'Alice', status: 'won', outcomeStreet: 'river' },
       });
 
       // Stale poll says 'playing'
       const state = reducer(withResult, {
-        type: 'UPDATE_PARTICIPATION',
+        type: 'UPDATE_PARTICIPATION' as const,
         payload: {
           players: [
             { name: 'Alice', participation_status: 'playing' },
@@ -678,13 +679,13 @@ describe('reducer', () => {
 
     it('does not let poll reset a sit-out (not_playing) player back to idle/playing', () => {
       const gameState = reducer(initialState, {
-        type: 'SET_GAME',
+        type: 'SET_GAME' as const,
         payload: { gameId: 1, players: ['Alice', 'Bob'], gameDate: '2026-04-08' },
       });
 
       // Dealer clicks sit-out for Alice (sets status to not_playing, recorded stays false)
       const withSitOut = reducer(gameState, {
-        type: 'SET_PLAYER_RESULT',
+        type: 'SET_PLAYER_RESULT' as const,
         payload: { name: 'Alice', status: 'not_playing', outcomeStreet: null },
       });
 
@@ -693,7 +694,7 @@ describe('reducer', () => {
 
       // Poll response says Alice is idle (server doesn't know about local sit-out)
       const state = reducer(withSitOut, {
-        type: 'UPDATE_PARTICIPATION',
+        type: 'UPDATE_PARTICIPATION' as const,
         payload: {
           players: [
             { name: 'Alice', participation_status: 'idle' },
@@ -712,7 +713,7 @@ describe('reducer', () => {
   describe('RESTORE_STATE', () => {
     it('normalizes review step to playerGrid on restore', () => {
       const state = reducer(initialState, {
-        type: 'RESTORE_STATE',
+        type: 'RESTORE_STATE' as const,
         payload: { gameId: 1, currentStep: 'review', players: [], community: { flop1: null, flop2: null, flop3: null, flopRecorded: false, turn: null, turnRecorded: false, river: null, riverRecorded: false } },
       });
       expect(state.currentStep).toBe('playerGrid');
@@ -720,7 +721,7 @@ describe('reducer', () => {
 
     it('normalizes outcome step to playerGrid on restore', () => {
       const state = reducer(initialState, {
-        type: 'RESTORE_STATE',
+        type: 'RESTORE_STATE' as const,
         payload: { gameId: 1, currentStep: 'outcome', players: [], community: { flop1: null, flop2: null, flop3: null, flopRecorded: false, turn: null, turnRecorded: false, river: null, riverRecorded: false } },
       });
       expect(state.currentStep).toBe('playerGrid');
@@ -728,7 +729,7 @@ describe('reducer', () => {
 
     it('preserves safe steps like dashboard on restore', () => {
       const state = reducer(initialState, {
-        type: 'RESTORE_STATE',
+        type: 'RESTORE_STATE' as const,
         payload: { gameId: 1, currentStep: 'dashboard', players: [], community: { flop1: null, flop2: null, flop3: null, flopRecorded: false, turn: null, turnRecorded: false, river: null, riverRecorded: false } },
       });
       expect(state.currentStep).toBe('dashboard');

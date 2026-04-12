@@ -86,8 +86,8 @@ vi.mock('../poker/evaluator.js', () => ({
   calculateEquity: vi.fn(() => []),
 }));
 
-vi.mock('./dealerState.js', async () => {
-  const actual = await vi.importActual('./dealerState.js');
+vi.mock('./dealerState.ts', async () => {
+  const actual = await vi.importActual('./dealerState.ts');
   return {
     ...actual,
     initialState: {
@@ -106,7 +106,7 @@ vi.mock('./dealerState.js', async () => {
 });
 
 import { createHand, addPlayerToHand, updateHolecards, updateCommunityCards, updateFlop, updateTurn, updateRiver, patchPlayerResult, fetchHands, fetchHand, fetchHandStatus } from '../api/client.js';
-import { initialState } from './dealerState.js';
+import { initialState } from './dealerState.ts';
 import { DealerApp } from './DealerApp.jsx';
 
 // Clear persisted dealer state before AND after every test to prevent state leaking

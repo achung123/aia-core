@@ -60,7 +60,7 @@ import {
   fetchHand,
 } from '../api/client.js';
 import { DealerApp } from './DealerApp.jsx';
-import { initialState } from './dealerState.js';
+import { initialState } from './dealerState.ts';
 
 function renderToContainer(vnode) {
   const container = document.createElement('div');

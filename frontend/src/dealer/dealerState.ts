@@ -1,8 +1,71 @@
-const emptyCommunity = { flop1: null, flop2: null, flop3: null, flopRecorded: false, turn: null, turnRecorded: false, river: null, riverRecorded: false };
+import type { CommunityCards, Player, GameMode, DealerState } from '../stores/dealerStore';
 
-const STREET_ORDER = { preflop: -1, flop: 0, turn: 1, river: 2 };
+// Re-export types from the Zustand store for backward compatibility
+export type { CommunityCards, Player, GameMode, DealerState };
 
-export function validateOutcomeStreets(players) {
+// --- Action Types ---
+
+export type DealerAction =
+  | { type: 'SET_GAME'; payload: { gameId: number; players: string[]; gameDate: string; gameMode?: GameMode } }
+  | { type: 'SET_PLAYER_CARDS'; payload: { name: string; card1: string; card2: string } }
+  | { type: 'SET_COMMUNITY_CARDS'; payload: { flop1: string; flop2: string; flop3: string; turn?: string | null; river?: string | null } }
+  | { type: 'SET_FLOP_CARDS'; payload: { flop1: string; flop2: string; flop3: string } }
+  | { type: 'SET_TURN_CARD'; payload: string }
+  | { type: 'SET_RIVER_CARD'; payload: string }
+  | { type: 'RESET_HAND' }
+  | { type: 'SET_PLAYER_RESULT'; payload: { name: string; status: string; outcomeStreet?: string | null } }
+  | { type: 'SET_HAND_ID'; payload: number }
+  | { type: 'LOAD_HAND'; payload: LoadHandPayload }
+  | { type: 'FINISH_HAND' }
+  | { type: 'SET_STEP'; payload: string }
+  | { type: 'SET_GAME_MODE'; payload: GameMode }
+  | { type: 'UPDATE_PARTICIPATION'; payload: { players: { name: string; participation_status: string }[] } }
+  | { type: 'RESTORE_STATE'; payload: Partial<DealerState> };
+
+export interface LoadHandPayload {
+  hand_number: number;
+  flop_1: string | null;
+  flop_2: string | null;
+  flop_3: string | null;
+  turn: string | null;
+  river: string | null;
+  player_hands: {
+    player_name: string;
+    card_1: string | null;
+    card_2: string | null;
+    result: string | null;
+    profit_loss?: number | null;
+    outcome_street?: string | null;
+  }[];
+}
+
+// --- Constants ---
+
+const emptyCommunity: CommunityCards = {
+  flop1: null, flop2: null, flop3: null, flopRecorded: false,
+  turn: null, turnRecorded: false, river: null, riverRecorded: false,
+};
+
+const STREET_ORDER: Record<string, number> = { preflop: -1, flop: 0, turn: 1, river: 2 };
+
+export const initialState: DealerState = {
+  gameId: null,
+  currentHandId: null,
+  players: [],
+  community: { ...emptyCommunity },
+  currentStep: 'gameSelector',
+  handCount: 0,
+  gameDate: null,
+  gameMode: 'dealer_centric',
+};
+
+// --- Utility ---
+
+function initPlayer(name: string): Player {
+  return { name, card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null };
+}
+
+export function validateOutcomeStreets(players: Player[]): string | null {
   // Collect all players that have a decisive result AND an outcome_street
   const decided = players.filter(
     (p) => (p.status === 'won' || p.status === 'lost' || p.status === 'folded') && p.outcomeStreet,
@@ -22,9 +85,9 @@ export function validateOutcomeStreets(players) {
 
   // If we have a showdown street, all folders must be on or before it
   if (showdownStreets.size === 1) {
-    const showdownStreet = [...showdownStreets][0];
+    const showdownStreet = [...showdownStreets][0]!;
     const showdownOrder = STREET_ORDER[showdownStreet] ?? -1;
-    const latefolders = folders.filter((p) => (STREET_ORDER[p.outcomeStreet] ?? -1) > showdownOrder);
+    const latefolders = folders.filter((p) => (STREET_ORDER[p.outcomeStreet!] ?? -1) > showdownOrder);
     if (latefolders.length > 0) {
       const mismatch = latefolders.map((p) => `${p.name} (${p.outcomeStreet})`).join(', ');
       return `Folders must fold on or before the showdown street (${showdownStreet}). Late: ${mismatch}. Please fix before finishing.`;
@@ -34,22 +97,9 @@ export function validateOutcomeStreets(players) {
   return null;
 }
 
-export const initialState = {
-  gameId: null,
-  currentHandId: null,
-  players: [],
-  community: { ...emptyCommunity },
-  currentStep: 'gameSelector',
-  handCount: 0,
-  gameDate: null,
-  gameMode: 'dealer_centric',
-};
+// --- Reducer ---
 
-function initPlayer(name) {
-  return { name, card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null };
-}
-
-export function reducer(state, action) {
+export function reducer(state: DealerState, action: DealerAction): DealerState {
   switch (action.type) {
     case 'SET_GAME': {
       const { gameId, players, gameDate, gameMode } = action.payload;
@@ -82,10 +132,10 @@ export function reducer(state, action) {
           ...state.community,
           flop1, flop2, flop3,
           flopRecorded: !!(flop1 && flop2 && flop3),
-          turn,
-          turnRecorded: !!turn,
-          river,
-          riverRecorded: !!river,
+          turn: turn ?? state.community.turn,
+          turnRecorded: turn ? true : state.community.turnRecorded,
+          river: river ?? state.community.river,
+          riverRecorded: river ? true : state.community.riverRecorded,
         },
       };
     }
@@ -202,9 +252,6 @@ export function reducer(state, action) {
       };
     }
 
-    default:
-      return state;
-
     case 'RESTORE_STATE': {
       const restored = { ...state, ...action.payload };
       // Steps that depend on ephemeral local state (reviewData, outcomeTarget)
@@ -214,5 +261,8 @@ export function reducer(state, action) {
       }
       return restored;
     }
+
+    default:
+      return state;
   }
 }

@@ -1,5 +1,5 @@
 import { useReducer, useState, useEffect } from 'preact/hooks';
-import { reducer, initialState, validateOutcomeStreets } from './dealerState.js';
+import { reducer, initialState, validateOutcomeStreets } from './dealerState.ts';
 import { GameSelector } from './GameSelector.jsx';
 import { GameCreateForm } from './GameCreateForm.jsx';
 import { HandDashboard } from './HandDashboard.jsx';
