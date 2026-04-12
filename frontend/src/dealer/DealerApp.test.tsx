@@ -203,17 +203,17 @@ describe('DealerApp 4-step shell', () => {
       ],
     });
     const container = renderToContainer(<DealerApp />);
-    expect(container.textContent).toContain('Hand Complete');
+    expect(container.textContent).toContain('Hand Review');
     expect(container.textContent).toContain('Hand #5');
     expect(container.textContent).toContain('Alice');
-    expect(container.textContent).toContain('won');
+    expect(container.textContent).toContain('Won');
     expect(container.textContent).toContain('Bob');
-    expect(container.textContent).toContain('folded');
-    expect(container.querySelector('[data-testid="next-hand-btn"]')).not.toBeNull();
-    expect(container.querySelector('[data-testid="review-back-btn"]')).not.toBeNull();
+    expect(container.textContent).toContain('Folded');
+    expect(container.querySelector('[data-testid="review-confirm-btn"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="review-cancel-btn"]')).not.toBeNull();
   });
 
-  it('next-hand-btn on review returns to dashboard', async () => {
+  it('confirm-btn on review saves and returns to dashboard', async () => {
     useDealerStore.setState({
       ...defaultTestState,
       currentStep: 'review',
@@ -225,8 +225,16 @@ describe('DealerApp 4-step shell', () => {
     (fetchHands as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     const container = renderToContainer(<DealerApp />);
 
-    act(() => {
-      container.querySelector<HTMLButtonElement>('[data-testid="next-hand-btn"]')!.click();
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="review-confirm-btn"]')!.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="finish-confirm-ok"]')).not.toBeNull();
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="finish-confirm-ok"]')!.click();
     });
 
     await vi.waitFor(() => {
@@ -875,11 +883,19 @@ describe('DealerApp finish hand flow', () => {
 
     // Goes to review step first
     await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="next-hand-btn"]')).not.toBeNull();
+      expect(container.querySelector('[data-testid="review-confirm-btn"]')).not.toBeNull();
     });
 
-    act(() => {
-      container.querySelector<HTMLButtonElement>('[data-testid="next-hand-btn"]')!.click();
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="review-confirm-btn"]')!.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="finish-confirm-ok"]')).not.toBeNull();
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="finish-confirm-ok"]')!.click();
     });
 
     await vi.waitFor(() => {
@@ -913,11 +929,19 @@ describe('DealerApp finish hand flow', () => {
 
     // Goes to review step first
     await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="next-hand-btn"]')).not.toBeNull();
+      expect(container.querySelector('[data-testid="review-confirm-btn"]')).not.toBeNull();
     });
 
-    act(() => {
-      container.querySelector<HTMLButtonElement>('[data-testid="next-hand-btn"]')!.click();
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="review-confirm-btn"]')!.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="finish-confirm-ok"]')).not.toBeNull();
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="finish-confirm-ok"]')!.click();
     });
 
     await vi.waitFor(() => {
@@ -939,11 +963,19 @@ describe('DealerApp finish hand flow', () => {
 
     // Should go directly to review (no dialog needed since all players captured)
     await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="next-hand-btn"]')).not.toBeNull();
+      expect(container.querySelector('[data-testid="review-confirm-btn"]')).not.toBeNull();
     });
 
-    act(() => {
-      container.querySelector<HTMLButtonElement>('[data-testid="next-hand-btn"]')!.click();
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="review-confirm-btn"]')!.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="finish-confirm-ok"]')).not.toBeNull();
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="finish-confirm-ok"]')!.click();
     });
 
     await vi.waitFor(() => {
@@ -973,11 +1005,19 @@ describe('DealerApp finish hand flow', () => {
 
     // Goes to review step first
     await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="next-hand-btn"]')).not.toBeNull();
+      expect(container.querySelector('[data-testid="review-confirm-btn"]')).not.toBeNull();
     });
 
-    act(() => {
-      container.querySelector<HTMLButtonElement>('[data-testid="next-hand-btn"]')!.click();
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="review-confirm-btn"]')!.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="finish-confirm-ok"]')).not.toBeNull();
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="finish-confirm-ok"]')!.click();
     });
 
     await vi.waitFor(() => {
@@ -1699,7 +1739,7 @@ describe('DealerApp showdown flow', () => {
     });
 
     await vi.waitFor(() => {
-      expect(container.textContent).toContain('Hand Complete');
+      expect(container.textContent).toContain('Hand Review');
     });
   });
 
@@ -1813,7 +1853,7 @@ describe('DealerApp showdown flow', () => {
     });
 
     await vi.waitFor(() => {
-      expect(container.textContent).toContain('Hand Complete');
+      expect(container.textContent).toContain('Hand Review');
       // Players should still have 'playing' status (blank results)
       const state = useDealerStore.getState();
       const alice = state.players.find((p) => p.name === 'Alice');
@@ -1836,7 +1876,7 @@ describe('DealerApp showdown flow', () => {
     });
 
     await vi.waitFor(() => {
-      expect(container.textContent).toContain('Hand Complete');
+      expect(container.textContent).toContain('Hand Review');
       const state = useDealerStore.getState();
       const alice = state.players.find((p) => p.name === 'Alice');
       expect(alice?.status).toBe('playing'); // not pre-filled

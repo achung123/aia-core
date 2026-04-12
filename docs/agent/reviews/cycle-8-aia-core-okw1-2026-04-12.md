@@ -59,7 +59,7 @@ Add tests like "clicking Retake during turn review re-opens camera capture for t
 **Category:** correctness
 
 **Problem:**
-The `CameraCapture` mock provides a `mock-cancel` button (calls `onCancel()`), and the production code clears `captureTarget` on cancel. No test verifies that cancelling during Turn or River capture returns the user to the `ActiveHandDashboard` without making any API calls. 
+The `CameraCapture` mock provides a `mock-cancel` button (calls `onCancel()`), and the production code clears `captureTarget` on cancel. No test verifies that cancelling during Turn or River capture returns the user to the `ActiveHandDashboard` without making any API calls.
 
 **Suggested Fix:**
 Add a test: "cancelling Turn capture returns to dashboard without API call" that clicks the flop tile, completes flop, clicks the turn tile, then clicks `mock-cancel`, and asserts that `updateTurn` was not called and the player-list is visible again.

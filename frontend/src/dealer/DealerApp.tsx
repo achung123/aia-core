@@ -10,6 +10,7 @@ import { ActiveHandDashboard } from './ActiveHandDashboard.tsx';
 import { CameraCapture } from './CameraCapture.tsx';
 import { DetectionReview } from './DetectionReview.tsx';
 import { OutcomeButtons } from './OutcomeButtons.tsx';
+import { ReviewScreen } from './ReviewScreen.tsx';
 import { addPlayerToHand, updateHolecards, updateFlop, updateTurn, updateRiver, patchPlayerResult, fetchGame, fetchHand, fetchHandStatus, fetchEquity } from '../api/client.ts';
 import { mapEquityToOutcomes, inferOutcomeStreet } from './showdownHelpers.ts';
 
@@ -435,35 +436,15 @@ export function DealerApp() {
       )}
 
       {/* ── Step 4: Hand Review ── */}
-      {currentStep === 'review' && gameId && (
-        <div style={reviewContainerStyle}>
-          <h2 style={reviewHeadingStyle}>Hand Complete</h2>
-          {currentHandId && <p style={reviewSubStyle}>Hand #{currentHandId}</p>}
-          <div style={reviewListStyle}>
-            {players.filter((p) => p.status !== 'playing' && p.status !== 'not_playing').map((p) => (
-              <div key={p.name} style={reviewPlayerStyle}>
-                <span style={reviewPlayerNameStyle}>{p.name}</span>
-                <span style={{ color: p.status === 'won' ? '#4ade80' : p.status === 'folded' ? '#f87171' : '#fb923c' }}>
-                  {p.status}{p.outcomeStreet ? ` (${p.outcomeStreet})` : ''}
-                </span>
-              </div>
-            ))}
-          </div>
-          <button
-            data-testid="next-hand-btn"
-            style={primaryButtonStyle}
-            onClick={() => finishHand()}
-          >
-            Next Hand
-          </button>
-          <button
-            data-testid="review-back-btn"
-            style={secondaryButtonStyle}
-            onClick={() => finishHand()}
-          >
-            Back to Dashboard
-          </button>
-        </div>
+      {currentStep === 'review' && gameId && currentHandId && (
+        <ReviewScreen
+          gameId={gameId}
+          handId={currentHandId}
+          players={players}
+          community={community}
+          onSaved={() => finishHand()}
+          onCancel={() => setStep('activeHand')}
+        />
       )}
 
       {/* Finish Hand confirmation dialog */}
@@ -525,73 +506,6 @@ const shellStyle: React.CSSProperties = {
   paddingBottom: '72px',
   display: 'flex',
   flexDirection: 'column',
-};
-
-const reviewContainerStyle: React.CSSProperties = {
-  maxWidth: '480px',
-  margin: '0 auto',
-  padding: '1.5rem 1rem',
-  width: '100%',
-};
-
-const reviewHeadingStyle: React.CSSProperties = {
-  fontSize: '1.4rem',
-  fontWeight: 700,
-  color: '#e2e8f0',
-  marginBottom: '0.25rem',
-};
-
-const reviewSubStyle: React.CSSProperties = {
-  color: '#94a3b8',
-  marginBottom: '1rem',
-};
-
-const reviewListStyle: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '0.5rem',
-  marginBottom: '1.5rem',
-};
-
-const reviewPlayerStyle: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  padding: '0.5rem 0.75rem',
-  background: '#1e1f2b',
-  borderRadius: '8px',
-  border: '1px solid #2e303a',
-};
-
-const reviewPlayerNameStyle: React.CSSProperties = {
-  color: '#e2e8f0',
-  fontWeight: 600,
-};
-
-const primaryButtonStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '0.75rem',
-  minHeight: '48px',
-  fontSize: '1.1rem',
-  fontWeight: 'bold',
-  border: 'none',
-  borderRadius: '8px',
-  background: '#4f46e5',
-  color: '#fff',
-  cursor: 'pointer',
-  marginBottom: '0.5rem',
-};
-
-const secondaryButtonStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '0.75rem',
-  minHeight: '48px',
-  fontSize: '1rem',
-  fontWeight: 600,
-  border: '1px solid #2e303a',
-  borderRadius: '8px',
-  background: 'transparent',
-  color: '#94a3b8',
-  cursor: 'pointer',
 };
 
 const bottomNavStyle: React.CSSProperties = {
