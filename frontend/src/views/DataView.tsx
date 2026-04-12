@@ -565,11 +565,16 @@ function HandDetails({ session, onRefresh }: HandDetailsProps) {
                 <td>{formatCard(h.turn)}</td>
                 <td>{formatCard(h.river)}</td>
                 <td>
-                  {(h.player_hands || []).map((p: PlayerHandResponse) => {
+                  {(h.player_hands || []).map((p: PlayerHandResponse, idx: number) => {
                     const cards = [p.card_1, p.card_2].filter(Boolean) as string[];
                     const hand = cards.length ? formatCards(cards) : '??';
-                    return `${p.player_name} [${hand}] ${p.result || '?'}`;
-                  }).join(', ') || '—'}
+                    return (
+                      <div key={idx} style={{ whiteSpace: 'nowrap' }}>
+                        {p.player_name} [{hand}] {p.result || '?'}
+                      </div>
+                    );
+                  })}
+                  {(h.player_hands || []).length === 0 && '—'}
                 </td>
                 <td style={{ display: 'flex', gap: '0.25rem' }}>
                   <button type="button" className="dv-btn dv-btn-sm" onClick={e => { e.stopPropagation(); setEditingHand(h); }}>Edit</button>

@@ -384,6 +384,7 @@ nav {
   max-width: 1200px;
   margin: 0 auto;
   text-align: left;
+  box-sizing: border-box;
 }
 
 .data-view h1.dv-title {
@@ -497,6 +498,7 @@ nav {
 .data-view .hand-details-row td {
   background: #16171d;
   padding: 1rem 1.25rem;
+  overflow-x: auto;
 }
 
 .data-view .action-bar {
@@ -689,4 +691,79 @@ nav {
   color: #64748b;
   margin: 0 0 0.75rem;
   line-height: 1.4;
+}
+
+/* ==========================================================================
+   Data View — Mobile Responsive
+   ========================================================================== */
+
+@media (max-width: 768px) {
+  .data-view {
+    padding: 1rem 0.75rem;
+  }
+
+  .data-view h1.dv-title {
+    font-size: 1.2rem;
+  }
+
+  /* Session table: tighter cells */
+  .data-view .session-table thead th {
+    padding: 0.5rem 0.5rem;
+    font-size: 0.68rem;
+  }
+  .data-view .session-table tbody td {
+    padding: 0.5rem 0.5rem;
+    font-size: 0.8rem;
+  }
+
+  /* Hand details: scroll horizontally instead of blowing out the viewport */
+  .data-view .hand-details-row td {
+    padding: 0.75rem 0.5rem;
+  }
+
+  .data-view .hand-table {
+    min-width: 500px;
+  }
+  .data-view .hand-table thead th {
+    padding: 0.4rem 0.5rem;
+    font-size: 0.65rem;
+  }
+  .data-view .hand-table tbody td {
+    padding: 0.35rem 0.5rem;
+    font-size: 0.72rem;
+  }
+
+  /* Action bar: wrap buttons nicely */
+  .data-view .action-bar {
+    gap: 0.35rem;
+  }
+  .data-view .action-bar .dv-btn-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.7rem;
+  }
+
+  /* Modal: fill the screen on mobile */
+  .modal-overlay .modal {
+    min-width: unset;
+    width: calc(100vw - 2rem);
+    max-width: calc(100vw - 2rem);
+    max-height: calc(100vh - 2rem);
+    padding: 1.25rem;
+    border-radius: 10px;
+  }
+
+  .modal-overlay .modal fieldset {
+    padding: 0.5rem 0.5rem;
+  }
+
+  .modal-overlay .modal .player-row {
+    gap: 0.3rem;
+  }
+  .modal-overlay .modal .player-row strong {
+    min-width: 60px;
+    font-size: 0.78rem;
+  }
+  .modal-overlay .modal .player-row input[type="text"] {
+    width: 50px !important;
+  }
 }

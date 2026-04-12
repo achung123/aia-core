@@ -171,4 +171,19 @@ describe('DataView', () => {
     // Hand detail row should be gone
     expect(screen.queryByText('+ Add Hand')).toBeNull();
   });
+
+  it('data-view has mobile-responsive styling (no horizontal overflow on narrow screens)', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const cssText = fs.readFileSync(path.resolve(__dirname, '../style.css'), 'utf8');
+    expect(cssText).toMatch(/@media\s*\(max-width:\s*768px\)/);
+    expect(cssText).toContain('.data-view');
+  });
+
+  it('hand-details-row td has overflow-x auto in CSS', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const cssText = fs.readFileSync(path.resolve(__dirname, '../style.css'), 'utf8');
+    expect(cssText).toMatch(/\.hand-details-row\s+td[\s\S]*?overflow-x:\s*auto/);
+  });
 });
