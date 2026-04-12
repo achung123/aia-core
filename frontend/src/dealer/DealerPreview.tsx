@@ -1,42 +1,69 @@
-import { useState, useRef, useEffect } from 'preact/hooks';
+import { useState, useRef, useEffect, type CSSProperties } from 'react';
 import { createPokerScene } from '../scenes/pokerScene.js';
-import { calculateEquity } from '../poker/evaluator';
+import { calculateEquity, type Card } from '../poker/evaluator';
 import { StreetScrubber } from '../mobile/StreetScrubber.jsx';
 
-const SUIT_SYMBOL = { h: '♥', d: '♦', c: '♣', s: '♠', H: '♥', D: '♦', C: '♣', S: '♠' };
-const RESULT_MAP = { won: 'win', folded: 'fold', lost: 'loss' };
+const SUIT_SYMBOL: Record<string, string> = { h: '♥', d: '♦', c: '♣', s: '♠', H: '♥', D: '♦', C: '♣', S: '♠' };
+const RESULT_MAP: Record<string, string> = { won: 'win', folded: 'fold', lost: 'loss' };
 
-function parseCard(cardStr) {
+function parseCard(cardStr: string | null | undefined): Card | null {
   if (!cardStr) return null;
   const rank = cardStr.slice(0, -1);
   const suitChar = cardStr.slice(-1);
   return { rank, suit: SUIT_SYMBOL[suitChar] || suitChar };
 }
 
-function communityForStreet(community, streetName) {
-  const cards = [];
+interface CommunityCards {
+  flop1: string | null;
+  flop2: string | null;
+  flop3: string | null;
+  turn: string | null;
+  river: string | null;
+  recorded?: boolean;
+}
+
+interface Player {
+  name: string;
+  card1: string | null;
+  card2: string | null;
+  recorded: boolean;
+  status: string;
+}
+
+type StreetName = 'Pre-Flop' | 'Flop' | 'Turn' | 'River' | 'Showdown';
+
+function communityForStreet(community: CommunityCards | null | undefined, streetName: StreetName): Card[] {
+  const cards: Card[] = [];
   if (streetName !== 'Pre-Flop' && community) {
-    if (community.flop1) cards.push(parseCard(community.flop1));
-    if (community.flop2) cards.push(parseCard(community.flop2));
-    if (community.flop3) cards.push(parseCard(community.flop3));
+    if (community.flop1) cards.push(parseCard(community.flop1)!);
+    if (community.flop2) cards.push(parseCard(community.flop2)!);
+    if (community.flop3) cards.push(parseCard(community.flop3)!);
   }
   if ((streetName === 'Turn' || streetName === 'River' || streetName === 'Showdown') && community?.turn) {
-    cards.push(parseCard(community.turn));
+    cards.push(parseCard(community.turn)!);
   }
   if ((streetName === 'River' || streetName === 'Showdown') && community?.river) {
-    cards.push(parseCard(community.river));
+    cards.push(parseCard(community.river)!);
   }
   return cards.filter(Boolean);
 }
 
-export function DealerPreview({ community, players, gameId, handNumber }) {
+export interface DealerPreviewProps {
+  community: CommunityCards | null;
+  players: Player[] | null;
+  gameId?: number;
+  handNumber?: number;
+}
+
+export function DealerPreview({ community, players, gameId: _gameId, handNumber: _handNumber }: DealerPreviewProps) {
   const [expanded, setExpanded] = useState(false);
-  const canvasRef = useRef(null);
-  const wrapperRef = useRef(null);
-  const sceneRef = useRef(null);
-  const labelsRef = useRef([]);
-  const [equityMap, setEquityMap] = useState({});
-  const [currentStreet, setCurrentStreet] = useState('Pre-Flop');
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sceneRef = useRef<any>(null);
+  const labelsRef = useRef<HTMLDivElement[]>([]);
+  const [equityMap, setEquityMap] = useState<Record<string, number>>({});
+  const [currentStreet, setCurrentStreet] = useState<StreetName>('Pre-Flop');
 
   // Create / dispose scene when expanded changes
   useEffect(() => {
@@ -58,7 +85,7 @@ export function DealerPreview({ community, players, gameId, handNumber }) {
     sceneRef.current = createPokerScene(canvas, { seatCount });
 
     // Create seat name labels
-    const labels = [];
+    const labels: HTMLDivElement[] = [];
     for (let i = 0; i < seatCount; i++) {
       const div = document.createElement('div');
       div.className = 'seat-label';
@@ -111,8 +138,8 @@ export function DealerPreview({ community, players, gameId, handNumber }) {
   useEffect(() => {
     if (!sceneRef.current || !expanded) return;
 
-    const seatPlayerMap = {};
-    const playerHands = [];
+    const seatPlayerMap: Record<number, string> = {};
+    const playerHands: { player_name: string; hole_cards: (Card | null)[] | null; result: string }[] = [];
 
     if (players) {
       players.forEach((p, i) => {
@@ -132,7 +159,7 @@ export function DealerPreview({ community, players, gameId, handNumber }) {
       player_hands: playerHands,
     };
 
-    const streetMap = { 'Pre-Flop': 0, 'Flop': 1, 'Turn': 2, 'River': 3, 'Showdown': 4 };
+    const streetMap: Record<string, number> = { 'Pre-Flop': 0, 'Flop': 1, 'Turn': 2, 'River': 3, 'Showdown': 4 };
     const streetIndex = streetMap[currentStreet] ?? 0;
 
     sceneRef.current.update({ cardData, seatPlayerMap, streetIndex });
@@ -191,11 +218,11 @@ export function DealerPreview({ community, players, gameId, handNumber }) {
     }
 
     const boardCards = communityForStreet(community, currentStreet);
-    const holeCards = playersWithCards.map((p) => [parseCard(p.card1), parseCard(p.card2)]);
+    const holeCards = playersWithCards.map((p) => [parseCard(p.card1)!, parseCard(p.card2)!]);
 
     try {
       const results = calculateEquity(holeCards, boardCards);
-      const eqMap = {};
+      const eqMap: Record<string, number> = {};
       playersWithCards.forEach((p, i) => {
         eqMap[p.name] = Math.round(results[i].equity * 100);
       });
@@ -243,7 +270,7 @@ export function DealerPreview({ community, players, gameId, handNumber }) {
       }
     });
 
-    observer.observe(canvas.parentElement);
+    observer.observe(canvas.parentElement!);
     return () => observer.disconnect();
   }, [expanded]);
 
@@ -292,11 +319,11 @@ export function DealerPreview({ community, players, gameId, handNumber }) {
   );
 }
 
-const containerStyle = {
+const containerStyle: CSSProperties = {
   marginBottom: '1rem',
 };
 
-const toggleStyle = {
+const toggleStyle: CSSProperties = {
   padding: '0.5rem 1rem',
   fontSize: '0.9rem',
   cursor: 'pointer',
@@ -307,28 +334,28 @@ const toggleStyle = {
   marginBottom: '0.5rem',
 };
 
-const canvasWrapperStyle = {
+const canvasWrapperStyle: CSSProperties = {
   width: '100%',
   borderRadius: '8px',
   overflow: 'hidden',
   position: 'relative',
 };
 
-const canvasStyle = {
+const canvasStyle: CSSProperties = {
   width: '100%',
   height: 'auto',
   aspectRatio: '4 / 3',
   display: 'block',
 };
 
-const badgeContainerStyle = {
+const badgeContainerStyle: CSSProperties = {
   display: 'flex',
   flexWrap: 'wrap',
   gap: '0.5rem',
   marginTop: '0.5rem',
 };
 
-const badgeStyle = {
+const badgeStyle: CSSProperties = {
   background: '#312e81',
   color: '#fff',
   padding: '0.25rem 0.75rem',

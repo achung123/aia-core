@@ -1,8 +1,14 @@
-import { useState, useEffect } from 'preact/hooks';
+import { useState, useEffect, type CSSProperties } from 'react';
 import QRCode from 'qrcode';
 
-export function QRCodeDisplay({ gameId, playerName, visible }) {
-  const [dataUrl, setDataUrl] = useState(null);
+export interface QRCodeDisplayProps {
+  gameId: number;
+  playerName?: string;
+  visible: boolean;
+}
+
+export function QRCodeDisplay({ gameId, playerName, visible }: QRCodeDisplayProps) {
+  const [dataUrl, setDataUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!visible) return;
@@ -28,7 +34,7 @@ export function QRCodeDisplay({ gameId, playerName, visible }) {
   );
 }
 
-const styles = {
+const styles: Record<string, CSSProperties> = {
   wrapper: {
     display: 'flex',
     flexDirection: 'column',

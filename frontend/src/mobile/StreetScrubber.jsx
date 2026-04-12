@@ -1,5 +1,3 @@
-import { h } from 'preact';
-
 const STREETS = ['Pre-Flop', 'Flop', 'Turn', 'River', 'Showdown'];
 
 const styles = {

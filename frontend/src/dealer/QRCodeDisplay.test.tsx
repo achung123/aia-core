@@ -1,7 +1,5 @@
-/** @vitest-environment happy-dom */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render } from 'preact';
-import { act } from 'preact/test-utils';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, cleanup, act } from '@testing-library/react';
 
 vi.mock('qrcode', () => ({
   default: {
@@ -10,19 +8,9 @@ vi.mock('qrcode', () => ({
 }));
 
 import QRCode from 'qrcode';
-import { QRCodeDisplay } from './QRCodeDisplay.jsx';
+import { QRCodeDisplay } from './QRCodeDisplay.tsx';
 
-function renderToContainer(vnode) {
-  const container = document.createElement('div');
-  document.body.appendChild(container);
-  render(vnode, container);
-  return container;
-}
-
-function cleanup(container) {
-  render(null, container);
-  container.remove();
-}
+afterEach(cleanup);
 
 describe('QRCodeDisplay', () => {
   beforeEach(() => {
@@ -30,82 +18,73 @@ describe('QRCodeDisplay', () => {
   });
 
   it('renders nothing when not visible', () => {
-    const container = renderToContainer(<QRCodeDisplay gameId={42} visible={false} />);
-    expect(container.querySelector('[data-testid="qr-code-display"]')).toBeNull();
-    cleanup(container);
+    render(<QRCodeDisplay gameId={42} visible={false} />);
+    expect(screen.queryByTestId('qr-code-display')).toBeNull();
   });
 
   it('calls QRCode.toDataURL with the correct player URL when visible', async () => {
-    let container;
     await act(async () => {
-      container = renderToContainer(<QRCodeDisplay gameId={42} visible={true} />);
+      render(<QRCodeDisplay gameId={42} visible={true} />);
     });
     const expectedUrl = `${window.location.origin}/#/player?game=42`;
     expect(QRCode.toDataURL).toHaveBeenCalledWith(expectedUrl, expect.any(Object));
-    cleanup(container);
   });
 
   it('includes playerName in URL when provided', async () => {
-    let container;
     await act(async () => {
-      container = renderToContainer(<QRCodeDisplay gameId={42} playerName="Alice" visible={true} />);
+      render(<QRCodeDisplay gameId={42} playerName="Alice" visible={true} />);
     });
     const expectedUrl = `${window.location.origin}/#/player?game=42&player=Alice`;
     expect(QRCode.toDataURL).toHaveBeenCalledWith(expectedUrl, expect.any(Object));
-    cleanup(container);
   });
 
   it('encodes special characters in playerName', async () => {
-    let container;
     await act(async () => {
-      container = renderToContainer(<QRCodeDisplay gameId={42} playerName="Bob Jr." visible={true} />);
+      render(<QRCodeDisplay gameId={42} playerName="Bob Jr." visible={true} />);
     });
     const expectedUrl = `${window.location.origin}/#/player?game=42&player=Bob%20Jr.`;
     expect(QRCode.toDataURL).toHaveBeenCalledWith(expectedUrl, expect.any(Object));
-    cleanup(container);
   });
 
   it('renders a QR code image after loading', async () => {
-    let container;
     await act(async () => {
-      container = renderToContainer(<QRCodeDisplay gameId={7} visible={true} />);
+      render(<QRCodeDisplay gameId={7} visible={true} />);
     });
     // Flush the promise-based state update
     await act(async () => {
       await new Promise((r) => setTimeout(r, 0));
     });
-    const img = container.querySelector('[data-testid="qr-code-img"]');
-    expect(img).not.toBeNull();
-    expect(img.src).toBe('data:image/png;base64,FAKE');
-    cleanup(container);
+    const img = screen.getByTestId('qr-code-img');
+    expect(img).toBeDefined();
+    expect(img.getAttribute('src')).toBe('data:image/png;base64,FAKE');
   });
 
   it('displays the player URL as text', async () => {
-    let container;
     await act(async () => {
-      container = renderToContainer(<QRCodeDisplay gameId={7} visible={true} />);
+      render(<QRCodeDisplay gameId={7} visible={true} />);
     });
     await act(async () => {
       await new Promise((r) => setTimeout(r, 0));
     });
-    const wrapper = container.querySelector('[data-testid="qr-code-display"]');
+    const wrapper = screen.getByTestId('qr-code-display');
     expect(wrapper.textContent).toContain('/#/player?game=7');
-    cleanup(container);
   });
 
   it('updates QR code when gameId changes', async () => {
-    let container;
+    const { rerender } = render(<QRCodeDisplay gameId={1} visible={true} />);
     await act(async () => {
-      container = renderToContainer(<QRCodeDisplay gameId={1} visible={true} />);
+      await new Promise((r) => setTimeout(r, 0));
     });
     expect(QRCode.toDataURL).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      render(<QRCodeDisplay gameId={2} visible={true} />, container);
+      rerender(<QRCodeDisplay gameId={2} visible={true} />);
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
     });
     expect(QRCode.toDataURL).toHaveBeenCalledTimes(2);
     const expectedUrl = `${window.location.origin}/#/player?game=2`;
     expect(QRCode.toDataURL).toHaveBeenLastCalledWith(expectedUrl, expect.any(Object));
-    cleanup(container);
   });
 });

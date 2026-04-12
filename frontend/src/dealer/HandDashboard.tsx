@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { fetchHands, createHand, completeGame } from '../api/client.ts';
-// @ts-expect-error — QRCodeDisplay is still JSX, will be converted in a later task
-import { QRCodeDisplay } from './QRCodeDisplay.jsx';
+import { QRCodeDisplay } from './QRCodeDisplay.tsx';
 import type { HandResponse, PlayerHandResponse } from '../api/types.ts';
 import type { GameMode } from '../stores/dealerStore.ts';
 

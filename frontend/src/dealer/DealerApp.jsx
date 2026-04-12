@@ -7,8 +7,8 @@ import { PlayerGrid } from './PlayerGrid.tsx';
 import { CameraCapture } from './CameraCapture.tsx';
 import { DetectionReview } from './DetectionReview.tsx';
 import { OutcomeButtons } from './OutcomeButtons.tsx';
-import { DealerPreview } from './DealerPreview.jsx';
-import { QRCodeDisplay } from './QRCodeDisplay.jsx';
+import { DealerPreview } from './DealerPreview.tsx';
+import { QRCodeDisplay } from './QRCodeDisplay.tsx';
 import { addPlayerToHand, updateHolecards, updateFlop, updateTurn, updateRiver, patchPlayerResult, fetchGame, fetchHand, fetchHandStatus } from '../api/client.js';
 
 const DEALER_STATE_KEY = 'aia_dealer_state';
