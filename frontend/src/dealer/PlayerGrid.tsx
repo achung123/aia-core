@@ -1,4 +1,6 @@
-const statusColors = {
+import type { CommunityCards, Player, GameMode } from '../stores/dealerStore.ts';
+
+const statusColors: Record<string, string> = {
   playing: '#ffffff',
   won: '#bbf7d0',
   folded: '#fecaca',
@@ -9,7 +11,7 @@ const statusColors = {
   handed_back: '#fef08a',
 };
 
-function formatStatus(status, outcomeStreet) {
+function formatStatus(status: string, outcomeStreet: string | null): string {
   if (status === 'not_playing') return 'not playing';
   if (status === 'handed_back') return 'handed back';
   if (status === 'idle') return 'playing';
@@ -17,7 +19,19 @@ function formatStatus(status, outcomeStreet) {
   return status;
 }
 
-export function PlayerGrid({ players, community, onTileSelect, onDirectOutcome, onMarkNotPlaying, gameMode, canFinish, onFinishHand, onBack }) {
+export interface PlayerGridProps {
+  players: Player[];
+  community: CommunityCards;
+  onTileSelect: (target: string) => void;
+  onDirectOutcome?: (playerName: string) => void;
+  onMarkNotPlaying?: (playerName: string) => void;
+  gameMode?: GameMode;
+  canFinish?: boolean;
+  onFinishHand?: () => void;
+  onBack?: () => void;
+}
+
+export function PlayerGrid({ players, community, onTileSelect, onDirectOutcome, onMarkNotPlaying, gameMode, canFinish, onFinishHand, onBack }: PlayerGridProps) {
   return (
     <div style={styles.container}>
       <h2 style={styles.heading}>Select a Player</h2>
@@ -125,7 +139,7 @@ export function PlayerGrid({ players, community, onTileSelect, onDirectOutcome, 
   );
 }
 
-const styles = {
+const styles: Record<string, React.CSSProperties> = {
   container: {
     maxWidth: '480px',
     margin: '0 auto',
@@ -222,7 +236,7 @@ const styles = {
     justifyContent: 'flex-end',
   },
   tileName: {
-    textAlign: 'center',
+    textAlign: 'center' as const,
   },
   statusText: {
     fontSize: '0.85rem',

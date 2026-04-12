@@ -1,15 +1,21 @@
-import { h } from 'preact';
-import { useState, useEffect } from 'preact/hooks';
-import { fetchHands, createHand, completeGame } from '../api/client.js';
+import { useState, useEffect } from 'react';
+import { fetchHands, createHand, completeGame } from '../api/client.ts';
+// @ts-expect-error — QRCodeDisplay is still JSX, will be converted in a later task
 import { QRCodeDisplay } from './QRCodeDisplay.jsx';
+import type { HandResponse, PlayerHandResponse } from '../api/types.ts';
+import type { GameMode } from '../stores/dealerStore.ts';
 
-const resultColors = {
+const resultColors: Record<string, string> = {
   won: '#16a34a',
   folded: '#dc2626',
   lost: '#ea580c',
 };
 
-function ResultBadge({ ph }) {
+interface ResultBadgeProps {
+  ph: PlayerHandResponse;
+}
+
+function ResultBadge({ ph }: ResultBadgeProps) {
   if (!ph.result) return <span>{ph.player_name} </span>;
   const color = resultColors[ph.result] || '#6b7280';
   const icon = ph.result === 'won' ? '\ud83c\udfc6 ' : '';
@@ -21,19 +27,28 @@ function ResultBadge({ ph }) {
   );
 }
 
-export function HandDashboard({ gameId, players: playerNames, gameMode, onSelectHand, onBack, onModeChange }) {
-  const [hands, setHands] = useState(null);
-  const [error, setError] = useState(null);
+export interface HandDashboardProps {
+  gameId: number;
+  players?: string[];
+  gameMode?: GameMode;
+  onSelectHand: (handNumber: number) => void;
+  onBack: () => void;
+  onModeChange?: (mode: GameMode) => void;
+}
+
+export function HandDashboard({ gameId, players: playerNames, gameMode, onSelectHand, onBack, onModeChange }: HandDashboardProps) {
+  const [hands, setHands] = useState<HandResponse[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [ending, setEnding] = useState(false);
-  const [selectedWinners, setSelectedWinners] = useState([]);
-  const [winnerError, setWinnerError] = useState(null);
+  const [selectedWinners, setSelectedWinners] = useState<string[]>([]);
+  const [winnerError, setWinnerError] = useState<string | null>(null);
   const [showQR, setShowQR] = useState(false);
 
   useEffect(() => {
     fetchHands(gameId)
       .then((data) => setHands(data))
-      .catch((err) => setError(err.message || 'Failed to fetch hands'));
+      .catch((err: Error) => setError(err.message || 'Failed to fetch hands'));
   }, [gameId]);
 
   if (error) {
@@ -54,7 +69,7 @@ export function HandDashboard({ gameId, players: playerNames, gameMode, onSelect
       const result = await createHand(gameId, {});
       onSelectHand(result.hand_number);
     } catch (err) {
-      setError(err.message || 'Failed to create hand');
+      setError((err as Error).message || 'Failed to create hand');
     }
   }
 
@@ -70,14 +85,14 @@ export function HandDashboard({ gameId, players: playerNames, gameMode, onSelect
       setShowEndConfirm(false);
       onBack();
     } catch (err) {
-      setError(err.message || 'Failed to end game');
+      setError((err as Error).message || 'Failed to end game');
       setShowEndConfirm(false);
     } finally {
       setEnding(false);
     }
   }
 
-  function toggleWinner(name) {
+  function toggleWinner(name: string) {
     setWinnerError(null);
     setSelectedWinners((prev) => {
       if (prev.includes(name)) return prev.filter((n) => n !== name);
@@ -140,7 +155,7 @@ export function HandDashboard({ gameId, players: playerNames, gameMode, onSelect
             {showQR ? 'Hide QR' : 'Show QR'}
           </button>
           {showQR && (playerNames || []).map((name) => (
-            <div key={name} style={{ marginTop: '0.75rem', textAlign: 'center', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '0.75rem' }}>
+            <div key={name} style={{ marginTop: '0.75rem', textAlign: 'center' as const, border: '1px solid #e5e7eb', borderRadius: '12px', padding: '0.75rem' }}>
               <h3 style={{ margin: '0 0 0.25rem' }}>{name}</h3>
               <QRCodeDisplay gameId={gameId} playerName={name} visible={true} />
             </div>
@@ -160,7 +175,7 @@ export function HandDashboard({ gameId, players: playerNames, gameMode, onSelect
           <div style={styles.dialog}>
             <p style={{ marginBottom: '0.5rem', fontWeight: 600 }}>Select the winner(s):</p>
             <p style={{ marginBottom: '0.75rem', fontSize: '0.85rem', color: '#6b7280' }}>Choose 1 or 2 players who won the game.</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '0.5rem', marginBottom: '1rem' }}>
               {(playerNames || []).map((name) => {
                 const selected = selectedWinners.includes(name);
                 return (
@@ -202,7 +217,7 @@ export function HandDashboard({ gameId, players: playerNames, gameMode, onSelect
   );
 }
 
-const styles = {
+const styles: Record<string, React.CSSProperties> = {
   container: {
     maxWidth: '480px',
     margin: '0 auto',

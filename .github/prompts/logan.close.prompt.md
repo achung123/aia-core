@@ -25,7 +25,12 @@ Closing a task in beads updates the dependency graph. Tasks that were blocked so
 4. **Close the task.** Run `bd close <id> --reason "<reason>" --json`. Use the user's stated reason, or default to "Completed" if none provided.
 5. **Capture the "after" ready list.** Run `bd ready --json` again.
 6. **Diff the lists.** Identify newly ready tasks (present in "after" but not "before").
-7. **Output** the closure confirmation and any newly unblocked tasks.
+7. **Unblock newly ready dependents.** For each newly ready task, explicitly set its status from `blocked` to `open`:
+   ```bash
+   bd update <newly-ready-id> --status open
+   ```
+   This ensures the kanban board moves these tasks out of the "Blocked" column immediately.
+8. **Output** the closure confirmation and any newly unblocked tasks.
 
 ---
 
@@ -82,5 +87,6 @@ No new tasks unblocked. Run `@logan ready` to see the current queue.
 
 - **Do NOT close a task that is still blocked.** If it has open dependencies, something is wrong — investigate first.
 - **Do NOT skip the ready-diff.** Surfacing newly unblocked tasks is the primary value of closing through Logan.
+- **Do NOT forget to unblock dependents.** When a task is closed, every dependent whose blockers are now all resolved MUST be explicitly set to `open` via `bd update <id> --status open`. Kanban boards rely on explicit status.
 - **Do NOT close without a reason.** Always provide one, even if it's just "Completed".
 - **Do NOT forget to remind about commit messages.** When closing after code work, the commit should include `(bd-xxx)`.
