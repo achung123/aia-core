@@ -1,8 +1,8 @@
 import { h } from 'preact';
 import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
 import { fetchSessions, fetchGame, fetchHands, fetchHandStatus, updateHolecards, patchPlayerResult } from '../api/client.js';
-import { CameraCapture } from '../dealer/CameraCapture.jsx';
-import { DetectionReview } from '../dealer/DetectionReview.jsx';
+import { CameraCapture } from '../dealer/CameraCapture.tsx';
+import { DetectionReview } from '../dealer/DetectionReview.tsx';
 
 function parseGameIdFromHash() {
   const hash = window.location.hash || '';

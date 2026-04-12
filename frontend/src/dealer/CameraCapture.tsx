@@ -1,19 +1,27 @@
-import { useRef, useState } from 'preact/hooks';
-import { uploadImage, getDetectionResults } from '../api/client.js';
+import { useRef, useState } from 'react';
+import { uploadImage, getDetectionResults } from '../api/client.ts';
+import type { CardDetectionEntry } from '../api/types.ts';
 
-export function CameraCapture({ gameId, targetName, onDetectionResult, onCancel }) {
-  const inputRef = useRef(null);
+export interface CameraCaptureProps {
+  gameId: number;
+  targetName: string;
+  onDetectionResult: (targetName: string, detections: CardDetectionEntry[], file: File) => void;
+  onCancel: () => void;
+}
+
+export function CameraCapture({ gameId, targetName, onDetectionResult, onCancel }: CameraCaptureProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
 
-  function triggerInput() {
+  function triggerInput(): void {
     if (inputRef.current) {
       inputRef.current.value = '';
       inputRef.current.click();
     }
   }
 
-  async function handleFileChange(e) {
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>): Promise<void> {
     const file = e.target.files?.[0];
     if (!file) {
       onCancel();
@@ -26,14 +34,15 @@ export function CameraCapture({ gameId, targetName, onDetectionResult, onCancel 
     try {
       const upload = await uploadImage(gameId, file);
       const detections = await getDetectionResults(gameId, upload.upload_id);
-      onDetectionResult(targetName, detections, file);
-    } catch (err) {
-      setError(err.message || 'Upload failed');
+      onDetectionResult(targetName, detections.detections, file);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Upload failed';
+      setError(message);
       setLoading(false);
     }
   }
 
-  function handleRetry() {
+  function handleRetry(): void {
     setError(null);
     triggerInput();
   }
@@ -78,7 +87,7 @@ export function CameraCapture({ gameId, targetName, onDetectionResult, onCancel 
   );
 }
 
-const styles = {
+const styles: Record<string, React.CSSProperties> = {
   overlay: {
     position: 'fixed',
     top: 0,
@@ -95,7 +104,7 @@ const styles = {
     background: '#fff',
     borderRadius: '12px',
     padding: '2rem',
-    textAlign: 'center',
+    textAlign: 'center' as const,
     maxWidth: '320px',
     width: '90%',
   },

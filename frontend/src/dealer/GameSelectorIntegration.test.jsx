@@ -21,11 +21,11 @@ vi.mock('../api/client.js', () => ({
   fetchHandStatus: vi.fn(() => Promise.resolve({ hand_number: 1, community_recorded: false, players: [] })),
 }));
 
-vi.mock('./CameraCapture.jsx', () => ({
+vi.mock('./CameraCapture.tsx', () => ({
   CameraCapture: () => <div data-testid="camera-capture" />,
 }));
 
-vi.mock('./DetectionReview.jsx', () => ({
+vi.mock('./DetectionReview.tsx', () => ({
   DetectionReview: () => <div data-testid="detection-review" />,
 }));
 

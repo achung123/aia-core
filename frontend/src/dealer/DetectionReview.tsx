@@ -1,10 +1,11 @@
-import { useState } from 'preact/hooks';
+import { useState } from 'react';
 import { CardPicker } from './CardPicker.jsx';
+import type { CardDetectionEntry } from '../api/types.ts';
 
-const SUIT_MAP = { h: '♥', s: '♠', d: '♦', c: '♣' };
-const SUIT_COLORS = { '♥': '#dc2626', '♠': '#1e293b', '♦': '#dc2626', '♣': '#1e293b' };
+const SUIT_MAP: Record<string, string> = { h: '♥', s: '♠', d: '♦', c: '♣' };
+const SUIT_COLORS: Record<string, string> = { '♥': '#dc2626', '♠': '#1e293b', '♦': '#dc2626', '♣': '#1e293b' };
 
-function formatCard(detectedValue) {
+function formatCard(detectedValue: string): { rank: string; suit: string } {
   const suit = detectedValue.slice(-1).toLowerCase();
   const rank = detectedValue.slice(0, -1).toUpperCase();
   const symbol = SUIT_MAP[suit] || suit;
@@ -12,7 +13,16 @@ function formatCard(detectedValue) {
 }
 
 const POSITION_LABELS_FLOP = ['Flop', 'Flop', 'Flop'];
-const MODE_CONFIG = {
+
+export type DetectionMode = 'flop' | 'turn' | 'river' | 'community' | 'player';
+
+interface ModeConfig {
+  maxCards: number;
+  expectedMin: number;
+  label: string | null;
+}
+
+const MODE_CONFIG: Record<DetectionMode, ModeConfig> = {
   flop: { maxCards: 3, expectedMin: 3, label: 'Flop (3 cards)' },
   turn: { maxCards: 1, expectedMin: 1, label: 'Turn (1 card)' },
   river: { maxCards: 1, expectedMin: 1, label: 'River (1 card)' },
@@ -20,7 +30,16 @@ const MODE_CONFIG = {
   player: { maxCards: 2, expectedMin: 2, label: null },
 };
 
-export function DetectionReview({ detections, imageUrl, mode, targetName, onConfirm, onRetake }) {
+export interface DetectionReviewProps {
+  detections: CardDetectionEntry[] | null;
+  imageUrl: string | null;
+  mode: DetectionMode;
+  targetName: string;
+  onConfirm: (targetName: string, cardValues: string[]) => void;
+  onRetake: () => void;
+}
+
+export function DetectionReview({ detections, imageUrl, mode, targetName, onConfirm, onRetake }: DetectionReviewProps) {
   const allCards = detections || [];
   const config = MODE_CONFIG[mode] || MODE_CONFIG.player;
   const maxCards = config.maxCards;
@@ -31,19 +50,21 @@ export function DetectionReview({ detections, imageUrl, mode, targetName, onConf
   const expectedMin = config.expectedMin;
   const countOk = cards.length >= expectedMin;
 
-  const [corrections, setCorrections] = useState({});
-  const [pickerIndex, setPickerIndex] = useState(null);
+  const [corrections, setCorrections] = useState<Record<number, string>>({});
+  const [pickerIndex, setPickerIndex] = useState<number | null>(null);
 
-  function getCorrectedValue(index) {
+  function getCorrectedValue(index: number): string | undefined {
     return corrections[index] || cards[index]?.detected_value;
   }
 
-  function handlePickerSelect(cardCode) {
-    setCorrections((prev) => ({ ...prev, [pickerIndex]: cardCode }));
-    setPickerIndex(null);
+  function handlePickerSelect(cardCode: string): void {
+    if (pickerIndex !== null) {
+      setCorrections((prev) => ({ ...prev, [pickerIndex]: cardCode }));
+      setPickerIndex(null);
+    }
   }
 
-  function handleConfirm() {
+  function handleConfirm(): void {
     const cardValues = cards.map((d, i) => corrections[i] || d.detected_value);
     onConfirm(targetName, cardValues);
   }
@@ -64,7 +85,7 @@ export function DetectionReview({ detections, imageUrl, mode, targetName, onConf
       <div style={styles.cardRow}>
         {cards.map((d, i) => {
           const value = getCorrectedValue(i);
-          const { rank, suit } = formatCard(value);
+          const { rank, suit } = formatCard(value ?? '');
           const conf = Math.round(d.confidence * 100);
           const color = SUIT_COLORS[suit] || '#1e293b';
           const isCorrected = i in corrections;
@@ -105,7 +126,7 @@ export function DetectionReview({ detections, imageUrl, mode, targetName, onConf
   );
 }
 
-const styles = {
+const styles: Record<string, React.CSSProperties> = {
   container: {
     maxWidth: '480px',
     margin: '0 auto',
@@ -123,7 +144,7 @@ const styles = {
   image: {
     width: '100%',
     maxHeight: '300px',
-    objectFit: 'contain',
+    objectFit: 'contain' as const,
     borderRadius: '8px',
     border: '1px solid #e5e7eb',
     marginBottom: '1rem',
@@ -136,14 +157,14 @@ const styles = {
   },
   cardRow: {
     display: 'flex',
-    flexWrap: 'wrap',
+    flexWrap: 'wrap' as const,
     gap: '0.75rem',
     justifyContent: 'center',
     marginBottom: '1.5rem',
   },
   cardLabel: {
     display: 'flex',
-    flexDirection: 'column',
+    flexDirection: 'column' as const,
     alignItems: 'center',
     padding: '0.75rem 1rem',
     border: '2px solid #c7d2fe',
@@ -168,7 +189,7 @@ const styles = {
     fontSize: '0.65rem',
     fontWeight: '700',
     color: '#4f46e5',
-    textTransform: 'uppercase',
+    textTransform: 'uppercase' as const,
     letterSpacing: '0.05em',
     marginBottom: '0.15rem',
   },
