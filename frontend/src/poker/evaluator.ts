@@ -1,22 +1,50 @@
 // Texas Hold'em hand evaluator and equity calculator.
 // Cards use the app display format: { rank: 'A', suit: '♥' }
 
-const RANK_VAL = { '2':0,'3':1,'4':2,'5':3,'6':4,'7':5,'8':6,'9':7,'10':8,'T':8,'J':9,'Q':10,'K':11,'A':12 };
-const SUIT_VAL = { '♥':0,'♦':1,'♣':2,'♠':3 };
-const HAND_NAMES = ['High Card','Pair','Two Pair','Three of a Kind','Straight','Flush','Full House','Four of a Kind','Straight Flush'];
+export interface Card {
+  rank: string;
+  suit: string;
+}
+
+export interface InternalCard {
+  r: number;
+  s: number;
+}
+
+export enum HandRank {
+  HighCard = 0,
+  Pair = 1,
+  TwoPair = 2,
+  ThreeOfAKind = 3,
+  Straight = 4,
+  Flush = 5,
+  FullHouse = 6,
+  FourOfAKind = 7,
+  StraightFlush = 8,
+}
+
+export interface EquityResult {
+  equity: number;
+}
+
+const RANK_VAL: Record<string, number> = { '2':0,'3':1,'4':2,'5':3,'6':4,'7':5,'8':6,'9':7,'10':8,'T':8,'J':9,'Q':10,'K':11,'A':12 };
+const SUIT_VAL: Record<string, number> = { '♥':0,'♦':1,'♣':2,'♠':3 };
+const HAND_NAMES: string[] = ['High Card','Pair','Two Pair','Three of a Kind','Straight','Flush','Full House','Four of a Kind','Straight Flush'];
 const B = 14; // base > 13 to avoid collisions
 const B5 = B ** 5;
 
-function toI(c) { return { r: RANK_VAL[c.rank], s: SUIT_VAL[c.suit] }; }
+function toI(c: Card): InternalCard {
+  return { r: RANK_VAL[c.rank], s: SUIT_VAL[c.suit] };
+}
 
-function sc(cat, k) {
+function sc(cat: number, k: number[]): number {
   let s = cat;
   for (let i = 0; i < 5; i++) s = s * B + (k[i] || 0);
   return s;
 }
 
 // Evaluate exactly 5 internal cards → numeric score (higher = better)
-function eval5(c0, c1, c2, c3, c4) {
+function eval5(c0: InternalCard, c1: InternalCard, c2: InternalCard, c3: InternalCard, c4: InternalCard): number {
   const r = [c0.r, c1.r, c2.r, c3.r, c4.r].sort((a, b) => b - a);
   const flush = c0.s === c1.s && c1.s === c2.s && c2.s === c3.s && c3.s === c4.s;
 
@@ -30,7 +58,7 @@ function eval5(c0, c1, c2, c3, c4) {
   // Rank frequencies — sorted by count desc then rank desc
   const f = new Int8Array(13);
   f[c0.r]++; f[c1.r]++; f[c2.r]++; f[c3.r]++; f[c4.r]++;
-  const g = [];
+  const g: [number, number][] = [];
   for (let i = 12; i >= 0; i--) if (f[i]) g.push([i, f[i]]);
   g.sort((a, b) => b[1] - a[1] || b[0] - a[0]);
 
@@ -46,7 +74,7 @@ function eval5(c0, c1, c2, c3, c4) {
 }
 
 // Best 5-card score from 5–7 cards (internal format)
-function bestScore(cards) {
+function bestScore(cards: InternalCard[]): number {
   const n = cards.length;
   if (n < 5) return -1;
   let best = -1;
@@ -61,24 +89,24 @@ function bestScore(cards) {
   return best;
 }
 
-function buildDeck(known) {
-  const used = new Set();
+function buildDeck(known: InternalCard[]): InternalCard[] {
+  const used = new Set<number>();
   for (const c of known) used.add(c.r * 4 + c.s);
-  const deck = [];
+  const deck: InternalCard[] = [];
   for (let r = 0; r < 13; r++)
     for (let s = 0; s < 4; s++)
       if (!used.has(r * 4 + s)) deck.push({ r, s });
   return deck;
 }
 
-function shuffle(arr) {
+function shuffle(arr: InternalCard[]): void {
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     const tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
   }
 }
 
-function evalBoard(players, board) {
+function evalBoard(players: InternalCard[][], board: InternalCard[]): number[] {
   const scores = players.map(p => bestScore([...p, ...board]));
   const mx = Math.max(...scores);
   const wc = scores.filter(s => s === mx).length;
@@ -87,14 +115,14 @@ function evalBoard(players, board) {
 
 /**
  * Calculate win equity for each player.
- * @param {Array<Array<{rank:string, suit:string}>>} playerHoleCards - per-player [card1, card2]
- * @param {Array<{rank:string, suit:string}>} communityCards - 0-5 known board cards
- * @returns {Array<{equity: number}>} equity per player (0-1)
+ * @param playerHoleCards - per-player [card1, card2]
+ * @param communityCards - 0-5 known board cards
+ * @returns equity per player (0-1)
  */
-export function calculateEquity(playerHoleCards, communityCards) {
+export function calculateEquity(playerHoleCards: Card[][], communityCards: Card[]): EquityResult[] {
   const players = playerHoleCards.map(hc => hc.map(toI));
   const board = communityCards.filter(Boolean).map(toI);
-  const allKnown = [...board];
+  const allKnown: InternalCard[] = [...board];
   players.forEach(p => allKnown.push(...p));
   const deck = buildDeck(allKnown);
   const remaining = 5 - board.length;
@@ -137,6 +165,6 @@ export function calculateEquity(playerHoleCards, communityCards) {
 }
 
 /** Human-readable hand category from a score (for display) */
-export function handCategory(score) {
+export function handCategory(score: number): string {
   return HAND_NAMES[Math.floor(score / B5)] || '';
 }

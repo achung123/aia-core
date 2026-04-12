@@ -5,7 +5,7 @@ import { createPokerScene } from '../scenes/pokerScene.js';
 import { SessionScrubber } from '../mobile/SessionScrubber.jsx';
 import { StreetScrubber } from '../mobile/StreetScrubber.jsx';
 import { EquityRow } from '../mobile/EquityRow.jsx';
-import { calculateEquity } from '../poker/evaluator.js';
+import { calculateEquity } from '../poker/evaluator';
 
 function parseCard(cardStr) {
   if (!cardStr) return null;

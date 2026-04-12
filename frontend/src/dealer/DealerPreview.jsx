@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'preact/hooks';
 import { createPokerScene } from '../scenes/pokerScene.js';
-import { calculateEquity } from '../poker/evaluator.js';
+import { calculateEquity } from '../poker/evaluator';
 import { StreetScrubber } from '../mobile/StreetScrubber.jsx';
 
 const SUIT_SYMBOL = { h: '♥', d: '♦', c: '♣', s: '♠', H: '♥', D: '♦', C: '♣', S: '♠' };

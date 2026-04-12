@@ -52,7 +52,7 @@ vi.mock('../components/equityOverlay.js', () => ({
 }));
 
 import { fetchSessions, fetchHands } from '../api/client.js';
-import { calculateEquity } from '../poker/evaluator.js';
+import { calculateEquity } from '../poker/evaluator';
 import { MobilePlaybackView } from './MobilePlaybackView.jsx';
 
 function renderToContainer(vnode) {

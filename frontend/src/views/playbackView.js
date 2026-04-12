@@ -4,7 +4,7 @@ import { createSeatLabels, loadSession, updateSeatLabelPositions } from '../scen
 import { createCommunityCards } from '../scenes/communityCards.js';
 import { createSessionScrubber } from '../components/sessionScrubber.js';
 import { createStreetScrubber } from '../components/streetScrubber.js';
-import { calculateEquity } from '../poker/evaluator.js';
+import { calculateEquity } from '../poker/evaluator';
 import { createEquityOverlay } from '../components/equityOverlay.js';
 
 const SUIT_SYMBOL = { h: '♥', d: '♦', c: '♣', s: '♠', H: '♥', D: '♦', C: '♣', S: '♠' };

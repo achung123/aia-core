@@ -25,7 +25,7 @@ vi.mock('../poker/evaluator.js', () => ({
 }));
 
 import { createPokerScene } from '../scenes/pokerScene.js';
-import { calculateEquity } from '../poker/evaluator.js';
+import { calculateEquity } from '../poker/evaluator';
 import { DealerPreview } from './DealerPreview.jsx';
 
 function renderToContainer(vnode) {
