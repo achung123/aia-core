@@ -996,3 +996,161 @@ Add a responsive split-screen layout to the Active Hand Dashboard for tablet/lar
 4. Blind info bar remains fixed/sticky at the top
 5. Implemented with CSS grid or flexbox — no JS layout calculations
 6. React Testing Library test verifies both layout modes render correctly
+
+---
+
+## Bugs / Findings
+
+### Cycle 1 — aia-core-25a3 (T-001)
+
+| # | Severity | Description | Source |
+|---|----------|-------------|--------|
+| F-001 | MEDIUM | Model/migration server_default drift: models.py has `default=True` but no `server_default`, while the migration uses `server_default=sa.text('1')`. A future autogenerate will create an unwanted migration. Fix: add `server_default=sa.text('1')` to the model column. | aia-core-25a3 |
+| F-002 | LOW | Unused `client` fixture parameter in test_game_player_is_active.py tests. Remove unused parameter. | aia-core-25a3 |
+| F-003 | LOW | Direct `SessionLocal` import inside test functions instead of using a `db_session` fixture — non-idiomatic test pattern. | aia-core-25a3 |
+
+### Cycle 2 — aia-core-7jw1 (T-003)
+
+| # | Severity | Description | Source |
+|---|----------|-------------|--------|
+| F-004 | MEDIUM | server_default on created_at diverges from project convention. PlayerHandAction.created_at has both default and server_default while all other models use only Python default. Either remove server_default or adopt project-wide. | aia-core-7jw1 |
+| F-005 | MEDIUM | Test file defines its own db_session fixture instead of using conftest. Justified since conftest doesn't enable PRAGMA foreign_keys=ON, but duplicates session setup. Consider shared db_session_with_fk fixture. | aia-core-7jw1 |
+| F-006 | LOW | created_at column is nullable=True in migration despite server_default always providing a value. Matches existing convention across all tables. | aia-core-7jw1 |
+
+### Cycle 4 — aia-core-m70e (T-004)
+
+| # | Severity | Description | Source |
+|---|----------|-------------|--------|
+| F-007 | MEDIUM | Pydantic schemas (GameSessionCreate, GameSessionListItem, GameSessionResponse) do not expose the new blind fields. API cannot set or retrieve blind values. Track as follow-up. | aia-core-m70e |
+| F-008 | LOW | Tautological assertion in test_blind_fields.py: `isinstance(col.type, type(col.type))` is always True. No functional impact. | aia-core-m70e |
+
+### Cycle 9 — aia-core-glk0 (T-012)
+
+| # | Severity | Description | Source |
+|---|----------|-------------|--------|
+| F-009 | HIGH | Resume logic resets full timer instead of preserving remaining time. When resuming, blind_timer_started_at = now gives full blind_timer_minutes remaining regardless of time elapsed before pause. No pause timestamp stored. Needs blind_timer_paused_at or blind_timer_remaining_seconds column. | aia-core-glk0 |
+| F-010 | MEDIUM | No validation for negative/zero blind amounts in BlindsUpdate. small_blind and big_blind accept any float including negatives. Add Field(gt=0). | aia-core-glk0 |
+| F-011 | MEDIUM | No validation for negative/zero timer minutes in BlindsUpdate. blind_timer_minutes accepts 0 or negative. Add Field(gt=0). | aia-core-glk0 |
+| F-012 | LOW | Simultaneous blind change + pause silently overrides pause. If both small_blind and blind_timer_paused:true are sent, the changed block resets paused to False. | aia-core-glk0 |
+
+### Cycle 10 — aia-core-2sr1 (T-009)
+
+| # | Severity | Description | Source |
+|---|----------|-------------|--------|
+| F-013 | MEDIUM | No validation for negative bet amounts. amount: float accepts negatives. Add Field(ge=0) to PlayerActionCreate. | aia-core-2sr1 |
+| F-014 | MEDIUM | No semantic validation of amount vs action type. fold with amount and bet without amount both accepted. Consider model_validator for poker-rule consistency. | aia-core-2sr1 |
+| F-015 | LOW | Test file duplicates conftest DB boilerplate. Matches existing codebase convention (18+ files). No action needed. | aia-core-2sr1 |
+
+### Cycle 12 — aia-core-w9fl (T-006)
+
+| # | Severity | Description | Source |
+|---|----------|-------------|--------|
+| F-016 | HIGH | No validation on empty/whitespace-only player names. AddPlayerToGameRequest.player_name is a bare str. Empty "" or whitespace "   " create garbage Player rows. Add Field(min_length=1, strip_whitespace=True). | aia-core-w9fl |
+| F-017 | MEDIUM | Race condition on seat number assignment. MAX(seat_number) read + insert with no unique constraint on (game_id, seat_number). Low risk under SQLite serialization. | aia-core-w9fl |
+| F-018 | MEDIUM | IntegrityError fallback skips duplicate-game-player re-check. After catching IntegrityError on Player creation, re-query doesn't check if player was concurrently added to game. | aia-core-w9fl |
+| F-019 | LOW | Test seat assertion imprecise — asserts not None but not expected value 1. | aia-core-w9fl |
+
+### Cycle 13 — aia-core-5wiv (T-008)
+
+| # | Severity | Description | Source |
+|---|----------|-------------|--------|
+| F-020 | HIGH | Existing GET hand endpoints (list_hands, get_hand, etc.) build HandResponse inline without sb_player_name/bb_player_name. Fields default to None even when DB has SB/BB set. Fix: use _build_hand_response() everywhere. | aia-core-5wiv |
+| F-021 | MEDIUM | No concurrency guard on hand_number assignment. Two concurrent start_hand calls could get same max and cause unhandled IntegrityError (500). Should catch and return 409. | aia-core-5wiv |
+| F-022 | MEDIUM | N+1 query pattern in _build_hand_response. One Player query per PlayerHand plus two for SB/BB. Should batch-fetch with Player.player_id.in_(ids). | aia-core-5wiv |
+| F-023 | MEDIUM | Prev-SB fallback rotation relies on implicit default. Logic correct but intent is unclear. Add clarifying comment. | aia-core-5wiv |
+| F-024 | LOW | Test file duplicates DB fixture setup from conftest.py. Works but diverges from convention. | aia-core-5wiv |
+
+### Cycle 1 (Anna) — aia-core-gilq (Bug Fix: HandResponse sb/bb)
+
+| # | Severity | Description | Source |
+|---|----------|-------------|--------|
+| F-025 | MEDIUM | Test file duplicates conftest fixtures (engine, SessionLocal, override_get_db, setup_db, client) instead of reusing them — pre-existing codebase pattern. | aia-core-gilq |
+| F-026 | MEDIUM | _build_hand_response queries Player table redundantly — SB/BB lookup re-queries players already fetched in the PlayerHand loop (N+1 pattern, pre-existing). | aia-core-gilq |
+| F-027 | LOW | test_record_hand_returns_sb_bb_fields asserts field presence (in data) but not value (is None) — weaker than explicit None assertion. | aia-core-gilq |
+
+### Cycle 2 (Anna) — aia-core-p3y2 (Bug Fix: Player name validation)
+
+| # | Severity | Description | Source |
+|---|----------|-------------|--------|
+| F-028 | MEDIUM | PlayerResultEntry validation has zero test coverage — 4 of 5 target models tested but PlayerResultEntry (PUT .../results) missing a test class. | aia-core-p3y2 |
+| F-029 | LOW | PlayerCreate.name: str has the same bare-string vulnerability — same class of bug, different field name, should be a separate issue. | aia-core-p3y2 |
+| F-030 | LOW | No whitespace-stripping positive tests for PlayerHandEntry or ConfirmPlayerEntry — only rejection tested, not that strip_whitespace actually strips valid input. | aia-core-p3y2 |
+
+### Cycle 3 (Anna) — aia-core-ov0s (Bug Fix: Blind timer remaining time)
+
+| # | Severity | Description | Source |
+|---|----------|-------------|--------|
+| F-031 | MEDIUM | Reducing blind_timer_minutes while paused can produce negative elapsed_before_pause, setting started_at in the future. Clamp remaining_seconds to min(remaining, total) on resume. | aia-core-ov0s |
+| F-032 | LOW | Missing edge-case tests: double-pause, double-resume, pause with no started timer, timer-minutes change while paused. | aia-core-ov0s |
+| F-033 | LOW | Test helper _set_started_at uses __import__ and doesn't properly close the DB generator. Import get_db directly or use SessionLocal from conftest. | aia-core-ov0s |
+
+### Cycle 4 (Anna) — aia-core-cdv2 (API client functions)
+
+| # | Severity | Description | Source |
+|---|----------|-------------|--------|
+| F-034 | MEDIUM | HandResponse TS type missing sb_player_name / bb_player_name fields — backend populates these but TS consumers have no type-safe access. | aia-core-cdv2 |
+| F-035 | LOW | AC2 specifies buyIn? parameter for addPlayerToGame but omitted — valid because backend AddPlayerToGameRequest has no buy_in field yet. | aia-core-cdv2 |
+| F-036 | LOW | No error-path tests for the 6 new functions — error handling is generic via request() helper so risk is minimal. | aia-core-cdv2 |
+
+### Cycle 5 (Anna) — aia-core-d22b (GameSessionResponse active status)
+
+| # | Severity | Description | Source |
+|---|----------|-------------|--------|
+| F-037 | MEDIUM | GameSessionListItem (GET /games list) does not include per-player active/inactive info. May need follow-up. | aia-core-d22b |
+| F-038 | LOW | _build_players() query lacks .order_by() — player list ordering is non-deterministic across requests. | aia-core-d22b |
+
+### Cycle 6 (Anna) — aia-core-s3df (Fold action auto-sets result)
+
+| # | Severity | Description | Source |
+|---|----------|-------------|--------|
+| F-039 | MEDIUM | Fold does not set outcome_street — player_hand.outcome_street is left None even though payload.street is available. | aia-core-s3df |
+| F-040 | MEDIUM | Fold after other terminal states silently overwrites result — guard only checks == 'folded', so fold on 'won' or 'lost' player silently changes it. | aia-core-s3df |
+
+### Cycle 7 (Anna) — aia-core-qd2p (Retrieve hand actions endpoint)
+
+| # | Severity | Description | Source |
+|---|----------|-------------|--------|
+| F-041 | MEDIUM | N+1 lazy-load on player_hand and player relationships — each iteration triggers 2 lazy SQL queries. Should use joinedload. | aia-core-qd2p |
+
+### Cycle 8 (Anna) — aia-core-9gaj (Auto-seat assignment)
+
+| # | Severity | Description | Source |
+|---|----------|-------------|--------|
+| F-042 | MEDIUM | No unique constraint on (game_id, seat_number) — concurrent add-player requests can produce duplicate seats. Known gap (F-017). Low risk with SQLite serialization. | aia-core-9gaj |
+| F-043 | LOW | No edge-case test for add-player to a game with 0 existing players. Code handles it correctly. | aia-core-9gaj |
+
+### Cycle 9 (Anna) — aia-core-07y6 (Turn-order state machine)
+
+| # | Severity | Description | Source |
+|---|----------|-------------|--------|
+| F-044 | MEDIUM | GET /state endpoint modifies DB state via _try_advance_phase() + db.commit() — violates REST idempotency. | aia-core-07y6 |
+| F-045 | MEDIUM | Phase advancement counts total actions >= player count — doesn't handle raise/re-raise rounds correctly. | aia-core-07y6 |
+| F-046 | MEDIUM | Heads-up post-flop first-to-act gives SB/dealer first action, but standard rules say BB acts first post-flop. | aia-core-07y6 |
+| F-047 | LOW | HandState.updated_at has no onupdate — stays at creation time after changes. | aia-core-07y6 |
+| F-048 | LOW | No test for all-but-one-fold scenario — hand completion signal missing. | aia-core-07y6 |
+| F-049 | LOW | action_index += 1 is Python-side read-modify-write — not atomic under concurrency. | aia-core-07y6 |
+| F-050 | LOW | _next_seat returns player's own seat when one remains — no hand-complete signal. | aia-core-07y6 |
+
+### Cycle 10 (Anna) — aia-core-vm6d (Buy-in capture)
+
+| # | Severity | Description | Source |
+|---|----------|-------------|--------|
+| F-051 | MEDIUM | No validation on negative buy-in values — both GameSessionCreate.player_buy_ins and AddPlayerToGameRequest.buy_in accept negative floats. Add ge=0. | aia-core-vm6d |
+| F-052 | LOW | Case-sensitive dict key matching for player_buy_ins vs case-insensitive player creation. | aia-core-vm6d |
+| F-053 | LOW | Extra keys in player_buy_ins silently ignored — typos discarded without warning. | aia-core-vm6d |
+
+### Cycle 11 (Anna) — aia-core-bjmw (Re-buy endpoints)
+
+| # | Severity | Description | Source |
+|---|----------|-------------|--------|
+| F-054 | HIGH | RebuyCreate.amount accepts zero and negative values — no gt=0 constraint. RebuyCreate(amount=-50) succeeds. | aia-core-bjmw |
+| F-055 | MEDIUM | Rebuy table uses player_name (String) instead of player_id FK — denormalized; fragile if player rename is ever added. | aia-core-bjmw |
+| F-056 | MEDIUM | _get_game_player helper duplicates logic already inline in toggle_player_status — could refactor to reuse. | aia-core-bjmw |
+| F-057 | LOW | No test for rebuy on a completed game session — behavior undefined and untested. | aia-core-bjmw |
+
+### Cycle 12 (Anna) — aia-core-2tkw (Bug Fix: Negative rebuy amount)
+
+| # | Severity | Description | Source |
+|---|----------|-------------|--------|
+| F-058 | MEDIUM | GameSessionCreate.player_buy_ins and AddPlayerToGameRequest.buy_in accept negative values — same class of bug. | aia-core-2tkw |
+| F-059 | MEDIUM | PlayerActionCreate.amount accepts negative values for bet/raise actions. | aia-core-2tkw |

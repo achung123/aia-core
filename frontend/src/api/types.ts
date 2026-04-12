@@ -248,3 +248,61 @@ export interface DetectionResultsResponse {
   status: string;
   detections: CardDetectionEntry[];
 }
+
+// --- Blinds ---
+
+export interface BlindsResponse {
+  small_blind: number;
+  big_blind: number;
+  blind_timer_minutes: number;
+  blind_timer_paused: boolean;
+  blind_timer_started_at: string | null;
+  blind_timer_remaining_seconds: number | null;
+}
+
+export interface BlindsUpdate {
+  small_blind?: number | null;
+  big_blind?: number | null;
+  blind_timer_minutes?: number | null;
+  blind_timer_paused?: boolean | null;
+}
+
+// --- Player Game Management ---
+
+export interface AddPlayerToGameRequest {
+  player_name: string;
+}
+
+export interface AddPlayerToGameResponse {
+  player_name: string;
+  is_active: boolean;
+  seat_number: number | null;
+}
+
+export interface PlayerStatusUpdate {
+  is_active: boolean;
+}
+
+export interface PlayerStatusResponse {
+  player_name: string;
+  is_active: boolean;
+}
+
+// --- Player Actions ---
+
+export type ActionEnum = 'fold' | 'check' | 'call' | 'bet' | 'raise';
+
+export interface PlayerActionCreate {
+  street: StreetEnum;
+  action: ActionEnum;
+  amount?: number | null;
+}
+
+export interface PlayerActionResponse {
+  action_id: number;
+  player_hand_id: number;
+  street: string;
+  action: string;
+  amount: number | null;
+  created_at: string;
+}

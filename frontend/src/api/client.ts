@@ -25,6 +25,12 @@ import type {
   RiverUpdate,
   PlayerResultUpdate,
   CompleteGameRequest,
+  BlindsResponse,
+  BlindsUpdate,
+  AddPlayerToGameResponse,
+  PlayerStatusResponse,
+  PlayerActionCreate,
+  PlayerActionResponse,
 } from './types.ts';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -236,4 +242,46 @@ export async function deleteHand(gameId: number, handNumber: number): Promise<vo
     const text = await response.text();
     throw new Error(`HTTP ${response.status}: ${text}`);
   }
+}
+
+export function togglePlayerStatus(gameId: number, playerName: string, isActive: boolean): Promise<PlayerStatusResponse> {
+  return request<PlayerStatusResponse>(`/games/${gameId}/players/${encodeURIComponent(playerName)}/status`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ is_active: isActive }),
+  });
+}
+
+export function addPlayerToGame(gameId: number, playerName: string): Promise<AddPlayerToGameResponse> {
+  return request<AddPlayerToGameResponse>(`/games/${gameId}/players`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ player_name: playerName }),
+  });
+}
+
+export function startHand(gameId: number): Promise<HandResponse> {
+  return request<HandResponse>(`/games/${gameId}/hands/start`, {
+    method: 'POST',
+  });
+}
+
+export function recordPlayerAction(gameId: number, handNumber: number, playerName: string, data: PlayerActionCreate): Promise<PlayerActionResponse> {
+  return request<PlayerActionResponse>(`/games/${gameId}/hands/${handNumber}/players/${encodeURIComponent(playerName)}/actions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+}
+
+export function fetchBlinds(gameId: number): Promise<BlindsResponse> {
+  return request<BlindsResponse>(`/games/${gameId}/blinds`);
+}
+
+export function updateBlinds(gameId: number, data: BlindsUpdate): Promise<BlindsResponse> {
+  return request<BlindsResponse>(`/games/${gameId}/blinds`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
 }

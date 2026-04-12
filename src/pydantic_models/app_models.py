@@ -2,13 +2,18 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from enum import Enum
+from typing import Annotated
 
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    StringConstraints,
     model_validator,
 )
+
+# Reusable constrained type: strips whitespace, then requires ≥1 char.
+PlayerName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
 
 class ResultEnum(str, Enum):
@@ -116,7 +121,8 @@ class Card(BaseModel):
 
 class GameSessionCreate(BaseModel):
     game_date: date
-    player_names: list[str] = Field(..., min_length=1)
+    player_names: list[PlayerName] = Field(..., min_length=1)
+    player_buy_ins: dict[str, float] | None = None
 
 
 class GameSessionListItem(BaseModel):
@@ -130,6 +136,29 @@ class GameSessionListItem(BaseModel):
     winners: list[str] = []
 
 
+class PlayerInfo(BaseModel):
+    name: str
+    is_active: bool
+    seat_number: int | None = None
+    buy_in: float | None = None
+    rebuy_count: int = 0
+    total_rebuys: float = 0.0
+
+
+class RebuyCreate(BaseModel):
+    amount: float = Field(gt=0)
+
+
+class RebuyResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    rebuy_id: int
+    game_id: int
+    player_name: str
+    amount: float
+    created_at: datetime
+
+
 class GameSessionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -138,6 +167,7 @@ class GameSessionResponse(BaseModel):
     status: str
     created_at: datetime
     player_names: list[str]
+    players: list[PlayerInfo] = []
     hand_count: int
     winners: list[str] = []
 
@@ -161,7 +191,7 @@ class PlayerResponse(BaseModel):
 class PlayerHandEntry(BaseModel):
     model_config = ConfigDict(use_enum_values=True)
 
-    player_name: str
+    player_name: PlayerName
     card_1: Card | None = None
     card_2: Card | None = None
     result: ResultEnum | None = None
@@ -205,6 +235,8 @@ class HandResponse(BaseModel):
     turn: str | None = None
     river: str | None = None
     source_upload_id: int | None = None
+    sb_player_name: str | None = None
+    bb_player_name: str | None = None
     created_at: datetime
     player_hands: list[PlayerHandResponse] = []
 
@@ -219,7 +251,7 @@ class HandResultUpdate(BaseModel):
 class PlayerResultEntry(BaseModel):
     model_config = ConfigDict(use_enum_values=True)
 
-    player_name: str
+    player_name: PlayerName
     result: ResultEnum | None = None
     profit_loss: float
 
@@ -351,7 +383,7 @@ class ConfirmCommunityCards(BaseModel):
 class ConfirmPlayerEntry(BaseModel):
     model_config = ConfigDict(use_enum_values=True)
 
-    player_name: str
+    player_name: PlayerName
     card_1: Card
     card_2: Card
 
@@ -390,3 +422,86 @@ class HandStatusResponse(BaseModel):
     hand_number: int
     community_recorded: bool
     players: list[PlayerStatusEntry]
+
+
+class BlindsResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    small_blind: float
+    big_blind: float
+    blind_timer_minutes: int
+    blind_timer_paused: bool
+    blind_timer_started_at: datetime | None = None
+    blind_timer_remaining_seconds: int | None = None
+
+
+class BlindsUpdate(BaseModel):
+    small_blind: float | None = None
+    big_blind: float | None = None
+    blind_timer_minutes: int | None = None
+    blind_timer_paused: bool | None = None
+
+
+class ActionEnum(str, Enum):
+    FOLD = 'fold'
+    CHECK = 'check'
+    CALL = 'call'
+    BET = 'bet'
+    RAISE = 'raise'
+
+
+class AddPlayerToGameRequest(BaseModel):
+    player_name: PlayerName
+    buy_in: float | None = None
+
+
+class AddPlayerToGameResponse(BaseModel):
+    player_name: str
+    is_active: bool
+    seat_number: int | None = None
+    buy_in: float | None = None
+
+
+class PlayerStatusUpdate(BaseModel):
+    is_active: bool
+
+
+class PlayerStatusResponse(BaseModel):
+    player_name: str
+    is_active: bool
+
+
+class PlayerActionCreate(BaseModel):
+    model_config = ConfigDict(use_enum_values=True)
+
+    street: StreetEnum
+    action: ActionEnum
+    amount: float | None = None
+
+
+class PlayerActionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    action_id: int
+    player_hand_id: int
+    street: str
+    action: str
+    amount: float | None = None
+    created_at: datetime
+
+
+class HandActionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    player_name: str
+    street: str
+    action: str
+    amount: float | None = None
+    created_at: datetime
+
+
+class HandStateResponse(BaseModel):
+    phase: str
+    current_seat: int | None
+    current_player_name: str | None
+    action_index: int
