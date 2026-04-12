@@ -694,6 +694,86 @@ nav {
 }
 
 /* ==========================================================================
+   Hand cards — mobile alternative to hand-table (hidden on desktop)
+   ========================================================================== */
+
+.data-view .hand-cards {
+  display: none;
+}
+
+.data-view .hand-card {
+  background: #1a1b28;
+  border: 1px solid #2e303a;
+  border-radius: 8px;
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.data-view .hand-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.4rem;
+}
+
+.data-view .hand-card-num {
+  color: #c084fc;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.data-view .hand-card-actions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.data-view .hand-card-community {
+  color: #94a3b8;
+  font-size: 0.78rem;
+  margin-bottom: 0.4rem;
+  line-height: 1.5;
+}
+
+.data-view .hand-card-label {
+  color: #64748b;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.data-view .hand-card-player {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.2rem 0;
+  font-size: 0.78rem;
+  color: #cbd5e1;
+  border-top: 1px solid rgba(46,48,58,0.4);
+}
+
+.data-view .hand-card-player:first-of-type {
+  border-top: none;
+}
+
+.data-view .hand-card-player-name {
+  color: #c084fc;
+  font-weight: 500;
+  min-width: 60px;
+}
+
+.data-view .hand-card-player-cards {
+  font-family: monospace;
+  color: #e2e8f0;
+}
+
+.data-view .hand-card-player-result {
+  color: #64748b;
+  font-size: 0.72rem;
+  text-transform: capitalize;
+}
+
+/* ==========================================================================
    Data View — Mobile Responsive
    ========================================================================== */
 
@@ -716,24 +796,20 @@ nav {
     font-size: 0.8rem;
   }
 
-  /* Hand details: scroll horizontally instead of blowing out the viewport */
+  /* Hand details: contained within viewport */
   .data-view .hand-details-row td {
     padding: 0.75rem 0.5rem;
   }
 
+  /* Hide the wide table on mobile, show cards instead */
   .data-view .hand-table {
-    min-width: 500px;
+    display: none;
   }
-  .data-view .hand-table thead th {
-    padding: 0.4rem 0.5rem;
-    font-size: 0.65rem;
-  }
-  .data-view .hand-table tbody td {
-    padding: 0.35rem 0.5rem;
-    font-size: 0.72rem;
+  .data-view .hand-cards {
+    display: block;
   }
 
-  /* Action bar: wrap buttons nicely */
+  /* Action bar: compact buttons that wrap */
   .data-view .action-bar {
     gap: 0.35rem;
   }

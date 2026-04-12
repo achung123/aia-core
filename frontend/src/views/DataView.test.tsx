@@ -186,4 +186,24 @@ describe('DataView', () => {
     const cssText = fs.readFileSync(path.resolve(__dirname, '../style.css'), 'utf8');
     expect(cssText).toMatch(/\.hand-details-row\s+td[\s\S]*?overflow-x:\s*auto/);
   });
+
+  it('hand table is hidden on mobile and replaced with card layout', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const cssText = fs.readFileSync(path.resolve(__dirname, '../style.css'), 'utf8');
+    // The hand-table should be hidden on mobile via display:none
+    expect(cssText).toMatch(/\.hand-table[\s\S]*?display:\s*none/);
+    // A card-based .hand-card class should exist for mobile
+    expect(cssText).toContain('.hand-card');
+  });
+
+  it('renders hand cards alongside the hand table for mobile layout', async () => {
+    render(<DataView />);
+    await waitFor(() => screen.getByText('2026-04-01'));
+    fireEvent.click(screen.getByText('2026-04-01'));
+    await waitFor(() => screen.getByText('+ Add Hand'));
+    // Should have .hand-card elements in the DOM (shown on mobile, hidden on desktop)
+    const cards = document.querySelectorAll('.hand-card');
+    expect(cards.length).toBeGreaterThan(0);
+  });
 });

@@ -551,39 +551,74 @@ function HandDetails({ session, onRefresh }: HandDetailsProps) {
       {hands.length === 0 ? (
         <p className="empty-msg">No hands recorded.</p>
       ) : (
-        <table className="hand-table">
-          <thead>
-            <tr>
-              {['#', 'Flop', 'Turn', 'River', 'Players', ''].map(t => <th key={t}>{t}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {hands.map(h => (
-              <tr key={h.hand_id}>
-                <td>{h.hand_number ?? '—'}</td>
-                <td>{formatCards([h.flop_1, h.flop_2, h.flop_3])}</td>
-                <td>{formatCard(h.turn)}</td>
-                <td>{formatCard(h.river)}</td>
-                <td>
-                  {(h.player_hands || []).map((p: PlayerHandResponse, idx: number) => {
-                    const cards = [p.card_1, p.card_2].filter(Boolean) as string[];
-                    const hand = cards.length ? formatCards(cards) : '??';
-                    return (
-                      <div key={idx} style={{ whiteSpace: 'nowrap' }}>
-                        {p.player_name} [{hand}] {p.result || '?'}
-                      </div>
-                    );
-                  })}
-                  {(h.player_hands || []).length === 0 && '—'}
-                </td>
-                <td style={{ display: 'flex', gap: '0.25rem' }}>
-                  <button type="button" className="dv-btn dv-btn-sm" onClick={e => { e.stopPropagation(); setEditingHand(h); }}>Edit</button>
-                  <button type="button" className="dv-btn dv-btn-sm dv-btn-danger" onClick={e => { e.stopPropagation(); handleDelete(h); }}>🗑</button>
-                </td>
+        <>
+          {/* Desktop: traditional table */}
+          <table className="hand-table">
+            <thead>
+              <tr>
+                {['#', 'Flop', 'Turn', 'River', 'Players', ''].map(t => <th key={t}>{t}</th>)}
               </tr>
+            </thead>
+            <tbody>
+              {hands.map(h => (
+                <tr key={h.hand_id}>
+                  <td>{h.hand_number ?? '—'}</td>
+                  <td>{formatCards([h.flop_1, h.flop_2, h.flop_3])}</td>
+                  <td>{formatCard(h.turn)}</td>
+                  <td>{formatCard(h.river)}</td>
+                  <td>
+                    {(h.player_hands || []).map((p: PlayerHandResponse, idx: number) => {
+                      const cards = [p.card_1, p.card_2].filter(Boolean) as string[];
+                      const hand = cards.length ? formatCards(cards) : '??';
+                      return (
+                        <div key={idx} style={{ whiteSpace: 'nowrap' }}>
+                          {p.player_name} [{hand}] {p.result || '?'}
+                        </div>
+                      );
+                    })}
+                    {(h.player_hands || []).length === 0 && '—'}
+                  </td>
+                  <td style={{ display: 'flex', gap: '0.25rem' }}>
+                    <button type="button" className="dv-btn dv-btn-sm" onClick={e => { e.stopPropagation(); setEditingHand(h); }}>Edit</button>
+                    <button type="button" className="dv-btn dv-btn-sm dv-btn-danger" onClick={e => { e.stopPropagation(); handleDelete(h); }}>🗑</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {/* Mobile: card layout */}
+          <div className="hand-cards">
+            {hands.map(h => (
+              <div key={h.hand_id} className="hand-card">
+                <div className="hand-card-header">
+                  <span className="hand-card-num">Hand #{h.hand_number ?? '?'}</span>
+                  <span className="hand-card-actions">
+                    <button type="button" className="dv-btn dv-btn-sm" onClick={e => { e.stopPropagation(); setEditingHand(h); }}>Edit</button>
+                    <button type="button" className="dv-btn dv-btn-sm dv-btn-danger" onClick={e => { e.stopPropagation(); handleDelete(h); }}>🗑</button>
+                  </span>
+                </div>
+                <div className="hand-card-community">
+                  <span className="hand-card-label">Flop</span> {formatCards([h.flop_1, h.flop_2, h.flop_3])}
+                  {' · '}
+                  <span className="hand-card-label">Turn</span> {formatCard(h.turn)}
+                  {' · '}
+                  <span className="hand-card-label">River</span> {formatCard(h.river)}
+                </div>
+                {(h.player_hands || []).map((p: PlayerHandResponse, idx: number) => {
+                  const cards = [p.card_1, p.card_2].filter(Boolean) as string[];
+                  const hand = cards.length ? formatCards(cards) : '??';
+                  return (
+                    <div key={idx} className="hand-card-player">
+                      <span className="hand-card-player-name">{p.player_name}</span>
+                      <span className="hand-card-player-cards">{hand}</span>
+                      <span className="hand-card-player-result">{p.result || '?'}</span>
+                    </div>
+                  );
+                })}
+              </div>
             ))}
-          </tbody>
-        </table>
+          </div>
+        </>
       )}
       {showAddHand && (
         <AddHandModal session={session} onClose={() => setShowAddHand(false)} onDone={() => { setShowAddHand(false); onRefresh(); }} />
