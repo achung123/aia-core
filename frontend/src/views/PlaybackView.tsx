@@ -8,11 +8,7 @@ import type { GameSessionListItem, HandResponse } from '../api/types.ts';
 import { createPokerScene } from '../scenes/pokerScene.js';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: JS module without type declarations
-import {
-  createSeatLabels,
-  loadSession as updateLabelsForSession,
-  updateSeatLabelPositions,
-} from '../scenes/tableGeometry.js';
+import { createSeatLabels, loadSession as updateLabelsForSession, updateSeatLabelPositions } from '../scenes/tableGeometry.js';
 import { calculateEquity } from '../poker/evaluator.ts';
 import { SessionScrubber } from '../components/SessionScrubber.tsx';
 import { StreetScrubber } from '../components/StreetScrubber.tsx';
@@ -423,7 +419,7 @@ export function PlaybackView() {
               />
               <StreetScrubber
                 currentStreet={currentStreet}
-                handData={currentHandData}
+                handData={{ turn: currentHandData.turn, river: currentHandData.river }}
                 onStreetChange={handleStreetChange}
               />
             </>

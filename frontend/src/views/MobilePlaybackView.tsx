@@ -454,7 +454,7 @@ export function MobilePlaybackView() {
             {hands[handIndex] && (
               <StreetScrubber
                 currentStreet={currentStreet}
-                handData={hands[handIndex]}
+                handData={{ turn: hands[handIndex].turn, river: hands[handIndex].river }}
                 onStreetChange={handleStreetChange}
               />
             )}
