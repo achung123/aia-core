@@ -2,13 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import type { CSSProperties } from 'react';
 import { fetchSessions, fetchHands } from '../api/client.ts';
 import type { GameSessionListItem, HandResponse } from '../api/types.ts';
-// Scene modules are still JS — will be typed in T-023/T-024
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore: JS module without type declarations
-import { createPokerScene } from '../scenes/pokerScene.js';
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore: JS module without type declarations
-import { createSeatLabels, loadSession as updateLabelsForSession, updateSeatLabelPositions } from '../scenes/tableGeometry.js';
+import { createPokerScene } from '../scenes/pokerScene.ts';
+import { createSeatLabels, loadSession as updateLabelsForSession, updateSeatLabelPositions } from '../scenes/tableGeometry.ts';
 import { calculateEquity } from '../poker/evaluator.ts';
 import { SessionScrubber } from '../components/SessionScrubber.tsx';
 import { StreetScrubber } from '../components/StreetScrubber.tsx';

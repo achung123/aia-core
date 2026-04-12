@@ -4,7 +4,7 @@ const DEFAULT_SEAT_COUNT = 10;
 const TABLE_RADIUS_X = 3.5;
 const TABLE_RADIUS_Z = 2.0;
 
-export function addPokerTable(scene) {
+export function addPokerTable(scene: THREE.Scene): THREE.Mesh {
   const tableGeom = new THREE.CylinderGeometry(1, 1, 0.1, 64);
   tableGeom.scale(TABLE_RADIUS_X, 1, TABLE_RADIUS_Z);
   const tableMat = new THREE.MeshLambertMaterial({ color: 0x1a7a1a });
@@ -14,8 +14,8 @@ export function addPokerTable(scene) {
   return tableMesh;
 }
 
-export function computeSeatPositions(seatCount = DEFAULT_SEAT_COUNT) {
-  const positions = [];
+export function computeSeatPositions(seatCount: number = DEFAULT_SEAT_COUNT): THREE.Vector3[] {
+  const positions: THREE.Vector3[] = [];
   for (let i = 0; i < seatCount; i++) {
     const angle = (i / seatCount) * Math.PI * 2;
     const x = Math.cos(angle) * (TABLE_RADIUS_X + 0.8);
@@ -25,8 +25,8 @@ export function computeSeatPositions(seatCount = DEFAULT_SEAT_COUNT) {
   return positions;
 }
 
-export function createSeatLabels(container, seatCount = DEFAULT_SEAT_COUNT) {
-  const labels = [];
+export function createSeatLabels(container: HTMLElement, seatCount: number = DEFAULT_SEAT_COUNT): HTMLDivElement[] {
+  const labels: HTMLDivElement[] = [];
   for (let i = 0; i < seatCount; i++) {
     const div = document.createElement('div');
     div.className = 'seat-label';
@@ -38,7 +38,12 @@ export function createSeatLabels(container, seatCount = DEFAULT_SEAT_COUNT) {
   return labels;
 }
 
-export function updateSeatLabelPositions(labels, seatPositions, camera, renderer) {
+export function updateSeatLabelPositions(
+  labels: HTMLDivElement[],
+  seatPositions: THREE.Vector3[],
+  camera: THREE.Camera,
+  renderer: THREE.WebGLRenderer,
+): void {
   const canvas = renderer.domElement;
   const width = canvas.clientWidth;
   const height = canvas.clientHeight;
@@ -58,10 +63,10 @@ export function updateSeatLabelPositions(labels, seatPositions, camera, renderer
   });
 }
 
-export function loadSession(labels, playerNames) {
+export function loadSession(labels: HTMLDivElement[], playerNames: (string | null | undefined)[]): void {
   labels.forEach((label, i) => {
     if (playerNames[i]) {
-      label.textContent = playerNames[i];
+      label.textContent = playerNames[i]!;
       label.style.opacity = '1';
     } else {
       label.textContent = `Seat ${i + 1}`;

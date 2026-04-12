@@ -14,7 +14,7 @@ vi.mock('../poker/evaluator.ts', () => ({
 }));
 
 // Mock poker scene — no WebGL in happy-dom
-vi.mock('../scenes/pokerScene.js', () => ({
+vi.mock('../scenes/pokerScene.ts', () => ({
   createPokerScene: vi.fn(() => ({
     scene: {},
     camera: {},

@@ -1,11 +1,47 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { addPokerTable, computeSeatPositions } from './tableGeometry.js';
+import { addPokerTable, computeSeatPositions } from './tableGeometry.ts';
 import { createChipStacks } from './chipStacks.js';
 import { createCommunityCards } from './communityCards.js';
 import { createHoleCards } from './holeCards.js';
 
-const DEFAULTS = {
+export interface PokerSceneOptions {
+  width?: number;
+  height?: number;
+  seatCount?: number;
+  antialias?: boolean;
+}
+
+export interface HandState {
+  cardData?: {
+    flop: { rank: string; suit: string }[] | null;
+    turn: { rank: string; suit: string } | null;
+    river: { rank: string; suit: string } | null;
+    player_hands: {
+      player_name: string;
+      hole_cards: { rank: string; suit: string }[] | null;
+      result: 'win' | 'loss' | 'fold';
+    }[];
+  };
+  seatPlayerMap?: Record<number, string>;
+  plMap?: Record<string, number>;
+  streetIndex?: number;
+}
+
+export interface PokerSceneResult {
+  scene: THREE.Scene;
+  camera: THREE.PerspectiveCamera;
+  renderer: THREE.WebGLRenderer;
+  controls: OrbitControls;
+  seatPositions: THREE.Vector3[];
+  chipStacks: ReturnType<typeof createChipStacks>;
+  holeCards: ReturnType<typeof createHoleCards>;
+  communityCards: ReturnType<typeof createCommunityCards> | null;
+  dispose: () => void;
+  update: (handState: HandState) => void;
+}
+
+const DEFAULTS: Required<PokerSceneOptions> = {
   width: 800,
   height: 600,
   seatCount: 10,
@@ -14,15 +50,11 @@ const DEFAULTS = {
 
 /**
  * Create a reusable Three.js poker scene.
- * @param {HTMLCanvasElement} canvas
- * @param {object} [options]
- * @param {number} [options.width=800]
- * @param {number} [options.height=600]
- * @param {number} [options.seatCount=10]
- * @param {boolean} [options.antialias=true]
- * @returns {{ scene, camera, renderer, seatPositions, chipStacks, holeCards, dispose, update }}
  */
-export function createPokerScene(canvas, options = {}) {
+export function createPokerScene(
+  canvas: HTMLCanvasElement,
+  options: PokerSceneOptions = {},
+): PokerSceneResult {
   const opts = { ...DEFAULTS, ...options };
 
   // --- Renderer ---
@@ -54,13 +86,13 @@ export function createPokerScene(canvas, options = {}) {
   controls.saveState();
 
   // --- Context menu suppression ---
-  function onContextMenu(e) { e.preventDefault(); }
+  function onContextMenu(e: Event): void { e.preventDefault(); }
   canvas.addEventListener('contextmenu', onContextMenu);
 
   // --- Double-tap to reset camera ---
   let lastTapTime = 0;
   const DOUBLE_TAP_MS = 300;
-  function onTouchEnd(e) {
+  function onTouchEnd(e: TouchEvent): void {
     // Ignore multi-finger lifts (e.g. pinch-zoom ending)
     if (e.touches.length > 0 || e.changedTouches.length > 1) return;
     const now = Date.now();
@@ -93,10 +125,10 @@ export function createPokerScene(canvas, options = {}) {
   const holeCards = createHoleCards(scene, seatPositions);
 
   // --- Community cards (swapped per hand) ---
-  let activeCommunityCards = null;
+  let activeCommunityCards: ReturnType<typeof createCommunityCards> | null = null;
 
   // --- Resize handler ---
-  function onResize() {
+  function onResize(): void {
     const rw = canvas.clientWidth;
     const rh = canvas.clientHeight;
     renderer.setSize(rw, rh);
@@ -106,8 +138,8 @@ export function createPokerScene(canvas, options = {}) {
   window.addEventListener('resize', onResize);
 
   // --- Animation loop ---
-  let rafId;
-  function animate() {
+  let rafId: number;
+  function animate(): void {
     rafId = requestAnimationFrame(animate);
     controls.update();
     renderer.render(scene, camera);
@@ -118,7 +150,7 @@ export function createPokerScene(canvas, options = {}) {
   onResize();
 
   // --- update(handState) ---
-  function update(handState) {
+  function update(handState: HandState): void {
     const { cardData, seatPlayerMap, plMap, streetIndex } = handState;
 
     // Community cards — recreate per hand
@@ -150,7 +182,7 @@ export function createPokerScene(canvas, options = {}) {
   }
 
   // --- dispose ---
-  function dispose() {
+  function dispose(): void {
     cancelAnimationFrame(rafId);
     window.removeEventListener('resize', onResize);
     canvas.removeEventListener('contextmenu', onContextMenu);

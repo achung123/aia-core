@@ -8,7 +8,7 @@ const mockDispose = vi.fn();
 const mockSetSize = vi.fn();
 const mockUpdateProjectionMatrix = vi.fn();
 
-vi.mock('../scenes/pokerScene.js', () => ({
+vi.mock('../scenes/pokerScene.ts', () => ({
   createPokerScene: vi.fn(() => ({
     scene: {},
     camera: { aspect: 1, updateProjectionMatrix: mockUpdateProjectionMatrix },
@@ -23,7 +23,7 @@ vi.mock('../poker/evaluator', () => ({
   calculateEquity: vi.fn(() => []),
 }));
 
-import { createPokerScene } from '../scenes/pokerScene.js';
+import { createPokerScene } from '../scenes/pokerScene.ts';
 import { calculateEquity } from '../poker/evaluator';
 import { DealerPreview } from './DealerPreview.tsx';
 import type { DealerPreviewProps } from './DealerPreview.tsx';

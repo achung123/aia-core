@@ -12,7 +12,7 @@ vi.mock('../poker/evaluator.ts', () => ({
   calculateEquity: vi.fn(() => []),
 }));
 
-vi.mock('../scenes/pokerScene.js', () => ({
+vi.mock('../scenes/pokerScene.ts', () => ({
   createPokerScene: vi.fn(() => ({
     scene: {},
     camera: {},
@@ -26,7 +26,7 @@ vi.mock('../scenes/pokerScene.js', () => ({
   })),
 }));
 
-vi.mock('../scenes/tableGeometry.js', () => ({
+vi.mock('../scenes/tableGeometry.ts', () => ({
   createSeatLabels: vi.fn(() => []),
   loadSession: vi.fn(),
   updateSeatLabelPositions: vi.fn(),

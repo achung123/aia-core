@@ -31,7 +31,7 @@ vi.mock('./DetectionReview.tsx', () => ({
   DetectionReview: () => <div data-testid="detection-review" />,
 }));
 
-vi.mock('../scenes/pokerScene.js', () => ({
+vi.mock('../scenes/pokerScene.ts', () => ({
   createPokerScene: vi.fn(() => ({
     scene: {},
     camera: { aspect: 1, updateProjectionMatrix: vi.fn() },

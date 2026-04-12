@@ -147,7 +147,7 @@ describe('createPokerScene', () => {
   let createPokerScene;
 
   beforeEach(async () => {
-    ({ createPokerScene } = await import('./pokerScene.js'));
+    ({ createPokerScene } = await import('./pokerScene.ts'));
   });
 
   it('returns the expected API surface', () => {
@@ -251,7 +251,7 @@ describe('touch controls', () => {
     mockOrbitControls.enableRotate = false;
     mockOrbitControls.enablePan = false;
     mockOrbitControls.touches = {};
-    ({ createPokerScene } = await import('./pokerScene.js'));
+    ({ createPokerScene } = await import('./pokerScene.ts'));
   });
 
   it('creates OrbitControls attached to the canvas', () => {

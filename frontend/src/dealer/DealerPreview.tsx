@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, type CSSProperties } from 'react';
-import { createPokerScene } from '../scenes/pokerScene.js';
+import { createPokerScene } from '../scenes/pokerScene.ts';
 import { calculateEquity, type Card } from '../poker/evaluator';
 import { StreetScrubber } from '../mobile/StreetScrubber.tsx';
 
