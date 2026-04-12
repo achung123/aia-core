@@ -20,6 +20,7 @@ vi.mock('../api/client.js', () => ({
   fetchGame: vi.fn(),
   fetchHand: vi.fn(),
   fetchHandStatus: vi.fn(() => Promise.resolve({ hand_number: 1, community_recorded: false, players: [] })),
+  fetchBlinds: vi.fn(() => Promise.resolve({ small_blind: 0.25, big_blind: 0.50, blind_timer_minutes: 15, blind_timer_paused: false, blind_timer_started_at: null, blind_timer_remaining_seconds: null })),
 }));
 
 vi.mock('./CameraCapture.tsx', () => ({
@@ -183,7 +184,7 @@ describe('GameSelector integration in DealerApp', () => {
 
     // Should transition directly to HandDashboard
     await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="new-hand-btn"]')).not.toBeNull();
+      expect(container.querySelector('[data-testid="start-hand-btn"]')).not.toBeNull();
     });
   });
 
@@ -211,7 +212,7 @@ describe('GameSelector integration in DealerApp', () => {
 
     // Should transition directly to HandDashboard (dashboard step)
     await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="new-hand-btn"]')).not.toBeNull();
+      expect(container.querySelector('[data-testid="start-hand-btn"]')).not.toBeNull();
     });
   });
 

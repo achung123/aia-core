@@ -5,7 +5,7 @@ import { HandDashboard } from './HandDashboard.tsx';
 
 vi.mock('../api/client.ts', () => ({
   fetchHands: vi.fn(),
-  createHand: vi.fn(),
+  startHand: vi.fn(),
   completeGame: vi.fn(),
 }));
 
@@ -14,10 +14,10 @@ vi.mock('./QRCodeDisplay.jsx', () => ({
     visible ? <div data-testid="qr-code-display">QR:{gameId}</div> : null,
 }));
 
-import { fetchHands, createHand, completeGame } from '../api/client.ts';
+import { fetchHands, startHand, completeGame } from '../api/client.ts';
 
 const mockedFetchHands = fetchHands as ReturnType<typeof vi.fn>;
-const mockedCreateHand = createHand as ReturnType<typeof vi.fn>;
+const mockedStartHand = startHand as ReturnType<typeof vi.fn>;
 const mockedCompleteGame = completeGame as ReturnType<typeof vi.fn>;
 
 const HANDS = [
@@ -125,21 +125,82 @@ describe('HandDashboard', () => {
     expect(onSelectHand).toHaveBeenCalledWith(2);
   });
 
-  it('New Hand button creates hand and calls onSelectHand', async () => {
+  it('Start Hand button calls startHand(gameId) and transitions on success', async () => {
     mockedFetchHands.mockResolvedValue(HANDS);
-    mockedCreateHand.mockResolvedValue({ hand_number: 3 });
+    mockedStartHand.mockResolvedValue({ hand_number: 3 });
     const onSelectHand = vi.fn();
     render(<HandDashboard gameId={42} onSelectHand={onSelectHand} onBack={() => {}} />);
     await waitFor(() => {
       expect(screen.getByText('2 Hands')).toBeTruthy();
     });
 
-    screen.getByTestId('new-hand-btn').click();
+    screen.getByTestId('start-hand-btn').click();
 
     await waitFor(() => {
-      expect(mockedCreateHand).toHaveBeenCalledWith(42, {});
+      expect(mockedStartHand).toHaveBeenCalledWith(42);
       expect(onSelectHand).toHaveBeenCalledWith(3);
     });
+  });
+
+  it('Start Hand button shows loading state during API call', async () => {
+    mockedFetchHands.mockResolvedValue(HANDS);
+    let resolveStart: (value: unknown) => void;
+    mockedStartHand.mockReturnValue(new Promise((resolve) => { resolveStart = resolve; }));
+    render(<HandDashboard gameId={42} onSelectHand={() => {}} onBack={() => {}} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('start-hand-btn')).toBeTruthy();
+    });
+
+    screen.getByTestId('start-hand-btn').click();
+
+    await waitFor(() => {
+      const btn = screen.getByTestId('start-hand-btn');
+      expect(btn.textContent).toContain('Starting');
+      expect(btn.hasAttribute('disabled')).toBe(true);
+    });
+
+    // Resolve to clean up
+    resolveStart!({ hand_number: 3 });
+  });
+
+  it('Start Hand button shows error message when API fails', async () => {
+    mockedFetchHands.mockResolvedValue(HANDS);
+    mockedStartHand.mockRejectedValue(new Error('No active players'));
+    render(<HandDashboard gameId={42} onSelectHand={() => {}} onBack={() => {}} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('start-hand-btn')).toBeTruthy();
+    });
+
+    screen.getByTestId('start-hand-btn').click();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('start-hand-error')).toBeTruthy();
+      expect(screen.getByTestId('start-hand-error').textContent).toContain('No active players');
+    });
+    // Button should be re-enabled after error
+    expect(screen.getByTestId('start-hand-btn').hasAttribute('disabled')).toBe(false);
+  });
+
+  it('Start Hand button is disabled while loading', async () => {
+    mockedFetchHands.mockResolvedValue(HANDS);
+    let resolveStart: (value: unknown) => void;
+    mockedStartHand.mockReturnValue(new Promise((resolve) => { resolveStart = resolve; }));
+    render(<HandDashboard gameId={42} onSelectHand={() => {}} onBack={() => {}} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('start-hand-btn')).toBeTruthy();
+    });
+
+    // Click once
+    screen.getByTestId('start-hand-btn').click();
+    await waitFor(() => {
+      expect(screen.getByTestId('start-hand-btn').hasAttribute('disabled')).toBe(true);
+    });
+
+    // Second click should not trigger another API call
+    screen.getByTestId('start-hand-btn').click();
+    expect(mockedStartHand).toHaveBeenCalledTimes(1);
+
+    resolveStart!({ hand_number: 3 });
   });
 
   it('Back to Games button calls onBack', async () => {

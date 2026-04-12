@@ -72,6 +72,8 @@ export interface HandResponse {
   turn: string | null;
   river: string | null;
   source_upload_id: number | null;
+  sb_player_name: string | null;
+  bb_player_name: string | null;
   created_at: string;
   player_hands: PlayerHandResponse[];
 }

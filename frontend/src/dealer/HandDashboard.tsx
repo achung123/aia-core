@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { fetchHands, createHand, completeGame } from '../api/client.ts';
+import { fetchHands, startHand, completeGame } from '../api/client.ts';
 import { QRCodeDisplay } from './QRCodeDisplay.tsx';
 import type { HandResponse, PlayerHandResponse } from '../api/types.ts';
 
@@ -40,6 +40,8 @@ export function HandDashboard({ gameId, players: playerNames, onSelectHand, onBa
   const [selectedWinners, setSelectedWinners] = useState<string[]>([]);
   const [winnerError, setWinnerError] = useState<string | null>(null);
   const [showQR, setShowQR] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchHands(gameId)
@@ -60,12 +62,16 @@ export function HandDashboard({ gameId, players: playerNames, onSelectHand, onBa
     return <div style={styles.container}>Loading</div>;
   }
 
-  async function handleNewHand() {
+  async function handleStartHand() {
+    setStarting(true);
+    setStartError(null);
     try {
-      const result = await createHand(gameId, {});
+      const result = await startHand(gameId);
       onSelectHand(result.hand_number);
     } catch (err) {
-      setError((err as Error).message || 'Failed to create hand');
+      setStartError((err as Error).message || 'Failed to start hand');
+    } finally {
+      setStarting(false);
     }
   }
 
@@ -120,9 +126,12 @@ export function HandDashboard({ gameId, players: playerNames, onSelectHand, onBa
           </div>
         ))}
       </div>
-      <button data-testid="new-hand-btn" onClick={handleNewHand} style={styles.button}>
-        New Hand
+      <button data-testid="start-hand-btn" onClick={handleStartHand} disabled={starting} style={styles.button}>
+        {starting ? 'Starting…' : 'Start Hand'}
       </button>
+      {startError && (
+        <div data-testid="start-hand-error" style={styles.startError}>{startError}</div>
+      )}
       <button
         data-testid="toggle-qr-btn"
         onClick={() => setShowQR((v) => !v)}
@@ -244,6 +253,11 @@ const styles: Record<string, React.CSSProperties> = {
     background: '#dc2626',
     color: '#fff',
     cursor: 'pointer',
+    marginTop: '0.5rem',
+  },
+  startError: {
+    color: '#991b1b',
+    fontSize: '0.9rem',
     marginTop: '0.5rem',
   },
   qrButton: {

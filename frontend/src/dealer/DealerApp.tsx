@@ -6,12 +6,12 @@ import type { DetectionMode } from './DetectionReview.tsx';
 import { GameSelector } from './GameSelector.tsx';
 import { GameCreateForm } from './GameCreateForm.tsx';
 import { HandDashboard } from './HandDashboard.tsx';
-import { PlayerGrid } from './PlayerGrid.tsx';
+import { ActiveHandDashboard } from './ActiveHandDashboard.tsx';
 import { CameraCapture } from './CameraCapture.tsx';
 import { DetectionReview } from './DetectionReview.tsx';
 import { OutcomeButtons } from './OutcomeButtons.tsx';
-import { DealerPreview } from './DealerPreview.tsx';
-import { addPlayerToHand, updateHolecards, updateFlop, updateTurn, updateRiver, patchPlayerResult, fetchGame, fetchHand, fetchHandStatus } from '../api/client.ts';
+import { addPlayerToHand, updateHolecards, updateFlop, updateTurn, updateRiver, patchPlayerResult, fetchGame, fetchHand, fetchHandStatus, fetchEquity } from '../api/client.ts';
+import { mapEquityToOutcomes, inferOutcomeStreet } from './showdownHelpers.ts';
 
 interface ReviewData {
   targetName: string;
@@ -24,6 +24,7 @@ export function DealerApp() {
   // Zustand store — replaces useReducer + manual sessionStorage
   const {
     gameId, currentHandId, players, community, currentStep,
+    sbPlayerName, bbPlayerName,
     setGame, setPlayerCards, setFlopCards, setTurnCard, setRiverCard,
     setHandId, setPlayerResult, finishHand, setStep,
     loadHand, updateParticipation,
@@ -293,6 +294,40 @@ export function DealerApp() {
     setOutcomeError(null);
   }
 
+  async function handleShowdown() {
+    setPatchError(null);
+    const nonFolded = players.filter(
+      (p) => p.status !== 'folded' && p.status !== 'not_playing',
+    );
+    const street = inferOutcomeStreet(community);
+
+    // AC3: Single non-folded player → auto-propose won
+    if (nonFolded.length <= 1) {
+      if (nonFolded.length === 1) {
+        setPlayerResult({ name: nonFolded[0].name, status: 'won', outcomeStreet: street });
+      }
+      setStep('review');
+      return;
+    }
+
+    // AC2: Call equity endpoint, map results
+    try {
+      const data = await fetchEquity(gameId!, currentHandId!);
+      const proposed = mapEquityToOutcomes(data.equities, players, community);
+      if (proposed) {
+        // AC5: Pre-fill proposed results
+        for (const r of proposed) {
+          setPlayerResult({ name: r.name, status: r.status, outcomeStreet: r.outcomeStreet });
+        }
+      }
+      // AC5/AC6: Navigate to review
+      setStep('review');
+    } catch {
+      // AC6: Inconclusive — navigate to review with blank results
+      setStep('review');
+    }
+  }
+
   function handleFinishHand() {
     // Validate outcome streets are consistent
     const validationError = validateOutcomeStreets(players);
@@ -344,24 +379,23 @@ export function DealerApp() {
       {/* ── Step 3: Active Hand ── */}
       {currentStep === 'activeHand' && gameId && (
         <>
-          {/* Base layer: player grid (hidden when overlay active) */}
+          {/* Base layer: active hand dashboard (hidden when overlay active) */}
           {!isActiveHandOverlay && (
-            <>
-              <DealerPreview community={community} players={players} gameId={gameId} handNumber={currentHandId ?? undefined} />
-              <PlayerGrid
-                players={players}
-                community={community}
-                onTileSelect={handleTileSelect}
-                onDirectOutcome={handleDirectOutcome}
-                onMarkNotPlaying={handleMarkNotPlaying}
-                canFinish={canFinish}
-                onFinishHand={handleFinishHand}
-                onBack={() => setStep('dashboard')}
-              />
-              {patchError && (
-                <div style={toastStyle}>{patchError}</div>
-              )}
-            </>
+            <ActiveHandDashboard
+              gameId={gameId}
+              community={community}
+              players={players}
+              sbPlayerName={sbPlayerName}
+              bbPlayerName={bbPlayerName}
+              onTileSelect={handleTileSelect}
+              onDirectOutcome={handleDirectOutcome}
+              onMarkNotPlaying={handleMarkNotPlaying}
+              canFinish={canFinish}
+              onFinishHand={handleFinishHand}
+              onShowdown={handleShowdown}
+              onBack={() => setStep('dashboard')}
+              patchError={patchError}
+            />
           )}
 
           {/* Overlay: Camera capture */}

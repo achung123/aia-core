@@ -31,6 +31,8 @@ export interface DealerState {
   currentStep: string;
   handCount: number;
   gameDate: string | null;
+  sbPlayerName: string | null;
+  bbPlayerName: string | null;
 }
 
 export interface DealerActions {
@@ -58,6 +60,8 @@ export interface LoadHandPayload {
   flop_3: string | null;
   turn: string | null;
   river: string | null;
+  sb_player_name?: string | null;
+  bb_player_name?: string | null;
   player_hands: {
     player_name: string;
     card_1: string | null;
@@ -85,6 +89,8 @@ const initialState: DealerState = {
   currentStep: 'gameSelector',
   handCount: 0,
   gameDate: null,
+  sbPlayerName: null,
+  bbPlayerName: null,
 };
 
 // --- Utility ---
@@ -221,6 +227,8 @@ export const useDealerStore = create<DealerState & DealerActions>()(
           return {
             currentHandId: hand.hand_number,
             currentStep: 'activeHand',
+            sbPlayerName: hand.sb_player_name ?? null,
+            bbPlayerName: hand.bb_player_name ?? null,
             community: {
               flop1: hand.flop_1, flop2: hand.flop_2, flop3: hand.flop_3,
               flopRecorded: hasFlopCards,
