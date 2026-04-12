@@ -1,12 +1,12 @@
-import type { CommunityCards, Player, GameMode, DealerState } from '../stores/dealerStore';
+import type { CommunityCards, Player, DealerState } from '../stores/dealerStore';
 
 // Re-export types from the Zustand store for backward compatibility
-export type { CommunityCards, Player, GameMode, DealerState };
+export type { CommunityCards, Player, DealerState };
 
 // --- Action Types ---
 
 export type DealerAction =
-  | { type: 'SET_GAME'; payload: { gameId: number; players: string[]; gameDate: string; gameMode?: GameMode } }
+  | { type: 'SET_GAME'; payload: { gameId: number; players: string[]; gameDate: string } }
   | { type: 'SET_PLAYER_CARDS'; payload: { name: string; card1: string; card2: string } }
   | { type: 'SET_COMMUNITY_CARDS'; payload: { flop1: string; flop2: string; flop3: string; turn?: string | null; river?: string | null } }
   | { type: 'SET_FLOP_CARDS'; payload: { flop1: string; flop2: string; flop3: string } }
@@ -18,7 +18,6 @@ export type DealerAction =
   | { type: 'LOAD_HAND'; payload: LoadHandPayload }
   | { type: 'FINISH_HAND' }
   | { type: 'SET_STEP'; payload: string }
-  | { type: 'SET_GAME_MODE'; payload: GameMode }
   | { type: 'UPDATE_PARTICIPATION'; payload: { players: { name: string; participation_status: string }[] } }
   | { type: 'RESTORE_STATE'; payload: Partial<DealerState> };
 
@@ -56,7 +55,6 @@ export const initialState: DealerState = {
   currentStep: 'gameSelector',
   handCount: 0,
   gameDate: null,
-  gameMode: 'dealer_centric',
 };
 
 // --- Utility ---
@@ -102,15 +100,14 @@ export function validateOutcomeStreets(players: Player[]): string | null {
 export function reducer(state: DealerState, action: DealerAction): DealerState {
   switch (action.type) {
     case 'SET_GAME': {
-      const { gameId, players, gameDate, gameMode } = action.payload;
+      const { gameId, players, gameDate } = action.payload;
       return {
         ...state,
         gameId,
         gameDate,
-        gameMode: gameMode || state.gameMode,
         players: players.map(initPlayer),
         community: { ...emptyCommunity },
-        currentStep: gameMode === 'participation' ? 'qrCodes' : 'dashboard',
+        currentStep: 'dashboard',
       };
     }
 
@@ -194,7 +191,7 @@ export function reducer(state: DealerState, action: DealerAction): DealerState {
       return {
         ...state,
         currentHandId: hand.hand_number,
-        currentStep: 'playerGrid',
+        currentStep: 'activeHand',
         community: {
           flop1: hand.flop_1, flop2: hand.flop_2, flop3: hand.flop_3,
           flopRecorded: hasFlopCards,
@@ -231,9 +228,6 @@ export function reducer(state: DealerState, action: DealerAction): DealerState {
     case 'SET_STEP':
       return { ...state, currentStep: action.payload };
 
-    case 'SET_GAME_MODE':
-      return { ...state, gameMode: action.payload };
-
     case 'UPDATE_PARTICIPATION': {
       const statusMap = new Map(
         action.payload.players.map((p) => [p.name, p.participation_status]),
@@ -254,10 +248,10 @@ export function reducer(state: DealerState, action: DealerAction): DealerState {
 
     case 'RESTORE_STATE': {
       const restored = { ...state, ...action.payload };
-      // Steps that depend on ephemeral local state (reviewData, outcomeTarget)
-      // cannot survive a restore — fall back to playerGrid
-      if (restored.currentStep === 'review' || restored.currentStep === 'outcome') {
-        restored.currentStep = 'playerGrid';
+      // Steps that depend on ephemeral local state (outcomeTarget)
+      // cannot survive a restore — fall back to activeHand
+      if (restored.currentStep === 'outcome') {
+        restored.currentStep = 'activeHand';
       }
       return restored;
     }

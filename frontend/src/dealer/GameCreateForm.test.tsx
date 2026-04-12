@@ -104,7 +104,7 @@ describe('GameCreateForm', () => {
     fireEvent.submit(document.querySelector('form')!);
 
     await waitFor(() => {
-      expect(onGameCreated).toHaveBeenCalledWith(42, ['Alice', 'Bob'], '2026-04-11', 'dealer_centric');
+      expect(onGameCreated).toHaveBeenCalledWith(42, ['Alice', 'Bob'], '2026-04-11');
     });
   });
 
@@ -157,13 +157,9 @@ describe('GameCreateForm', () => {
     });
   });
 
-  it('renders game mode selection with dealer_centric as default', async () => {
+  it('does not render game mode selection', async () => {
     render(<GameCreateForm onGameCreated={() => {}} />);
-    expect(screen.getByText('Game Mode')).toBeTruthy();
-    expect(screen.getByText('Dealer Centric')).toBeTruthy();
-    expect(screen.getByText('Player Participation')).toBeTruthy();
-
-    const dealerRadio = document.querySelector('input[value="dealer_centric"]') as HTMLInputElement;
-    expect(dealerRadio.checked).toBe(true);
+    expect(screen.queryByText('Game Mode')).toBeNull();
+    expect(screen.queryByText('Dealer Centric')).toBeNull();
   });
 });

@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useDealerStore, validateOutcomeStreets } from '../stores/dealerStore.ts';
-import type { GameMode } from '../stores/dealerStore.ts';
 import type { CardDetectionEntry, ResultEnum, StreetEnum } from '../api/types.ts';
 import type { OutcomeResult, OutcomeStreet } from './OutcomeButtons.tsx';
 import type { DetectionMode } from './DetectionReview.tsx';
@@ -12,7 +11,6 @@ import { CameraCapture } from './CameraCapture.tsx';
 import { DetectionReview } from './DetectionReview.tsx';
 import { OutcomeButtons } from './OutcomeButtons.tsx';
 import { DealerPreview } from './DealerPreview.tsx';
-import { QRCodeDisplay } from './QRCodeDisplay.tsx';
 import { addPlayerToHand, updateHolecards, updateFlop, updateTurn, updateRiver, patchPlayerResult, fetchGame, fetchHand, fetchHandStatus } from '../api/client.ts';
 
 interface ReviewData {
@@ -25,9 +23,9 @@ interface ReviewData {
 export function DealerApp() {
   // Zustand store — replaces useReducer + manual sessionStorage
   const {
-    gameId, currentHandId, players, community, currentStep, gameMode,
+    gameId, currentHandId, players, community, currentStep,
     setGame, setPlayerCards, setFlopCards, setTurnCard, setRiverCard,
-    setHandId, setPlayerResult, finishHand, setStep, setGameMode,
+    setHandId, setPlayerResult, finishHand, setStep,
     loadHand, updateParticipation,
   } = useDealerStore();
 
@@ -51,7 +49,7 @@ export function DealerApp() {
 
   // Polling for participation mode
   useEffect(() => {
-    if (currentStep !== 'playerGrid' || !gameId || !currentHandId || gameMode !== 'participation') return;
+    if (currentStep !== 'activeHand' || !gameId || !currentHandId) return;
 
     const controller = new AbortController();
     const { signal } = controller;
@@ -97,7 +95,7 @@ export function DealerApp() {
       controller.abort();
       clearInterval(intervalId);
     };
-  }, [currentStep, gameId, currentHandId, gameMode]);
+  }, [currentStep, gameId, currentHandId]);
 
   function handleNewGame() {
     setStep('create');
@@ -112,8 +110,8 @@ export function DealerApp() {
     }
   }
 
-  function handleGameCreated(createdGameId: number, createdPlayers: string[], createdGameDate: string, createdGameMode: GameMode) {
-    setGame({ gameId: createdGameId, players: createdPlayers, gameDate: createdGameDate, gameMode: createdGameMode });
+  function handleGameCreated(createdGameId: number, createdPlayers: string[], createdGameDate: string) {
+    setGame({ gameId: createdGameId, players: createdPlayers, gameDate: createdGameDate });
   }
 
   async function handleSelectHand(handNumber: number) {
@@ -122,7 +120,7 @@ export function DealerApp() {
       loadHand(handData);
     } catch {
       setHandId(handNumber);
-      setStep('playerGrid');
+      setStep('activeHand');
     }
   }
 
@@ -136,39 +134,33 @@ export function DealerApp() {
     }
 
     // Participation mode: tile click activates players or opens outcome
-    if (gameMode === 'participation') {
-      const player = players.find((p) => p.name === name);
-      if (!player) return;
+    const player = players.find((p) => p.name === name);
+    if (!player) return;
 
-      if (player.status === 'playing' || player.status === 'idle') {
-        try {
-          await addPlayerToHand(gameId!, currentHandId!, {
-            player_name: name,
-          });
-        } catch (err: unknown) {
-          const message = err instanceof Error ? err.message : 'Failed to activate player';
-          setPatchError(message);
-        }
-        return;
+    if (player.status === 'playing' || player.status === 'idle') {
+      try {
+        await addPlayerToHand(gameId!, currentHandId!, {
+          player_name: name,
+        });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to activate player';
+        setPatchError(message);
       }
-
-      if (player.status === 'handed_back') {
-        handleDirectOutcome(name);
-        return;
-      }
-
       return;
     }
 
-    // Dealer-centric: open camera
-    setCaptureTarget(name);
+    if (player.status === 'handed_back') {
+      handleDirectOutcome(name);
+      return;
+    }
+
+    return;
   }
 
   function handleDirectOutcome(name: string) {
     setPatchError(null);
     setOutcomeError(null);
     setOutcomeTarget(name);
-    setStep('outcome');
   }
 
   function handleMarkNotPlaying(name: string) {
@@ -186,7 +178,6 @@ export function DealerApp() {
       imageUrl,
       mode,
     });
-    setStep('review');
   }
 
   function handleCaptureCancel() {
@@ -210,9 +201,7 @@ export function DealerApp() {
           flop3: cardValues[2] || '',
         });
         setPatchError(null);
-        setStep('playerGrid');
       } catch (err: unknown) {
-        setStep('playerGrid');
         setPatchError(err instanceof Error ? err.message : 'Failed to save flop cards');
       }
     } else if (reviewData?.mode === 'turn') {
@@ -223,9 +212,7 @@ export function DealerApp() {
         });
         setTurnCard(cardValues[0] || '');
         setPatchError(null);
-        setStep('playerGrid');
       } catch (err: unknown) {
-        setStep('playerGrid');
         setPatchError(err instanceof Error ? err.message : 'Failed to save turn card');
       }
     } else if (reviewData?.mode === 'river') {
@@ -236,9 +223,7 @@ export function DealerApp() {
         });
         setRiverCard(cardValues[0] || '');
         setPatchError(null);
-        setStep('playerGrid');
       } catch (err: unknown) {
-        setStep('playerGrid');
         setPatchError(err instanceof Error ? err.message : 'Failed to save river card');
       }
     } else {
@@ -264,12 +249,10 @@ export function DealerApp() {
         }
         setPlayerCards({ name: targetName, card1: card1 || '', card2: card2 || '' });
         setPatchError(null);
-        // Transition to outcome step
+        // Transition to outcome overlay
         setOutcomeTarget(targetName);
         setOutcomeError(null);
-        setStep('outcome');
       } catch (err: unknown) {
-        setStep('playerGrid');
         setPatchError(err instanceof Error ? err.message : 'Failed to save cards');
       }
     }
@@ -279,7 +262,6 @@ export function DealerApp() {
     if (reviewData?.imageUrl) URL.revokeObjectURL(reviewData.imageUrl);
     const target = reviewData?.targetName ?? null;
     setReviewData(null);
-    setStep('playerGrid');
     setCaptureTarget(target);
   }
 
@@ -291,7 +273,6 @@ export function DealerApp() {
     if (result === 'not_playing') {
       setPlayerResult({ name: outcomeTarget!, status: 'not_playing', outcomeStreet: null });
       setOutcomeTarget(null);
-      setStep('playerGrid');
       setOutcomeSubmitting(false);
       return;
     }
@@ -300,7 +281,6 @@ export function DealerApp() {
       await patchPlayerResult(gameId!, currentHandId!, outcomeTarget!, { result: result as ResultEnum, outcome_street: (outcomeStreet || null) as StreetEnum | null });
       setPlayerResult({ name: outcomeTarget!, status: result, outcomeStreet: outcomeStreet || null });
       setOutcomeTarget(null);
-      setStep('playerGrid');
     } catch (err: unknown) {
       setOutcomeError(err instanceof Error ? err.message : 'Failed to save result');
     } finally {
@@ -311,7 +291,6 @@ export function DealerApp() {
   function handleOutcomeCancel() {
     setOutcomeTarget(null);
     setOutcomeError(null);
-    setStep('playerGrid');
   }
 
   function handleFinishHand() {
@@ -331,26 +310,19 @@ export function DealerApp() {
   }
 
   function doFinishHand() {
-    setFinishing(true);
-    setFinishError(null);
-    try {
-      finishHand();
-      setShowFinishConfirm(false);
-    } catch (err: unknown) {
-      setFinishError(err instanceof Error ? err.message : 'Failed to finish hand');
-    } finally {
-      setFinishing(false);
-    }
+    setShowFinishConfirm(false);
+    setStep('review');
   }
 
   const canFinish =
     players.length > 0 &&
     players.some((p) => p.status !== 'playing');
 
-  return (
-    <div id="dealer-root">
-      <h1>Dealer Interface</h1>
+  const isActiveHandOverlay = !!(captureTarget || reviewData || outcomeTarget);
 
+  return (
+    <div id="dealer-root" style={shellStyle}>
+      {/* ── Step 1: Game Selection ── */}
       {currentStep === 'gameSelector' && (
         <GameSelector onSelectGame={handleSelectGame} onNewGame={handleNewGame} />
       )}
@@ -359,88 +331,108 @@ export function DealerApp() {
         <GameCreateForm onGameCreated={handleGameCreated} />
       )}
 
-      {currentStep === 'qrCodes' && gameId && (
-        <div style={{ maxWidth: '480px', margin: '0 auto', padding: '1rem' }}>
-          <h2 style={{ color: '#e2e8f0' }}>Share with Players</h2>
-          <p style={{ color: '#94a3b8', marginBottom: '1rem' }}>Each player scans their QR code to join:</p>
-          {players.map((p) => (
-            <div key={p.name} style={{ marginBottom: '1.5rem', textAlign: 'center', border: '1px solid #2e303a', borderRadius: '12px', padding: '0.75rem', background: '#1e1f2b' }}>
-              <h3 style={{ margin: '0 0 0.25rem', color: '#c084fc' }}>{p.name}</h3>
-              <QRCodeDisplay gameId={gameId} playerName={p.name} visible={true} />
-            </div>
-          ))}
-          <button
-            data-testid="qr-continue-btn"
-            style={{ width: '100%', padding: '0.75rem', minHeight: '48px', fontSize: '1.1rem', fontWeight: 'bold', border: 'none', borderRadius: '8px', background: '#4f46e5', color: '#fff', cursor: 'pointer', marginTop: '1rem' }}
-            onClick={() => setStep('dashboard')}
-          >
-            Continue
-          </button>
-        </div>
-      )}
-
+      {/* ── Step 2: Game Dashboard ── */}
       {currentStep === 'dashboard' && gameId && (
         <HandDashboard
           gameId={gameId}
           players={players.map((p) => p.name)}
-          gameMode={gameMode}
           onSelectHand={handleSelectHand}
           onBack={() => setStep('gameSelector')}
-          onModeChange={(mode: GameMode) => setGameMode(mode)}
         />
       )}
 
-      {currentStep === 'playerGrid' && gameId && (
+      {/* ── Step 3: Active Hand ── */}
+      {currentStep === 'activeHand' && gameId && (
         <>
-          <DealerPreview community={community} players={players} gameId={gameId} handNumber={currentHandId ?? undefined} />
-          <PlayerGrid
-            players={players}
-            community={community}
-            onTileSelect={handleTileSelect}
-            onDirectOutcome={handleDirectOutcome}
-            onMarkNotPlaying={handleMarkNotPlaying}
-            gameMode={gameMode}
-            canFinish={canFinish}
-            onFinishHand={handleFinishHand}
-            onBack={() => setStep('dashboard')}
-          />
-          {patchError && (
-            <div style={toastStyle}>{patchError}</div>
+          {/* Base layer: player grid (hidden when overlay active) */}
+          {!isActiveHandOverlay && (
+            <>
+              <DealerPreview community={community} players={players} gameId={gameId} handNumber={currentHandId ?? undefined} />
+              <PlayerGrid
+                players={players}
+                community={community}
+                onTileSelect={handleTileSelect}
+                onDirectOutcome={handleDirectOutcome}
+                onMarkNotPlaying={handleMarkNotPlaying}
+                canFinish={canFinish}
+                onFinishHand={handleFinishHand}
+                onBack={() => setStep('dashboard')}
+              />
+              {patchError && (
+                <div style={toastStyle}>{patchError}</div>
+              )}
+            </>
+          )}
+
+          {/* Overlay: Camera capture */}
+          {captureTarget && (
+            <CameraCapture
+              gameId={gameId}
+              targetName={captureTarget}
+              onDetectionResult={handleDetectionResult}
+              onCancel={handleCaptureCancel}
+            />
+          )}
+
+          {/* Overlay: Detection review */}
+          {reviewData && (
+            <DetectionReview
+              detections={reviewData.detections}
+              imageUrl={reviewData.imageUrl}
+              mode={reviewData.mode as DetectionMode}
+              targetName={reviewData.targetName}
+              onConfirm={handleReviewConfirm}
+              onRetake={handleReviewRetake}
+            />
+          )}
+
+          {/* Overlay: Outcome selection */}
+          {outcomeTarget && !reviewData && (
+            <OutcomeButtons
+              key={`${outcomeTarget}-${outcomeError ?? ''}`}
+              playerName={outcomeTarget}
+              onSelect={handleOutcomeSelect}
+              onCancel={handleOutcomeCancel}
+              error={outcomeError}
+              submitting={outcomeSubmitting}
+            />
           )}
         </>
       )}
 
-      {captureTarget && gameId && (
-        <CameraCapture
-          gameId={gameId}
-          targetName={captureTarget}
-          onDetectionResult={handleDetectionResult}
-          onCancel={handleCaptureCancel}
-        />
+      {/* ── Step 4: Hand Review ── */}
+      {currentStep === 'review' && gameId && (
+        <div style={reviewContainerStyle}>
+          <h2 style={reviewHeadingStyle}>Hand Complete</h2>
+          {currentHandId && <p style={reviewSubStyle}>Hand #{currentHandId}</p>}
+          <div style={reviewListStyle}>
+            {players.filter((p) => p.status !== 'playing' && p.status !== 'not_playing').map((p) => (
+              <div key={p.name} style={reviewPlayerStyle}>
+                <span style={reviewPlayerNameStyle}>{p.name}</span>
+                <span style={{ color: p.status === 'won' ? '#4ade80' : p.status === 'folded' ? '#f87171' : '#fb923c' }}>
+                  {p.status}{p.outcomeStreet ? ` (${p.outcomeStreet})` : ''}
+                </span>
+              </div>
+            ))}
+          </div>
+          <button
+            data-testid="next-hand-btn"
+            style={primaryButtonStyle}
+            onClick={() => finishHand()}
+          >
+            Next Hand
+          </button>
+          <button
+            data-testid="review-back-btn"
+            style={secondaryButtonStyle}
+            onClick={() => finishHand()}
+          >
+            Back to Dashboard
+          </button>
+        </div>
       )}
 
-      {currentStep === 'review' && reviewData && (
-        <DetectionReview
-          detections={reviewData.detections}
-          imageUrl={reviewData.imageUrl}
-          mode={reviewData.mode as DetectionMode}
-          targetName={reviewData.targetName}
-          onConfirm={handleReviewConfirm}
-          onRetake={handleReviewRetake}
-        />
-      )}
-
-      {currentStep === 'outcome' && outcomeTarget && (
-        <OutcomeButtons
-          key={`${outcomeTarget}-${outcomeError ?? ''}`}
-          playerName={outcomeTarget}
-          onSelect={handleOutcomeSelect}
-          onCancel={handleOutcomeCancel}
-          error={outcomeError}
-          submitting={outcomeSubmitting}
-        />
-      )}
-
+      {/* Finish Hand confirmation dialog */}
       {showFinishConfirm && (
         <div data-testid="finish-confirm-dialog" style={dialogOverlayStyle}>
           <div style={dialogStyle}>
@@ -463,9 +455,141 @@ export function DealerApp() {
           </div>
         </div>
       )}
+
+      {/* Bottom navigation — mobile-first, one-thumb accessible */}
+      <nav data-testid="bottom-nav" style={bottomNavStyle}>
+        {(['gameSelector', 'dashboard', 'activeHand', 'review'] as const).map((step) => {
+          const labels: Record<string, string> = { gameSelector: 'Games', dashboard: 'Dashboard', activeHand: 'Hand', review: 'Review' };
+          const isActive = currentStep === step || (step === 'gameSelector' && currentStep === 'create');
+          return (
+            <button
+              key={step}
+              data-testid={`nav-${step}`}
+              style={{ ...navItemStyle, ...(isActive ? navItemActiveStyle : {}) }}
+              disabled={
+                (step === 'dashboard' && !gameId) ||
+                (step === 'activeHand' && !currentHandId) ||
+                (step === 'review' && currentStep !== 'review')
+              }
+              onClick={() => {
+                if (step === 'gameSelector') setStep('gameSelector');
+                else if (step === 'dashboard' && gameId) setStep('dashboard');
+                else if (step === 'activeHand' && currentHandId) setStep('activeHand');
+              }}
+            >
+              {labels[step]}
+            </button>
+          );
+        })}
+      </nav>
     </div>
   );
 }
+
+const shellStyle: React.CSSProperties = {
+  minHeight: '100dvh',
+  paddingBottom: '72px',
+  display: 'flex',
+  flexDirection: 'column',
+};
+
+const reviewContainerStyle: React.CSSProperties = {
+  maxWidth: '480px',
+  margin: '0 auto',
+  padding: '1.5rem 1rem',
+  width: '100%',
+};
+
+const reviewHeadingStyle: React.CSSProperties = {
+  fontSize: '1.4rem',
+  fontWeight: 700,
+  color: '#e2e8f0',
+  marginBottom: '0.25rem',
+};
+
+const reviewSubStyle: React.CSSProperties = {
+  color: '#94a3b8',
+  marginBottom: '1rem',
+};
+
+const reviewListStyle: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '0.5rem',
+  marginBottom: '1.5rem',
+};
+
+const reviewPlayerStyle: React.CSSProperties = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  padding: '0.5rem 0.75rem',
+  background: '#1e1f2b',
+  borderRadius: '8px',
+  border: '1px solid #2e303a',
+};
+
+const reviewPlayerNameStyle: React.CSSProperties = {
+  color: '#e2e8f0',
+  fontWeight: 600,
+};
+
+const primaryButtonStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '0.75rem',
+  minHeight: '48px',
+  fontSize: '1.1rem',
+  fontWeight: 'bold',
+  border: 'none',
+  borderRadius: '8px',
+  background: '#4f46e5',
+  color: '#fff',
+  cursor: 'pointer',
+  marginBottom: '0.5rem',
+};
+
+const secondaryButtonStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '0.75rem',
+  minHeight: '48px',
+  fontSize: '1rem',
+  fontWeight: 600,
+  border: '1px solid #2e303a',
+  borderRadius: '8px',
+  background: 'transparent',
+  color: '#94a3b8',
+  cursor: 'pointer',
+};
+
+const bottomNavStyle: React.CSSProperties = {
+  position: 'fixed',
+  bottom: 0,
+  left: 0,
+  right: 0,
+  display: 'flex',
+  justifyContent: 'space-around',
+  background: '#0f1117',
+  borderTop: '1px solid #2e303a',
+  padding: '0.5rem 0',
+  zIndex: 100,
+};
+
+const navItemStyle: React.CSSProperties = {
+  flex: 1,
+  padding: '0.5rem 0',
+  minHeight: '44px',
+  fontSize: '0.85rem',
+  fontWeight: 600,
+  border: 'none',
+  background: 'transparent',
+  color: '#64748b',
+  cursor: 'pointer',
+  textAlign: 'center',
+};
+
+const navItemActiveStyle: React.CSSProperties = {
+  color: '#818cf8',
+  borderTop: '2px solid #818cf8',
+};
 
 const dialogOverlayStyle: React.CSSProperties = {
   position: 'fixed',
@@ -499,7 +623,7 @@ const dialogButtonRow: React.CSSProperties = {
 
 const toastStyle: React.CSSProperties = {
   position: 'fixed',
-  bottom: '1rem',
+  bottom: '5rem',
   left: '50%',
   transform: 'translateX(-50%)',
   background: '#991b1b',

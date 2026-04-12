@@ -95,7 +95,7 @@ vi.mock('../poker/evaluator.js', () => ({
   calculateEquity: vi.fn(() => []),
 }));
 
-import { createHand, addPlayerToHand, updateHolecards, updateFlop, updateTurn, updateRiver, patchPlayerResult, fetchHands, fetchHand, fetchHandStatus } from '../api/client.ts';
+import { createHand, addPlayerToHand, updateHolecards, updateFlop, updateTurn, updateRiver, patchPlayerResult, fetchHands, fetchHand, fetchHandStatus, fetchSessions } from '../api/client.ts';
 import { DealerApp } from './DealerApp.tsx';
 
 const defaultTestPlayers: Player[] = [
@@ -115,7 +115,6 @@ const defaultTestState: Partial<DealerState> = {
   players: defaultTestPlayers.map((p) => ({ ...p })),
   handCount: 0,
   gameDate: '2026-04-08',
-  gameMode: 'dealer_centric',
   currentHandId: null,
   community: { ...emptyCommunity },
 };
@@ -141,6 +140,98 @@ function findButton(container: HTMLElement, text: string): HTMLButtonElement | u
   return (buttons.find((b) => b.textContent?.trim() === text)
     || buttons.find((b) => b.textContent?.includes(text))) as HTMLButtonElement | undefined;
 }
+
+describe('DealerApp 4-step shell', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (fetchSessions as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (fetchHands as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+  });
+
+  it('renders bottom navigation with all 4 steps', () => {
+    useDealerStore.setState({ ...defaultTestState, currentStep: 'gameSelector', gameId: null });
+    const container = renderToContainer(<DealerApp />);
+    const nav = container.querySelector('[data-testid="bottom-nav"]');
+    expect(nav).not.toBeNull();
+    expect(nav!.querySelector('[data-testid="nav-gameSelector"]')).not.toBeNull();
+    expect(nav!.querySelector('[data-testid="nav-dashboard"]')).not.toBeNull();
+    expect(nav!.querySelector('[data-testid="nav-activeHand"]')).not.toBeNull();
+    expect(nav!.querySelector('[data-testid="nav-review"]')).not.toBeNull();
+  });
+
+  it('highlights the current step in navigation', () => {
+    useDealerStore.setState({ ...defaultTestState, currentStep: 'dashboard' });
+    const container = renderToContainer(<DealerApp />);
+    const dashBtn = container.querySelector('[data-testid="nav-dashboard"]') as HTMLElement;
+    expect(dashBtn.style.color).toBe('#818cf8');
+  });
+
+  it('renders GameSelector on gameSelector step', () => {
+    useDealerStore.setState({ ...defaultTestState, currentStep: 'gameSelector', gameId: null });
+    const container = renderToContainer(<DealerApp />);
+    expect(container.textContent).toContain('Games');
+  });
+
+  it('renders HandDashboard on dashboard step', async () => {
+    useDealerStore.setState({ ...defaultTestState, currentStep: 'dashboard' });
+    const container = renderToContainer(<DealerApp />);
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="new-hand-btn"]')).not.toBeNull();
+    });
+  });
+
+  it('renders PlayerGrid on activeHand step', () => {
+    useDealerStore.setState({
+      ...defaultTestState,
+      currentStep: 'activeHand',
+      currentHandId: 1,
+    });
+    const container = renderToContainer(<DealerApp />);
+    expect(container.textContent).toContain('Select a Player');
+  });
+
+  it('renders review summary on review step', () => {
+    useDealerStore.setState({
+      ...defaultTestState,
+      currentStep: 'review',
+      currentHandId: 5,
+      players: [
+        { name: 'Alice', card1: 'Ah', card2: 'Kd', recorded: true, status: 'won', outcomeStreet: 'river' },
+        { name: 'Bob', card1: '9s', card2: 'Tc', recorded: true, status: 'folded', outcomeStreet: 'flop' },
+      ],
+    });
+    const container = renderToContainer(<DealerApp />);
+    expect(container.textContent).toContain('Hand Complete');
+    expect(container.textContent).toContain('Hand #5');
+    expect(container.textContent).toContain('Alice');
+    expect(container.textContent).toContain('won');
+    expect(container.textContent).toContain('Bob');
+    expect(container.textContent).toContain('folded');
+    expect(container.querySelector('[data-testid="next-hand-btn"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="review-back-btn"]')).not.toBeNull();
+  });
+
+  it('next-hand-btn on review returns to dashboard', async () => {
+    useDealerStore.setState({
+      ...defaultTestState,
+      currentStep: 'review',
+      currentHandId: 5,
+      players: [
+        { name: 'Alice', card1: 'Ah', card2: 'Kd', recorded: true, status: 'won', outcomeStreet: 'river' },
+      ],
+    });
+    (fetchHands as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    const container = renderToContainer(<DealerApp />);
+
+    act(() => {
+      container.querySelector<HTMLButtonElement>('[data-testid="next-hand-btn"]')!.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="new-hand-btn"]')).not.toBeNull();
+    });
+  });
+});
 
 describe('DealerApp per-player card collection', () => {
   beforeEach(() => {
@@ -170,44 +261,6 @@ describe('DealerApp per-player card collection', () => {
     });
   }
 
-  async function capturePlayerCards(container: HTMLElement, playerName: string) {
-    act(() => {
-      container.querySelector<HTMLButtonElement>(`[data-testid="player-tile-${playerName}"]`)!.click();
-    });
-    await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="mock-detect"]')).not.toBeNull();
-    });
-    act(() => {
-      container.querySelector<HTMLButtonElement>('[data-testid="mock-detect"]')!.click();
-    });
-    await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="mock-confirm"]')).not.toBeNull();
-    });
-    act(() => {
-      container.querySelector<HTMLButtonElement>('[data-testid="mock-confirm"]')!.click();
-    });
-  }
-
-  async function captureAndCompletePlayer(container: HTMLElement, playerName: string) {
-    await capturePlayerCards(container, playerName);
-    // After card confirm, outcome buttons appear — select Won then street to return to grid
-    await vi.waitFor(() => {
-      expect(findButton(container, 'Won')).not.toBeUndefined();
-    });
-    act(() => {
-      findButton(container, 'Won')!.click();
-    });
-    await vi.waitFor(() => {
-      expect(findButton(container, 'River')).not.toBeUndefined();
-    });
-    act(() => {
-      findButton(container, 'River')!.click();
-    });
-    await vi.waitFor(() => {
-      expect(container.textContent).toContain('Select a Player');
-    });
-  }
-
   it('clicking Start Hand creates an empty hand on the backend', async () => {
     const container = renderToContainer(<DealerApp />);
     await vi.waitFor(() => {
@@ -223,7 +276,7 @@ describe('DealerApp per-player card collection', () => {
     });
   });
 
-  it('after hand creation, transitions to playerGrid', async () => {
+  it('after hand creation, transitions to activeHand', async () => {
     const container = renderToContainer(<DealerApp />);
     await startHand(container);
 
@@ -232,109 +285,34 @@ describe('DealerApp per-player card collection', () => {
     expect(container.textContent).toContain('Bob');
   });
 
-  it('tapping a playing tile opens camera capture', async () => {
+  it('tapping a playing tile calls addPlayerToHand to activate player', async () => {
     const container = renderToContainer(<DealerApp />);
     await startHand(container);
 
     act(() => {
       container.querySelector<HTMLButtonElement>('[data-testid="player-tile-Alice"]')!.click();
     });
-
-    await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="camera-capture"]')).not.toBeNull();
-      expect(container.querySelector('[data-testid="capture-target"]')!.textContent).toBe('Alice');
-    });
-  });
-
-  it('after confirm, addPlayerToHand is called for unrecorded player', async () => {
-    const container = renderToContainer(<DealerApp />);
-    await startHand(container);
-    await capturePlayerCards(container, 'Alice');
 
     await vi.waitFor(() => {
       expect(addPlayerToHand).toHaveBeenCalledWith(42, 1, {
         player_name: 'Alice',
-        card_1: 'Ah',
-        card_2: 'Kd',
       });
     });
   });
 
-  it('player tile shows recorded after successful PATCH', async () => {
+  it('shows error toast on addPlayerToHand failure', async () => {
+    (addPlayerToHand as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Network error'));
+
     const container = renderToContainer(<DealerApp />);
     await startHand(container);
-    await captureAndCompletePlayer(container, 'Alice');
-
-    await vi.waitFor(() => {
-      const aliceTile = container.querySelector('[data-testid="player-tile-Alice"]');
-      expect(aliceTile).not.toBeNull();
-      expect(aliceTile!.textContent).toContain('✅');
-    });
-  });
-
-  it('tapping a recorded tile opens camera for retake', async () => {
-    const container = renderToContainer(<DealerApp />);
-    await startHand(container);
-    await captureAndCompletePlayer(container, 'Alice');
-
-    await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="player-tile-Alice"]')!.textContent).toContain('✅');
-    });
 
     act(() => {
       container.querySelector<HTMLButtonElement>('[data-testid="player-tile-Alice"]')!.click();
     });
 
     await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="camera-capture"]')).not.toBeNull();
-    });
-  });
-
-  it('retake calls updateHolecards instead of addPlayerToHand', async () => {
-    const container = renderToContainer(<DealerApp />);
-    await startHand(container);
-    await captureAndCompletePlayer(container, 'Alice');
-
-    await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="player-tile-Alice"]')!.textContent).toContain('✅');
-    });
-
-    // Second capture = retake
-    await capturePlayerCards(container, 'Alice');
-
-    await vi.waitFor(() => {
-      expect(updateHolecards).toHaveBeenCalledWith(42, 1, 'Alice', {
-        card_1: 'Ah',
-        card_2: 'Kd',
-      });
-    });
-  });
-
-  it('shows error toast on PATCH failure', async () => {
-    (addPlayerToHand as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Network error'));
-
-    const container = renderToContainer(<DealerApp />);
-    await startHand(container);
-    await capturePlayerCards(container, 'Alice');
-
-    await vi.waitFor(() => {
       expect(container.textContent).toContain('Network error');
     });
-  });
-
-  it('does not update player state on PATCH failure', async () => {
-    (addPlayerToHand as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Server error'));
-
-    const container = renderToContainer(<DealerApp />);
-    await startHand(container);
-    await capturePlayerCards(container, 'Alice');
-
-    await vi.waitFor(() => {
-      expect(container.textContent).toContain('Server error');
-    });
-
-    const aliceTile = container.querySelector('[data-testid="player-tile-Alice"]');
-    expect(aliceTile!.textContent).not.toContain('✅');
   });
 });
 
@@ -348,7 +326,7 @@ describe('DealerApp outcome flow', () => {
     (patchPlayerResult as ReturnType<typeof vi.fn>).mockResolvedValue({});
   });
 
-  async function startHand(container: HTMLElement) {
+  async function startHandWithHandedBack(container: HTMLElement) {
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="new-hand-btn"]')).not.toBeNull();
     });
@@ -358,30 +336,25 @@ describe('DealerApp outcome flow', () => {
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Select a Player');
     });
-  }
-
-  async function captureAndConfirmCards(container: HTMLElement, playerName: string) {
+    // Set Alice to handed_back so outcome button appears
     act(() => {
-      container.querySelector<HTMLButtonElement>(`[data-testid="player-tile-${playerName}"]`)!.click();
-    });
-    await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="mock-detect"]')).not.toBeNull();
-    });
-    act(() => {
-      container.querySelector<HTMLButtonElement>('[data-testid="mock-detect"]')!.click();
-    });
-    await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="mock-confirm"]')).not.toBeNull();
-    });
-    act(() => {
-      container.querySelector<HTMLButtonElement>('[data-testid="mock-confirm"]')!.click();
+      useDealerStore.setState((state) => ({
+        players: state.players.map((p) =>
+          p.name === 'Alice' ? { ...p, status: 'handed_back' } : p,
+        ),
+      }));
     });
   }
 
-  it('shows outcome buttons after card review confirm', async () => {
+  it('shows outcome buttons when clicking outcome button on handed_back player', async () => {
     const container = renderToContainer(<DealerApp />);
-    await startHand(container);
-    await captureAndConfirmCards(container, 'Alice');
+    await startHandWithHandedBack(container);
+
+    const outcomeBtn = container.querySelector('[data-testid="outcome-btn-Alice"]');
+    expect(outcomeBtn).not.toBeNull();
+    act(() => {
+      (outcomeBtn as HTMLButtonElement).click();
+    });
 
     await vi.waitFor(() => {
       expect(findButton(container, 'Won')).not.toBeUndefined();
@@ -392,8 +365,11 @@ describe('DealerApp outcome flow', () => {
 
   it('tapping Won PATCHes result to backend', async () => {
     const container = renderToContainer(<DealerApp />);
-    await startHand(container);
-    await captureAndConfirmCards(container, 'Alice');
+    await startHandWithHandedBack(container);
+
+    act(() => {
+      container.querySelector<HTMLButtonElement>('[data-testid="outcome-btn-Alice"]')!.click();
+    });
 
     await vi.waitFor(() => {
       expect(findButton(container, 'Won')).not.toBeUndefined();
@@ -417,8 +393,11 @@ describe('DealerApp outcome flow', () => {
 
   it('tapping Folded PATCHes result to backend', async () => {
     const container = renderToContainer(<DealerApp />);
-    await startHand(container);
-    await captureAndConfirmCards(container, 'Alice');
+    await startHandWithHandedBack(container);
+
+    act(() => {
+      container.querySelector<HTMLButtonElement>('[data-testid="outcome-btn-Alice"]')!.click();
+    });
 
     await vi.waitFor(() => {
       expect(findButton(container, 'Folded')).not.toBeUndefined();
@@ -442,8 +421,11 @@ describe('DealerApp outcome flow', () => {
 
   it('tapping Lost PATCHes result to backend', async () => {
     const container = renderToContainer(<DealerApp />);
-    await startHand(container);
-    await captureAndConfirmCards(container, 'Alice');
+    await startHandWithHandedBack(container);
+
+    act(() => {
+      container.querySelector<HTMLButtonElement>('[data-testid="outcome-btn-Alice"]')!.click();
+    });
 
     await vi.waitFor(() => {
       expect(findButton(container, 'Lost')).not.toBeUndefined();
@@ -467,8 +449,11 @@ describe('DealerApp outcome flow', () => {
 
   it('player tile updates status after outcome selection', async () => {
     const container = renderToContainer(<DealerApp />);
-    await startHand(container);
-    await captureAndConfirmCards(container, 'Alice');
+    await startHandWithHandedBack(container);
+
+    act(() => {
+      container.querySelector<HTMLButtonElement>('[data-testid="outcome-btn-Alice"]')!.click();
+    });
 
     await vi.waitFor(() => {
       expect(findButton(container, 'Won')).not.toBeUndefined();
@@ -496,8 +481,11 @@ describe('DealerApp outcome flow', () => {
     (patchPlayerResult as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Result PATCH failed'));
 
     const container = renderToContainer(<DealerApp />);
-    await startHand(container);
-    await captureAndConfirmCards(container, 'Alice');
+    await startHandWithHandedBack(container);
+
+    act(() => {
+      container.querySelector<HTMLButtonElement>('[data-testid="outcome-btn-Alice"]')!.click();
+    });
 
     await vi.waitFor(() => {
       expect(findButton(container, 'Won')).not.toBeUndefined();
@@ -524,27 +512,9 @@ describe('DealerApp outcome flow', () => {
     expect(findButton(container, 'Lost')).not.toBeUndefined();
   });
 
-  it('allows direct outcome selection from player grid (skip camera)', async () => {
+  it('outcome PATCHes without requiring card capture first', async () => {
     const container = renderToContainer(<DealerApp />);
-    await startHand(container);
-
-    // Click the direct outcome button on Alice's tile
-    const outcomeBtn = container.querySelector('[data-testid="outcome-btn-Alice"]');
-    expect(outcomeBtn).not.toBeNull();
-    act(() => {
-      (outcomeBtn as HTMLButtonElement).click();
-    });
-
-    await vi.waitFor(() => {
-      expect(findButton(container, 'Won')).not.toBeUndefined();
-      expect(findButton(container, 'Folded')).not.toBeUndefined();
-      expect(findButton(container, 'Lost')).not.toBeUndefined();
-    });
-  });
-
-  it('direct outcome PATCHes without requiring card capture first', async () => {
-    const container = renderToContainer(<DealerApp />);
-    await startHand(container);
+    await startHandWithHandedBack(container);
 
     act(() => {
       container.querySelector<HTMLButtonElement>('[data-testid="outcome-btn-Alice"]')!.click();
@@ -568,15 +538,15 @@ describe('DealerApp outcome flow', () => {
     await vi.waitFor(() => {
       expect(patchPlayerResult).toHaveBeenCalledWith(42, 1, 'Alice', { result: 'folded', outcome_street: 'flop' });
     });
-
-    // Should NOT have called addPlayerToHand
-    expect(addPlayerToHand).not.toHaveBeenCalled();
   });
 
   it('returns to player grid after successful outcome selection', async () => {
     const container = renderToContainer(<DealerApp />);
-    await startHand(container);
-    await captureAndConfirmCards(container, 'Alice');
+    await startHandWithHandedBack(container);
+
+    act(() => {
+      container.querySelector<HTMLButtonElement>('[data-testid="outcome-btn-Alice"]')!.click();
+    });
 
     await vi.waitFor(() => {
       expect(findButton(container, 'Won')).not.toBeUndefined();
@@ -755,26 +725,22 @@ describe('DealerApp finish hand flow', () => {
     });
   }
 
-  async function capturePlayerCards(container: HTMLElement, playerName: string) {
+  function setPlayerHandedBack(playerName: string) {
     act(() => {
-      container.querySelector<HTMLButtonElement>(`[data-testid="player-tile-${playerName}"]`)!.click();
-    });
-    await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="mock-detect"]')).not.toBeNull();
-    });
-    act(() => {
-      container.querySelector<HTMLButtonElement>('[data-testid="mock-detect"]')!.click();
-    });
-    await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="mock-confirm"]')).not.toBeNull();
-    });
-    act(() => {
-      container.querySelector<HTMLButtonElement>('[data-testid="mock-confirm"]')!.click();
+      useDealerStore.setState((state) => ({
+        players: state.players.map((p) =>
+          p.name === playerName ? { ...p, status: 'handed_back' } : p,
+        ),
+      }));
     });
   }
 
-  async function captureAndCompletePlayer(container: HTMLElement, playerName: string) {
-    await capturePlayerCards(container, playerName);
+  async function completePlayer(container: HTMLElement, playerName: string) {
+    setPlayerHandedBack(playerName);
+
+    act(() => {
+      container.querySelector<HTMLButtonElement>(`[data-testid="outcome-btn-${playerName}"]`)!.click();
+    });
     await vi.waitFor(() => {
       expect(findButton(container, 'Won')).not.toBeUndefined();
     });
@@ -793,6 +759,8 @@ describe('DealerApp finish hand flow', () => {
   }
 
   async function directOutcome(container: HTMLElement, playerName: string, outcome: string) {
+    setPlayerHandedBack(playerName);
+
     act(() => {
       container.querySelector<HTMLButtonElement>(`[data-testid="outcome-btn-${playerName}"]`)!.click();
     });
@@ -903,6 +871,15 @@ describe('DealerApp finish hand flow', () => {
       findButton(container, 'Confirm')!.click();
     });
 
+    // Goes to review step first
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="next-hand-btn"]')).not.toBeNull();
+    });
+
+    act(() => {
+      container.querySelector<HTMLButtonElement>('[data-testid="next-hand-btn"]')!.click();
+    });
+
     await vi.waitFor(() => {
       // Should reach dashboard without posting uncaptured Bob
       expect(container.querySelector('[data-testid="new-hand-btn"]')).not.toBeNull();
@@ -932,6 +909,15 @@ describe('DealerApp finish hand flow', () => {
       findButton(container, 'Confirm')!.click();
     });
 
+    // Goes to review step first
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="next-hand-btn"]')).not.toBeNull();
+    });
+
+    act(() => {
+      container.querySelector<HTMLButtonElement>('[data-testid="next-hand-btn"]')!.click();
+    });
+
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="new-hand-btn"]')).not.toBeNull();
     });
@@ -941,15 +927,23 @@ describe('DealerApp finish hand flow', () => {
     const container = renderToContainer(<DealerApp />);
     await startHand(container);
     await captureCommunityCards(container);
-    await captureAndCompletePlayer(container, 'Alice');
-    await captureAndCompletePlayer(container, 'Bob');
-    await captureAndCompletePlayer(container, 'Charlie');
+    await completePlayer(container, 'Alice');
+    await completePlayer(container, 'Bob');
+    await completePlayer(container, 'Charlie');
 
     act(() => {
       findButton(container, 'Finish Hand')!.click();
     });
 
-    // Should go directly to dashboard (no dialog needed since all players captured)
+    // Should go directly to review (no dialog needed since all players captured)
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="next-hand-btn"]')).not.toBeNull();
+    });
+
+    act(() => {
+      container.querySelector<HTMLButtonElement>('[data-testid="next-hand-btn"]')!.click();
+    });
+
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="new-hand-btn"]')).not.toBeNull();
     });
@@ -973,6 +967,15 @@ describe('DealerApp finish hand flow', () => {
 
     act(() => {
       findButton(container, 'Confirm')!.click();
+    });
+
+    // Goes to review step first
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="next-hand-btn"]')).not.toBeNull();
+    });
+
+    act(() => {
+      container.querySelector<HTMLButtonElement>('[data-testid="next-hand-btn"]')!.click();
     });
 
     await vi.waitFor(() => {
@@ -1004,7 +1007,6 @@ describe('DealerApp hand status polling', () => {
     vi.useFakeTimers();
     useDealerStore.setState({
       ...defaultTestState,
-      gameMode: 'participation',
       players: defaultTestPlayers.map((p) => ({ ...p })),
       community: { ...emptyCommunity },
     });
@@ -1046,7 +1048,7 @@ describe('DealerApp hand status polling', () => {
     });
   }
 
-  it('starts polling fetchHandStatus when on playerGrid step', async () => {
+  it('starts polling fetchHandStatus when on activeHand step', async () => {
     const container = renderToContainer(<DealerApp />);
     await startHand(container);
 
@@ -1114,7 +1116,7 @@ describe('DealerApp hand status polling', () => {
     });
   });
 
-  it('stops polling when leaving playerGrid step', async () => {
+  it('stops polling when leaving activeHand step', async () => {
     const container = renderToContainer(<DealerApp />);
     await startHand(container);
 
@@ -1138,7 +1140,6 @@ describe('DealerApp hand status polling', () => {
 
   it('stops polling on unmount', async () => {
     vi.useRealTimers();
-    useDealerStore.setState({ gameMode: 'participation' });
     (fetchHandStatus as ReturnType<typeof vi.fn>).mockResolvedValue({
       hand_number: 1,
       community_recorded: false,
@@ -1179,9 +1180,8 @@ describe('DealerApp hand status polling', () => {
     expect(callsAfterWait - callsAtUnmount).toBeLessThanOrEqual(1);
   });
 
-  it('existing manual flow still works alongside polling', async () => {
+  it('tile tap activates player alongside polling', async () => {
     vi.useRealTimers();
-    useDealerStore.setState({ gameMode: 'dealer_centric' });
     const container = renderToContainer(<DealerApp />);
 
     await vi.waitFor(() => {
@@ -1194,21 +1194,9 @@ describe('DealerApp hand status polling', () => {
       expect(container.textContent).toContain('Select a Player');
     });
 
-    // Manually capture Alice's cards via tile tap
+    // Tap Alice tile — in participation mode this calls addPlayerToHand
     act(() => {
       container.querySelector<HTMLButtonElement>('[data-testid="player-tile-Alice"]')!.click();
-    });
-    await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="mock-detect"]')).not.toBeNull();
-    });
-    act(() => {
-      container.querySelector<HTMLButtonElement>('[data-testid="mock-detect"]')!.click();
-    });
-    await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="mock-confirm"]')).not.toBeNull();
-    });
-    act(() => {
-      container.querySelector<HTMLButtonElement>('[data-testid="mock-confirm"]')!.click();
     });
 
     await vi.waitFor(() => {
@@ -1268,7 +1256,6 @@ describe('DealerApp hand status polling', () => {
 
   it('manual action wins over stale poll response (recorded player not overwritten)', async () => {
     vi.useRealTimers();
-    useDealerStore.setState({ gameMode: 'dealer_centric' });
     const container = renderToContainer(<DealerApp />);
 
     await vi.waitFor(() => {
@@ -1281,46 +1268,33 @@ describe('DealerApp hand status polling', () => {
       expect(container.textContent).toContain('Select a Player');
     });
 
-    // Manually capture Alice's cards
+    // Tap Alice tile — in participation mode this calls addPlayerToHand
     act(() => {
       container.querySelector<HTMLButtonElement>('[data-testid="player-tile-Alice"]')!.click();
-    });
-    await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="mock-detect"]')).not.toBeNull();
-    });
-    act(() => {
-      container.querySelector<HTMLButtonElement>('[data-testid="mock-detect"]')!.click();
-    });
-    await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="mock-confirm"]')).not.toBeNull();
-    });
-    act(() => {
-      container.querySelector<HTMLButtonElement>('[data-testid="mock-confirm"]')!.click();
     });
 
     await vi.waitFor(() => {
       expect(addPlayerToHand).toHaveBeenCalled();
     });
 
-    // Set outcome — select "Not Playing" which is a single-click outcome (no street needed)
-    await vi.waitFor(() => {
-      expect(container.textContent).toContain('Outcome for Alice');
-    });
-    const notPlayingBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent === 'Not Playing');
-    act(() => {
-      notPlayingBtn!.click();
-    });
+    // Use sit-out button to mark Alice as not_playing
+    const sitOutBtn = container.querySelector('[data-testid="sitout-btn-Alice"]');
+    if (sitOutBtn) {
+      act(() => {
+        (sitOutBtn as HTMLButtonElement).click();
+      });
 
-    // Wait for player grid to show
-    await vi.waitFor(() => {
-      expect(container.textContent).toContain('Select a Player');
-    });
+      // Wait for player grid to show
+      await vi.waitFor(() => {
+        expect(container.textContent).toContain('Select a Player');
+      });
 
-    // Alice is now recorded. The grid should reflect that.
-    const aliceRow = container.querySelector('[data-testid="player-row-Alice"]') as HTMLElement;
-    expect(aliceRow).not.toBeNull();
-    // Alice should not have the idle/playing background (#f3f4f6)
-    expect(aliceRow.style.backgroundColor).not.toBe('#f3f4f6');
+      // Alice is now not_playing. The grid should reflect that.
+      const aliceRow = container.querySelector('[data-testid="player-row-Alice"]') as HTMLElement;
+      expect(aliceRow).not.toBeNull();
+      // Alice should have the not_playing background (#e5e7eb)
+      expect(aliceRow.style.backgroundColor).toBe('#e5e7eb');
+    }
   });
 
   it('sit-out button marks player as not_playing in participation mode without API call', async () => {

@@ -224,7 +224,10 @@ class TestPlayerHandActionRelationships:
     def test_navigate_player_hand_to_actions(self, db_session):
         ph = self._create_player_hand(db_session)
         a1 = PlayerHandAction(
-            player_hand_id=ph.player_hand_id, street='preflop', action='call', amount=10.0
+            player_hand_id=ph.player_hand_id,
+            street='preflop',
+            action='call',
+            amount=10.0,
         )
         a2 = PlayerHandAction(
             player_hand_id=ph.player_hand_id, street='flop', action='bet', amount=25.0

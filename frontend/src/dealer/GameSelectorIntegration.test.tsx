@@ -86,7 +86,6 @@ describe('GameSelector integration in DealerApp', () => {
       currentStep: 'gameSelector',
       handCount: 0,
       gameDate: null,
-      gameMode: 'dealer_centric',
     });
     mockedFetchSessions.mockResolvedValue([]);
     mockedFetchPlayers.mockResolvedValue([
@@ -182,7 +181,7 @@ describe('GameSelector integration in DealerApp', () => {
       new Event('submit', { bubbles: true, cancelable: true })
     );
 
-    // Should transition to dashboard (HandDashboard has new-hand-btn)
+    // Should transition directly to HandDashboard
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="new-hand-btn"]')).not.toBeNull();
     });
@@ -210,13 +209,13 @@ describe('GameSelector integration in DealerApp', () => {
     // Click the game card
     container.querySelector<HTMLElement>('[data-testid="game-card"]')!.click();
 
-    // Should transition to HandDashboard
+    // Should transition directly to HandDashboard (dashboard step)
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="new-hand-btn"]')).not.toBeNull();
     });
   });
 
-  it('selecting existing game fetches players and shows them on playerGrid', async () => {
+  it('selecting existing game fetches players and shows them on activeHand', async () => {
     mockedFetchSessions.mockResolvedValue([
       { game_id: 42, game_date: '2026-04-08', status: 'active', player_count: 3, hand_count: 1 },
     ]);
@@ -244,7 +243,7 @@ describe('GameSelector integration in DealerApp', () => {
       expect(container.querySelector('[data-testid="hand-row"]')).not.toBeNull();
     });
 
-    // Click the hand to go to playerGrid
+    // Click the hand to go to activeHand
     container.querySelector<HTMLElement>('[data-testid="hand-row"]')!.click();
 
     // Player tiles should be visible
@@ -354,6 +353,7 @@ describe('GameSelector integration in DealerApp', () => {
       new Event('submit', { bubbles: true, cancelable: true })
     );
 
+    // Goes directly to dashboard
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="back-btn"]')).not.toBeNull();
     });

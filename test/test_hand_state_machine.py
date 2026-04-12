@@ -7,11 +7,10 @@ Covers acceptance criteria for aia-core-07y6 / T-050.
 import pytest
 from fastapi.testclient import TestClient
 
-from app.database.models import Base, HandState
 from app.database.session import get_db
 from app.main import app
 
-from conftest import SessionLocal, engine, override_get_db
+from conftest import override_get_db
 
 
 @pytest.fixture
@@ -148,9 +147,7 @@ class TestSeatAdvancement:
         hand = _start_hand(client, game_id)
         hand_number = hand['hand_number']
 
-        state_before = client.get(
-            f'/games/{game_id}/hands/{hand_number}/state'
-        ).json()
+        state_before = client.get(f'/games/{game_id}/hands/{hand_number}/state').json()
         current = state_before['current_player_name']
 
         client.post(
@@ -158,9 +155,7 @@ class TestSeatAdvancement:
             json={'street': 'preflop', 'action': 'call', 'amount': 0.20},
         )
 
-        state_after = client.get(
-            f'/games/{game_id}/hands/{hand_number}/state'
-        ).json()
+        state_after = client.get(f'/games/{game_id}/hands/{hand_number}/state').json()
         assert state_after['current_seat'] != state_before['current_seat']
         assert state_after['action_index'] == state_before['action_index'] + 1
 
@@ -206,9 +201,7 @@ class TestPhaseAdvancement:
 
         # All three players call in preflop
         for _ in range(3):
-            state = client.get(
-                f'/games/{game_id}/hands/{hand_number}/state'
-            ).json()
+            state = client.get(f'/games/{game_id}/hands/{hand_number}/state').json()
             p = state['current_player_name']
             client.post(
                 f'/games/{game_id}/hands/{hand_number}/players/{p}/actions',
@@ -269,9 +262,7 @@ class TestPhaseCommunityCardGating:
 
         # Both players act in preflop
         for _ in range(2):
-            state = client.get(
-                f'/games/{game_id}/hands/{hand_number}/state'
-            ).json()
+            state = client.get(f'/games/{game_id}/hands/{hand_number}/state').json()
             p = state['current_player_name']
             client.post(
                 f'/games/{game_id}/hands/{hand_number}/players/{p}/actions',
@@ -290,9 +281,7 @@ class TestPhaseCommunityCardGating:
 
         # Complete preflop
         for _ in range(2):
-            state = client.get(
-                f'/games/{game_id}/hands/{hand_number}/state'
-            ).json()
+            state = client.get(f'/games/{game_id}/hands/{hand_number}/state').json()
             client.post(
                 f'/games/{game_id}/hands/{hand_number}/players/{state["current_player_name"]}/actions',
                 json={'street': 'preflop', 'action': 'call', 'amount': 0.20},
@@ -309,9 +298,7 @@ class TestPhaseCommunityCardGating:
 
         # Complete flop actions
         for _ in range(2):
-            state = client.get(
-                f'/games/{game_id}/hands/{hand_number}/state'
-            ).json()
+            state = client.get(f'/games/{game_id}/hands/{hand_number}/state').json()
             client.post(
                 f'/games/{game_id}/hands/{hand_number}/players/{state["current_player_name"]}/actions',
                 json={'street': 'flop', 'action': 'check'},

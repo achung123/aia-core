@@ -11,7 +11,6 @@ describe('initialState', () => {
       currentStep: 'gameSelector',
       handCount: 0,
       gameDate: null,
-      gameMode: 'dealer_centric',
     });
   });
 });
@@ -28,7 +27,6 @@ describe('reducer', () => {
       expect(state.gameId).toBe(42);
       expect(state.gameDate).toBe('2026-04-08');
       expect(state.currentStep).toBe('dashboard');
-      expect(state.gameMode).toBe('dealer_centric'); // preserved from initialState
       expect(state.players).toEqual([
         { name: 'Alice', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null },
         { name: 'Bob', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null },
@@ -36,31 +34,6 @@ describe('reducer', () => {
       expect(state.community).toEqual({
         flop1: null, flop2: null, flop3: null, flopRecorded: false, turn: null, turnRecorded: false, river: null, riverRecorded: false,
       });
-    });
-
-    it('preserves current gameMode when none is provided in payload', () => {
-      // Start with participation mode already set
-      const participationState = reducer(initialState, {
-        type: 'SET_GAME_MODE' as const,
-        payload: 'participation' as const,
-      });
-      const action = {
-        type: 'SET_GAME' as const,
-        payload: { gameId: 42, players: ['Alice'], gameDate: '2026-04-08' },
-      };
-      const state = reducer(participationState, action);
-      expect(state.gameMode).toBe('participation');
-    });
-
-    it('sets step to qrCodes when gameMode is participation', () => {
-      const action = {
-        type: 'SET_GAME' as const,
-        payload: { gameId: 42, players: ['Alice', 'Bob'], gameDate: '2026-04-08', gameMode: 'participation' as const },
-      };
-      const state = reducer(initialState, action);
-
-      expect(state.currentStep).toBe('qrCodes');
-      expect(state.gameMode).toBe('participation');
     });
   });
 
@@ -166,10 +139,10 @@ describe('reducer', () => {
     it('updates currentStep', () => {
       const state = reducer(initialState, {
         type: 'SET_STEP' as const,
-        payload: 'playerGrid',
+        payload: 'activeHand',
       });
 
-      expect(state.currentStep).toBe('playerGrid');
+      expect(state.currentStep).toBe('activeHand');
     });
   });
 
@@ -385,7 +358,7 @@ describe('reducer', () => {
       state = reducer(state, { type: 'LOAD_HAND' as const, payload: handData });
 
       expect(state.currentHandId).toBe(3);
-      expect(state.currentStep).toBe('playerGrid');
+      expect(state.currentStep).toBe('activeHand');
       expect(state.community).toEqual({
         flop1: '2H', flop2: '3C', flop3: '5D', flopRecorded: true, turn: 'JS', turnRecorded: true, river: 'QH', riverRecorded: true,
       });
@@ -711,20 +684,20 @@ describe('reducer', () => {
   });
 
   describe('RESTORE_STATE', () => {
-    it('normalizes review step to playerGrid on restore', () => {
+    it('preserves review step on restore (review is step 4 — hand summary)', () => {
       const state = reducer(initialState, {
         type: 'RESTORE_STATE' as const,
         payload: { gameId: 1, currentStep: 'review', players: [], community: { flop1: null, flop2: null, flop3: null, flopRecorded: false, turn: null, turnRecorded: false, river: null, riverRecorded: false } },
       });
-      expect(state.currentStep).toBe('playerGrid');
+      expect(state.currentStep).toBe('review');
     });
 
-    it('normalizes outcome step to playerGrid on restore', () => {
+    it('normalizes outcome step to activeHand on restore', () => {
       const state = reducer(initialState, {
         type: 'RESTORE_STATE' as const,
         payload: { gameId: 1, currentStep: 'outcome', players: [], community: { flop1: null, flop2: null, flop3: null, flopRecorded: false, turn: null, turnRecorded: false, river: null, riverRecorded: false } },
       });
-      expect(state.currentStep).toBe('playerGrid');
+      expect(state.currentStep).toBe('activeHand');
     });
 
     it('preserves safe steps like dashboard on restore', () => {

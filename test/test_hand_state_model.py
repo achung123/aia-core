@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from sqlalchemy import create_engine, inspect, StaticPool
 from sqlalchemy.orm import sessionmaker
 
-from app.database.models import Base, GameSession, Hand, HandState, Player
+from app.database.models import Base, GameSession, Hand, HandState
 
 
 engine = create_engine(
@@ -193,7 +193,9 @@ class TestHandStateExplicitValues:
         db = _setup()
         try:
             _, hand = _create_game_and_hand(db)
-            state = HandState(hand_id=hand.hand_id, phase='flop', current_seat=3, action_index=5)
+            state = HandState(
+                hand_id=hand.hand_id, phase='flop', current_seat=3, action_index=5
+            )
             db.add(state)
             db.flush()
             assert state.phase == 'flop'

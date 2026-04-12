@@ -25,7 +25,6 @@ describe('initial state', () => {
     expect(s.currentStep).toBe('gameSelector');
     expect(s.handCount).toBe(0);
     expect(s.gameDate).toBeNull();
-    expect(s.gameMode).toBe('dealer_centric');
   });
 });
 
@@ -37,7 +36,6 @@ describe('setGame', () => {
     expect(s.gameId).toBe(42);
     expect(s.gameDate).toBe('2026-04-08');
     expect(s.currentStep).toBe('dashboard');
-    expect(s.gameMode).toBe('dealer_centric');
     expect(s.players).toEqual([
       { name: 'Alice', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null },
       { name: 'Bob', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null },
@@ -48,17 +46,15 @@ describe('setGame', () => {
     });
   });
 
-  it('preserves current gameMode when none is provided', () => {
-    getState().setGameMode('participation');
+  it('preserves current step when setting up game', () => {
     getState().setGame({ gameId: 42, players: ['Alice'], gameDate: '2026-04-08' });
-    expect(getState().gameMode).toBe('participation');
+    expect(getState().currentStep).toBe('dashboard');
   });
 
-  it('sets step to qrCodes when gameMode is participation', () => {
-    getState().setGame({ gameId: 42, players: ['Alice', 'Bob'], gameDate: '2026-04-08', gameMode: 'participation' });
+  it('sets step to dashboard when setting game', () => {
+    getState().setGame({ gameId: 42, players: ['Alice', 'Bob'], gameDate: '2026-04-08' });
     const s = getState();
-    expect(s.currentStep).toBe('qrCodes');
-    expect(s.gameMode).toBe('participation');
+    expect(s.currentStep).toBe('dashboard');
   });
 });
 
@@ -228,20 +224,20 @@ describe('reset', () => {
 });
 
 describe('restoreState', () => {
-  it('normalizes review step to playerGrid on restore', () => {
+  it('preserves review step on restore (review is step 4 — hand summary)', () => {
     getState().restoreState({
       gameId: 1, currentStep: 'review', players: [],
       community: { flop1: null, flop2: null, flop3: null, flopRecorded: false, turn: null, turnRecorded: false, river: null, riverRecorded: false },
     });
-    expect(getState().currentStep).toBe('playerGrid');
+    expect(getState().currentStep).toBe('review');
   });
 
-  it('normalizes outcome step to playerGrid on restore', () => {
+  it('normalizes outcome step to activeHand on restore', () => {
     getState().restoreState({
       gameId: 1, currentStep: 'outcome', players: [],
       community: { flop1: null, flop2: null, flop3: null, flopRecorded: false, turn: null, turnRecorded: false, river: null, riverRecorded: false },
     });
-    expect(getState().currentStep).toBe('playerGrid');
+    expect(getState().currentStep).toBe('activeHand');
   });
 
   it('preserves safe steps like dashboard on restore', () => {
@@ -294,7 +290,7 @@ describe('loadHand', () => {
     const s = getState();
 
     expect(s.currentHandId).toBe(3);
-    expect(s.currentStep).toBe('playerGrid');
+    expect(s.currentStep).toBe('activeHand');
     expect(s.community).toEqual({
       flop1: '2H', flop2: '3C', flop3: '5D', flopRecorded: true,
       turn: 'JS', turnRecorded: true, river: 'QH', riverRecorded: true,
@@ -340,15 +336,8 @@ describe('loadHand', () => {
 
 describe('setStep', () => {
   it('updates currentStep', () => {
-    getState().setStep('playerGrid');
-    expect(getState().currentStep).toBe('playerGrid');
-  });
-});
-
-describe('setGameMode', () => {
-  it('updates gameMode', () => {
-    getState().setGameMode('participation');
-    expect(getState().gameMode).toBe('participation');
+    getState().setStep('activeHand');
+    expect(getState().currentStep).toBe('activeHand');
   });
 });
 

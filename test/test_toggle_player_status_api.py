@@ -1,7 +1,5 @@
 """Tests for PATCH /games/{game_id}/players/{player_name}/status endpoint."""
 
-from datetime import date
-
 
 def _create_game_with_players(client, player_names=None):
     """Helper: create a game with given players and return the game_id."""
@@ -68,9 +66,7 @@ class TestTogglePlayerStatusDeactivate:
         # Alice's hand entry should still exist
         get_resp = client.get(f'/games/{game_id}/hands/{hand_number}')
         assert get_resp.status_code == 200
-        players_in_hand = [
-            pe['player_name'] for pe in get_resp.json()['player_hands']
-        ]
+        players_in_hand = [pe['player_name'] for pe in get_resp.json()['player_hands']]
         assert 'Alice' in players_in_hand
 
 

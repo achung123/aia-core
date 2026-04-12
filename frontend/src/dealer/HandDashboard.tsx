@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { fetchHands, createHand, completeGame } from '../api/client.ts';
 import { QRCodeDisplay } from './QRCodeDisplay.tsx';
 import type { HandResponse, PlayerHandResponse } from '../api/types.ts';
-import type { GameMode } from '../stores/dealerStore.ts';
 
 const resultColors: Record<string, string> = {
   won: '#16a34a',
@@ -29,13 +28,11 @@ function ResultBadge({ ph }: ResultBadgeProps) {
 export interface HandDashboardProps {
   gameId: number;
   players?: string[];
-  gameMode?: GameMode;
   onSelectHand: (handNumber: number) => void;
   onBack: () => void;
-  onModeChange?: (mode: GameMode) => void;
 }
 
-export function HandDashboard({ gameId, players: playerNames, gameMode, onSelectHand, onBack, onModeChange }: HandDashboardProps) {
+export function HandDashboard({ gameId, players: playerNames, onSelectHand, onBack }: HandDashboardProps) {
   const [hands, setHands] = useState<HandResponse[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
@@ -126,41 +123,19 @@ export function HandDashboard({ gameId, players: playerNames, gameMode, onSelect
       <button data-testid="new-hand-btn" onClick={handleNewHand} style={styles.button}>
         New Hand
       </button>
-      {onModeChange && (
-        <div data-testid="mode-toggle" style={styles.modeToggle}>
-          <button
-            data-testid="mode-dealer-btn"
-            style={{ ...styles.modeBtn, ...(gameMode === 'dealer_centric' ? styles.modeBtnActive : {}) }}
-            onClick={() => onModeChange('dealer_centric')}
-          >
-            🎰 Dealer Centric
-          </button>
-          <button
-            data-testid="mode-participation-btn"
-            style={{ ...styles.modeBtn, ...(gameMode === 'participation' ? styles.modeBtnActive : {}) }}
-            onClick={() => onModeChange('participation')}
-          >
-            📱 Player Participation
-          </button>
+      <button
+        data-testid="toggle-qr-btn"
+        onClick={() => setShowQR((v) => !v)}
+        style={styles.qrButton}
+      >
+        {showQR ? 'Hide QR' : 'Show QR'}
+      </button>
+      {showQR && (playerNames || []).map((name) => (
+        <div key={name} style={{ marginTop: '0.75rem', textAlign: 'center' as const, border: '1px solid #e5e7eb', borderRadius: '12px', padding: '0.75rem' }}>
+          <h3 style={{ margin: '0 0 0.25rem' }}>{name}</h3>
+          <QRCodeDisplay gameId={gameId} playerName={name} visible={true} />
         </div>
-      )}
-      {gameMode === 'participation' && (
-        <>
-          <button
-            data-testid="toggle-qr-btn"
-            onClick={() => setShowQR((v) => !v)}
-            style={styles.qrButton}
-          >
-            {showQR ? 'Hide QR' : 'Show QR'}
-          </button>
-          {showQR && (playerNames || []).map((name) => (
-            <div key={name} style={{ marginTop: '0.75rem', textAlign: 'center' as const, border: '1px solid #e5e7eb', borderRadius: '12px', padding: '0.75rem' }}>
-              <h3 style={{ margin: '0 0 0.25rem' }}>{name}</h3>
-              <QRCodeDisplay gameId={gameId} playerName={name} visible={true} />
-            </div>
-          ))}
-        </>
-      )}
+      ))}
       <button
         data-testid="end-game-btn"
         onClick={() => setShowEndConfirm(true)}
@@ -281,28 +256,6 @@ const styles: Record<string, React.CSSProperties> = {
     background: '#f9fafb',
     cursor: 'pointer',
     marginTop: '0.5rem',
-  },
-  modeToggle: {
-    display: 'flex',
-    gap: '0.5rem',
-    marginTop: '0.75rem',
-  },
-  modeBtn: {
-    flex: 1,
-    padding: '0.5rem',
-    minHeight: '40px',
-    fontSize: '0.85rem',
-    fontWeight: 600,
-    border: '2px solid #d1d5db',
-    borderRadius: '8px',
-    background: '#f9fafb',
-    color: '#374151',
-    cursor: 'pointer',
-  },
-  modeBtnActive: {
-    borderColor: '#4f46e5',
-    background: '#eef2ff',
-    color: '#312e81',
   },
   dialogOverlay: {
     position: 'fixed',

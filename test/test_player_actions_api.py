@@ -152,8 +152,12 @@ class TestRecordAction:
         game_id, hand_number = game_with_hand
         url = _url(game_id, hand_number, 'Alice')
 
-        resp1 = client.post(url, json={'street': 'preflop', 'action': 'call', 'amount': 0.20})
-        resp2 = client.post(url, json={'street': 'flop', 'action': 'bet', 'amount': 1.0})
+        resp1 = client.post(
+            url, json={'street': 'preflop', 'action': 'call', 'amount': 0.20}
+        )
+        resp2 = client.post(
+            url, json={'street': 'flop', 'action': 'bet', 'amount': 1.0}
+        )
 
         assert resp1.status_code == 201
         assert resp2.status_code == 201
@@ -231,7 +235,10 @@ class TestNotFoundCases:
         # Create a game with Alice, Bob, and Charlie
         resp = client.post(
             '/games',
-            json={'game_date': '2026-04-12', 'player_names': ['Alice', 'Bob', 'Charlie']},
+            json={
+                'game_date': '2026-04-12',
+                'player_names': ['Alice', 'Bob', 'Charlie'],
+            },
         )
         assert resp.status_code == 201
         game_id = resp.json()['game_id']

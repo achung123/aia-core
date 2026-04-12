@@ -101,7 +101,9 @@ class TestBlindFieldTypes:
 
         mapper = inspect(GameSession)
         col = next(c for c in mapper.columns if c.key == 'blind_timer_started_at')
-        assert 'DATETIME' in str(col.type).upper() or 'TIMESTAMP' in str(col.type).upper()
+        assert (
+            'DATETIME' in str(col.type).upper() or 'TIMESTAMP' in str(col.type).upper()
+        )
 
 
 class TestBlindFieldDefaults:

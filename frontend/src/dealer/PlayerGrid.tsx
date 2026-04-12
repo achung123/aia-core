@@ -1,4 +1,4 @@
-import type { CommunityCards, Player, GameMode } from '../stores/dealerStore.ts';
+import type { CommunityCards, Player } from '../stores/dealerStore.ts';
 
 const statusColors: Record<string, string> = {
   playing: '#ffffff',
@@ -25,13 +25,12 @@ export interface PlayerGridProps {
   onTileSelect: (target: string) => void;
   onDirectOutcome?: (playerName: string) => void;
   onMarkNotPlaying?: (playerName: string) => void;
-  gameMode?: GameMode;
   canFinish?: boolean;
   onFinishHand?: () => void;
   onBack?: () => void;
 }
 
-export function PlayerGrid({ players, community, onTileSelect, onDirectOutcome, onMarkNotPlaying, gameMode, canFinish, onFinishHand, onBack }: PlayerGridProps) {
+export function PlayerGrid({ players, community, onTileSelect, onDirectOutcome, onMarkNotPlaying, canFinish, onFinishHand, onBack }: PlayerGridProps) {
   return (
     <div style={styles.container}>
       <h2 style={styles.heading}>Select a Player</h2>
@@ -78,9 +77,9 @@ export function PlayerGrid({ players, community, onTileSelect, onDirectOutcome, 
 
       <div data-testid="player-list" style={styles.playerList}>
         {players.map((p) => {
-          const needsAction = gameMode === 'participation' && p.status === 'handed_back';
-          const showOutcomeBtn = onDirectOutcome && (gameMode !== 'participation' || needsAction);
-          const showSitOutBtn = onMarkNotPlaying && gameMode === 'participation' && (p.status === 'playing' || p.status === 'idle');
+          const needsAction = p.status === 'handed_back';
+          const showOutcomeBtn = onDirectOutcome && needsAction;
+          const showSitOutBtn = onMarkNotPlaying && (p.status === 'playing' || p.status === 'idle');
           return (
             <div
               key={p.name}

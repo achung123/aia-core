@@ -23,8 +23,6 @@ export interface Player {
   outcomeStreet: string | null;
 }
 
-export type GameMode = 'dealer_centric' | 'participation';
-
 export interface DealerState {
   gameId: number | null;
   currentHandId: number | null;
@@ -33,11 +31,10 @@ export interface DealerState {
   currentStep: string;
   handCount: number;
   gameDate: string | null;
-  gameMode: GameMode;
 }
 
 export interface DealerActions {
-  setGame: (payload: { gameId: number; players: string[]; gameDate: string; gameMode?: GameMode }) => void;
+  setGame: (payload: { gameId: number; players: string[]; gameDate: string }) => void;
   setPlayerCards: (payload: { name: string; card1: string; card2: string }) => void;
   setCommunityCards: (payload: { flop1: string; flop2: string; flop3: string; turn?: string; river?: string }) => void;
   setFlopCards: (payload: { flop1: string; flop2: string; flop3: string }) => void;
@@ -50,7 +47,6 @@ export interface DealerActions {
   reset: () => void;
   restoreState: (payload: Partial<DealerState>) => void;
   setStep: (step: string) => void;
-  setGameMode: (mode: GameMode) => void;
   loadHand: (hand: LoadHandPayload) => void;
   updateParticipation: (payload: { players: { name: string; participation_status: string }[] }) => void;
 }
@@ -89,7 +85,6 @@ const initialState: DealerState = {
   currentStep: 'gameSelector',
   handCount: 0,
   gameDate: null,
-  gameMode: 'dealer_centric',
 };
 
 // --- Utility ---
@@ -133,14 +128,13 @@ export const useDealerStore = create<DealerState & DealerActions>()(
     (set) => ({
       ...initialState,
 
-      setGame: ({ gameId, players, gameDate, gameMode }) =>
-        set((state) => ({
+      setGame: ({ gameId, players, gameDate }) =>
+        set(() => ({
           gameId,
           gameDate,
-          gameMode: gameMode || state.gameMode,
           players: players.map(initPlayer),
           community: { ...emptyCommunity },
-          currentStep: (gameMode || state.gameMode) === 'participation' ? 'qrCodes' : 'dashboard',
+          currentStep: 'dashboard',
         })),
 
       setPlayerCards: ({ name, card1, card2 }) =>
@@ -210,15 +204,13 @@ export const useDealerStore = create<DealerState & DealerActions>()(
       restoreState: (payload) =>
         set((state) => {
           const restored = { ...state, ...payload };
-          if (restored.currentStep === 'review' || restored.currentStep === 'outcome') {
-            restored.currentStep = 'playerGrid';
+          if (restored.currentStep === 'outcome') {
+            restored.currentStep = 'activeHand';
           }
           return restored;
         }),
 
       setStep: (step) => set({ currentStep: step }),
-
-      setGameMode: (mode) => set({ gameMode: mode }),
 
       loadHand: (hand) =>
         set((state) => {
@@ -228,7 +220,7 @@ export const useDealerStore = create<DealerState & DealerActions>()(
           const hasFlopCards = hand.flop_1 != null;
           return {
             currentHandId: hand.hand_number,
-            currentStep: 'playerGrid',
+            currentStep: 'activeHand',
             community: {
               flop1: hand.flop_1, flop2: hand.flop_2, flop3: hand.flop_3,
               flopRecorded: hasFlopCards,

@@ -166,16 +166,10 @@ class TestPauseResumeRemainingTime:
 
         # Access the overridden DB session
         db_gen = client.app.dependency_overrides[
-            __import__(
-                'app.database.session', fromlist=['get_db']
-            ).get_db
+            __import__('app.database.session', fromlist=['get_db']).get_db
         ]
         db = next(db_gen())
-        game = (
-            db.query(GameSession)
-            .filter(GameSession.game_id == game_id)
-            .first()
-        )
+        game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
         game.blind_timer_started_at = started_at
         db.commit()
         db.close()

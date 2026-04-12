@@ -1154,3 +1154,35 @@ Add a responsive split-screen layout to the Active Hand Dashboard for tablet/lar
 |---|----------|-------------|--------|
 | F-058 | MEDIUM | GameSessionCreate.player_buy_ins and AddPlayerToGameRequest.buy_in accept negative values — same class of bug. | aia-core-2tkw |
 | F-059 | MEDIUM | PlayerActionCreate.amount accepts negative values for bet/raise actions. | aia-core-2tkw |
+
+### Cycle 13 (Anna) — aia-core-6y9t (Request-ID middleware)
+
+| # | Severity | Description | Source |
+|---|----------|-------------|--------|
+| F-060 | MEDIUM | Unhandled exceptions bypass header injection — call_next() re-raises on 500s, skipping X-Request-Id and X-Response-Time-Ms. | aia-core-6y9t |
+| F-061 | LOW | CORS expose_headers doesn't include X-Request-Id / X-Response-Time-Ms — browser JS can't read them. | aia-core-6y9t |
+
+### Cycle 1 — aia-core-lkop (T-032)
+
+| # | Severity | Description | Source |
+|---|----------|-------------|--------|
+| F-055 | MEDIUM | Potential race between scene init (bounded RAF retry) and data fetch. If fetch resolves before sceneRef is set, scene.update() is silently skipped, leaving 3D scene empty. | aia-core-lkop |
+| F-056 | LOW | Unused fetchHandStatus mock setup in TableView.test.tsx. Dead setup code. | aia-core-lkop |
+| F-057 | LOW | any typing on sceneRef — could use PokerSceneResult interface. Matches existing PlaybackView pattern, not a regression. | aia-core-lkop |
+
+### Cycle 3 — aia-core-jjd9 (T-016)
+
+| # | Severity | Description | Source |
+|---|----------|-------------|--------|
+| F-058 | CRITICAL | File deletions not staged in git. 4 deleted files remained tracked — fixed by git rm. | aia-core-jjd9 |
+| F-059 | MEDIUM | Duplicate LoadHandPayload interface in dealerStore.ts and dealerState.ts. Pre-existing, but natural consolidation candidate now that handPayload.ts is gone. | aia-core-jjd9 |
+
+### Cycle 4 — aia-core-d1b6 (T-018)
+
+| # | Severity | Description | Source |
+|---|----------|-------------|--------|
+| F-060 | HIGH | restoreState normalizes 'review' step to 'activeHand'. Now that review is step 4, this incorrectly resets the step on restore. Fix: remove 'review' from normalization guard. | aia-core-d1b6 |
+| F-061 | MEDIUM | "Next Hand" and "Back to Dashboard" buttons both call finishHand() — same action, misleading UX. Differentiate or consolidate. | aia-core-d1b6 |
+| F-062 | LOW | Unused state setters setFinishError/setFinishing in DealerApp.tsx. Dead code. | aia-core-d1b6 |
+| F-063 | LOW | Unused act alias in dealerStore.test.ts. | aia-core-d1b6 |
+| F-064 | LOW | CSS shorthand/longhand conflict in bottom nav (border vs borderTop). | aia-core-d1b6 |

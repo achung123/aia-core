@@ -1122,4 +1122,26 @@ describe('PlayerApp — button alignment', () => {
       expect(capture.style.minHeight).toBe(change.style.minHeight);
     });
   });
+
+  it('shows a Table View button when in playing step', async () => {
+    const container = await goToPlaying();
+    await vi.waitFor(() => {
+      const btn = container.querySelector('[data-testid="table-view-btn"]') as HTMLElement;
+      expect(btn).not.toBeNull();
+      expect(btn.textContent).toContain('Table View');
+    });
+  });
+
+  it('Table View button sets window.location.hash with game and player params', async () => {
+    const container = await goToPlaying(1); // Bob (index 1)
+    await vi.waitFor(() => {
+      const btn = container.querySelector('[data-testid="table-view-btn"]') as HTMLElement;
+      expect(btn).not.toBeNull();
+    });
+    const btn = container.querySelector('[data-testid="table-view-btn"]') as HTMLElement;
+    act(() => { btn.click(); });
+    expect(window.location.hash).toContain('/player/table');
+    expect(window.location.hash).toContain('game=3');
+    expect(window.location.hash).toContain('player=Bob');
+  });
 });

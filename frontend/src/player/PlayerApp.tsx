@@ -369,6 +369,16 @@ export function PlayerApp() {
         )}
 
         <button
+          data-testid="table-view-btn"
+          style={styles.tableViewBtn}
+          onClick={() => {
+            window.location.hash = `#/player/table?game=${gameId}&player=${encodeURIComponent(playerName!)}`;
+          }}
+        >
+          Table View
+        </button>
+
+        <button
           data-testid="change-player-btn"
           style={styles.changeBtn}
           onClick={handleChangePlayer}

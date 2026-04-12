@@ -5,6 +5,7 @@ Revises: 4d88a1c3a8d4
 Create Date: 2026-04-12 10:33:22.220326
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -24,8 +25,12 @@ def upgrade() -> None:
     with op.batch_alter_table('hands', schema=None) as batch_op:
         batch_op.add_column(sa.Column('sb_player_id', sa.Integer(), nullable=True))
         batch_op.add_column(sa.Column('bb_player_id', sa.Integer(), nullable=True))
-        batch_op.create_foreign_key('fk_hands_sb_player_id', 'players', ['sb_player_id'], ['player_id'])
-        batch_op.create_foreign_key('fk_hands_bb_player_id', 'players', ['bb_player_id'], ['player_id'])
+        batch_op.create_foreign_key(
+            'fk_hands_sb_player_id', 'players', ['sb_player_id'], ['player_id']
+        )
+        batch_op.create_foreign_key(
+            'fk_hands_bb_player_id', 'players', ['bb_player_id'], ['player_id']
+        )
 
     # ### end Alembic commands ###
 

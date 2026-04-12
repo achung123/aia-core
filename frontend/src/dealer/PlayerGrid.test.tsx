@@ -75,10 +75,10 @@ describe('PlayerGrid', () => {
     }
   });
 
-  it('shows not_playing status without outcome button allowing change', () => {
+  it('does not show outcome button for not_playing player', () => {
     const onDirectOutcome = vi.fn();
     render(<PlayerGrid {...defaultProps} onDirectOutcome={onDirectOutcome} />);
-    expect(screen.getByTestId('outcome-btn-Eve')).toBeTruthy();
+    expect(screen.queryByTestId('outcome-btn-Eve')).toBeNull();
   });
 
   it('shows ✅ on Flop tile when flop is recorded', () => {
@@ -130,17 +130,23 @@ describe('PlayerGrid', () => {
     expect(aliceRow.textContent).toContain('playing');
   });
 
-  it('shows outcome button for players with non-playing status', () => {
+  it('shows outcome button for handed_back players', () => {
     const onDirectOutcome = vi.fn();
-    render(<PlayerGrid {...defaultProps} onDirectOutcome={onDirectOutcome} />);
+    const players: Player[] = [
+      { name: 'Alice', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null },
+      { name: 'Bob', card1: null, card2: null, recorded: true, status: 'handed_back', outcomeStreet: null },
+    ];
+    render(<PlayerGrid {...defaultProps} players={players} onDirectOutcome={onDirectOutcome} />);
     expect(screen.getByTestId('outcome-btn-Bob')).toBeTruthy();
-    expect(screen.getByTestId('outcome-btn-Carol')).toBeTruthy();
-    expect(screen.getByTestId('outcome-btn-Dave')).toBeTruthy();
+    expect(screen.queryByTestId('outcome-btn-Alice')).toBeNull();
   });
 
-  it('clicking outcome button on non-playing player calls onDirectOutcome', () => {
+  it('clicking outcome button on handed_back player calls onDirectOutcome', () => {
     const onDirectOutcome = vi.fn();
-    render(<PlayerGrid {...defaultProps} onDirectOutcome={onDirectOutcome} />);
+    const players: Player[] = [
+      { name: 'Bob', card1: null, card2: null, recorded: true, status: 'handed_back', outcomeStreet: null },
+    ];
+    render(<PlayerGrid {...defaultProps} players={players} onDirectOutcome={onDirectOutcome} />);
     screen.getByTestId('outcome-btn-Bob').click();
     expect(onDirectOutcome).toHaveBeenCalledWith('Bob');
   });
@@ -190,13 +196,13 @@ describe('PlayerGrid', () => {
     expect(row.textContent).toContain('joined');
   });
 
-  it('formats handed_back status text as "handed back"', () => {
+  it('formats handed_back status text as decision prompt', () => {
     const players: Player[] = [
       { name: 'Zara', card1: null, card2: null, recorded: false, status: 'handed_back', outcomeStreet: null },
     ];
     render(<PlayerGrid {...defaultProps} players={players} />);
     const row = screen.getByTestId('player-row-Zara');
-    expect(row.textContent).toContain('handed back');
+    expect(row.textContent).toContain('Decide outcome');
   });
 
   it('preserves existing status colors when new statuses are added', () => {
@@ -217,13 +223,12 @@ describe('PlayerGrid', () => {
       { name: 'Carol', card1: null, card2: null, recorded: false, status: 'handed_back', outcomeStreet: null },
     ];
 
-    it('shows sit-out button for playing-status players in participation mode', () => {
+    it('shows sit-out button for playing-status players', () => {
       const onMarkNotPlaying = vi.fn();
       render(
         <PlayerGrid
           {...defaultProps}
           players={participationPlayers}
-          gameMode="participation"
           onMarkNotPlaying={onMarkNotPlaying}
         />,
       );
@@ -237,25 +242,11 @@ describe('PlayerGrid', () => {
         <PlayerGrid
           {...defaultProps}
           players={participationPlayers}
-          gameMode="participation"
           onMarkNotPlaying={onMarkNotPlaying}
         />,
       );
       expect(screen.queryByTestId('sitout-btn-Bob')).toBeNull();
       expect(screen.queryByTestId('sitout-btn-Carol')).toBeNull();
-    });
-
-    it('does not show sit-out button in dealer_centric mode', () => {
-      const onMarkNotPlaying = vi.fn();
-      render(
-        <PlayerGrid
-          {...defaultProps}
-          players={participationPlayers}
-          gameMode="dealer_centric"
-          onMarkNotPlaying={onMarkNotPlaying}
-        />,
-      );
-      expect(screen.queryByTestId('sitout-btn-Alice')).toBeNull();
     });
 
     it('calls onMarkNotPlaying with player name when sit-out button clicked', () => {
@@ -264,7 +255,6 @@ describe('PlayerGrid', () => {
         <PlayerGrid
           {...defaultProps}
           players={participationPlayers}
-          gameMode="participation"
           onMarkNotPlaying={onMarkNotPlaying}
         />,
       );
@@ -277,7 +267,6 @@ describe('PlayerGrid', () => {
         <PlayerGrid
           {...defaultProps}
           players={participationPlayers}
-          gameMode="participation"
         />,
       );
       expect(screen.queryByTestId('sitout-btn-Alice')).toBeNull();

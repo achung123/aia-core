@@ -316,7 +316,7 @@ describe('HandDashboard', () => {
 
   it('QR code is hidden by default', async () => {
     mockedFetchHands.mockResolvedValue(HANDS);
-    render(<HandDashboard gameId={42} gameMode="participation" players={['Alice', 'Bob']} onSelectHand={() => {}} onBack={() => {}} />);
+    render(<HandDashboard gameId={42} players={['Alice', 'Bob']} onSelectHand={() => {}} onBack={() => {}} />);
     await waitFor(() => {
       expect(screen.getByTestId('toggle-qr-btn')).toBeTruthy();
     });
@@ -326,7 +326,7 @@ describe('HandDashboard', () => {
 
   it('toggle button shows/hides QR code', async () => {
     mockedFetchHands.mockResolvedValue(HANDS);
-    render(<HandDashboard gameId={42} gameMode="participation" players={['Alice', 'Bob']} onSelectHand={() => {}} onBack={() => {}} />);
+    render(<HandDashboard gameId={42} players={['Alice', 'Bob']} onSelectHand={() => {}} onBack={() => {}} />);
     await waitFor(() => {
       expect(screen.getByTestId('toggle-qr-btn')).toBeTruthy();
     });
@@ -346,12 +346,12 @@ describe('HandDashboard', () => {
     expect(screen.getByTestId('toggle-qr-btn').textContent).toBe('Show QR');
   });
 
-  it('hides QR toggle in dealer_centric mode', async () => {
+  it('QR toggle always visible', async () => {
     mockedFetchHands.mockResolvedValue(HANDS);
-    render(<HandDashboard gameId={42} gameMode="dealer_centric" onSelectHand={() => {}} onBack={() => {}} />);
+    render(<HandDashboard gameId={42} players={['Alice', 'Bob']} onSelectHand={() => {}} onBack={() => {}} />);
     await waitFor(() => {
       expect(screen.getByTestId('hand-list')).toBeTruthy();
     });
-    expect(screen.queryByTestId('toggle-qr-btn')).toBeNull();
+    expect(screen.getByTestId('toggle-qr-btn')).toBeTruthy();
   });
 });

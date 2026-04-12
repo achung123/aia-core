@@ -5,6 +5,7 @@ Revises: 72219689ea6b
 Create Date: 2026-04-12 12:32:41.393575
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -21,7 +22,9 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     """Upgrade schema."""
     with op.batch_alter_table('game_sessions', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('blind_timer_remaining_seconds', sa.Integer(), nullable=True))
+        batch_op.add_column(
+            sa.Column('blind_timer_remaining_seconds', sa.Integer(), nullable=True)
+        )
 
 
 def downgrade() -> None:
