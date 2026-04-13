@@ -4,6 +4,8 @@ import { fetchHands } from '../api/client.ts';
 import type { HandResponse } from '../api/types.ts';
 import { createPokerScene } from '../scenes/pokerScene.ts';
 import { isShowdown } from '../scenes/showdown.ts';
+import { computeSeatCameraPosition, animateCameraToSeat, getDefaultCameraPosition } from '../scenes/seatCamera.ts';
+import { SessionScrubber } from '../components/SessionScrubber.tsx';
 
 /* ── Card-parsing helpers (same as MobilePlaybackView) ──────── */
 
@@ -94,9 +96,12 @@ export function TableView() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sceneRef = useRef<any>(null);
   const labelsRef = useRef<HTMLDivElement[]>([]);
+  const animCancelRef = useRef<(() => void) | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [hands, setHands] = useState<HandResponse[]>([]);
+  const [currentHandNumber, setCurrentHandNumber] = useState(0);
 
   const gameId = gameIdStr ? Number(gameIdStr) : null;
 
@@ -197,8 +202,9 @@ export function TableView() {
       div.className = 'seat-label';
       div.setAttribute('data-testid', `seat-label-${i}`);
       div.style.cssText =
-        'position:absolute;pointer-events:none;color:#fff;font-size:12px;font-weight:600;white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,0.8);z-index:4;';
+        'position:absolute;pointer-events:auto;cursor:pointer;color:#fff;font-size:12px;font-weight:600;white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,0.8);z-index:4;';
       div.textContent = name;
+      div.addEventListener('click', () => handleSeatClick(i));
       wrapper.appendChild(div);
       labels.push(div);
     });
@@ -211,24 +217,86 @@ export function TableView() {
     updateLabelPositions();
   }
 
-  /* Center camera on player's seat */
-  function centerOnPlayer(playerSeatIndex: number): void {
+  /* Animate camera to a seat */
+  function handleSeatClick(seatIndex: number): void {
     if (!sceneRef.current) return;
     const { seatPositions, camera, controls } = sceneRef.current;
-    if (!seatPositions || !seatPositions[playerSeatIndex]) return;
+    if (!seatPositions || !seatPositions[seatIndex]) return;
 
-    const seat = seatPositions[playerSeatIndex];
-    // Position camera behind and above the player's seat, looking at center
-    const behindX = seat.x * 0.5;
-    const behindZ = seat.z * 0.5;
-    camera.position.set(seat.x * 1.3, 8, seat.z * 1.3 + 2);
-    if (controls && controls.target) {
-      controls.target.set(behindX, 0, behindZ);
-      controls.update();
-      controls.saveState();
+    // Cancel any in-flight animation
+    if (animCancelRef.current) {
+      animCancelRef.current();
+      animCancelRef.current = null;
     }
-    camera.lookAt(0, 0, 0);
-    camera.updateProjectionMatrix();
+
+    const seat = seatPositions[seatIndex];
+    const { position, target } = computeSeatCameraPosition(seat);
+    const { cancel } = animateCameraToSeat(camera, controls, position, target);
+    animCancelRef.current = cancel;
+  }
+
+  /* Reset camera to overhead default */
+  function handleResetView(): void {
+    if (!sceneRef.current) return;
+    const { camera, controls } = sceneRef.current;
+
+    if (animCancelRef.current) {
+      animCancelRef.current();
+      animCancelRef.current = null;
+    }
+
+    const { position, target } = getDefaultCameraPosition();
+    const { cancel } = animateCameraToSeat(camera, controls, position, target);
+    animCancelRef.current = cancel;
+  }
+
+  /* Center camera on player's seat (animated) */
+  function centerOnPlayer(playerSeatIndex: number): void {
+    handleSeatClick(playerSeatIndex);
+  }
+
+  /* Build seat/player maps from all hands */
+  const seatPlayerMapRef = useRef<Record<number, string>>({});
+  const playerNamesRef = useRef<string[]>([]);
+
+  function buildSeatMaps(allHands: HandResponse[]): void {
+    const seatPlayerMap: Record<number, string> = {};
+    const seen = new Set<string>();
+    const names: string[] = [];
+    allHands.forEach(h => {
+      (h.player_hands || []).forEach(ph => {
+        if (ph.player_name && !seen.has(ph.player_name)) {
+          seen.add(ph.player_name);
+          names.push(ph.player_name);
+        }
+      });
+    });
+    names.forEach((name, i) => {
+      seatPlayerMap[i] = name;
+    });
+    seatPlayerMapRef.current = seatPlayerMap;
+    playerNamesRef.current = names;
+  }
+
+  /* Update the 3D scene for a specific hand */
+  function updateSceneForHand(hand: HandResponse): void {
+    if (!sceneRef.current || !playerName) return;
+    const cardData = handToPlayerCardData(hand, playerName);
+    sceneRef.current.update({
+      cardData,
+      seatPlayerMap: seatPlayerMapRef.current,
+      plMap: {},
+      streetIndex: computeStreetIndex(hand),
+    });
+  }
+
+  /* Handle scrubber change */
+  function handleScrubberChange(handNumber: number): void {
+    setCurrentHandNumber(handNumber);
+    const hand = hands.find(h => h.hand_number === handNumber);
+    if (hand) {
+      updateSceneForHand(hand);
+    }
   }
 
   /* Fetch and render hand data */
@@ -239,8 +307,8 @@ export function TableView() {
     const { signal } = controller;
 
     fetchHands(gameId, { signal })
-      .then(hands => {
-        if (signal.aborted || !hands || hands.length === 0) {
+      .then(fetchedHands => {
+        if (signal.aborted || !fetchedHands || fetchedHands.length === 0) {
           if (!signal.aborted) {
             setError('No hands found for this game.');
             setLoading(false);
@@ -248,41 +316,24 @@ export function TableView() {
           return;
         }
 
-        // Get the latest hand
-        const latest = hands.reduce((max, h) =>
-          h.hand_number > max.hand_number ? h : max, hands[0]);
+        // Sort by hand_number ascending
+        const sorted = [...fetchedHands].sort((a, b) => a.hand_number - b.hand_number);
+        setHands(sorted);
 
-        // Build player-perspective card data
-        const cardData = handToPlayerCardData(latest, playerName);
+        // Get the latest hand
+        const latest = sorted[sorted.length - 1];
+        setCurrentHandNumber(latest.hand_number);
 
         // Build seat/player maps
-        const seatPlayerMap: Record<number, string> = {};
-        const seen = new Set<string>();
-        const playerNames: string[] = [];
-        hands.forEach(h => {
-          (h.player_hands || []).forEach(ph => {
-            if (ph.player_name && !seen.has(ph.player_name)) {
-              seen.add(ph.player_name);
-              playerNames.push(ph.player_name);
-            }
-          });
-        });
-        playerNames.forEach((name, i) => {
-          seatPlayerMap[i] = name;
-        });
+        buildSeatMaps(sorted);
+        createSeatLabelsForPlayers(playerNamesRef.current);
 
-        createSeatLabelsForPlayers(playerNames);
+        // Render the latest hand
+        updateSceneForHand(latest);
 
+        // Center camera on the player's seat
         if (sceneRef.current) {
-          sceneRef.current.update({
-            cardData,
-            seatPlayerMap,
-            plMap: {},
-            streetIndex: computeStreetIndex(latest),
-          });
-
-          // Center camera on the player's seat
-          const playerSeatIndex = playerNames.indexOf(playerName);
+          const playerSeatIndex = playerNamesRef.current.indexOf(playerName);
           if (playerSeatIndex >= 0) {
             centerOnPlayer(playerSeatIndex);
           }
@@ -337,9 +388,23 @@ export function TableView() {
         <button data-testid="back-to-hand-btn" style={styles.backBtn} onClick={handleBack}>
           ← Back to Hand
         </button>
+        <button data-testid="reset-view-btn" style={styles.resetBtn} onClick={handleResetView}>
+          Reset View
+        </button>
         {loading && <p style={styles.loadingText}>Loading table…</p>}
         {error && <p style={styles.error}>{error}</p>}
       </div>
+
+      {/* Hand scrubber at the bottom */}
+      {hands.length > 0 && (
+        <div style={styles.scrubberContainer}>
+          <SessionScrubber
+            handCount={hands.length}
+            currentHand={currentHandNumber}
+            onChange={handleScrubberChange}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -391,6 +456,19 @@ const styles: Record<string, CSSProperties> = {
     cursor: 'pointer',
     backdropFilter: 'blur(4px)',
   },
+  resetBtn: {
+    pointerEvents: 'auto',
+    padding: '0.6rem 1.2rem',
+    minHeight: '48px',
+    fontSize: '1rem',
+    fontWeight: 'bold',
+    border: 'none',
+    borderRadius: '8px',
+    background: 'rgba(55, 65, 81, 0.9)',
+    color: '#fff',
+    cursor: 'pointer',
+    backdropFilter: 'blur(4px)',
+  },
   loadingText: {
     color: '#c7d2fe',
     fontSize: '0.9rem',
@@ -400,5 +478,12 @@ const styles: Record<string, CSSProperties> = {
     color: '#f87171',
     fontSize: '0.9rem',
     margin: 0,
+  },
+  scrubberContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
   },
 };

@@ -9,6 +9,23 @@ vi.mock('../api/client.ts', () => ({
   fetchHandStatus: vi.fn(),
 }));
 
+// Mock seatCamera — track animation calls
+const mockAnimateCancel = vi.fn();
+const mockAnimateCameraToSeat = vi.fn(() => ({ cancel: mockAnimateCancel }));
+vi.mock('../scenes/seatCamera.ts', () => ({
+  computeSeatCameraPosition: vi.fn((seatPos: { x: number; z: number }) => ({
+    position: { x: seatPos.x * 1.4, y: 6, z: seatPos.z * 1.4 },
+    target: { x: 0, y: 0, z: 0 },
+  })),
+  animateCameraToSeat: mockAnimateCameraToSeat,
+  getDefaultCameraPosition: vi.fn(() => ({
+    position: { x: 0, y: 14, z: 3 },
+    target: { x: 0, y: 0, z: 0 },
+  })),
+  DEFAULT_OVERHEAD_POSITION: { x: 0, y: 14, z: 3 },
+  DEFAULT_OVERHEAD_TARGET: { x: 0, y: 0, z: 0 },
+}));
+
 // Mock poker scene — no WebGL in happy-dom
 const mockSceneUpdate = vi.fn();
 const mockSceneDispose = vi.fn();
@@ -62,6 +79,57 @@ const HANDS: HandResponse[] = [
       { player_hand_id: 1, hand_id: 1, player_id: 1, player_name: 'Alice', card_1: '2h', card_2: '3h', result: 'won', profit_loss: 50, outcome_street: null },
       { player_hand_id: 2, hand_id: 1, player_id: 2, player_name: 'Bob', card_1: '4d', card_2: '5d', result: 'lost', profit_loss: -50, outcome_street: null },
       { player_hand_id: 3, hand_id: 1, player_id: 3, player_name: 'Carol', card_1: null, card_2: null, result: 'folded', profit_loss: 0, outcome_street: null },
+    ],
+  },
+];
+
+const MULTI_HANDS: HandResponse[] = [
+  {
+    hand_id: 1,
+    game_id: 5,
+    hand_number: 1,
+    flop_1: 'Ah',
+    flop_2: 'Kd',
+    flop_3: 'Qc',
+    turn: null,
+    river: null,
+    source_upload_id: null,
+    created_at: '2026-04-10T12:00:00Z',
+    player_hands: [
+      { player_hand_id: 1, hand_id: 1, player_id: 1, player_name: 'Alice', card_1: '2h', card_2: '3h', result: 'won', profit_loss: 50, outcome_street: null },
+      { player_hand_id: 2, hand_id: 1, player_id: 2, player_name: 'Bob', card_1: '4d', card_2: '5d', result: 'lost', profit_loss: -50, outcome_street: null },
+    ],
+  },
+  {
+    hand_id: 2,
+    game_id: 5,
+    hand_number: 2,
+    flop_1: '9s',
+    flop_2: '8c',
+    flop_3: '7h',
+    turn: '6d',
+    river: null,
+    source_upload_id: null,
+    created_at: '2026-04-10T12:05:00Z',
+    player_hands: [
+      { player_hand_id: 3, hand_id: 2, player_id: 1, player_name: 'Alice', card_1: 'Th', card_2: 'Jh', result: 'won', profit_loss: 80, outcome_street: null },
+      { player_hand_id: 4, hand_id: 2, player_id: 2, player_name: 'Bob', card_1: '2c', card_2: '3c', result: 'lost', profit_loss: -80, outcome_street: null },
+    ],
+  },
+  {
+    hand_id: 3,
+    game_id: 5,
+    hand_number: 3,
+    flop_1: 'Ks',
+    flop_2: 'Qs',
+    flop_3: 'Js',
+    turn: 'Ts',
+    river: 'As',
+    source_upload_id: null,
+    created_at: '2026-04-10T12:10:00Z',
+    player_hands: [
+      { player_hand_id: 5, hand_id: 3, player_id: 1, player_name: 'Alice', card_1: '9s', card_2: '8s', result: null, profit_loss: 0, outcome_street: null },
+      { player_hand_id: 6, hand_id: 3, player_id: 2, player_name: 'Bob', card_1: 'Ad', card_2: 'Kd', result: null, profit_loss: 0, outcome_street: null },
     ],
   },
 ];
@@ -246,5 +314,153 @@ describe('TableView', () => {
     expect(bob.hole_cards).toBeNull();
     // streetIndex should not be 4
     expect(call.streetIndex).not.toBe(4);
+  });
+
+  /* ── Seat-snap camera view (T-037) ────────────────────────── */
+
+  it('makes seat labels clickable (pointer-events auto)', async () => {
+    renderTableView('?game=5&player=Alice');
+    await waitFor(() => {
+      expect(mockSceneUpdate).toHaveBeenCalled();
+    });
+    const label = screen.getByTestId('seat-label-0');
+    expect(label.style.pointerEvents).toBe('auto');
+    expect(label.style.cursor).toBe('pointer');
+  });
+
+  it('animates camera to seat when seat label is clicked', async () => {
+    renderTableView('?game=5&player=Alice');
+    await waitFor(() => {
+      expect(mockSceneUpdate).toHaveBeenCalled();
+    });
+    mockAnimateCameraToSeat.mockClear();
+    const label = screen.getByTestId('seat-label-1');
+    fireEvent.click(label);
+    expect(mockAnimateCameraToSeat).toHaveBeenCalledOnce();
+  });
+
+  it('shows a Reset View button', async () => {
+    renderTableView('?game=5&player=Alice');
+    await waitFor(() => {
+      expect(mockSceneUpdate).toHaveBeenCalled();
+    });
+    const btn = screen.getByTestId('reset-view-btn');
+    expect(btn).toBeTruthy();
+    expect(btn.textContent).toContain('Reset View');
+  });
+
+  it('Reset View animates camera to default overhead position', async () => {
+    renderTableView('?game=5&player=Alice');
+    await waitFor(() => {
+      expect(mockSceneUpdate).toHaveBeenCalled();
+    });
+    mockAnimateCameraToSeat.mockClear();
+    const btn = screen.getByTestId('reset-view-btn');
+    fireEvent.click(btn);
+    expect(mockAnimateCameraToSeat).toHaveBeenCalledOnce();
+    // First two args: camera, controls — third arg should be the default overhead position
+    const callArgs = mockAnimateCameraToSeat.mock.calls[0];
+    expect(callArgs[2]).toEqual({ x: 0, y: 14, z: 3 });
+  });
+
+  it('defaults camera to player own seat on load', async () => {
+    renderTableView('?game=5&player=Alice');
+    await waitFor(() => {
+      expect(mockSceneUpdate).toHaveBeenCalled();
+    });
+    // Should have animated to Alice's seat (index 0) on initial load
+    expect(mockAnimateCameraToSeat).toHaveBeenCalled();
+  });
+
+  it('cancels previous animation when a new seat is clicked', async () => {
+    renderTableView('?game=5&player=Alice');
+    await waitFor(() => {
+      expect(mockSceneUpdate).toHaveBeenCalled();
+    });
+    mockAnimateCancel.mockClear();
+    // Click seat 0
+    fireEvent.click(screen.getByTestId('seat-label-0'));
+    // Click seat 1 — should cancel the previous animation
+    fireEvent.click(screen.getByTestId('seat-label-1'));
+    expect(mockAnimateCancel).toHaveBeenCalled();
+  });
+
+  /* ── Session scrubber (T-035) ─────────────────────────────── */
+
+  it('renders a SessionScrubber when hands are loaded', async () => {
+    vi.mocked(fetchHands).mockResolvedValue(MULTI_HANDS);
+    renderTableView('?game=5&player=Alice');
+    await waitFor(() => {
+      expect(screen.getByTestId('session-scrubber')).toBeTruthy();
+    });
+  });
+
+  it('scrubber defaults to the latest hand number', async () => {
+    vi.mocked(fetchHands).mockResolvedValue(MULTI_HANDS);
+    renderTableView('?game=5&player=Alice');
+    await waitFor(() => {
+      expect(screen.getByTestId('session-scrubber')).toBeTruthy();
+    });
+    // Latest hand is hand_number 3
+    expect(screen.getByTestId('session-label').textContent).toBe('Hand 3 / 3');
+  });
+
+  it('scrubber label shows Hand X / Y format', async () => {
+    vi.mocked(fetchHands).mockResolvedValue(MULTI_HANDS);
+    renderTableView('?game=5&player=Alice');
+    await waitFor(() => {
+      expect(screen.getByTestId('session-label')).toBeTruthy();
+    });
+    expect(screen.getByTestId('session-label').textContent).toMatch(/^Hand \d+ \/ \d+$/);
+  });
+
+  it('scrubber slider has min=1 and max=total hands', async () => {
+    vi.mocked(fetchHands).mockResolvedValue(MULTI_HANDS);
+    renderTableView('?game=5&player=Alice');
+    await waitFor(() => {
+      expect(screen.getByTestId('session-slider')).toBeTruthy();
+    });
+    const slider = screen.getByTestId('session-slider') as HTMLInputElement;
+    expect(slider.min).toBe('1');
+    expect(slider.max).toBe('3');
+  });
+
+  it('changing the scrubber updates the 3D scene with selected hand', async () => {
+    vi.mocked(fetchHands).mockResolvedValue(MULTI_HANDS);
+    renderTableView('?game=5&player=Alice');
+    await waitFor(() => {
+      expect(mockSceneUpdate).toHaveBeenCalled();
+    });
+    mockSceneUpdate.mockClear();
+
+    // Change scrubber to hand 1
+    const slider = screen.getByTestId('session-slider');
+    fireEvent.change(slider, { target: { value: '1' } });
+
+    // Scene should be updated with hand 1's card data (flop: Ah, Kd, Qc)
+    expect(mockSceneUpdate).toHaveBeenCalled();
+    const call = mockSceneUpdate.mock.calls[0][0];
+    expect(call.cardData.flop[0].rank).toBe('A');
+  });
+
+  it('does not render scrubber when there are no hands', async () => {
+    vi.mocked(fetchHands).mockResolvedValue([]);
+    renderTableView('?game=5&player=Alice');
+    await waitFor(() => {
+      expect(screen.getByText(/no hands found/i)).toBeTruthy();
+    });
+    expect(screen.queryByTestId('session-scrubber')).toBeNull();
+  });
+
+  it('scrubber has touch-friendly 48px thumb styling', async () => {
+    vi.mocked(fetchHands).mockResolvedValue(MULTI_HANDS);
+    renderTableView('?game=5&player=Alice');
+    await waitFor(() => {
+      expect(screen.getByTestId('session-scrubber')).toBeTruthy();
+    });
+    // The SessionScrubber component injects a <style> tag with 48px thumb
+    const styleTag = screen.getByTestId('session-scrubber').querySelector('style');
+    expect(styleTag).toBeTruthy();
+    expect(styleTag!.textContent).toContain('48px');
   });
 });
