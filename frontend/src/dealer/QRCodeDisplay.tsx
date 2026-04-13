@@ -3,26 +3,21 @@ import QRCode from 'qrcode';
 
 export interface QRCodeDisplayProps {
   gameId: number;
-  playerName?: string;
   visible: boolean;
 }
 
-export function QRCodeDisplay({ gameId, playerName, visible }: QRCodeDisplayProps) {
+export function QRCodeDisplay({ gameId, visible }: QRCodeDisplayProps) {
   const [dataUrl, setDataUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!visible) return;
-    const url = playerName
-      ? `${window.location.origin}/#/player?game=${gameId}&player=${encodeURIComponent(playerName)}`
-      : `${window.location.origin}/#/player?game=${gameId}`;
+    const url = `${window.location.origin}/player?game=${gameId}`;
     QRCode.toDataURL(url, { width: 200, margin: 2 }).then(setDataUrl);
-  }, [gameId, playerName, visible]);
+  }, [gameId, visible]);
 
   if (!visible) return null;
 
-  const playerUrl = playerName
-    ? `${window.location.origin}/#/player?game=${gameId}&player=${encodeURIComponent(playerName)}`
-    : `${window.location.origin}/#/player?game=${gameId}`;
+  const playerUrl = `${window.location.origin}/player?game=${gameId}`;
 
   return (
     <div data-testid="qr-code-display" style={styles.wrapper}>

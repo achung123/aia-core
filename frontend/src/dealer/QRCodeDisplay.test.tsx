@@ -22,27 +22,11 @@ describe('QRCodeDisplay', () => {
     expect(screen.queryByTestId('qr-code-display')).toBeNull();
   });
 
-  it('calls QRCode.toDataURL with the correct player URL when visible', async () => {
+  it('calls QRCode.toDataURL with the correct game URL when visible', async () => {
     await act(async () => {
       render(<QRCodeDisplay gameId={42} visible={true} />);
     });
-    const expectedUrl = `${window.location.origin}/#/player?game=42`;
-    expect(QRCode.toDataURL).toHaveBeenCalledWith(expectedUrl, expect.any(Object));
-  });
-
-  it('includes playerName in URL when provided', async () => {
-    await act(async () => {
-      render(<QRCodeDisplay gameId={42} playerName="Alice" visible={true} />);
-    });
-    const expectedUrl = `${window.location.origin}/#/player?game=42&player=Alice`;
-    expect(QRCode.toDataURL).toHaveBeenCalledWith(expectedUrl, expect.any(Object));
-  });
-
-  it('encodes special characters in playerName', async () => {
-    await act(async () => {
-      render(<QRCodeDisplay gameId={42} playerName="Bob Jr." visible={true} />);
-    });
-    const expectedUrl = `${window.location.origin}/#/player?game=42&player=Bob%20Jr.`;
+    const expectedUrl = `${window.location.origin}/player?game=42`;
     expect(QRCode.toDataURL).toHaveBeenCalledWith(expectedUrl, expect.any(Object));
   });
 
@@ -67,7 +51,8 @@ describe('QRCodeDisplay', () => {
       await new Promise((r) => setTimeout(r, 0));
     });
     const wrapper = screen.getByTestId('qr-code-display');
-    expect(wrapper.textContent).toContain('/#/player?game=7');
+    expect(wrapper.textContent).toContain('/player?game=7');
+    expect(wrapper.textContent).not.toContain('/#/');
   });
 
   it('updates QR code when gameId changes', async () => {
@@ -84,7 +69,7 @@ describe('QRCodeDisplay', () => {
       await new Promise((r) => setTimeout(r, 0));
     });
     expect(QRCode.toDataURL).toHaveBeenCalledTimes(2);
-    const expectedUrl = `${window.location.origin}/#/player?game=2`;
+    const expectedUrl = `${window.location.origin}/player?game=2`;
     expect(QRCode.toDataURL).toHaveBeenLastCalledWith(expectedUrl, expect.any(Object));
   });
 });

@@ -9,7 +9,7 @@ vi.mock('../api/client.ts', () => ({
   completeGame: vi.fn(),
 }));
 
-vi.mock('./QRCodeDisplay.jsx', () => ({
+vi.mock('./QRCodeDisplay.tsx', () => ({
   QRCodeDisplay: ({ gameId, visible }: { gameId: number; visible: boolean }) =>
     visible ? <div data-testid="qr-code-display">QR:{gameId}</div> : null,
 }));
@@ -400,7 +400,7 @@ describe('HandDashboard', () => {
     // Click to show
     screen.getByTestId('toggle-qr-btn').click();
     await waitFor(() => {
-      expect(screen.queryAllByTestId('qr-code-display').length).toBeGreaterThan(0);
+      expect(screen.queryAllByTestId('qr-code-display').length).toBe(1);
     });
     expect(screen.getByTestId('toggle-qr-btn').textContent).toBe('Hide QR');
 

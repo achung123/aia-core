@@ -141,12 +141,9 @@ export function HandDashboard({ gameId, players: playerNames, onSelectHand, onBa
       >
         {showQR ? 'Hide QR' : 'Show QR'}
       </button>
-      {showQR && (playerNames || []).map((name) => (
-        <div key={name} style={{ marginTop: '0.75rem', textAlign: 'center' as const, border: '1px solid #e5e7eb', borderRadius: '12px', padding: '0.75rem' }}>
-          <h3 style={{ margin: '0 0 0.25rem' }}>{name}</h3>
-          <QRCodeDisplay gameId={gameId} playerName={name} visible={true} />
-        </div>
-      ))}
+      {showQR && (
+        <QRCodeDisplay gameId={gameId} visible={true} />
+      )}
       <button
         data-testid="end-game-btn"
         onClick={() => setShowEndConfirm(true)}

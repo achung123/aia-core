@@ -228,6 +228,37 @@ export function fetchHandStatus(gameId: number, handNumber: number, { signal }: 
   return request<HandStatusResponse>(`/games/${gameId}/hands/${handNumber}/status`, { signal });
 }
 
+export interface ConditionalResponse<T> {
+  data: T | null;
+  etag: string | null;
+  notModified: boolean;
+}
+
+export async function fetchHandStatusConditional(
+  gameId: number,
+  handNumber: number,
+  { signal, etag }: { signal?: AbortSignal; etag?: string | null } = {},
+): Promise<ConditionalResponse<HandStatusResponse>> {
+  const headers: Record<string, string> = {};
+  if (etag) {
+    headers['If-None-Match'] = etag;
+  }
+  const response = await fetch(`${BASE_URL}/games/${gameId}/hands/${handNumber}/status`, {
+    signal,
+    headers,
+  });
+  if (response.status === 304) {
+    return { data: null, etag: etag ?? null, notModified: true };
+  }
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`HTTP ${response.status}: ${text}`);
+  }
+  const data = (await response.json()) as HandStatusResponse;
+  const newEtag = response.headers.get('etag');
+  return { data, etag: newEtag, notModified: false };
+}
+
 export function exportGameCsvUrl(gameId: number): string {
   return `${BASE_URL}/games/${gameId}/export/csv`;
 }
