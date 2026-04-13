@@ -1,7 +1,5 @@
 """Unit tests for hand ranking description function."""
 
-import pytest
-
 from app.services.hand_ranking import describe_hand
 
 

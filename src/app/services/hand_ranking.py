@@ -5,20 +5,53 @@ from __future__ import annotations
 from itertools import combinations
 
 RANK_VAL = {
-    '2': 0, '3': 1, '4': 2, '5': 3, '6': 4, '7': 5, '8': 6,
-    '9': 7, '10': 8, 'T': 8, 'J': 9, 'Q': 10, 'K': 11, 'A': 12,
+    '2': 0,
+    '3': 1,
+    '4': 2,
+    '5': 3,
+    '6': 4,
+    '7': 5,
+    '8': 6,
+    '9': 7,
+    '10': 8,
+    'T': 8,
+    'J': 9,
+    'Q': 10,
+    'K': 11,
+    'A': 12,
 }
 SUIT_VAL = {'h': 0, 'd': 1, 'c': 2, 's': 3, 'H': 0, 'D': 1, 'C': 2, 'S': 3}
 
 RANK_NAMES = {
-    0: '2', 1: '3', 2: '4', 3: '5', 4: '6', 5: '7', 6: '8',
-    7: '9', 8: '10', 9: 'Jack', 10: 'Queen', 11: 'King', 12: 'Ace',
+    0: '2',
+    1: '3',
+    2: '4',
+    3: '5',
+    4: '6',
+    5: '7',
+    6: '8',
+    7: '9',
+    8: '10',
+    9: 'Jack',
+    10: 'Queen',
+    11: 'King',
+    12: 'Ace',
 }
 
 RANK_NAMES_PLURAL = {
-    0: 'Twos', 1: 'Threes', 2: 'Fours', 3: 'Fives', 4: 'Sixes',
-    5: 'Sevens', 6: 'Eights', 7: 'Nines', 8: 'Tens', 9: 'Jacks',
-    10: 'Queens', 11: 'Kings', 12: 'Aces',
+    0: 'Twos',
+    1: 'Threes',
+    2: 'Fours',
+    3: 'Fives',
+    4: 'Sixes',
+    5: 'Sevens',
+    6: 'Eights',
+    7: 'Nines',
+    8: 'Tens',
+    9: 'Jacks',
+    10: 'Queens',
+    11: 'Kings',
+    12: 'Aces',
 }
 
 

@@ -43,8 +43,16 @@ def _current(client, game_id, hand_number=1):
     return _state(client, game_id, hand_number)['current_player_name']
 
 
-def _act(client, game_id, player_name, action, amount=None, hand_number=1,
-         street=None, is_all_in=False):
+def _act(
+    client,
+    game_id,
+    player_name,
+    action,
+    amount=None,
+    hand_number=1,
+    street=None,
+    is_all_in=False,
+):
     if street is None:
         street = _state(client, game_id, hand_number)['phase']
     payload = {'street': street, 'action': action}
@@ -66,8 +74,14 @@ class TestBetAllIn:
         _start_hand(client, game_id)
 
         # UTG bets all-in for 5.00
-        resp = _act(client, game_id, _current(client, game_id), 'bet', amount=5.00,
-                     is_all_in=True)
+        resp = _act(
+            client,
+            game_id,
+            _current(client, game_id),
+            'bet',
+            amount=5.00,
+            is_all_in=True,
+        )
         assert resp.status_code == 201
 
         # SB calls for the full amount
@@ -85,8 +99,14 @@ class TestBetAllIn:
         _start_hand(client, game_id)
 
         # UTG bets all-in for 5.00
-        _act(client, game_id, _current(client, game_id), 'bet', amount=5.00,
-             is_all_in=True)
+        _act(
+            client,
+            game_id,
+            _current(client, game_id),
+            'bet',
+            amount=5.00,
+            is_all_in=True,
+        )
         # SB calls full
         _act(client, game_id, _current(client, game_id), 'call', amount=4.90)
         # BB calls full
@@ -107,8 +127,14 @@ class TestRaiseAllIn:
         # UTG raises to 1.00
         _act(client, game_id, _current(client, game_id), 'raise', amount=1.00)
         # SB re-raises all-in to 3.00
-        resp = _act(client, game_id, _current(client, game_id), 'raise', amount=3.00,
-                     is_all_in=True)
+        resp = _act(
+            client,
+            game_id,
+            _current(client, game_id),
+            'raise',
+            amount=3.00,
+            is_all_in=True,
+        )
         assert resp.status_code == 201
 
         # BB calls
@@ -127,8 +153,14 @@ class TestRaiseAllIn:
         _start_hand(client, game_id)
 
         # UTG raises all-in
-        resp = _act(client, game_id, _current(client, game_id), 'raise', amount=10.00,
-                     is_all_in=True)
+        resp = _act(
+            client,
+            game_id,
+            _current(client, game_id),
+            'raise',
+            amount=10.00,
+            is_all_in=True,
+        )
         # Should not fail validation
         assert resp.status_code == 201
 
@@ -158,8 +190,14 @@ class TestCallAllInFallback:
         # UTG raises to 5.00
         _act(client, game_id, _current(client, game_id), 'raise', amount=5.00)
         # SB calls full amount but marks as all-in
-        _act(client, game_id, _current(client, game_id), 'call', amount=4.90,
-             is_all_in=True)
+        _act(
+            client,
+            game_id,
+            _current(client, game_id),
+            'call',
+            amount=4.90,
+            is_all_in=True,
+        )
         # BB folds
         _act(client, game_id, _current(client, game_id), 'fold')
 

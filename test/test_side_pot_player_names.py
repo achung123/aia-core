@@ -76,9 +76,9 @@ class TestSidePotPlayerNames:
         for sp in hand['side_pots']:
             # Must have eligible_players with string names
             assert 'eligible_players' in sp, 'side pot missing eligible_players key'
-            assert all(
-                isinstance(name, str) for name in sp['eligible_players']
-            ), 'eligible_players should contain strings (player names)'
+            assert all(isinstance(name, str) for name in sp['eligible_players']), (
+                'eligible_players should contain strings (player names)'
+            )
             # Must NOT expose internal DB IDs
             assert 'eligible_player_ids' not in sp, (
                 'side pot must not expose eligible_player_ids'

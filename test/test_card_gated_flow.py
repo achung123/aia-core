@@ -23,7 +23,9 @@ def client():
 def _create_game(client, names=None):
     if names is None:
         names = ['Alice', 'Bob', 'Charlie']
-    resp = client.post('/games', json={'game_date': '2026-04-13', 'player_names': names})
+    resp = client.post(
+        '/games', json={'game_date': '2026-04-13', 'player_names': names}
+    )
     assert resp.status_code == 201
     return resp.json()['game_id']
 
@@ -130,9 +132,13 @@ class TestTransitionToPreflop:
         hand = _start_hand(client, gid)
         hn = hand['hand_number']
 
-        _capture_all(client, gid, hn,
-                     ['Alice', 'Bob', 'Charlie'],
-                     [('Ah', 'Kd'), ('2c', '3c'), ('4s', '5s')])
+        _capture_all(
+            client,
+            gid,
+            hn,
+            ['Alice', 'Bob', 'Charlie'],
+            [('Ah', 'Kd'), ('2c', '3c'), ('4s', '5s')],
+        )
 
         state = client.get(f'/games/{gid}/hands/{hn}/state').json()
         assert state['phase'] == 'preflop'
@@ -143,9 +149,13 @@ class TestTransitionToPreflop:
         hand = _start_hand(client, gid)
         hn = hand['hand_number']
 
-        _capture_all(client, gid, hn,
-                     ['Alice', 'Bob', 'Charlie'],
-                     [('Ah', 'Kd'), ('2c', '3c'), ('4s', '5s')])
+        _capture_all(
+            client,
+            gid,
+            hn,
+            ['Alice', 'Bob', 'Charlie'],
+            [('Ah', 'Kd'), ('2c', '3c'), ('4s', '5s')],
+        )
 
         actions = client.get(f'/games/{gid}/hands/{hn}/actions').json()
         blind_actions = [a for a in actions if a['action'] == 'blind']
@@ -157,9 +167,13 @@ class TestTransitionToPreflop:
         hand = _start_hand(client, gid)
         hn = hand['hand_number']
 
-        _capture_all(client, gid, hn,
-                     ['Alice', 'Bob', 'Charlie'],
-                     [('Ah', 'Kd'), ('2c', '3c'), ('4s', '5s')])
+        _capture_all(
+            client,
+            gid,
+            hn,
+            ['Alice', 'Bob', 'Charlie'],
+            [('Ah', 'Kd'), ('2c', '3c'), ('4s', '5s')],
+        )
 
         status = client.get(f'/games/{gid}/hands/{hn}/status').json()
         assert abs(status['pot'] - 0.30) < 0.01  # 0.10 + 0.20
@@ -170,9 +184,13 @@ class TestTransitionToPreflop:
         hand = _start_hand(client, gid)
         hn = hand['hand_number']
 
-        _capture_all(client, gid, hn,
-                     ['Alice', 'Bob', 'Charlie'],
-                     [('Ah', 'Kd'), ('2c', '3c'), ('4s', '5s')])
+        _capture_all(
+            client,
+            gid,
+            hn,
+            ['Alice', 'Bob', 'Charlie'],
+            [('Ah', 'Kd'), ('2c', '3c'), ('4s', '5s')],
+        )
 
         state = client.get(f'/games/{gid}/hands/{hn}/state').json()
         assert state['current_player_name'] is not None
@@ -186,9 +204,13 @@ class TestTransitionToPreflop:
         hand = _start_hand(client, gid)
         hn = hand['hand_number']
 
-        _capture_all(client, gid, hn,
-                     ['Alice', 'Bob', 'Charlie'],
-                     [('Ah', 'Kd'), ('2c', '3c'), ('4s', '5s')])
+        _capture_all(
+            client,
+            gid,
+            hn,
+            ['Alice', 'Bob', 'Charlie'],
+            [('Ah', 'Kd'), ('2c', '3c'), ('4s', '5s')],
+        )
 
         status = client.get(f'/games/{gid}/hands/{hn}/status').json()
         assert status['phase'] == 'preflop'
@@ -199,9 +221,7 @@ class TestTransitionToPreflop:
         hand = _start_hand(client, gid)
         hn = hand['hand_number']
 
-        _capture_all(client, gid, hn,
-                     ['Alice', 'Bob'],
-                     [('Ah', 'Kd'), ('2c', '3c')])
+        _capture_all(client, gid, hn, ['Alice', 'Bob'], [('Ah', 'Kd'), ('2c', '3c')])
 
         state = client.get(f'/games/{gid}/hands/{hn}/state').json()
         assert state['phase'] == 'preflop'
@@ -254,9 +274,13 @@ class TestFullGatedFlow:
         hn = hand['hand_number']
 
         # 1. Capture all cards
-        _capture_all(client, gid, hn,
-                     ['Alice', 'Bob', 'Charlie'],
-                     [('Ah', 'Kd'), ('2c', '3c'), ('4s', '5s')])
+        _capture_all(
+            client,
+            gid,
+            hn,
+            ['Alice', 'Bob', 'Charlie'],
+            [('Ah', 'Kd'), ('2c', '3c'), ('4s', '5s')],
+        )
 
         # 2. Set flop cards for later advance
         client.patch(

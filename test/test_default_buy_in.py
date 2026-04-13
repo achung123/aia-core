@@ -12,11 +12,14 @@ def _seed_players(client: TestClient):
 
 class TestDefaultBuyIn:
     def test_create_game_with_default_buy_in(self, client: TestClient, _seed_players):  # noqa: F811
-        resp = client.post('/games', json={
-            'game_date': '2026-04-10',
-            'player_names': ['Alice', 'Bob'],
-            'default_buy_in': 50.0,
-        })
+        resp = client.post(
+            '/games',
+            json={
+                'game_date': '2026-04-10',
+                'player_names': ['Alice', 'Bob'],
+                'default_buy_in': 50.0,
+            },
+        )
         assert resp.status_code == 201
         data = resp.json()
         assert data['default_buy_in'] == 50.0
@@ -24,24 +27,34 @@ class TestDefaultBuyIn:
         for p in data['players']:
             assert p['buy_in'] == 50.0
 
-    def test_create_game_without_default_buy_in(self, client: TestClient, _seed_players):  # noqa: F811
-        resp = client.post('/games', json={
-            'game_date': '2026-04-10',
-            'player_names': ['Alice', 'Bob'],
-        })
+    def test_create_game_without_default_buy_in(
+        self, client: TestClient, _seed_players
+    ):  # noqa: F811
+        resp = client.post(
+            '/games',
+            json={
+                'game_date': '2026-04-10',
+                'player_names': ['Alice', 'Bob'],
+            },
+        )
         assert resp.status_code == 201
         data = resp.json()
         assert data['default_buy_in'] is None
         for p in data['players']:
             assert p['buy_in'] is None
 
-    def test_per_player_buy_in_overrides_default(self, client: TestClient, _seed_players):  # noqa: F811
-        resp = client.post('/games', json={
-            'game_date': '2026-04-10',
-            'player_names': ['Alice', 'Bob'],
-            'default_buy_in': 50.0,
-            'player_buy_ins': {'Alice': 100.0},
-        })
+    def test_per_player_buy_in_overrides_default(
+        self, client: TestClient, _seed_players
+    ):  # noqa: F811
+        resp = client.post(
+            '/games',
+            json={
+                'game_date': '2026-04-10',
+                'player_names': ['Alice', 'Bob'],
+                'default_buy_in': 50.0,
+                'player_buy_ins': {'Alice': 100.0},
+            },
+        )
         assert resp.status_code == 201
         data = resp.json()
         players = {p['name']: p for p in data['players']}
@@ -49,25 +62,35 @@ class TestDefaultBuyIn:
         assert players['Bob']['buy_in'] == 50.0
 
     def test_get_game_returns_default_buy_in(self, client: TestClient, _seed_players):  # noqa: F811
-        create_resp = client.post('/games', json={
-            'game_date': '2026-04-10',
-            'player_names': ['Alice', 'Bob'],
-            'default_buy_in': 25.0,
-        })
+        create_resp = client.post(
+            '/games',
+            json={
+                'game_date': '2026-04-10',
+                'player_names': ['Alice', 'Bob'],
+                'default_buy_in': 25.0,
+            },
+        )
         game_id = create_resp.json()['game_id']
         resp = client.get(f'/games/{game_id}')
         assert resp.status_code == 200
         assert resp.json()['default_buy_in'] == 25.0
 
-    def test_rebuy_endpoint_works_with_default_buy_in(self, client: TestClient, _seed_players):  # noqa: F811
-        create_resp = client.post('/games', json={
-            'game_date': '2026-04-10',
-            'player_names': ['Alice', 'Bob'],
-            'default_buy_in': 50.0,
-        })
+    def test_rebuy_endpoint_works_with_default_buy_in(
+        self, client: TestClient, _seed_players
+    ):  # noqa: F811
+        create_resp = client.post(
+            '/games',
+            json={
+                'game_date': '2026-04-10',
+                'player_names': ['Alice', 'Bob'],
+                'default_buy_in': 50.0,
+            },
+        )
         game_id = create_resp.json()['game_id']
         # Rebuy for Alice
-        rebuy_resp = client.post(f'/games/{game_id}/players/Alice/rebuys', json={'amount': 50.0})
+        rebuy_resp = client.post(
+            f'/games/{game_id}/players/Alice/rebuys', json={'amount': 50.0}
+        )
         assert rebuy_resp.status_code == 201
         assert rebuy_resp.json()['amount'] == 50.0
         # Verify rebuy stats reflect

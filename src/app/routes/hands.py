@@ -219,6 +219,10 @@ def _try_advance_phase(db: Session, game_id: int, hand: Hand, state: HandState) 
     state.phase = next_phase
     state.current_seat = _first_to_act_seat(db, game_id, hand, next_phase)
 
+    # Showdown is terminal — no player should act
+    if next_phase == 'showdown':
+        state.current_seat = None
+
 
 def _activate_preflop(db: Session, game_id: int, hand: Hand, state: HandState) -> None:
     """Transition from awaiting_cards to preflop: post blinds and set first-to-act."""
@@ -1628,6 +1632,7 @@ def record_player_action(
                 detail=f'Player {player_name!r} has already folded',
             )
         player_hand.result = 'folded'
+        player_hand.outcome_street = payload.street
 
     action = PlayerHandAction(
         player_hand_id=player_hand.player_hand_id,
@@ -1655,6 +1660,7 @@ def record_player_action(
         non_folded = [ph for ph in hand.player_hands if ph.result != 'folded']
         if len(non_folded) == 1:
             non_folded[0].result = 'won'
+            non_folded[0].outcome_street = payload.street
             if hand_state:
                 hand_state.phase = 'showdown'
                 hand_state.current_seat = None

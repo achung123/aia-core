@@ -6,17 +6,18 @@ Issue 3: is_current_turn flag on player status entries
 Issue 4: winning_hand_description in player hand responses
 """
 
-import pytest
-
 from conftest import activate_hand
 
 
 # ── helpers ──────────────────────────────────────────────────────────
 
+
 def _create_game(client, names=None):
     if names is None:
         names = ['Alice', 'Bob', 'Charlie']
-    resp = client.post('/games', json={'game_date': '2026-04-12', 'player_names': names})
+    resp = client.post(
+        '/games', json={'game_date': '2026-04-12', 'player_names': names}
+    )
     assert resp.status_code == 201
     return resp.json()
 
@@ -236,7 +237,9 @@ class TestWinningHandDescription:
 
         resp = client.get(f'/games/{game_id}/hands/1')
         hand_data = resp.json()
-        alice_ph = next(p for p in hand_data['player_hands'] if p['player_name'] == 'Alice')
+        alice_ph = next(
+            p for p in hand_data['player_hands'] if p['player_name'] == 'Alice'
+        )
         assert alice_ph['winning_hand_description'] is not None
         assert 'flush' in alice_ph['winning_hand_description'].lower()
 
@@ -253,7 +256,9 @@ class TestWinningHandDescription:
 
         resp = client.get(f'/games/{game_id}/hands/1')
         hand_data = resp.json()
-        alice_ph = next(p for p in hand_data['player_hands'] if p['player_name'] == 'Alice')
+        alice_ph = next(
+            p for p in hand_data['player_hands'] if p['player_name'] == 'Alice'
+        )
         assert alice_ph['winning_hand_description'] is None
 
     def test_winning_hand_description_null_without_hole_cards(self, client):
