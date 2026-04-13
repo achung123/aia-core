@@ -7,6 +7,15 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 vi.mock('../api/client.ts', () => ({
   fetchHands: vi.fn(),
   fetchHandStatus: vi.fn(),
+  fetchPlayerEquity: vi.fn(() => Promise.resolve({ equities: [] })),
+  fetchBlinds: vi.fn(() => Promise.resolve({
+    small_blind: 0.10,
+    big_blind: 0.20,
+    blind_timer_minutes: 15,
+    blind_timer_paused: false,
+    blind_timer_started_at: null,
+    blind_timer_remaining_seconds: null,
+  })),
 }));
 
 // Mock seatCamera — track animation calls
@@ -57,7 +66,7 @@ vi.mock('../scenes/pokerScene.ts', () => ({
   })),
 }));
 
-import { fetchHands, fetchHandStatus } from '../api/client.ts';
+import { fetchHands, fetchHandStatus, fetchPlayerEquity, fetchBlinds } from '../api/client.ts';
 import type { HandResponse } from '../api/types.ts';
 
 // Lazy import so mocks are in place
@@ -74,6 +83,8 @@ const HANDS: HandResponse[] = [
     turn: 'Js',
     river: null,
     source_upload_id: null,
+    sb_player_name: 'Alice',
+    bb_player_name: 'Bob',
     created_at: '2026-04-10T12:00:00Z',
     player_hands: [
       { player_hand_id: 1, hand_id: 1, player_id: 1, player_name: 'Alice', card_1: '2h', card_2: '3h', result: 'won', profit_loss: 50, outcome_street: null },
@@ -94,6 +105,8 @@ const MULTI_HANDS: HandResponse[] = [
     turn: null,
     river: null,
     source_upload_id: null,
+    sb_player_name: 'Alice',
+    bb_player_name: 'Bob',
     created_at: '2026-04-10T12:00:00Z',
     player_hands: [
       { player_hand_id: 1, hand_id: 1, player_id: 1, player_name: 'Alice', card_1: '2h', card_2: '3h', result: 'won', profit_loss: 50, outcome_street: null },
@@ -110,6 +123,8 @@ const MULTI_HANDS: HandResponse[] = [
     turn: '6d',
     river: null,
     source_upload_id: null,
+    sb_player_name: 'Bob',
+    bb_player_name: 'Alice',
     created_at: '2026-04-10T12:05:00Z',
     player_hands: [
       { player_hand_id: 3, hand_id: 2, player_id: 1, player_name: 'Alice', card_1: 'Th', card_2: 'Jh', result: 'won', profit_loss: 80, outcome_street: null },
@@ -126,6 +141,8 @@ const MULTI_HANDS: HandResponse[] = [
     turn: 'Ts',
     river: 'As',
     source_upload_id: null,
+    sb_player_name: 'Alice',
+    bb_player_name: 'Bob',
     created_at: '2026-04-10T12:10:00Z',
     player_hands: [
       { player_hand_id: 5, hand_id: 3, player_id: 1, player_name: 'Alice', card_1: '9s', card_2: '8s', result: null, profit_loss: 0, outcome_street: null },
@@ -462,5 +479,188 @@ describe('TableView', () => {
     const styleTag = screen.getByTestId('session-scrubber').querySelector('style');
     expect(styleTag).toBeTruthy();
     expect(styleTag!.textContent).toContain('48px');
+  });
+
+  /* ── Adjusted equity display (T-033) ──────────────────────── */
+
+  it('calls fetchPlayerEquity with game, hand, and player name (AC1)', async () => {
+    vi.mocked(fetchHands).mockResolvedValue(HANDS);
+    vi.mocked(fetchPlayerEquity).mockResolvedValue({
+      equities: [{ player_name: 'Alice', equity: 0.72 }],
+    });
+    renderTableView('?game=5&player=Alice');
+    await waitFor(() => {
+      expect(vi.mocked(fetchPlayerEquity)).toHaveBeenCalledWith(5, 1, 'Alice');
+    });
+  });
+
+  it('displays equity percentage near player cards (AC2)', async () => {
+    vi.mocked(fetchHands).mockResolvedValue(HANDS);
+    vi.mocked(fetchPlayerEquity).mockResolvedValue({
+      equities: [{ player_name: 'Alice', equity: 0.72 }],
+    });
+    renderTableView('?game=5&player=Alice');
+    await waitFor(() => {
+      expect(screen.getByTestId('equity-overlay')).toBeTruthy();
+    });
+    expect(screen.getByTestId('equity-overlay').textContent).toContain('72%');
+  });
+
+  it('recalculates equity when hand changes via scrubber (AC3)', async () => {
+    vi.mocked(fetchHands).mockResolvedValue(MULTI_HANDS);
+    vi.mocked(fetchPlayerEquity).mockResolvedValue({
+      equities: [{ player_name: 'Alice', equity: 0.65 }],
+    });
+    renderTableView('?game=5&player=Alice');
+    await waitFor(() => {
+      expect(vi.mocked(fetchPlayerEquity)).toHaveBeenCalled();
+    });
+
+    vi.mocked(fetchPlayerEquity).mockClear();
+    vi.mocked(fetchPlayerEquity).mockResolvedValue({
+      equities: [{ player_name: 'Alice', equity: 0.50 }],
+    });
+
+    // Change scrubber to hand 1
+    const slider = screen.getByTestId('session-slider');
+    fireEvent.change(slider, { target: { value: '1' } });
+
+    await waitFor(() => {
+      expect(vi.mocked(fetchPlayerEquity)).toHaveBeenCalledWith(5, 1, 'Alice');
+    });
+  });
+
+  it('has a toggle button to show/hide equity (AC4)', async () => {
+    vi.mocked(fetchHands).mockResolvedValue(HANDS);
+    vi.mocked(fetchPlayerEquity).mockResolvedValue({
+      equities: [{ player_name: 'Alice', equity: 0.72 }],
+    });
+    renderTableView('?game=5&player=Alice');
+    await waitFor(() => {
+      expect(screen.getByTestId('equity-overlay')).toBeTruthy();
+    });
+
+    // Toggle button exists
+    const toggleBtn = screen.getByTestId('equity-toggle-btn');
+    expect(toggleBtn).toBeTruthy();
+
+    // Click to hide
+    fireEvent.click(toggleBtn);
+    expect(screen.queryByTestId('equity-overlay')).toBeNull();
+
+    // Click to show again
+    fireEvent.click(toggleBtn);
+    await waitFor(() => {
+      expect(screen.getByTestId('equity-overlay')).toBeTruthy();
+    });
+  });
+
+  it('shows preflop equity when no community cards (AC5)', async () => {
+    const preflopHand: HandResponse[] = [{
+      ...HANDS[0],
+      flop_1: null,
+      flop_2: null,
+      flop_3: null,
+      turn: null,
+      river: null,
+      player_hands: [
+        { player_hand_id: 1, hand_id: 1, player_id: 1, player_name: 'Alice', card_1: 'Ah', card_2: 'As', result: null, profit_loss: 0, outcome_street: null },
+        { player_hand_id: 2, hand_id: 1, player_id: 2, player_name: 'Bob', card_1: null, card_2: null, result: null, profit_loss: 0, outcome_street: null },
+      ],
+    }];
+    vi.mocked(fetchHands).mockResolvedValue(preflopHand);
+    vi.mocked(fetchPlayerEquity).mockResolvedValue({
+      equities: [{ player_name: 'Alice', equity: 0.85 }],
+    });
+    renderTableView('?game=5&player=Alice');
+    await waitFor(() => {
+      expect(screen.getByTestId('equity-overlay')).toBeTruthy();
+    });
+    // Should show preflop equity
+    expect(screen.getByTestId('equity-overlay').textContent).toContain('85%');
+  });
+
+  it('does not show equity overlay when no equity data returned', async () => {
+    vi.mocked(fetchHands).mockResolvedValue(HANDS);
+    vi.mocked(fetchPlayerEquity).mockResolvedValue({ equities: [] });
+    renderTableView('?game=5&player=Alice');
+    await waitFor(() => {
+      expect(mockSceneUpdate).toHaveBeenCalled();
+    });
+    // Give time for equity fetch to complete
+    await new Promise(r => setTimeout(r, 50));
+    expect(screen.queryByTestId('equity-overlay')).toBeNull();
+  });
+
+  it('handles equity fetch errors gracefully', async () => {
+    vi.mocked(fetchHands).mockResolvedValue(HANDS);
+    vi.mocked(fetchPlayerEquity).mockRejectedValue(new Error('Network error'));
+    renderTableView('?game=5&player=Alice');
+    await waitFor(() => {
+      expect(mockSceneUpdate).toHaveBeenCalled();
+    });
+    // Should not crash — no equity overlay shown
+    await new Promise(r => setTimeout(r, 50));
+    expect(screen.queryByTestId('equity-overlay')).toBeNull();
+  });
+
+  /* ── Blind & position display (T-031) ─────────────────────── */
+
+  it('renders BlindPositionDisplay with SB/BB from latest hand (AC1/AC2)', async () => {
+    vi.mocked(fetchHands).mockResolvedValue(HANDS);
+    renderTableView('?game=5&player=Alice');
+    await waitFor(() => {
+      expect(mockSceneUpdate).toHaveBeenCalled();
+    });
+    // BlindPositionDisplay should render with SB/BB from the hand fixture
+    expect(screen.getByTestId('blind-position-display')).toBeTruthy();
+    expect(screen.getByTestId('sb-label').textContent).toContain('Alice');
+    expect(screen.getByTestId('bb-label').textContent).toContain('Bob');
+  });
+
+  it('highlights current player label when they are SB (AC3)', async () => {
+    vi.mocked(fetchHands).mockResolvedValue(HANDS);
+    renderTableView('?game=5&player=Alice');
+    await waitFor(() => {
+      expect(mockSceneUpdate).toHaveBeenCalled();
+    });
+    // Alice is SB in the HANDS fixture
+    expect(screen.getByTestId('sb-label').getAttribute('data-highlight')).toBe('true');
+    expect(screen.getByTestId('bb-label').getAttribute('data-highlight')).toBe('false');
+  });
+
+  it('updates SB/BB when scrubbing to a different hand (AC2)', async () => {
+    vi.mocked(fetchHands).mockResolvedValue(MULTI_HANDS);
+    renderTableView('?game=5&player=Alice');
+    await waitFor(() => {
+      expect(mockSceneUpdate).toHaveBeenCalled();
+    });
+    // Latest hand (3) has SB=Alice, BB=Bob
+    expect(screen.getByTestId('sb-label').textContent).toContain('Alice');
+    expect(screen.getByTestId('bb-label').textContent).toContain('Bob');
+
+    // Scrub to hand 2 where SB=Bob, BB=Alice
+    const slider = screen.getByTestId('session-slider');
+    fireEvent.change(slider, { target: { value: '2' } });
+
+    expect(screen.getByTestId('sb-label').textContent).toContain('Bob');
+    expect(screen.getByTestId('bb-label').textContent).toContain('Alice');
+    // Alice is now BB — highlight should flip
+    expect(screen.getByTestId('bb-label').getAttribute('data-highlight')).toBe('true');
+    expect(screen.getByTestId('sb-label').getAttribute('data-highlight')).toBe('false');
+  });
+
+  it('calls fetchBlinds for the blind level display (AC4)', async () => {
+    vi.mocked(fetchHands).mockResolvedValue(HANDS);
+    renderTableView('?game=5&player=Alice');
+    await waitFor(() => {
+      expect(vi.mocked(fetchBlinds)).toHaveBeenCalledWith(5);
+    });
+  });
+
+  it('does not show blind display when loading or error', async () => {
+    vi.mocked(fetchHands).mockReturnValue(new Promise(() => {}));
+    renderTableView('?game=5&player=Alice');
+    expect(screen.queryByTestId('blind-position-display')).toBeNull();
   });
 });

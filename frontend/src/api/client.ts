@@ -220,6 +220,10 @@ export function fetchEquity(gameId: number, handNumber: number): Promise<EquityR
   return request<EquityResponse>(`/games/${gameId}/hands/${handNumber}/equity`);
 }
 
+export function fetchPlayerEquity(gameId: number, handNumber: number, playerName: string): Promise<EquityResponse> {
+  return request<EquityResponse>(`/games/${gameId}/hands/${handNumber}/equity?player=${encodeURIComponent(playerName)}`);
+}
+
 export function fetchHandStatus(gameId: number, handNumber: number, { signal }: { signal?: AbortSignal } = {}): Promise<HandStatusResponse> {
   return request<HandStatusResponse>(`/games/${gameId}/hands/${handNumber}/status`, { signal });
 }

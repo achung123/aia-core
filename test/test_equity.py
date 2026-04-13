@@ -169,3 +169,57 @@ class TestEdgeCasePlayerCounts:
             [('Q', 'c'), ('J', 'd'), ('10', 'h')],
         )
         assert result == [1.0]
+
+
+class TestCalculatePlayerEquity:
+    """Tests for player-perspective equity (one player vs random opponents)."""
+
+    def test_returns_float_between_0_and_1(self):
+        from app.services.equity import calculate_player_equity
+
+        result = calculate_player_equity(
+            [('A', 's'), ('A', 'h')], num_opponents=1, community_cards=[]
+        )
+        assert isinstance(result, float)
+        assert 0.0 <= result <= 1.0
+
+    def test_aa_preflop_vs_one_random_opponent(self):
+        """AA preflop vs 1 random opponent should be ~85%."""
+        from app.services.equity import calculate_player_equity
+
+        result = calculate_player_equity(
+            [('A', 's'), ('A', 'h')], num_opponents=1, community_cards=[]
+        )
+        assert abs(result - 0.85) < 0.05
+
+    def test_aa_preflop_vs_multiple_opponents(self):
+        """AA equity drops with more opponents."""
+        from app.services.equity import calculate_player_equity
+
+        eq_1 = calculate_player_equity(
+            [('A', 's'), ('A', 'h')], num_opponents=1, community_cards=[]
+        )
+        eq_3 = calculate_player_equity(
+            [('A', 's'), ('A', 'h')], num_opponents=3, community_cards=[]
+        )
+        assert eq_1 > eq_3  # More opponents → lower equity
+
+    def test_with_community_cards(self):
+        """Equity with community cards returns a valid value."""
+        from app.services.equity import calculate_player_equity
+
+        result = calculate_player_equity(
+            [('A', 's'), ('A', 'h')],
+            num_opponents=1,
+            community_cards=[('2', 'c'), ('7', 'd'), ('J', 's')],
+        )
+        assert 0.0 <= result <= 1.0
+
+    def test_no_opponents_returns_one(self):
+        """With 0 opponents, equity is 1.0."""
+        from app.services.equity import calculate_player_equity
+
+        result = calculate_player_equity(
+            [('A', 's'), ('K', 'h')], num_opponents=0, community_cards=[]
+        )
+        assert result == 1.0

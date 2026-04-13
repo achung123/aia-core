@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef, useCallback, type CSSProperties } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { fetchHands } from '../api/client.ts';
+import { fetchPlayerEquity } from '../api/client.ts';
 import type { HandResponse } from '../api/types.ts';
 import { createPokerScene } from '../scenes/pokerScene.ts';
 import { isShowdown } from '../scenes/showdown.ts';
 import { computeSeatCameraPosition, animateCameraToSeat, getDefaultCameraPosition } from '../scenes/seatCamera.ts';
 import { SessionScrubber } from '../components/SessionScrubber.tsx';
+import { BlindPositionDisplay } from '../components/BlindPositionDisplay.tsx';
 
 /* ── Card-parsing helpers (same as MobilePlaybackView) ──────── */
 
@@ -102,6 +104,10 @@ export function TableView() {
   const [error, setError] = useState<string | null>(null);
   const [hands, setHands] = useState<HandResponse[]>([]);
   const [currentHandNumber, setCurrentHandNumber] = useState(0);
+  const [equityPct, setEquityPct] = useState<number | null>(null);
+  const [showEquity, setShowEquity] = useState(true);
+  const [sbPlayerName, setSbPlayerName] = useState<string | null>(null);
+  const [bbPlayerName, setBbPlayerName] = useState<string | null>(null);
 
   const gameId = gameIdStr ? Number(gameIdStr) : null;
 
@@ -290,12 +296,31 @@ export function TableView() {
     });
   }
 
+  /* Fetch player-perspective equity for the current hand */
+  function fetchEquityForHand(handNumber: number): void {
+    if (!gameId || !playerName) return;
+    fetchPlayerEquity(gameId, handNumber, playerName)
+      .then(data => {
+        if (data.equities.length > 0) {
+          setEquityPct(data.equities[0].equity);
+        } else {
+          setEquityPct(null);
+        }
+      })
+      .catch(() => {
+        setEquityPct(null);
+      });
+  }
+
   /* Handle scrubber change */
   function handleScrubberChange(handNumber: number): void {
     setCurrentHandNumber(handNumber);
     const hand = hands.find(h => h.hand_number === handNumber);
     if (hand) {
       updateSceneForHand(hand);
+      fetchEquityForHand(handNumber);
+      setSbPlayerName(hand.sb_player_name ?? null);
+      setBbPlayerName(hand.bb_player_name ?? null);
     }
   }
 
@@ -323,6 +348,8 @@ export function TableView() {
         // Get the latest hand
         const latest = sorted[sorted.length - 1];
         setCurrentHandNumber(latest.hand_number);
+        setSbPlayerName(latest.sb_player_name ?? null);
+        setBbPlayerName(latest.bb_player_name ?? null);
 
         // Build seat/player maps
         buildSeatMaps(sorted);
@@ -330,6 +357,9 @@ export function TableView() {
 
         // Render the latest hand
         updateSceneForHand(latest);
+
+        // Fetch player-perspective equity for the latest hand
+        fetchEquityForHand(latest.hand_number);
 
         // Center camera on the player's seat
         if (sceneRef.current) {
@@ -391,9 +421,35 @@ export function TableView() {
         <button data-testid="reset-view-btn" style={styles.resetBtn} onClick={handleResetView}>
           Reset View
         </button>
+        <button
+          data-testid="equity-toggle-btn"
+          style={styles.resetBtn}
+          onClick={() => setShowEquity(prev => !prev)}
+        >
+          {showEquity ? 'Hide Equity' : 'Show Equity'}
+        </button>
         {loading && <p style={styles.loadingText}>Loading table…</p>}
         {error && <p style={styles.error}>{error}</p>}
       </div>
+
+      {/* Blind & position display */}
+      {gameId && playerName && !loading && !error && (
+        <div style={styles.blindDisplayContainer}>
+          <BlindPositionDisplay
+            gameId={gameId}
+            currentPlayerName={playerName}
+            sbPlayerName={sbPlayerName}
+            bbPlayerName={bbPlayerName}
+          />
+        </div>
+      )}
+
+      {/* Equity overlay near player's cards */}
+      {showEquity && equityPct !== null && (
+        <div data-testid="equity-overlay" style={styles.equityOverlay}>
+          {Math.round(equityPct * 100)}%
+        </div>
+      )}
 
       {/* Hand scrubber at the bottom */}
       {hands.length > 0 && (
@@ -485,5 +541,26 @@ const styles: Record<string, CSSProperties> = {
     left: 0,
     right: 0,
     zIndex: 10,
+  },
+  blindDisplayContainer: {
+    position: 'absolute',
+    top: '12px',
+    right: '12px',
+    zIndex: 10,
+  },
+  equityOverlay: {
+    position: 'absolute',
+    bottom: '80px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    zIndex: 10,
+    background: 'rgba(16, 185, 129, 0.9)',
+    color: '#fff',
+    fontSize: '1.4rem',
+    fontWeight: 'bold',
+    padding: '6px 16px',
+    borderRadius: '12px',
+    pointerEvents: 'none',
+    textShadow: '0 1px 3px rgba(0,0,0,0.5)',
   },
 };

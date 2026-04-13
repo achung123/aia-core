@@ -253,3 +253,117 @@ class TestEquityEndpointNullCardsExcluded:
         data = resp.json()
         total = sum(e['equity'] for e in data['equities'])
         assert abs(total - 1.0) < 0.02
+
+
+class TestPlayerPerspectiveEquity:
+    """T-033 AC1: Equity endpoint with ?player= returns single-player equity vs random opponents."""
+
+    def test_player_param_returns_single_equity(self, client, game_with_players):
+        """?player=Alice returns equities with only Alice's entry."""
+        hand_number = _create_hand(
+            client,
+            game_with_players,
+            player_entries=[
+                {
+                    'player_name': 'Alice',
+                    'card_1': {'rank': 'A', 'suit': 'S'},
+                    'card_2': {'rank': 'A', 'suit': 'H'},
+                },
+                {
+                    'player_name': 'Bob',
+                    'card_1': {'rank': 'K', 'suit': 'S'},
+                    'card_2': {'rank': 'K', 'suit': 'H'},
+                },
+            ],
+        )
+
+        resp = client.get(
+            f'/games/{game_with_players}/hands/{hand_number}/equity?player=Alice'
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data['equities']) == 1
+        assert data['equities'][0]['player_name'] == 'Alice'
+        assert 0.0 <= data['equities'][0]['equity'] <= 1.0
+
+    def test_player_equity_without_community_cards(self, client, game_with_players):
+        """AC5: Preflop equity when no community cards — AA vs 1 random ~85%."""
+        hand_number = _create_hand(
+            client,
+            game_with_players,
+            player_entries=[
+                {
+                    'player_name': 'Alice',
+                    'card_1': {'rank': 'A', 'suit': 'S'},
+                    'card_2': {'rank': 'A', 'suit': 'H'},
+                },
+                {
+                    'player_name': 'Bob',
+                    'card_1': {'rank': 'K', 'suit': 'S'},
+                    'card_2': {'rank': 'K', 'suit': 'H'},
+                },
+            ],
+        )
+
+        resp = client.get(
+            f'/games/{game_with_players}/hands/{hand_number}/equity?player=Alice'
+        )
+        data = resp.json()
+        # AA vs 1 random opponent preflop should be ~85%
+        assert abs(data['equities'][0]['equity'] - 0.85) < 0.06
+
+    def test_player_equity_with_community_cards(self, client, game_with_players):
+        """AC3: Equity recalculates with community cards present."""
+        hand_number = _create_hand(
+            client,
+            game_with_players,
+            community={
+                'flop_1': {'rank': 'A', 'suit': 'D'},
+                'flop_2': {'rank': '7', 'suit': 'C'},
+                'flop_3': {'rank': '2', 'suit': 'S'},
+            },
+            player_entries=[
+                {
+                    'player_name': 'Alice',
+                    'card_1': {'rank': 'A', 'suit': 'S'},
+                    'card_2': {'rank': 'A', 'suit': 'H'},
+                },
+                {
+                    'player_name': 'Bob',
+                    'card_1': {'rank': 'K', 'suit': 'S'},
+                    'card_2': {'rank': 'K', 'suit': 'H'},
+                },
+            ],
+        )
+
+        resp = client.get(
+            f'/games/{game_with_players}/hands/{hand_number}/equity?player=Alice'
+        )
+        data = resp.json()
+        # AA with an ace on the flop should have very high equity vs random
+        assert data['equities'][0]['equity'] > 0.8
+
+    def test_player_not_in_hand_returns_empty(self, client, game_with_players):
+        """Player not in the hand → empty equities."""
+        hand_number = _create_hand(
+            client,
+            game_with_players,
+            player_entries=[
+                {
+                    'player_name': 'Alice',
+                    'card_1': {'rank': 'A', 'suit': 'S'},
+                    'card_2': {'rank': 'A', 'suit': 'H'},
+                },
+                {
+                    'player_name': 'Bob',
+                    'card_1': {'rank': 'K', 'suit': 'S'},
+                    'card_2': {'rank': 'K', 'suit': 'H'},
+                },
+            ],
+        )
+
+        resp = client.get(
+            f'/games/{game_with_players}/hands/{hand_number}/equity?player=ZZZ'
+        )
+        assert resp.status_code == 200
+        assert resp.json() == {'equities': []}

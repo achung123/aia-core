@@ -194,3 +194,48 @@ def calculate_equity(
         for j in range(num_players):
             wins[j] += result[j]
     return [w / iters for w in wins]
+
+
+def calculate_player_equity(
+    hole_cards: list[tuple[str, str]],
+    num_opponents: int,
+    community_cards: list[tuple[str, str]],
+) -> float:
+    """Calculate equity for a single player vs random opponent hands.
+
+    Args:
+        hole_cards: Player's 2 hole cards as (rank, suit) tuples.
+        num_opponents: Number of opponents with random hands.
+        community_cards: 0-5 known community cards as (rank, suit) tuples.
+
+    Returns:
+        Float representing the player's equity (0.0–1.0).
+    """
+    if num_opponents == 0:
+        return 1.0
+
+    player = [_to_internal(c) for c in hole_cards]
+    board = [_to_internal(c) for c in community_cards]
+
+    all_known = list(board) + player
+    deck = _build_deck(all_known)
+
+    remaining = 5 - len(board)
+    iters = 5000
+    wins = 0.0
+
+    for _ in range(iters):
+        random.shuffle(deck)
+        idx = 0
+        # Deal random hole cards to opponents
+        opponents = []
+        for _ in range(num_opponents):
+            opponents.append([deck[idx], deck[idx + 1]])
+            idx += 2
+        # Deal remaining community cards
+        b = board + deck[idx : idx + remaining] if remaining > 0 else board
+        all_players = [player] + opponents
+        result = _eval_board(all_players, b)
+        wins += result[0]
+
+    return wins / iters

@@ -52,6 +52,7 @@ describe('PlayerApp', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionStorage.clear();
     originalHash = window.location.hash;
     window.location.hash = '';
   });
@@ -182,6 +183,7 @@ describe('PlayerApp — name picker', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionStorage.clear();
     originalHash = window.location.hash;
     window.location.hash = '';
     // Default mocks so polling in 'playing' step doesn't crash
@@ -406,6 +408,7 @@ describe('PlayerApp — polling and status', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionStorage.clear();
     vi.useFakeTimers();
     originalHash = window.location.hash;
     window.location.hash = '';
@@ -570,6 +573,7 @@ describe('PlayerApp — camera capture flow', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionStorage.clear();
     vi.useFakeTimers();
     originalHash = window.location.hash;
     window.location.hash = '';
@@ -812,6 +816,7 @@ describe('PlayerApp — hand back cards action', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionStorage.clear();
     vi.useFakeTimers();
     originalHash = window.location.hash;
     window.location.hash = '';
@@ -957,6 +962,7 @@ describe('PlayerApp — polling edge cases', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionStorage.clear();
     vi.useFakeTimers();
     originalHash = window.location.hash;
     window.location.hash = '';
@@ -1104,6 +1110,7 @@ describe('PlayerApp — button alignment', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionStorage.clear();
     vi.useFakeTimers();
     originalHash = window.location.hash;
     window.location.hash = '';
@@ -1164,5 +1171,166 @@ describe('PlayerApp — button alignment', () => {
     expect(window.location.hash).toContain('/player/table');
     expect(window.location.hash).toContain('game=3');
     expect(window.location.hash).toContain('player=Bob');
+  });
+});
+
+import { PLAYER_SESSION_KEY } from './PlayerApp.tsx';
+
+describe('PlayerApp — session pinning (sessionStorage)', () => {
+  let originalHash: string;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    originalHash = window.location.hash;
+    window.location.hash = '';
+    sessionStorage.clear();
+    mockFetchHands.mockResolvedValue([{ hand_number: 1 }]);
+    mockFetchHandStatus.mockResolvedValue({
+      hand_number: 1,
+      community_recorded: false,
+      players: GAME_DETAIL.player_names.map(name => ({
+        name,
+        participation_status: 'idle',
+        card_1: null,
+        card_2: null,
+        result: null,
+        outcome_street: null,
+      })),
+    });
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+    window.location.hash = originalHash;
+    sessionStorage.clear();
+  });
+
+  it('stores gameId and playerName in sessionStorage after selecting game and player', async () => {
+    const container = await goToPlaying(1); // Bob
+
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain('Bob');
+    });
+
+    const stored = JSON.parse(sessionStorage.getItem(PLAYER_SESSION_KEY)!);
+    expect(stored).toEqual({ gameId: 3, playerName: 'Bob' });
+  });
+
+  it('restores session from sessionStorage and skips to playing step on mount', async () => {
+    sessionStorage.setItem(PLAYER_SESSION_KEY, JSON.stringify({ gameId: 2, playerName: 'Eve' }));
+    mockFetchSessions.mockResolvedValue(SESSIONS);
+
+    const { container } = render(<PlayerApp />);
+
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain('Eve');
+      expect(container.textContent).toContain('Game #2');
+    });
+
+    // Should not show game cards or name picker
+    expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(0);
+    expect(container.querySelectorAll('[data-testid="player-name-btn"]').length).toBe(0);
+  });
+
+  it('clears storage and shows selector when stored game is not active', async () => {
+    // Game 1 is "complete" in SESSIONS
+    sessionStorage.setItem(PLAYER_SESSION_KEY, JSON.stringify({ gameId: 1, playerName: 'Alice' }));
+    mockFetchSessions.mockResolvedValue(SESSIONS);
+
+    const { container } = render(<PlayerApp />);
+
+    await vi.waitFor(() => {
+      expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(2);
+    });
+
+    expect(sessionStorage.getItem(PLAYER_SESSION_KEY)).toBeNull();
+  });
+
+  it('clears storage and shows selector when stored game is not found', async () => {
+    sessionStorage.setItem(PLAYER_SESSION_KEY, JSON.stringify({ gameId: 999, playerName: 'Ghost' }));
+    mockFetchSessions.mockResolvedValue(SESSIONS);
+
+    const { container } = render(<PlayerApp />);
+
+    await vi.waitFor(() => {
+      expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(2);
+    });
+
+    expect(sessionStorage.getItem(PLAYER_SESSION_KEY)).toBeNull();
+  });
+
+  it('Leave Game button clears sessionStorage and returns to game selector', async () => {
+    const container = await goToPlaying(1); // Bob
+
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain('Bob');
+    });
+
+    // Verify storage was set
+    expect(sessionStorage.getItem(PLAYER_SESSION_KEY)).not.toBeNull();
+
+    // Click Leave Game
+    const leaveBtn = container.querySelector('[data-testid="leave-game-btn"]') as HTMLElement;
+    expect(leaveBtn).not.toBeNull();
+    act(() => { leaveBtn.click(); });
+
+    await vi.waitFor(() => {
+      // Should be back at game selector
+      expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(2);
+    });
+
+    expect(sessionStorage.getItem(PLAYER_SESSION_KEY)).toBeNull();
+  });
+
+  it('Change Player button clears sessionStorage', async () => {
+    const container = await goToPlaying(1); // Bob
+
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain('Bob');
+    });
+
+    expect(sessionStorage.getItem(PLAYER_SESSION_KEY)).not.toBeNull();
+
+    act(() => { container.querySelector<HTMLElement>('[data-testid="change-player-btn"]')!.click(); });
+
+    await vi.waitFor(() => {
+      expect(container.querySelectorAll('[data-testid="player-name-btn"]').length).toBe(3);
+    });
+
+    expect(sessionStorage.getItem(PLAYER_SESSION_KEY)).toBeNull();
+  });
+
+  it('does not restore session when sessionStorage is empty', async () => {
+    mockFetchSessions.mockResolvedValue(SESSIONS);
+
+    const { container } = render(<PlayerApp />);
+
+    await vi.waitFor(() => {
+      expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(2);
+    });
+
+    // Should show game selector normally
+    expect(container.textContent).toContain('Select a Game');
+  });
+
+  it('URL params take precedence over sessionStorage', async () => {
+    // Store session for game 3/Alice
+    sessionStorage.setItem(PLAYER_SESSION_KEY, JSON.stringify({ gameId: 3, playerName: 'Alice' }));
+    // URL points to game 2/Bob
+    window.location.hash = '#/player?game=2&player=Bob';
+    mockFetchSessions.mockResolvedValue(SESSIONS);
+
+    const { container } = render(<PlayerApp />);
+
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain('Bob');
+      expect(container.textContent).toContain('Game #2');
+    });
+
+    // Session should be updated to URL values
+    const stored = JSON.parse(sessionStorage.getItem(PLAYER_SESSION_KEY)!);
+    expect(stored).toEqual({ gameId: 2, playerName: 'Bob' });
   });
 });

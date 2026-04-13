@@ -17,7 +17,7 @@ from app.database.models import (
     PlayerHandAction,
 )
 from app.database.session import get_db
-from app.services.equity import calculate_equity
+from app.services.equity import calculate_equity, calculate_player_equity
 from pydantic_models.app_models import (
     CommunityCardsUpdate,
     EquityResponse,
@@ -509,6 +509,7 @@ def get_hand_equity(
     game_id: int,
     hand_number: int,
     db: Annotated[Session, Depends(get_db)],
+    player: str | None = None,
 ):
     game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
     if game is None:
@@ -527,19 +528,34 @@ def get_hand_equity(
     for ph in hand.player_hands:
         if ph.card_1 is None or ph.card_2 is None:
             continue
-        player = db.query(Player).filter(Player.player_id == ph.player_id).first()
-        player_name = player.name if player else ''
+        p = db.query(Player).filter(Player.player_id == ph.player_id).first()
+        player_name = p.name if p else ''
         hole_cards = [_db_card_to_tuple(ph.card_1), _db_card_to_tuple(ph.card_2)]
         players_with_cards.append((player_name, hole_cards))
-
-    if len(players_with_cards) < 2:
-        return EquityResponse(equities=[])
 
     # Gather community cards
     community_cards: list[tuple[str, str]] = []
     for card_str in [hand.flop_1, hand.flop_2, hand.flop_3, hand.turn, hand.river]:
         if card_str is not None:
             community_cards.append(_db_card_to_tuple(card_str))
+
+    # Player-perspective equity: single player vs random opponents
+    if player is not None:
+        target = [(name, hc) for name, hc in players_with_cards if name == player]
+        if not target:
+            return EquityResponse(equities=[])
+        target_name, target_cards = target[0]
+        num_opponents = len(players_with_cards) - 1
+        if num_opponents < 1:
+            return EquityResponse(equities=[])
+        eq = calculate_player_equity(target_cards, num_opponents, community_cards)
+        return EquityResponse(
+            equities=[{'player_name': target_name, 'equity': round(eq, 4)}]
+        )
+
+    # Standard multi-player equity
+    if len(players_with_cards) < 2:
+        return EquityResponse(equities=[])
 
     player_hole_cards = [hc for _, hc in players_with_cards]
     equities = calculate_equity(player_hole_cards, community_cards)

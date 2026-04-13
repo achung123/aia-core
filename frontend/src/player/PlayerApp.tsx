@@ -16,6 +16,30 @@ import { CameraCapture } from '../dealer/CameraCapture.tsx';
 import { DetectionReview } from '../dealer/DetectionReview.tsx';
 import { PlayerActionButtons } from './PlayerActionButtons.tsx';
 
+export const PLAYER_SESSION_KEY = 'aia-player-session';
+
+function saveSession(gameId: number, playerName: string) {
+  sessionStorage.setItem(PLAYER_SESSION_KEY, JSON.stringify({ gameId, playerName }));
+}
+
+function loadSession(): { gameId: number; playerName: string } | null {
+  try {
+    const raw = sessionStorage.getItem(PLAYER_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed.gameId === 'number' && typeof parsed.playerName === 'string') {
+      return parsed;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function clearSession() {
+  sessionStorage.removeItem(PLAYER_SESSION_KEY);
+}
+
 type PlayerStep = 'gameSelect' | 'namePick' | 'playing';
 type CaptureStep = null | 'camera' | 'review';
 type ParticipationStatus = 'idle' | 'pending' | 'joined' | 'folded' | 'handed_back' | 'won' | 'lost';
@@ -131,6 +155,7 @@ export function PlayerApp() {
             setGameId(urlGameId);
             setPlayerName(urlPlayer);
             setStep('playing');
+            saveSession(urlGameId, urlPlayer);
           } else {
             setError(`Game #${urlGameId} not found or not active`);
           }
@@ -140,11 +165,25 @@ export function PlayerApp() {
       return;
     }
 
+    const saved = loadSession();
+
     fetchSessions()
       .then(data => {
         const active = data.filter(s => s.status === 'active');
         const sorted = [...active].sort((a, b) => b.game_id - a.game_id);
         setSessions(sorted);
+
+        if (saved) {
+          const found = active.find(s => s.game_id === saved.gameId);
+          if (found) {
+            setGameId(saved.gameId);
+            setPlayerName(saved.playerName);
+            setStep('playing');
+            return;
+          } else {
+            clearSession();
+          }
+        }
 
         if (urlGameId !== null) {
           const found = sorted.find(s => s.game_id === urlGameId);
@@ -171,9 +210,11 @@ export function PlayerApp() {
     setPlayerName(name);
     setPlayerStatus('idle');
     setStep('playing');
+    if (gameId) saveSession(gameId, name);
   }
 
   function handleChangePlayer() {
+    clearSession();
     setPlayerName(null);
     setPlayerStatus('idle');
     setNoActiveHand(false);
@@ -184,6 +225,20 @@ export function PlayerApp() {
     setCaptureError(null);
     if (gameId) loadPlayers(gameId);
     setStep('namePick');
+  }
+
+  function handleLeaveGame() {
+    clearSession();
+    setPlayerName(null);
+    setGameId(null);
+    setPlayerStatus('idle');
+    setNoActiveHand(false);
+    setPollError(null);
+    handNumberRef.current = null;
+    setCaptureStep(null);
+    setReviewData(null);
+    setCaptureError(null);
+    setStep('gameSelect');
   }
 
   function handleStartCapture() {
@@ -397,6 +452,14 @@ export function PlayerApp() {
           onClick={handleChangePlayer}
         >
           Change Player
+        </button>
+
+        <button
+          data-testid="leave-game-btn"
+          style={styles.changeBtn}
+          onClick={handleLeaveGame}
+        >
+          Leave Game
         </button>
       </div>
     );
