@@ -46,7 +46,7 @@ class MockCardDetector:
                 'detected_value': card,
                 'confidence': round(random.uniform(0.75, 0.99), 4),
             }
-            for pos, card in zip(positions, chosen)
+            for pos, card in zip(positions, chosen, strict=False)
         ]
 
 

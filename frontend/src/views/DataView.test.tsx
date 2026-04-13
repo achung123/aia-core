@@ -1,4 +1,6 @@
 /** @vitest-environment happy-dom */
+import fs from 'fs';
+import path from 'path';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 
@@ -173,23 +175,17 @@ describe('DataView', () => {
   });
 
   it('data-view has mobile-responsive styling (no horizontal overflow on narrow screens)', () => {
-    const fs = require('fs');
-    const path = require('path');
     const cssText = fs.readFileSync(path.resolve(__dirname, '../style.css'), 'utf8');
     expect(cssText).toMatch(/@media\s*\(max-width:\s*768px\)/);
     expect(cssText).toContain('.data-view');
   });
 
   it('hand-details-row td has overflow-x auto in CSS', () => {
-    const fs = require('fs');
-    const path = require('path');
     const cssText = fs.readFileSync(path.resolve(__dirname, '../style.css'), 'utf8');
     expect(cssText).toMatch(/\.hand-details-row\s+td[\s\S]*?overflow-x:\s*auto/);
   });
 
   it('hand table is hidden on mobile and replaced with card layout', () => {
-    const fs = require('fs');
-    const path = require('path');
     const cssText = fs.readFileSync(path.resolve(__dirname, '../style.css'), 'utf8');
     // The hand-table should be hidden on mobile via display:none
     expect(cssText).toMatch(/\.hand-table[\s\S]*?display:\s*none/);

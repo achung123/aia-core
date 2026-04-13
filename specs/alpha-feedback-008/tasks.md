@@ -1186,3 +1186,21 @@ Add a responsive split-screen layout to the Active Hand Dashboard for tablet/lar
 | F-062 | LOW | Unused state setters setFinishError/setFinishing in DealerApp.tsx. Dead code. | aia-core-d1b6 |
 | F-063 | LOW | Unused act alias in dealerStore.test.ts. | aia-core-d1b6 |
 | F-064 | LOW | CSS shorthand/longhand conflict in bottom nav (border vs borderTop). | aia-core-d1b6 |
+
+### Cycle 36 — aia-core-x0ie (T-039)
+
+| # | Severity | Description | Source |
+|---|----------|-------------|--------|
+| F-070 | MEDIUM | BlindPositionDisplay doesn't forward abort signal to fetchBlinds — HTTP request not cancelled on unmount. signal.aborted guard prevents stale updates but request runs to completion. | aia-core-x0ie |
+| F-071 | LOW | DealerApp nested fetchHand not cancellable — secondary call inside polling doesn't receive abort signal. | aia-core-x0ie |
+| F-072 | LOW | No concurrent-tick protection in usePolling — setInterval fires regardless of pending fetch. setTimeout chain would be more robust. | aia-core-x0ie |
+| F-073 | LOW | No integration test for 304/notModified path in PlayerApp.test.tsx — code correct by inspection but not regression-tested. | aia-core-x0ie |
+
+### Cycle 37 — aia-core-p7kn (T-038)
+
+| # | Severity | Description | Source |
+|---|----------|-------------|--------|
+| F-074 | MEDIUM | Equity not re-fetched after auto-advance or community card update. Scene updates but equity overlay shows stale data. Add fetchEquityForHand() to the else branch. | aia-core-p7kn |
+| F-075 | MEDIUM | Equity overlay and new-hand banner overlap when both visible (bottom: 80px vs bottom: 70px). Shift banner or add conditional positioning. | aia-core-p7kn |
+| F-076 | LOW | fetchEquityForHand lacks cancellation — rapid scrubbing can produce out-of-order equity updates. Pre-existing pattern. | aia-core-p7kn |
+| F-077 | LOW | Suppressed exhaustive-deps lint rule lacks explanatory comment. Future maintainers may remove it and break the loop. | aia-core-p7kn |

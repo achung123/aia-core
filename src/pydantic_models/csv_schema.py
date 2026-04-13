@@ -206,7 +206,7 @@ def parse_csv(csv_text: str) -> dict[tuple[str, str], list[dict[str, str]]]:
     for row in reader:
         if not row or all(cell.strip() == '' for cell in row):
             continue
-        row_dict = dict(zip(headers, row))
+        row_dict = dict(zip(headers, row, strict=False))
         key = (row_dict['game_date'], row_dict['hand_number'])
         grouped[key].append(row_dict)
 

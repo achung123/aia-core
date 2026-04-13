@@ -9,6 +9,7 @@ vi.mock('../api/client.ts', () => ({
   fetchGame: vi.fn(),
   fetchHands: vi.fn(),
   fetchHandStatus: vi.fn(),
+  fetchHandStatusConditional: vi.fn(),
   uploadImage: vi.fn(),
   getDetectionResults: vi.fn(),
   updateHolecards: vi.fn(),
@@ -19,7 +20,7 @@ import {
   fetchSessions,
   fetchGame,
   fetchHands,
-  fetchHandStatus,
+  fetchHandStatusConditional,
   uploadImage,
   getDetectionResults,
   updateHolecards,
@@ -29,7 +30,7 @@ import {
 const mockFetchSessions = fetchSessions as ReturnType<typeof vi.fn>;
 const mockFetchGame = fetchGame as ReturnType<typeof vi.fn>;
 const mockFetchHands = fetchHands as ReturnType<typeof vi.fn>;
-const mockFetchHandStatus = fetchHandStatus as ReturnType<typeof vi.fn>;
+const mockFetchHandStatusConditional = fetchHandStatusConditional as ReturnType<typeof vi.fn>;
 const mockUploadImage = uploadImage as ReturnType<typeof vi.fn>;
 const mockGetDetectionResults = getDetectionResults as ReturnType<typeof vi.fn>;
 const mockUpdateHolecards = updateHolecards as ReturnType<typeof vi.fn>;
@@ -188,11 +189,11 @@ describe('PlayerApp — name picker', () => {
     window.location.hash = '';
     // Default mocks so polling in 'playing' step doesn't crash
     mockFetchHands.mockResolvedValue([{ hand_number: 1 }]);
-    mockFetchHandStatus.mockResolvedValue({
+    mockFetchHandStatusConditional.mockResolvedValue(wrapConditional({
       hand_number: 1,
       community_recorded: false,
       players: [],
-    });
+    }));
   });
 
   afterEach(() => {
@@ -320,13 +321,13 @@ describe('PlayerApp — name picker', () => {
     window.location.hash = '#/player?game=2&player=Bob';
     mockFetchSessions.mockResolvedValue(SESSIONS);
     mockFetchHands.mockResolvedValue([{ hand_number: 1 }]);
-    mockFetchHandStatus.mockResolvedValue({
+    mockFetchHandStatusConditional.mockResolvedValue(wrapConditional({
       hand_number: 1,
       community_recorded: false,
       players: [
         { name: 'Bob', participation_status: 'idle', card_1: null, card_2: null, result: null, outcome_street: null },
       ],
-    });
+    }));
     const container = renderToContainer(<PlayerApp />);
 
     // Should go straight to playing step, not name pick
@@ -346,9 +347,9 @@ async function goToPlaying(playerIndex = 1, { hands, handStatus }: { hands?: { h
   mockFetchGame.mockResolvedValue(GAME_DETAIL);
   mockFetchHands.mockResolvedValue(hands || [{ hand_number: 1 }]);
   if (handStatus) {
-    mockFetchHandStatus.mockResolvedValue(handStatus);
-  } else if (!mockFetchHandStatus.getMockImplementation()) {
-    mockFetchHandStatus.mockResolvedValue({
+    mockFetchHandStatusConditional.mockResolvedValue(wrapConditional(handStatus));
+  } else if (!mockFetchHandStatusConditional.getMockImplementation()) {
+    mockFetchHandStatusConditional.mockResolvedValue(wrapConditional({
       hand_number: 1,
       community_recorded: false,
       players: GAME_DETAIL.player_names.map(name => ({
@@ -359,7 +360,7 @@ async function goToPlaying(playerIndex = 1, { hands, handStatus }: { hands?: { h
         result: null,
         outcome_street: null,
       })),
-    });
+    }));
   }
 
   const { container } = render(<PlayerApp />);
@@ -386,6 +387,10 @@ const HAND_STATUS_IDLE = {
     outcome_street: null,
   })),
 };
+
+function wrapConditional(data: Record<string, unknown>) {
+  return { data, etag: '"test-etag"', notModified: false };
+}
 
 function makeStatus(playerName: string, status: string, extras: Record<string, unknown> = {}) {
   return {
@@ -421,49 +426,49 @@ describe('PlayerApp — polling and status', () => {
   });
 
   it('fetches hands list and starts polling hand status after name selection', async () => {
-    const container = await goToPlaying();
+    await goToPlaying();
 
     await vi.waitFor(() => {
       expect(mockFetchHands).toHaveBeenCalledWith(3, expect.objectContaining({ signal: expect.any(AbortSignal) }));
     });
 
     await vi.waitFor(() => {
-      expect(mockFetchHandStatus).toHaveBeenCalledWith(3, 1, expect.objectContaining({ signal: expect.any(AbortSignal) }));
+      expect(mockFetchHandStatusConditional).toHaveBeenCalledWith(3, 1, expect.objectContaining({ signal: expect.any(AbortSignal) }));
     });
   });
 
-  it('polls hand status every 3 seconds', async () => {
-    const container = await goToPlaying();
+  it('polls hand status every 5 seconds', async () => {
+    await goToPlaying();
 
     await vi.waitFor(() => {
-      expect(mockFetchHandStatus).toHaveBeenCalledTimes(1);
+      expect(mockFetchHandStatusConditional).toHaveBeenCalledTimes(1);
     });
 
-    mockFetchHandStatus.mockResolvedValue(HAND_STATUS_IDLE);
-    act(() => { vi.advanceTimersByTime(3000); });
+    mockFetchHandStatusConditional.mockResolvedValue(wrapConditional(HAND_STATUS_IDLE));
+    act(() => { vi.advanceTimersByTime(5000); });
     await vi.waitFor(() => {
-      expect(mockFetchHandStatus).toHaveBeenCalledTimes(2);
+      expect(mockFetchHandStatusConditional).toHaveBeenCalledTimes(2);
     });
 
-    act(() => { vi.advanceTimersByTime(3000); });
+    act(() => { vi.advanceTimersByTime(5000); });
     await vi.waitFor(() => {
-      expect(mockFetchHandStatus).toHaveBeenCalledTimes(3);
+      expect(mockFetchHandStatusConditional).toHaveBeenCalledTimes(3);
     });
   });
 
   it('stops polling on unmount (no leaked intervals)', async () => {
-    const container = await goToPlaying();
+    await goToPlaying();
 
     await vi.waitFor(() => {
-      expect(mockFetchHandStatus).toHaveBeenCalledTimes(1);
+      expect(mockFetchHandStatusConditional).toHaveBeenCalledTimes(1);
     });
 
     // Unmount
     cleanup();
 
-    const callsBefore = mockFetchHandStatus.mock.calls.length;
-    act(() => { vi.advanceTimersByTime(6000); });
-    expect(mockFetchHandStatus).toHaveBeenCalledTimes(callsBefore);
+    const callsBefore = mockFetchHandStatusConditional.mock.calls.length;
+    act(() => { vi.advanceTimersByTime(10000); });
+    expect(mockFetchHandStatusConditional).toHaveBeenCalledTimes(callsBefore);
   });
 
   it('shows "Waiting for hand…" when status is idle', async () => {
@@ -523,13 +528,13 @@ describe('PlayerApp — polling and status', () => {
   });
 
   it('uses the latest hand number from fetchHands', async () => {
-    const container = await goToPlaying(1, {
+    await goToPlaying(1, {
       hands: [{ hand_number: 1 }, { hand_number: 2 }, { hand_number: 3 }],
       handStatus: { ...HAND_STATUS_IDLE, hand_number: 3 },
     });
 
     await vi.waitFor(() => {
-      expect(mockFetchHandStatus).toHaveBeenCalledWith(3, 3, expect.objectContaining({ signal: expect.any(AbortSignal) }));
+      expect(mockFetchHandStatusConditional).toHaveBeenCalledWith(3, 3, expect.objectContaining({ signal: expect.any(AbortSignal) }));
     });
   });
 
@@ -541,8 +546,8 @@ describe('PlayerApp — polling and status', () => {
     });
 
     // Next poll returns pending
-    mockFetchHandStatus.mockResolvedValue(makeStatus('Bob', 'pending'));
-    act(() => { vi.advanceTimersByTime(3000); });
+    mockFetchHandStatusConditional.mockResolvedValue(wrapConditional(makeStatus('Bob', 'pending')));
+    act(() => { vi.advanceTimersByTime(5000); });
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Your turn');
@@ -553,7 +558,7 @@ describe('PlayerApp — polling and status', () => {
     const container = await goToPlaying(1);
 
     await vi.waitFor(() => {
-      expect(mockFetchHandStatus).toHaveBeenCalled();
+      expect(mockFetchHandStatusConditional).toHaveBeenCalled();
     });
 
     act(() => { container.querySelector<HTMLElement>('[data-testid="change-player-btn"]')!.click(); });
@@ -562,9 +567,9 @@ describe('PlayerApp — polling and status', () => {
       expect(container.querySelectorAll('[data-testid="player-name-btn"]').length).toBe(3);
     });
 
-    const callsBefore = mockFetchHandStatus.mock.calls.length;
-    act(() => { vi.advanceTimersByTime(6000); });
-    expect(mockFetchHandStatus).toHaveBeenCalledTimes(callsBefore);
+    const callsBefore = mockFetchHandStatusConditional.mock.calls.length;
+    act(() => { vi.advanceTimersByTime(10000); });
+    expect(mockFetchHandStatusConditional).toHaveBeenCalledTimes(callsBefore);
   });
 });
 
@@ -798,7 +803,7 @@ describe('PlayerApp — camera capture flow', () => {
     });
 
     mockUpdateHolecards.mockResolvedValue({});
-    mockFetchHandStatus.mockResolvedValue(makeStatus('Bob', 'joined', { card_1: 'Ah', card_2: 'Ks' }));
+    mockFetchHandStatusConditional.mockResolvedValue(wrapConditional(makeStatus('Bob', 'joined', { card_1: 'Ah', card_2: 'Ks' })));
 
     const confirmBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent === 'Confirm');
     await act(async () => { confirmBtn!.click(); });
@@ -945,8 +950,8 @@ describe('PlayerApp — hand back cards action', () => {
     });
 
     // Next poll returns handed_back status
-    mockFetchHandStatus.mockResolvedValue(makeStatus('Bob', 'handed_back', { result: 'handed_back' }));
-    act(() => { vi.advanceTimersByTime(3000); });
+    mockFetchHandStatusConditional.mockResolvedValue(wrapConditional(makeStatus('Bob', 'handed_back', { result: 'handed_back' })));
+    act(() => { vi.advanceTimersByTime(5000); });
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Waiting for dealer');
@@ -995,8 +1000,8 @@ describe('PlayerApp — polling edge cases', () => {
 
     // Next poll cycle: a hand now exists
     mockFetchHands.mockResolvedValue([{ hand_number: 1 }]);
-    mockFetchHandStatus.mockResolvedValue(makeStatus('Bob', 'pending'));
-    act(() => { vi.advanceTimersByTime(3000); });
+    mockFetchHandStatusConditional.mockResolvedValue(wrapConditional(makeStatus('Bob', 'pending')));
+    act(() => { vi.advanceTimersByTime(5000); });
 
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="no-active-hand"]')).toBeNull();
@@ -1013,7 +1018,7 @@ describe('PlayerApp — polling edge cases', () => {
 
     // New hand starts — hand_number changes from 1 to 2
     mockFetchHands.mockResolvedValue([{ hand_number: 1 }, { hand_number: 2 }]);
-    mockFetchHandStatus.mockResolvedValue({
+    mockFetchHandStatusConditional.mockResolvedValue(wrapConditional({
       hand_number: 2,
       community_recorded: false,
       players: GAME_DETAIL.player_names.map(name => ({
@@ -1024,8 +1029,8 @@ describe('PlayerApp — polling edge cases', () => {
         result: null,
         outcome_street: null,
       })),
-    });
-    act(() => { vi.advanceTimersByTime(3000); });
+    }));
+    act(() => { vi.advanceTimersByTime(5000); });
 
     await vi.waitFor(() => {
       expect(container.textContent).toContain('Waiting for hand');
@@ -1036,16 +1041,16 @@ describe('PlayerApp — polling edge cases', () => {
     const container = await goToPlaying(1);
 
     await vi.waitFor(() => {
-      expect(mockFetchHandStatus).toHaveBeenCalled();
+      expect(mockFetchHandStatusConditional).toHaveBeenCalled();
     });
 
     // Next poll: fetchHands network error
     mockFetchHands.mockRejectedValue(new Error('Network error'));
-    act(() => { vi.advanceTimersByTime(3000); });
+    act(() => { vi.advanceTimersByTime(5000); });
 
-    // Should show poll error but not crash
+    // Should show reconnection indicator but not crash
     await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="poll-error"]')).not.toBeNull();
+      expect(container.querySelector('[data-testid="player-reconnecting"]')).not.toBeNull();
     });
 
     // Component should still be mounted and functional
@@ -1053,54 +1058,54 @@ describe('PlayerApp — polling edge cases', () => {
     expect(container.querySelector('[data-testid="change-player-btn"]')).not.toBeNull();
   });
 
-  it('handles network error on fetchHandStatus without crashing', async () => {
+  it('handles network error on fetchHandStatusConditional without crashing', async () => {
     const container = await goToPlaying(1);
 
     await vi.waitFor(() => {
-      expect(mockFetchHandStatus).toHaveBeenCalled();
+      expect(mockFetchHandStatusConditional).toHaveBeenCalled();
     });
 
-    // Next poll: fetchHandStatus network error
-    mockFetchHandStatus.mockRejectedValue(new Error('Server error'));
-    act(() => { vi.advanceTimersByTime(3000); });
+    // Next poll: fetchHandStatusConditional network error
+    mockFetchHandStatusConditional.mockRejectedValue(new Error('Server error'));
+    act(() => { vi.advanceTimersByTime(5000); });
 
     await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="poll-error"]')).not.toBeNull();
+      expect(container.querySelector('[data-testid="player-reconnecting"]')).not.toBeNull();
     });
 
     // Should recover on next successful poll
     mockFetchHands.mockResolvedValue([{ hand_number: 1 }]);
-    mockFetchHandStatus.mockResolvedValue(makeStatus('Bob', 'pending'));
-    act(() => { vi.advanceTimersByTime(3000); });
+    mockFetchHandStatusConditional.mockResolvedValue(wrapConditional(makeStatus('Bob', 'pending')));
+    act(() => { vi.advanceTimersByTime(5000); });
 
     await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="poll-error"]')).toBeNull();
+      expect(container.querySelector('[data-testid="player-reconnecting"]')).toBeNull();
       expect(container.textContent).toContain('Your turn');
     });
   });
 
-  it('clears poll error on successful recovery', async () => {
+  it('clears reconnection indicator on successful recovery', async () => {
     const container = await goToPlaying(1);
 
     await vi.waitFor(() => {
-      expect(mockFetchHandStatus).toHaveBeenCalled();
+      expect(mockFetchHandStatusConditional).toHaveBeenCalled();
     });
 
     // Error poll
     mockFetchHands.mockRejectedValue(new Error('Timeout'));
-    act(() => { vi.advanceTimersByTime(3000); });
+    act(() => { vi.advanceTimersByTime(5000); });
 
     await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="poll-error"]')).not.toBeNull();
+      expect(container.querySelector('[data-testid="player-reconnecting"]')).not.toBeNull();
     });
 
     // Recovery poll
     mockFetchHands.mockResolvedValue([{ hand_number: 1 }]);
-    mockFetchHandStatus.mockResolvedValue(HAND_STATUS_IDLE);
-    act(() => { vi.advanceTimersByTime(3000); });
+    mockFetchHandStatusConditional.mockResolvedValue(wrapConditional(HAND_STATUS_IDLE));
+    act(() => { vi.advanceTimersByTime(5000); });
 
     await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="poll-error"]')).toBeNull();
+      expect(container.querySelector('[data-testid="player-reconnecting"]')).toBeNull();
     });
   });
 });
@@ -1186,7 +1191,7 @@ describe('PlayerApp — session pinning (sessionStorage)', () => {
     window.location.hash = '';
     sessionStorage.clear();
     mockFetchHands.mockResolvedValue([{ hand_number: 1 }]);
-    mockFetchHandStatus.mockResolvedValue({
+    mockFetchHandStatusConditional.mockResolvedValue(wrapConditional({
       hand_number: 1,
       community_recorded: false,
       players: GAME_DETAIL.player_names.map(name => ({
@@ -1197,7 +1202,7 @@ describe('PlayerApp — session pinning (sessionStorage)', () => {
         result: null,
         outcome_street: null,
       })),
-    });
+    }));
   });
 
   afterEach(() => {

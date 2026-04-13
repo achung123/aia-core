@@ -4,7 +4,6 @@ import { createCard } from './cards.js';
 // Card layout per seat: 2 cards, slightly offset from each other
 const CARD_OFFSET_X = 0.25;   // left/right spread
 const CARD_OFFSET_Y = 0.01;   // above table surface
-const CARD_OFFSET_Z = -0.30;  // inward toward table center from seat
 
 function createFoldSprite() {
   const canvas = document.createElement('canvas');
@@ -200,7 +199,7 @@ export function createHoleCards(scene, seatPositions) {
     goToPreFlop() {
       winnerGlowTimers.forEach(id => clearTimeout(id));
       winnerGlowTimers.clear();
-      for (const [seatIndex, data] of seatData) {
+      for (const [seatIndex] of seatData) {
         removeSprite(seatIndex);
         disposeCards(seatIndex);
         placeCards(seatIndex, 'A', 'S', 'A', 'S', false);

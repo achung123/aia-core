@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import type React from 'react';
 import { recordPlayerAction } from '../api/client.ts';
 import { ChipPicker } from '../dealer/ChipPicker.tsx';
@@ -21,13 +21,10 @@ export function getStreet(communityCardCount: number): StreetEnum {
 }
 
 export function PlayerActionButtons({ gameId, handNumber, playerName, communityCardCount }: PlayerActionButtonsProps) {
-  const [hasActed, setHasActed] = useState(false);
+  const [actedOnCount, setActedOnCount] = useState(-1);
+  const hasActed = actedOnCount === communityCardCount;
   const [chipAction, setChipAction] = useState<'bet' | 'raise' | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setHasActed(false);
-  }, [communityCardCount]);
 
   const street = getStreet(communityCardCount);
 
@@ -39,7 +36,7 @@ export function PlayerActionButtons({ gameId, handNumber, playerName, communityC
         action,
         amount: amount ?? null,
       });
-      setHasActed(true);
+      setActedOnCount(communityCardCount);
       setChipAction(null);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Action failed';

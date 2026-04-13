@@ -3,18 +3,18 @@ import {
   fetchSessions,
   fetchGame,
   fetchHands,
-  fetchHandStatus,
+  fetchHandStatusConditional,
   updateHolecards,
   patchPlayerResult,
 } from '../api/client.ts';
 import type {
   GameSessionListItem,
-  HandStatusResponse,
   CardDetectionEntry,
 } from '../api/types.ts';
 import { CameraCapture } from '../dealer/CameraCapture.tsx';
 import { DetectionReview } from '../dealer/DetectionReview.tsx';
 import { PlayerActionButtons } from './PlayerActionButtons.tsx';
+import { usePolling } from '../hooks/usePolling.ts';
 
 export const PLAYER_SESSION_KEY = 'aia-player-session';
 
@@ -130,7 +130,6 @@ export function PlayerApp() {
   const [handBackError, setHandBackError] = useState<string | null>(null);
   const [noActiveHand, setNoActiveHand] = useState(false);
   const [communityCardCount, setCommunityCardCount] = useState(0);
-  const [pollError, setPollError] = useState<string | null>(null);
   const handNumberRef = useRef<number | null>(null);
 
   const loadPlayers = useCallback(function loadPlayers(id: number) {
@@ -218,7 +217,6 @@ export function PlayerApp() {
     setPlayerName(null);
     setPlayerStatus('idle');
     setNoActiveHand(false);
-    setPollError(null);
     handNumberRef.current = null;
     setCaptureStep(null);
     setReviewData(null);
@@ -233,7 +231,6 @@ export function PlayerApp() {
     setGameId(null);
     setPlayerStatus('idle');
     setNoActiveHand(false);
-    setPollError(null);
     handNumberRef.current = null;
     setCaptureStep(null);
     setReviewData(null);
@@ -300,14 +297,12 @@ export function PlayerApp() {
     }
   }
 
-  useEffect(() => {
-    if (step !== 'playing' || !gameId || !playerName) return;
+  const etagRef = useRef<string | null>(null);
 
-    const controller = new AbortController();
-    const { signal } = controller;
-    let intervalId: ReturnType<typeof setInterval> | null = null;
-
-    function pollCycle() {
+  const { isReconnecting: playerReconnecting } = usePolling({
+    intervalMs: 5000,
+    enabled: step === 'playing' && !!gameId && !!playerName,
+    fetchFn: (signal) =>
       fetchHands(gameId!, { signal })
         .then(hands => {
           if (signal.aborted) return;
@@ -316,7 +311,8 @@ export function PlayerApp() {
             setHandNumber(null);
             handNumberRef.current = null;
             setPlayerStatus('idle');
-            return null;
+            etagRef.current = null;
+            return;
           }
           setNoActiveHand(false);
           const latest = hands.reduce((max, h) =>
@@ -325,35 +321,25 @@ export function PlayerApp() {
             setHandNumber(latest.hand_number);
             handNumberRef.current = latest.hand_number;
             setPlayerStatus('idle');
+            etagRef.current = null;
           }
           const ccCount = [latest.flop_1, latest.flop_2, latest.flop_3, latest.turn, latest.river]
             .filter(c => c != null).length;
           setCommunityCardCount(ccCount);
-          return fetchHandStatus(gameId!, latest.hand_number, { signal });
-        })
-        .then(data => {
-          if (!data || signal.aborted) return;
-          setPollError(null);
-          setCommunityRecorded((data as HandStatusResponse).community_recorded);
-          const me = (data as HandStatusResponse).players.find(p => p.name === playerName);
-          if (me) {
-            setPlayerStatus(me.participation_status as ParticipationStatus);
-          }
-        })
-        .catch(err => {
-          if ((err as Error).name === 'AbortError') return;
-          setPollError('Connection issue — retrying…');
-        });
-    }
-
-    pollCycle();
-    intervalId = setInterval(pollCycle, 3000);
-
-    return () => {
-      controller.abort();
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [step, gameId, playerName]);
+          return fetchHandStatusConditional(gameId!, latest.hand_number, { signal, etag: etagRef.current })
+            .then(result => {
+              if (signal.aborted) return;
+              if (result.notModified) return;
+              etagRef.current = result.etag;
+              if (!result.data) return;
+              setCommunityRecorded(result.data.community_recorded);
+              const me = result.data.players.find(p => p.name === playerName);
+              if (me) {
+                setPlayerStatus(me.participation_status as ParticipationStatus);
+              }
+            });
+        }),
+  });
 
   if (step === 'playing') {
     return (
@@ -388,8 +374,8 @@ export function PlayerApp() {
             {noActiveHand && (
               <p data-testid="no-active-hand" style={{ color: '#6b7280' }}>No hands yet — waiting for dealer</p>
             )}
-            {pollError && (
-              <p data-testid="poll-error" style={{ color: '#ca8a04', fontSize: '0.85rem' }}>{pollError}</p>
+            {playerReconnecting && (
+              <p data-testid="player-reconnecting" style={{ color: '#ca8a04', fontSize: '0.85rem' }}>Reconnecting…</p>
             )}
             {!noActiveHand && (
               <>

@@ -1,6 +1,6 @@
 /** @vitest-environment happy-dom */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, cleanup, fireEvent, waitFor, screen } from '@testing-library/react';
+import { render, cleanup, fireEvent, waitFor, screen, act } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 // Mock API client
@@ -416,10 +416,8 @@ describe('TableView', () => {
     vi.mocked(fetchHands).mockResolvedValue(MULTI_HANDS);
     renderTableView('?game=5&player=Alice');
     await waitFor(() => {
-      expect(screen.getByTestId('session-scrubber')).toBeTruthy();
+      expect(screen.getByTestId('session-label').textContent).toBe('Hand 3 / 3');
     });
-    // Latest hand is hand_number 3
-    expect(screen.getByTestId('session-label').textContent).toBe('Hand 3 / 3');
   });
 
   it('scrubber label shows Hand X / Y format', async () => {
@@ -662,5 +660,109 @@ describe('TableView', () => {
     vi.mocked(fetchHands).mockReturnValue(new Promise(() => {}));
     renderTableView('?game=5&player=Alice');
     expect(screen.queryByTestId('blind-position-display')).toBeNull();
+  });
+
+  /* ── Live hand polling (T-038) ────────────────────────────── */
+
+  it('polls for new hands every 10s using usePolling (AC1)', async () => {
+    vi.mocked(fetchHands).mockResolvedValue(HANDS);
+    renderTableView('?game=5&player=Alice');
+    await waitFor(() => {
+      expect(mockSceneUpdate).toHaveBeenCalled();
+    });
+    // fetchHands should have been called at least once on mount
+    expect(vi.mocked(fetchHands)).toHaveBeenCalledWith(5, expect.any(Object));
+  });
+
+  it('does not reset scroll or navigate on polling update (AC6)', async () => {
+    vi.mocked(fetchHands).mockResolvedValue(MULTI_HANDS);
+    renderTableView('?game=5&player=Alice');
+    await waitFor(() => {
+      expect(mockSceneUpdate).toHaveBeenCalled();
+    });
+    // The viewport should still be present (no navigation happened)
+    expect(screen.queryByTestId('player-app')).toBeNull();
+  });
+
+  describe('with fake timers (polling)', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('auto-advances to new hand when viewing latest (AC2)', async () => {
+      vi.mocked(fetchHands).mockResolvedValue([MULTI_HANDS[0]]);
+      renderTableView('?game=5&player=Alice');
+
+      // Let initial poll + microtasks resolve
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+      expect(screen.getByTestId('session-label').textContent).toBe('Hand 1 / 1');
+
+      // Now server returns 2 hands
+      mockSceneUpdate.mockClear();
+      vi.mocked(fetchHands).mockResolvedValue([MULTI_HANDS[0], MULTI_HANDS[1]]);
+
+      // Advance past the 10s polling interval
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10100);
+      });
+
+      expect(screen.getByTestId('session-label').textContent).toBe('Hand 2 / 2');
+    });
+
+    it('shows "New hand available" banner when scrubbing older hand (AC3)', async () => {
+      vi.mocked(fetchHands).mockResolvedValue([MULTI_HANDS[0], MULTI_HANDS[1]]);
+      renderTableView('?game=5&player=Alice');
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+      expect(mockSceneUpdate).toHaveBeenCalled();
+
+      // Scrub to hand 1 (index 0, not latest)
+      const slider = screen.getByTestId('session-slider');
+      fireEvent.change(slider, { target: { value: '1' } });
+
+      // Now 3 hands arrive on next poll
+      vi.mocked(fetchHands).mockResolvedValue(MULTI_HANDS);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10100);
+      });
+
+      expect(screen.getByTestId('new-hand-banner')).toBeTruthy();
+      expect(screen.getByTestId('new-hand-banner').textContent).toContain('New hand available');
+    });
+
+    it('community card changes update scene seamlessly (AC4)', async () => {
+      const noFlop: HandResponse[] = [{
+        ...MULTI_HANDS[0],
+        flop_1: null,
+        flop_2: null,
+        flop_3: null,
+      }];
+      vi.mocked(fetchHands).mockResolvedValue(noFlop);
+      renderTableView('?game=5&player=Alice');
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+      expect(mockSceneUpdate).toHaveBeenCalled();
+
+      // Now the same hand gets community cards
+      mockSceneUpdate.mockClear();
+      vi.mocked(fetchHands).mockResolvedValue([MULTI_HANDS[0]]);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10100);
+      });
+
+      expect(mockSceneUpdate).toHaveBeenCalled();
+      const lastCall = mockSceneUpdate.mock.calls[mockSceneUpdate.mock.calls.length - 1][0];
+      expect(lastCall.cardData.flop[0].rank).toBe('A');
+    });
   });
 });

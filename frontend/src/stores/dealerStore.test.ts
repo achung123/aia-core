@@ -4,9 +4,6 @@ import { useDealerStore, validateOutcomeStreets } from './dealerStore';
 // Helper: get a fresh state snapshot
 const getState = () => useDealerStore.getState();
 
-// Helper: call an action directly (Zustand allows calling outside React)
-const act = useDealerStore.getState;
-
 beforeEach(() => {
   // Reset store to initial state before each test
   useDealerStore.getState().reset();

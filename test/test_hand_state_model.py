@@ -84,7 +84,7 @@ class TestHandStateTableSchema:
             for uc in unique_constraints:
                 unique_cols.extend(uc['column_names'])
             # Also check column-level unique
-            cols = inspector.get_columns('hand_states')
+            # cols = inspector.get_columns("hand_states")  # unused
             # SQLite might report unique via index, check indexes too
             indexes = inspector.get_indexes('hand_states')
             unique_index_cols = []

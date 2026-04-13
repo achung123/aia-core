@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import { fetchBlinds } from '../api/client.ts';
+import { usePolling } from '../hooks/usePolling.ts';
 
 export interface BlindPositionDisplayProps {
   gameId: number;
@@ -9,7 +10,7 @@ export interface BlindPositionDisplayProps {
   bbPlayerName: string | null;
 }
 
-const POLL_INTERVAL_MS = 30_000;
+const POLL_INTERVAL_MS = 10_000;
 
 export function BlindPositionDisplay({
   gameId,
@@ -19,28 +20,16 @@ export function BlindPositionDisplay({
 }: BlindPositionDisplayProps) {
   const [blinds, setBlinds] = useState<{ small_blind: number; big_blind: number } | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    function poll() {
+  usePolling({
+    intervalMs: POLL_INTERVAL_MS,
+    fetchFn: (signal) =>
       fetchBlinds(gameId)
         .then(data => {
-          if (!cancelled) {
+          if (!signal.aborted) {
             setBlinds({ small_blind: data.small_blind, big_blind: data.big_blind });
           }
-        })
-        .catch(() => {
-          /* ignore errors — keep last known value or dash */
-        });
-    }
-
-    poll();
-    const id = setInterval(poll, POLL_INTERVAL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [gameId]);
+        }),
+  });
 
   const isSb = currentPlayerName === sbPlayerName;
   const isBb = currentPlayerName === bbPlayerName;

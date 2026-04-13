@@ -452,6 +452,6 @@ class TestFullRotation:
         state = client.get(f'/games/{game_id}/hands/{hn}/state').json()
         # SB is seat 1, so post-flop first-to-act should be seat 1 (SB)
         # or the first active after dealer. In standard poker SB acts first post-flop.
-        sb_name = hand['sb_player_name']
+        _sb_name = hand["sb_player_name"]  # noqa: F841
         # Post-flop: first non-folded player at or after SB seat
         assert state['current_player_name'] is not None

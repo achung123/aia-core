@@ -1,6 +1,6 @@
 /** @vitest-environment happy-dom */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, cleanup, screen, waitFor, act } from '@testing-library/react';
+import { render, cleanup, screen, act } from '@testing-library/react';
 
 vi.mock('../api/client.ts', () => ({
   fetchBlinds: vi.fn(),
@@ -130,9 +130,9 @@ describe('BlindPositionDisplay', () => {
       blind_timer_remaining_seconds: null,
     });
 
-    // Advance timer to trigger poll (30s interval)
+    // Advance timer to trigger poll (10s interval)
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(30_000);
+      await vi.advanceTimersByTimeAsync(10_000);
     });
 
     expect(vi.mocked(fetchBlinds)).toHaveBeenCalledTimes(2);

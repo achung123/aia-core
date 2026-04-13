@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback, type CSSProperties } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { fetchHands } from '../api/client.ts';
 import { fetchPlayerEquity } from '../api/client.ts';
 import type { HandResponse } from '../api/types.ts';
+import { useHandPolling } from '../hooks/useHandPolling.ts';
 import { createPokerScene } from '../scenes/pokerScene.ts';
 import { isShowdown } from '../scenes/showdown.ts';
 import { computeSeatCameraPosition, animateCameraToSeat, getDefaultCameraPosition } from '../scenes/seatCamera.ts';
@@ -102,14 +102,26 @@ export function TableView() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [hands, setHands] = useState<HandResponse[]>([]);
+  const [currentHandIndex, setCurrentHandIndex] = useState(-1);
   const [currentHandNumber, setCurrentHandNumber] = useState(0);
   const [equityPct, setEquityPct] = useState<number | null>(null);
   const [showEquity, setShowEquity] = useState(true);
   const [sbPlayerName, setSbPlayerName] = useState<string | null>(null);
   const [bbPlayerName, setBbPlayerName] = useState<string | null>(null);
+  const initialLoadDoneRef = useRef(false);
 
   const gameId = gameIdStr ? Number(gameIdStr) : null;
+
+  /* Live hand polling */
+  const handleAutoAdvance = useCallback((newIndex: number) => {
+    setCurrentHandIndex(newIndex);
+  }, []);
+
+  const { hands, newHandAvailable, dismissNewHand, hasFetched } = useHandPolling({
+    gameId,
+    currentHandIndex,
+    onAutoAdvance: handleAutoAdvance,
+  });
 
   /* Navigate back to the player action screen */
   const handleBack = useCallback(() => {
@@ -172,7 +184,6 @@ export function TableView() {
     if (!domEl || !seatPositions) return;
     const cw = domEl.clientWidth || 1;
     const ch = domEl.clientHeight || 1;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     labelsRef.current.forEach((label, i: number) => {
       if (seatPositions[i] && seatPositions[i].clone) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -314,6 +325,8 @@ export function TableView() {
 
   /* Handle scrubber change */
   function handleScrubberChange(handNumber: number): void {
+    const idx = hands.findIndex(h => h.hand_number === handNumber);
+    if (idx >= 0) setCurrentHandIndex(idx);
     setCurrentHandNumber(handNumber);
     const hand = hands.find(h => h.hand_number === handNumber);
     if (hand) {
@@ -322,66 +335,59 @@ export function TableView() {
       setSbPlayerName(hand.sb_player_name ?? null);
       setBbPlayerName(hand.bb_player_name ?? null);
     }
+    dismissNewHand();
   }
 
-  /* Fetch and render hand data */
+  /* React to hands changes from polling */
   useEffect(() => {
     if (!gameId || !playerName) return;
 
-    const controller = new AbortController();
-    const { signal } = controller;
-
-    fetchHands(gameId, { signal })
-      .then(fetchedHands => {
-        if (signal.aborted || !fetchedHands || fetchedHands.length === 0) {
-          if (!signal.aborted) {
-            setError('No hands found for this game.');
-            setLoading(false);
-          }
-          return;
-        }
-
-        // Sort by hand_number ascending
-        const sorted = [...fetchedHands].sort((a, b) => a.hand_number - b.hand_number);
-        setHands(sorted);
-
-        // Get the latest hand
-        const latest = sorted[sorted.length - 1];
-        setCurrentHandNumber(latest.hand_number);
-        setSbPlayerName(latest.sb_player_name ?? null);
-        setBbPlayerName(latest.bb_player_name ?? null);
-
-        // Build seat/player maps
-        buildSeatMaps(sorted);
-        createSeatLabelsForPlayers(playerNamesRef.current);
-
-        // Render the latest hand
-        updateSceneForHand(latest);
-
-        // Fetch player-perspective equity for the latest hand
-        fetchEquityForHand(latest.hand_number);
-
-        // Center camera on the player's seat
-        if (sceneRef.current) {
-          const playerSeatIndex = playerNamesRef.current.indexOf(playerName);
-          if (playerSeatIndex >= 0) {
-            centerOnPlayer(playerSeatIndex);
-          }
-        }
-
+    if (hands.length === 0) {
+      if (hasFetched) {
+        setError('No hands found for this game.');
         setLoading(false);
-      })
-      .catch(err => {
-        if ((err as Error).name === 'AbortError') return;
-        setError(err.message);
-        setLoading(false);
-      });
+      }
+      return;
+    }
 
-    return () => {
-      controller.abort();
-    };
+    if (!initialLoadDoneRef.current) {
+      // First load — initialize everything
+      initialLoadDoneRef.current = true;
+      const latest = hands[hands.length - 1];
+      setCurrentHandIndex(hands.length - 1);
+      setCurrentHandNumber(latest.hand_number);
+      setSbPlayerName(latest.sb_player_name ?? null);
+      setBbPlayerName(latest.bb_player_name ?? null);
+
+      buildSeatMaps(hands);
+      createSeatLabelsForPlayers(playerNamesRef.current);
+      updateSceneForHand(latest);
+      fetchEquityForHand(latest.hand_number);
+
+      if (sceneRef.current) {
+        const playerSeatIndex = playerNamesRef.current.indexOf(playerName);
+        if (playerSeatIndex >= 0) {
+          centerOnPlayer(playerSeatIndex);
+        }
+      }
+
+      setLoading(false);
+    } else {
+      // Subsequent poll — update scene for current hand (handles community card changes)
+      const idx = currentHandIndex >= 0 && currentHandIndex < hands.length
+        ? currentHandIndex
+        : hands.length - 1;
+      const hand = hands[idx];
+      if (hand) {
+        setCurrentHandNumber(hand.hand_number);
+        setSbPlayerName(hand.sb_player_name ?? null);
+        setBbPlayerName(hand.bb_player_name ?? null);
+        buildSeatMaps(hands);
+        updateSceneForHand(hand);
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameId, playerName]);
+  }, [hands, gameId, playerName, hasFetched]);
 
   /* Early-return for missing params */
   if (!gameId) {
@@ -448,6 +454,21 @@ export function TableView() {
       {showEquity && equityPct !== null && (
         <div data-testid="equity-overlay" style={styles.equityOverlay}>
           {Math.round(equityPct * 100)}%
+        </div>
+      )}
+
+      {/* New hand available banner */}
+      {newHandAvailable && (
+        <div
+          data-testid="new-hand-banner"
+          style={styles.newHandBanner}
+          onClick={() => {
+            if (hands.length > 0) {
+              handleScrubberChange(hands[hands.length - 1].hand_number);
+            }
+          }}
+        >
+          New hand available — tap to view
         </div>
       )}
 
@@ -562,5 +583,22 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: '12px',
     pointerEvents: 'none',
     textShadow: '0 1px 3px rgba(0,0,0,0.5)',
+  },
+  newHandBanner: {
+    position: 'absolute',
+    bottom: '70px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    zIndex: 11,
+    background: 'rgba(59, 130, 246, 0.95)',
+    color: '#fff',
+    fontSize: '0.9rem',
+    fontWeight: 600,
+    padding: '8px 20px',
+    borderRadius: '20px',
+    cursor: 'pointer',
+    pointerEvents: 'auto',
+    whiteSpace: 'nowrap',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
   },
 };

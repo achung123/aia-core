@@ -563,7 +563,7 @@ def get_hand_equity(
     return EquityResponse(
         equities=[
             {'player_name': name, 'equity': round(eq, 4)}
-            for (name, _), eq in zip(players_with_cards, equities)
+            for (name, _), eq in zip(players_with_cards, equities, strict=False)
         ]
     )
 

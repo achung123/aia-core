@@ -13,6 +13,7 @@ import { OutcomeButtons } from './OutcomeButtons.tsx';
 import { ReviewScreen } from './ReviewScreen.tsx';
 import { addPlayerToHand, updateHolecards, updateFlop, updateTurn, updateRiver, patchPlayerResult, fetchGame, fetchHand, fetchHandStatus, fetchEquity } from '../api/client.ts';
 import { mapEquityToOutcomes, inferOutcomeStreet } from './showdownHelpers.ts';
+import { usePolling } from '../hooks/usePolling.ts';
 
 interface ReviewData {
   targetName: string;
@@ -39,8 +40,8 @@ export function DealerApp() {
   const [outcomeError, setOutcomeError] = useState<string | null>(null);
   const [outcomeSubmitting, setOutcomeSubmitting] = useState(false);
   const [showFinishConfirm, setShowFinishConfirm] = useState(false);
-  const [finishError, setFinishError] = useState<string | null>(null);
-  const [finishing, setFinishing] = useState(false);
+  const [finishError] = useState<string | null>(null);
+  const [finishing] = useState(false);
 
   // Emit legacy custom event for non-Zustand subscribers (e.g., LandingPage)
   useEffect(() => {
@@ -50,13 +51,10 @@ export function DealerApp() {
   }, []);
 
   // Polling for participation mode
-  useEffect(() => {
-    if (currentStep !== 'activeHand' || !gameId || !currentHandId) return;
-
-    const controller = new AbortController();
-    const { signal } = controller;
-
-    function poll() {
+  const { isReconnecting: dealerReconnecting } = usePolling({
+    intervalMs: 3000,
+    enabled: currentStep === 'activeHand' && !!gameId && !!currentHandId,
+    fetchFn: (signal) =>
       fetchHandStatus(gameId!, currentHandId!, { signal })
         .then((data) => {
           if (signal.aborted) return;
@@ -83,21 +81,8 @@ export function DealerApp() {
               })
               .catch(() => { /* ignore card fetch errors */ });
           }
-        })
-        .catch((err: unknown) => {
-          if (err instanceof Error && err.name === 'AbortError') return;
-          /* ignore polling errors */
-        });
-    }
-
-    poll();
-    const intervalId = setInterval(poll, 3000);
-
-    return () => {
-      controller.abort();
-      clearInterval(intervalId);
-    };
-  }, [currentStep, gameId, currentHandId]);
+        }),
+  });
 
   function handleNewGame() {
     setStep('create');
@@ -380,6 +365,11 @@ export function DealerApp() {
       {/* ── Step 3: Active Hand ── */}
       {currentStep === 'activeHand' && gameId && (
         <>
+          {dealerReconnecting && (
+            <div data-testid="dealer-reconnecting" style={{ color: '#ca8a04', fontSize: '0.8rem', textAlign: 'center', padding: '0.25rem' }}>
+              Reconnecting…
+            </div>
+          )}
           {/* Base layer: active hand dashboard (hidden when overlay active) */}
           {!isActiveHandOverlay && (
             <ActiveHandDashboard
@@ -569,17 +559,4 @@ const dialogButtonRow: React.CSSProperties = {
   gap: '0.5rem',
 };
 
-const toastStyle: React.CSSProperties = {
-  position: 'fixed',
-  bottom: '5rem',
-  left: '50%',
-  transform: 'translateX(-50%)',
-  background: '#991b1b',
-  color: '#fff',
-  padding: '0.75rem 1.5rem',
-  borderRadius: '8px',
-  fontSize: '0.95rem',
-  zIndex: 200,
-  maxWidth: '90%',
-  textAlign: 'center',
-};
+

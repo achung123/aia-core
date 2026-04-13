@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, type CSSProperties } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback, type CSSProperties } from 'react';
 import { createPokerScene } from '../scenes/pokerScene.ts';
 import { calculateEquity, type Card } from '../poker/evaluator';
 import { StreetScrubber } from '../mobile/StreetScrubber.tsx';
@@ -55,15 +55,46 @@ export interface DealerPreviewProps {
   handNumber?: number;
 }
 
-export function DealerPreview({ community, players, gameId: _gameId, handNumber: _handNumber }: DealerPreviewProps) {
+export function DealerPreview({ community, players }: DealerPreviewProps) {
   const [expanded, setExpanded] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sceneRef = useRef<any>(null);
   const labelsRef = useRef<HTMLDivElement[]>([]);
-  const [equityMap, setEquityMap] = useState<Record<string, number>>({});
-  const [currentStreet, setCurrentStreet] = useState<StreetName>('Pre-Flop');
+
+  // Auto-derive street from community cards; user can override per community state
+  const communityKey = `${community?.flop1 ?? ''}|${community?.turn ?? ''}|${community?.river ?? ''}`;
+  const derivedStreet = useMemo<StreetName>(() => {
+    if (!community) return 'Pre-Flop';
+    if (community.river) return 'River';
+    if (community.turn) return 'Turn';
+    if (community.flop1) return 'Flop';
+    return 'Pre-Flop';
+  }, [community?.flop1, community?.turn, community?.river]);
+  const [userOverride, setUserOverride] = useState<{ key: string; street: StreetName } | null>(null);
+  const currentStreet: StreetName = (userOverride?.key === communityKey) ? userOverride.street : derivedStreet;
+  const setCurrentStreet = useCallback((s: StreetName) => {
+    setUserOverride({ key: communityKey, street: s });
+  }, [communityKey]);
+  const playerCardsKey = (players || []).map((p) => `${p.card1 ?? ''}|${p.card2 ?? ''}`).join(',');
+  const equityMap = useMemo<Record<string, number>>(() => {
+    const playersWithCards = (players || []).filter((p) => p.card1 && p.card2);
+    if (playersWithCards.length < 2) return {};
+    const boardCards = communityForStreet(community, currentStreet);
+    const holeCards = playersWithCards.map((p) => [parseCard(p.card1)!, parseCard(p.card2)!]);
+    try {
+      const results = calculateEquity(holeCards, boardCards);
+      const eqMap: Record<string, number> = {};
+      playersWithCards.forEach((p, i) => {
+        eqMap[p.name] = Math.round(results[i].equity * 100);
+      });
+      return eqMap;
+    } catch {
+      return {};
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStreet, community?.flop1, community?.flop2, community?.flop3, community?.turn, community?.river, playerCardsKey]);
 
   // Create / dispose scene when expanded changes
   useEffect(() => {
@@ -195,45 +226,6 @@ export function DealerPreview({ community, players, gameId: _gameId, handNumber:
     currentStreet,
     community?.flop1, community?.flop2, community?.flop3, community?.turn, community?.river,
     ...((players || []).flatMap((p) => [p.card1, p.card2, p.name, p.status])),
-  ]);
-
-  // Auto-advance street when new community cards come in
-  useEffect(() => {
-    if (community) {
-      if (community.river) setCurrentStreet('River');
-      else if (community.turn) setCurrentStreet('Turn');
-      else if (community.flop1) setCurrentStreet('Flop');
-      else setCurrentStreet('Pre-Flop');
-    } else {
-      setCurrentStreet('Pre-Flop');
-    }
-  }, [community?.flop1, community?.turn, community?.river]);
-
-  // Calculate equity client-side based on current street
-  useEffect(() => {
-    const playersWithCards = (players || []).filter((p) => p.card1 && p.card2);
-    if (playersWithCards.length < 2) {
-      setEquityMap({});
-      return;
-    }
-
-    const boardCards = communityForStreet(community, currentStreet);
-    const holeCards = playersWithCards.map((p) => [parseCard(p.card1)!, parseCard(p.card2)!]);
-
-    try {
-      const results = calculateEquity(holeCards, boardCards);
-      const eqMap: Record<string, number> = {};
-      playersWithCards.forEach((p, i) => {
-        eqMap[p.name] = Math.round(results[i].equity * 100);
-      });
-      setEquityMap(eqMap);
-    } catch {
-      setEquityMap({});
-    }
-  }, [
-    currentStreet,
-    community?.flop1, community?.flop2, community?.flop3, community?.turn, community?.river,
-    ...((players || []).flatMap((p) => [p.card1, p.card2])),
   ]);
 
   // ResizeObserver for responsive canvas + label reposition

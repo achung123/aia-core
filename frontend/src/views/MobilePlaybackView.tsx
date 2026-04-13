@@ -236,7 +236,6 @@ export function MobilePlaybackView() {
     if (!domEl || !seatPositions) return;
     const cw = domEl.clientWidth || 1;
     const ch = domEl.clientHeight || 1;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     labelsRef.current.forEach((label, i: number) => {
       if (seatPositions[i] && seatPositions[i].clone) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
