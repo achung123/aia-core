@@ -1,6 +1,7 @@
 """Tests for T-039: Image Upload endpoint (POST /games/{game_id}/hands/image)."""
 
 import glob
+import os
 from unittest.mock import patch
 
 import pytest
@@ -123,6 +124,20 @@ class TestImageUploadSuccess:
         assert 'hand.jpg' in data['file_path']
 
 
+class TestImageUploadAbsolutePath:
+    """File path must be absolute so Docker CWD differences don't cause failures."""
+
+    def test_file_path_is_absolute(self, client, game_id):
+        response = client.post(
+            f'/games/{game_id}/hands/image',
+            files={'file': ('hand.jpg', _make_jpeg(), 'image/jpeg')},
+        )
+        assert response.status_code == 201
+        assert os.path.isabs(response.json()['file_path']), (
+            'Stored file_path must be absolute to avoid Docker CWD issues'
+        )
+
+
 class TestImageUploadValidation:
     def test_unsupported_file_type_returns_415(self, client, game_id):
         response = client.post(
@@ -179,7 +194,7 @@ class TestImageUploadPathTraversal:
             assert '..' not in file_path, (
                 'Path traversal sequence must not appear in stored path'
             )
-            assert file_path.startswith('uploads/'), (
+            assert '/uploads/' in file_path or file_path.startswith('uploads/'), (
                 'Stored path must remain inside uploads/'
             )
 
@@ -192,7 +207,7 @@ class TestImageUploadPathTraversal:
         assert response.status_code == 201
         file_path = response.json()['file_path']
         assert '..' not in file_path
-        assert file_path.startswith('uploads/')
+        assert '/uploads/' in file_path or file_path.startswith('uploads/')
         assert 'evil.jpg' in file_path
 
     def test_absolute_path_filename_is_sanitized(self, client, game_id):
@@ -206,7 +221,7 @@ class TestImageUploadPathTraversal:
         assert not file_path.startswith('/etc/'), (
             'Absolute path must not be stored outside uploads/'
         )
-        assert file_path.startswith('uploads/')
+        assert '/uploads/' in file_path or file_path.startswith('uploads/')
 
 
 class TestImageUploadNoDuplicateOverwrite:

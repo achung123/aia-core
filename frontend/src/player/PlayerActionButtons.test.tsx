@@ -274,3 +274,80 @@ describe('PlayerActionButtons', () => {
     expect(foldBtn.style.backgroundColor).toBe('#dc2626');
   });
 });
+
+describe('PlayerActionButtons — data-driven rendering', () => {
+  it('renders only legal actions when legalActions provided', () => {
+    render(<PlayerActionButtons {...defaultProps} legalActions={['fold', 'call', 'raise']} />);
+    expect(screen.getByTestId('action-fold')).toBeDefined();
+    expect(screen.getByTestId('action-call')).toBeDefined();
+    expect(screen.getByTestId('action-raise')).toBeDefined();
+    expect(screen.queryByTestId('action-check')).toBeNull();
+    expect(screen.queryByTestId('action-bet')).toBeNull();
+  });
+
+  it('renders only fold and check when legal', () => {
+    render(<PlayerActionButtons {...defaultProps} legalActions={['fold', 'check']} />);
+    expect(screen.getByTestId('action-fold')).toBeDefined();
+    expect(screen.getByTestId('action-check')).toBeDefined();
+    expect(screen.queryByTestId('action-call')).toBeNull();
+    expect(screen.queryByTestId('action-bet')).toBeNull();
+    expect(screen.queryByTestId('action-raise')).toBeNull();
+  });
+
+  it('shows betting info with pot and amount to call', () => {
+    render(<PlayerActionButtons {...defaultProps} legalActions={['fold', 'call']} pot={2.50} amountToCall={0.50} />);
+    const info = screen.getByTestId('betting-info');
+    expect(info.textContent).toContain('Pot: $2.50');
+    expect(info.textContent).toContain('$0.50 to call');
+  });
+
+  it('shows pot odds when amount to call is positive', () => {
+    render(<PlayerActionButtons {...defaultProps} legalActions={['fold', 'call']} pot={2.50} amountToCall={0.50} />);
+    const odds = screen.getByTestId('pot-odds');
+    // pot odds = (pot / amountToCall) + 1 = (2.50 / 0.50) + 1 = 6.0:1
+    expect(odds.textContent).toBe('Odds: 6.0:1');
+  });
+
+  it('hides pot odds when amount to call is zero', () => {
+    render(<PlayerActionButtons {...defaultProps} legalActions={['fold', 'check']} pot={1.00} amountToCall={0} />);
+    expect(screen.queryByTestId('pot-odds')).toBeNull();
+  });
+
+  it('hides amount-to-call when zero', () => {
+    render(<PlayerActionButtons {...defaultProps} legalActions={['fold', 'check']} pot={1.00} amountToCall={0} />);
+    const info = screen.getByTestId('betting-info');
+    expect(info.textContent).toContain('Pot: $1.00');
+    expect(info.textContent).not.toContain('to call');
+  });
+
+  it('Call button displays amount when amountToCall > 0', () => {
+    render(<PlayerActionButtons {...defaultProps} legalActions={['fold', 'call']} amountToCall={0.25} />);
+    expect(screen.getByTestId('action-call').textContent).toBe('Call $0.25');
+  });
+
+  it('Call button shows plain "Call" when amountToCall is 0', () => {
+    render(<PlayerActionButtons {...defaultProps} legalActions={['fold', 'call']} amountToCall={0} />);
+    expect(screen.getByTestId('action-call').textContent).toBe('Call');
+  });
+
+  it('Call sends amount to API when amountToCall > 0', async () => {
+    render(<PlayerActionButtons {...defaultProps} legalActions={['fold', 'call']} amountToCall={0.50} />);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('action-call'));
+    });
+    expect(mockRecordPlayerAction).toHaveBeenCalledWith(1, 2, 'Alice', {
+      street: 'preflop',
+      action: 'call',
+      amount: 0.50,
+    });
+  });
+
+  it('renders all buttons as fallback when legalActions is empty', () => {
+    render(<PlayerActionButtons {...defaultProps} legalActions={[]} />);
+    expect(screen.getByTestId('action-fold')).toBeDefined();
+    expect(screen.getByTestId('action-check')).toBeDefined();
+    expect(screen.getByTestId('action-call')).toBeDefined();
+    expect(screen.getByTestId('action-bet')).toBeDefined();
+    expect(screen.getByTestId('action-raise')).toBeDefined();
+  });
+});

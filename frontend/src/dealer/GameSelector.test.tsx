@@ -72,9 +72,9 @@ describe('GameSelector', () => {
 
     const cards = screen.getAllByTestId('game-card');
     // Sorted by game_id desc: 3 (complete), 2 (active), 1 (complete)
-    expect((cards[0] as HTMLElement).style.borderColor).not.toContain('indigo');
-    expect((cards[1] as HTMLElement).style.borderColor).toContain('indigo');
-    expect((cards[2] as HTMLElement).style.borderColor).not.toContain('indigo');
+    expect((cards[0] as HTMLElement).style.borderColor).not.toContain('#6366f1');
+    expect((cards[1] as HTMLElement).style.borderColor).toContain('#6366f1');
+    expect((cards[2] as HTMLElement).style.borderColor).not.toContain('#6366f1');
   });
 
   it('calls onSelectGame when a game card is tapped', async () => {

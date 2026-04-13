@@ -1,14 +1,14 @@
 import * as THREE from 'three';
 
 /** Default overhead camera position used by the poker scene. */
-export const DEFAULT_OVERHEAD_POSITION = new THREE.Vector3(0, 14, 3);
+export const DEFAULT_OVERHEAD_POSITION = new THREE.Vector3(0, 18, 6);
 /** Default camera look-at target (table center). */
 export const DEFAULT_OVERHEAD_TARGET = new THREE.Vector3(0, 0, 0);
 
 /** Height of the camera above the table when snapped to a seat. */
-const SEAT_CAMERA_HEIGHT = 6;
+export const SEAT_CAMERA_HEIGHT = 8;
 /** How far behind the seat the camera is placed (multiplier on seat vector). */
-const SEAT_CAMERA_BEHIND = 1.4;
+export const SEAT_CAMERA_BEHIND = 1.6;
 
 /**
  * Compute a camera position and look-at target for viewing from a specific seat.

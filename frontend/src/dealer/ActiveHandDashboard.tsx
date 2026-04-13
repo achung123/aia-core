@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import type { CommunityCards, Player } from '../stores/dealerStore.ts';
-import { fetchBlinds } from '../api/client.ts';
-import { isShowdownEnabled } from './showdownHelpers.ts';
+import { recordPlayerAction, fetchHands } from '../api/client.ts';
+import { TableView3D } from './TableView3D.tsx';
+import { BlindTimer } from './BlindTimer.tsx';
+import type { ActionEnum, StreetEnum, HandResponse } from '../api/types.ts';
 
 const statusColors: Record<string, string> = {
   playing: '#ffffff',
@@ -24,6 +26,7 @@ function formatStatus(status: string, outcomeStreet: string | null): string {
 
 export interface ActiveHandDashboardProps {
   gameId: number;
+  handNumber?: number;
   community: CommunityCards;
   players: Player[];
   sbPlayerName: string | null;
@@ -33,13 +36,21 @@ export interface ActiveHandDashboardProps {
   onMarkNotPlaying?: (playerName: string) => void;
   canFinish?: boolean;
   onFinishHand?: () => void;
-  onShowdown?: () => void;
   onBack?: () => void;
   patchError?: string | null;
+  // Betting verification
+  currentPlayerName?: string | null;
+  legalActions?: string[];
+  amountToCall?: number;
+  pot?: number;
+  streetComplete?: boolean;
+  handPhase?: string;
+  onActionConfirmed?: () => void;
 }
 
 export function ActiveHandDashboard({
   gameId,
+  handNumber,
   community,
   players,
   sbPlayerName,
@@ -49,14 +60,26 @@ export function ActiveHandDashboard({
   onMarkNotPlaying,
   canFinish,
   onFinishHand,
-  onShowdown,
   onBack,
   patchError,
+  currentPlayerName,
+  legalActions,
+  amountToCall,
+  pot,
+  streetComplete,
+  handPhase,
+  onActionConfirmed,
 }: ActiveHandDashboardProps) {
-  const [blinds, setBlinds] = useState<{ small_blind: number; big_blind: number } | null>(null);
   const [isWide, setIsWide] = useState(() =>
     typeof window !== 'undefined' && window.matchMedia('(min-width: 600px)').matches,
   );
+  const [overrideOpen, setOverrideOpen] = useState(false);
+  const [overrideAction, setOverrideAction] = useState<ActionEnum>('call');
+  const [overrideAmount, setOverrideAmount] = useState('');
+  const [betVerifyError, setBetVerifyError] = useState<string | null>(null);
+  const [betVerifyLoading, setBetVerifyLoading] = useState(false);
+  const [viewMode, setViewMode] = useState<'tile' | '3d'>('tile');
+  const [hands3D, setHands3D] = useState<HandResponse[]>([]);
 
   useEffect(() => {
     const mql = window.matchMedia('(min-width: 600px)');
@@ -64,12 +87,6 @@ export function ActiveHandDashboard({
     mql.addEventListener('change', handler);
     return () => mql.removeEventListener('change', handler);
   }, []);
-
-  useEffect(() => {
-    fetchBlinds(gameId)
-      .then((data) => setBlinds({ small_blind: data.small_blind, big_blind: data.big_blind }))
-      .catch(() => { /* ignore blind fetch errors */ });
-  }, [gameId]);
 
   const boardCards = [
     community.flop1,
@@ -79,13 +96,60 @@ export function ActiveHandDashboard({
     community.river,
   ];
 
+  function deriveStreet(): StreetEnum {
+    if (community.riverRecorded) return 'river';
+    if (community.turnRecorded) return 'turn';
+    if (community.flopRecorded) return 'flop';
+    return 'preflop';
+  }
+
+  async function handleOverrideSubmit() {
+    if (!handNumber || !currentPlayerName) return;
+    setBetVerifyLoading(true);
+    setBetVerifyError(null);
+    const parsedAmount = overrideAmount ? parseFloat(overrideAmount) : null;
+    try {
+      await recordPlayerAction(gameId, handNumber, currentPlayerName, {
+        street: deriveStreet(),
+        action: overrideAction,
+        amount: parsedAmount,
+      });
+      setOverrideOpen(false);
+      setOverrideAmount('');
+      onActionConfirmed?.();
+    } catch (err) {
+      setBetVerifyError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBetVerifyLoading(false);
+    }
+  }
+
   return (
     <div style={isWide ? styles.containerWide : styles.container}>
+      {/* 3D View Toggle */}
+      <button
+        data-testid="view-toggle-btn"
+        onClick={() => {
+          setViewMode((v) => {
+            const next = v === 'tile' ? '3d' : 'tile';
+            if (next === '3d') {
+              fetchHands(gameId).then(setHands3D).catch(() => {});
+            }
+            return next;
+          });
+        }}
+        style={styles.viewToggleButton}
+      >
+        {viewMode === 'tile' ? '3D View' : 'Tile View'}
+      </button>
+
+      {viewMode === '3d' ? (
+        <TableView3D hands={hands3D} />
+      ) : (
+      <>
       {/* Blind Info Bar */}
       <div data-testid="blind-info-bar" style={styles.blindBarSticky}>
-        <span style={styles.blindLevel}>
-          {blinds ? `Blinds: $${blinds.small_blind.toFixed(2)} / $${blinds.big_blind.toFixed(2)}` : 'Blinds: –'}
-        </span>
+        <BlindTimer gameId={gameId} />
         <span style={styles.blindPlayers}>
           {sbPlayerName && <span>SB: {sbPlayerName}</span>}
           {sbPlayerName && bbPlayerName && <span style={styles.blindSeparator}> | </span>}
@@ -118,8 +182,12 @@ export function ActiveHandDashboard({
           <div data-testid="street-buttons" style={styles.streetRow}>
             <button
               data-testid="flop-tile"
-              style={styles.streetTile}
-              onClick={() => onTileSelect('flop')}
+              style={{
+                ...styles.streetTile,
+                ...(streetComplete === false && !community.flopRecorded ? styles.streetTileDisabled : {}),
+              }}
+              onClick={() => (streetComplete !== false || community.flopRecorded) && onTileSelect('flop')}
+              disabled={streetComplete === false && !community.flopRecorded}
             >
               <span style={styles.tileName}>Flop</span>
               {community.flopRecorded && <span style={styles.check}>✅</span>}
@@ -128,10 +196,10 @@ export function ActiveHandDashboard({
               data-testid="turn-tile"
               style={{
                 ...styles.streetTile,
-                ...(community.flopRecorded ? {} : styles.streetTileDisabled),
+                ...(community.flopRecorded && streetComplete !== false ? {} : styles.streetTileDisabled),
               }}
-              onClick={() => community.flopRecorded && onTileSelect('turn')}
-              disabled={!community.flopRecorded}
+              onClick={() => community.flopRecorded && streetComplete !== false && onTileSelect('turn')}
+              disabled={!community.flopRecorded || streetComplete === false}
             >
               <span style={styles.tileName}>Turn</span>
               {community.turnRecorded && <span style={styles.check}>✅</span>}
@@ -140,27 +208,89 @@ export function ActiveHandDashboard({
               data-testid="river-tile"
               style={{
                 ...styles.streetTile,
-                ...(community.turnRecorded ? {} : styles.streetTileDisabled),
+                ...(community.turnRecorded && streetComplete !== false ? {} : styles.streetTileDisabled),
               }}
-              onClick={() => community.turnRecorded && onTileSelect('river')}
-              disabled={!community.turnRecorded}
+              onClick={() => community.turnRecorded && streetComplete !== false && onTileSelect('river')}
+              disabled={!community.turnRecorded || streetComplete === false}
             >
               <span style={styles.tileName}>River</span>
               {community.riverRecorded && <span style={styles.check}>✅</span>}
             </button>
-            <button
-              data-testid="showdown-btn"
-              style={{
-                ...styles.streetTile,
-                ...(isShowdownEnabled(community, players) ? {} : styles.streetTileDisabled),
-              }}
-              onClick={() => isShowdownEnabled(community, players) && onShowdown?.()}
-              disabled={!isShowdownEnabled(community, players)}
-            >
-              <span style={styles.tileName}>Showdown</span>
-            </button>
           </div>
         </div>
+
+        {/* Bet Verification Panel */}
+        {handNumber && (
+          <div data-testid="bet-verify-panel" style={styles.betVerifyPanel}>
+            <div style={styles.betVerifyHeader}>
+              <span style={styles.betVerifyLabel}>
+                {handPhase === 'awaiting_cards'
+                  ? 'Waiting for cards…'
+                  : currentPlayerName
+                    ? `Turn: ${currentPlayerName}`
+                    : 'Waiting for turn…'}
+              </span>
+              {pot !== undefined && pot > 0 && (
+                <span data-testid="pot-display" style={styles.potBadge}>Pot: ${pot.toFixed(2)}</span>
+              )}
+            </div>
+            {currentPlayerName && legalActions && legalActions.length > 0 && (
+              <div style={styles.betVerifyActions}>
+                <span data-testid="legal-actions-display" style={styles.legalActionsText}>
+                  Legal: {legalActions.join(', ')}
+                  {amountToCall ? ` ($${amountToCall.toFixed(2)} to call)` : ''}
+                </span>
+                <div style={styles.betVerifyBtnRow}>
+                  <button
+                    data-testid="record-action-btn"
+                    style={styles.overrideBtn}
+                    onClick={() => setOverrideOpen(!overrideOpen)}
+                    disabled={betVerifyLoading}
+                  >
+                    Record Action
+                  </button>
+                </div>
+              </div>
+            )}
+            {overrideOpen && currentPlayerName && (
+              <div data-testid="override-form" style={styles.overrideForm}>
+                <select
+                  data-testid="override-action-select"
+                  value={overrideAction}
+                  onChange={(e) => setOverrideAction(e.target.value as ActionEnum)}
+                  style={styles.overrideSelect}
+                >
+                  <option value="fold">Fold</option>
+                  <option value="check">Check</option>
+                  <option value="call">Call</option>
+                  <option value="bet">Bet</option>
+                  <option value="raise">Raise</option>
+                </select>
+                <input
+                  data-testid="override-amount-input"
+                  type="number"
+                  placeholder="Amount"
+                  value={overrideAmount}
+                  onChange={(e) => setOverrideAmount(e.target.value)}
+                  style={styles.overrideInput}
+                  step="0.01"
+                  min="0"
+                />
+                <button
+                  data-testid="override-submit-btn"
+                  style={styles.confirmBtn}
+                  onClick={handleOverrideSubmit}
+                  disabled={betVerifyLoading}
+                >
+                  Submit
+                </button>
+              </div>
+            )}
+            {betVerifyError && (
+              <div data-testid="bet-verify-error" style={styles.toast}>{betVerifyError}</div>
+            )}
+          </div>
+        )}
 
         {/* Player Panel — player tiles + finish button */}
         <div data-testid="player-panel" style={isWide ? styles.panelScroll : styles.panelStack}>
@@ -229,6 +359,8 @@ export function ActiveHandDashboard({
       {patchError && (
         <div style={styles.toast}>{patchError}</div>
       )}
+      </>
+      )}
     </div>
   );
 }
@@ -247,9 +379,22 @@ const styles: Record<string, React.CSSProperties> = {
     margin: '0 auto',
     padding: '1rem',
   },
+  viewToggleButton: {
+    width: '100%',
+    padding: '0.5rem',
+    minHeight: '40px',
+    fontSize: '0.95rem',
+    fontWeight: 600,
+    border: '1px solid #4f46e5',
+    borderRadius: '8px',
+    background: '#eef2ff',
+    color: '#4f46e5',
+    cursor: 'pointer',
+    marginBottom: '0.75rem',
+  },
   blindBarSticky: {
     display: 'flex',
-    justifyContent: 'space-between',
+    flexDirection: 'column',
     alignItems: 'center',
     padding: '0.5rem 0.75rem',
     background: '#1e1b4b',
@@ -437,5 +582,88 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px solid #fca5a5',
     borderRadius: '8px',
     fontSize: '0.85rem',
+  },
+  betVerifyPanel: {
+    padding: '0.75rem',
+    marginBottom: '0.75rem',
+    border: '2px solid #c7d2fe',
+    borderRadius: '12px',
+    background: '#f5f3ff',
+  },
+  betVerifyHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '0.5rem',
+  },
+  betVerifyLabel: {
+    fontWeight: 700,
+    fontSize: '1rem',
+    color: '#312e81',
+  },
+  potBadge: {
+    fontSize: '0.85rem',
+    fontWeight: 600,
+    color: '#4f46e5',
+    background: '#eef2ff',
+    padding: '0.2rem 0.5rem',
+    borderRadius: '6px',
+  },
+  betVerifyActions: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '0.5rem',
+  },
+  legalActionsText: {
+    fontSize: '0.85rem',
+    color: '#555',
+  },
+  betVerifyBtnRow: {
+    display: 'flex',
+    gap: '0.5rem',
+  },
+  confirmBtn: {
+    padding: '0.5rem 1rem',
+    fontSize: '0.9rem',
+    fontWeight: 600,
+    borderRadius: '8px',
+    border: 'none',
+    background: '#16a34a',
+    color: '#fff',
+    cursor: 'pointer',
+    minHeight: '40px',
+  },
+  overrideBtn: {
+    padding: '0.5rem 1rem',
+    fontSize: '0.9rem',
+    fontWeight: 600,
+    borderRadius: '8px',
+    border: '1px solid #f59e0b',
+    background: '#fef3c7',
+    color: '#92400e',
+    cursor: 'pointer',
+    minHeight: '40px',
+  },
+  overrideForm: {
+    display: 'flex',
+    gap: '0.5rem',
+    marginTop: '0.5rem',
+    alignItems: 'center',
+    flexWrap: 'wrap' as const,
+  },
+  overrideSelect: {
+    padding: '0.4rem 0.5rem',
+    fontSize: '0.9rem',
+    borderRadius: '6px',
+    border: '1px solid #d1d5db',
+    minHeight: '36px',
+  },
+  overrideInput: {
+    padding: '0.4rem 0.5rem',
+    fontSize: '0.9rem',
+    borderRadius: '6px',
+    border: '1px solid #d1d5db',
+    width: '80px',
+    minHeight: '36px',
   },
 };

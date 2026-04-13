@@ -40,6 +40,9 @@ PNG_MAGIC = b'\x89PNG\r\n\x1a\n'
 _MODELS_DIR = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'models')
 _WEIGHTS_PATH = os.path.join(_MODELS_DIR, 'best_closeup.pt')
 _WEIGHTS_PATH_FALLBACK = os.path.join(_MODELS_DIR, 'best.pt')
+_UPLOAD_DIR = os.path.normpath(
+    os.path.join(os.path.dirname(__file__), '..', '..', '..', 'uploads')
+)
 
 
 def get_card_detector() -> CardDetector:
@@ -84,7 +87,7 @@ async def upload_image(
             detail='File content does not match a valid JPEG or PNG image.',
         )
 
-    upload_dir = os.path.join('uploads', str(game_id))
+    upload_dir = os.path.join(_UPLOAD_DIR, str(game_id))
     os.makedirs(upload_dir, exist_ok=True)
     safe_name = os.path.basename(file.filename)
 

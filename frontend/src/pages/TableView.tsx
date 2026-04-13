@@ -7,7 +7,6 @@ import { createPokerScene } from '../scenes/pokerScene.ts';
 import { isShowdown } from '../scenes/showdown.ts';
 import { computeSeatCameraPosition, animateCameraToSeat, getDefaultCameraPosition } from '../scenes/seatCamera.ts';
 import { SessionScrubber } from '../components/SessionScrubber.tsx';
-import { BlindPositionDisplay } from '../components/BlindPositionDisplay.tsx';
 
 /* ── Card-parsing helpers (same as MobilePlaybackView) ──────── */
 
@@ -106,8 +105,6 @@ export function TableView() {
   const [currentHandNumber, setCurrentHandNumber] = useState(0);
   const [equityPct, setEquityPct] = useState<number | null>(null);
   const [showEquity, setShowEquity] = useState(true);
-  const [sbPlayerName, setSbPlayerName] = useState<string | null>(null);
-  const [bbPlayerName, setBbPlayerName] = useState<string | null>(null);
   const initialLoadDoneRef = useRef(false);
 
   const gameId = gameIdStr ? Number(gameIdStr) : null;
@@ -332,8 +329,6 @@ export function TableView() {
     if (hand) {
       updateSceneForHand(hand);
       fetchEquityForHand(handNumber);
-      setSbPlayerName(hand.sb_player_name ?? null);
-      setBbPlayerName(hand.bb_player_name ?? null);
     }
     dismissNewHand();
   }
@@ -356,8 +351,6 @@ export function TableView() {
       const latest = hands[hands.length - 1];
       setCurrentHandIndex(hands.length - 1);
       setCurrentHandNumber(latest.hand_number);
-      setSbPlayerName(latest.sb_player_name ?? null);
-      setBbPlayerName(latest.bb_player_name ?? null);
 
       buildSeatMaps(hands);
       createSeatLabelsForPlayers(playerNamesRef.current);
@@ -380,8 +373,6 @@ export function TableView() {
       const hand = hands[idx];
       if (hand) {
         setCurrentHandNumber(hand.hand_number);
-        setSbPlayerName(hand.sb_player_name ?? null);
-        setBbPlayerName(hand.bb_player_name ?? null);
         buildSeatMaps(hands);
         updateSceneForHand(hand);
       }
@@ -438,18 +429,6 @@ export function TableView() {
         {error && <p style={styles.error}>{error}</p>}
       </div>
 
-      {/* Blind & position display */}
-      {gameId && playerName && !loading && !error && (
-        <div style={styles.blindDisplayContainer}>
-          <BlindPositionDisplay
-            gameId={gameId}
-            currentPlayerName={playerName}
-            sbPlayerName={sbPlayerName}
-            bbPlayerName={bbPlayerName}
-          />
-        </div>
-      )}
-
       {/* Equity overlay near player's cards */}
       {showEquity && equityPct !== null && (
         <div data-testid="equity-overlay" style={styles.equityOverlay}>
@@ -497,7 +476,7 @@ const styles: Record<string, CSSProperties> = {
     top: 0,
     left: 0,
     width: '100vw',
-    height: '100vh',
+    height: '100dvh',
     overflow: 'hidden',
     background: '#1a1a2e',
   },
@@ -512,19 +491,20 @@ const styles: Record<string, CSSProperties> = {
     top: 0,
     left: 0,
     right: 0,
-    padding: '12px',
+    padding: 'max(8px, env(safe-area-inset-top)) 8px 0',
     zIndex: 10,
     pointerEvents: 'none',
     display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'flex-start',
-    gap: '8px',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: '6px',
   },
   backBtn: {
     pointerEvents: 'auto',
-    padding: '0.6rem 1.2rem',
-    minHeight: '48px',
-    fontSize: '1rem',
+    padding: '0.4rem 0.8rem',
+    minHeight: '40px',
+    fontSize: '0.85rem',
     fontWeight: 'bold',
     border: 'none',
     borderRadius: '8px',
@@ -535,9 +515,9 @@ const styles: Record<string, CSSProperties> = {
   },
   resetBtn: {
     pointerEvents: 'auto',
-    padding: '0.6rem 1.2rem',
-    minHeight: '48px',
-    fontSize: '1rem',
+    padding: '0.4rem 0.8rem',
+    minHeight: '40px',
+    fontSize: '0.85rem',
     fontWeight: 'bold',
     border: 'none',
     borderRadius: '8px',
@@ -561,12 +541,6 @@ const styles: Record<string, CSSProperties> = {
     bottom: 0,
     left: 0,
     right: 0,
-    zIndex: 10,
-  },
-  blindDisplayContainer: {
-    position: 'absolute',
-    top: '12px',
-    right: '12px',
     zIndex: 10,
   },
   equityOverlay: {

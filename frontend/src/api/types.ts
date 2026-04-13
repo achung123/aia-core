@@ -22,6 +22,8 @@ export interface PlayerInfo {
   is_active: boolean;
   seat_number: number | null;
   buy_in: number | null;
+  rebuy_count: number;
+  total_rebuys: number;
 }
 
 export interface GameSessionResponse {
@@ -33,11 +35,13 @@ export interface GameSessionResponse {
   players?: PlayerInfo[];
   hand_count: number;
   winners: string[];
+  default_buy_in?: number | null;
 }
 
 export interface GameSessionCreate {
   game_date: string;
   player_names: string[];
+  default_buy_in?: number | null;
 }
 
 export interface CompleteGameRequest {
@@ -68,6 +72,7 @@ export interface PlayerHandResponse {
   result: string | null;
   profit_loss: number | null;
   outcome_street: string | null;
+  winning_hand_description: string | null;
 }
 
 export interface HandResponse {
@@ -193,12 +198,40 @@ export interface PlayerStatusEntry {
   card_2: string | null;
   result: string | null;
   outcome_street: string | null;
+  is_current_turn: boolean;
 }
 
 export interface HandStatusResponse {
   hand_number: number;
   community_recorded: boolean;
   players: PlayerStatusEntry[];
+  current_player_name: string | null;
+  legal_actions: string[];
+  amount_to_call: number;
+  pot: number;
+  side_pots: unknown[];
+  street_complete: boolean;
+  phase: string;
+}
+
+// --- Seat Assignment ---
+
+export interface SeatAssignmentRequest {
+  seat_number: number;
+}
+
+// --- Rebuy ---
+
+export interface RebuyCreate {
+  amount: number;
+}
+
+export interface RebuyResponse {
+  rebuy_id: number;
+  game_id: number;
+  player_name: string;
+  amount: number;
+  created_at: string;
 }
 
 // --- Equity ---
@@ -206,6 +239,7 @@ export interface HandStatusResponse {
 export interface PlayerEquityEntry {
   player_name: string;
   equity: number;
+  winning_hand_description: string | null;
 }
 
 export interface EquityResponse {

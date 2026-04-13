@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { fetchHands, startHand, completeGame } from '../api/client.ts';
+import { fetchHands, startHand, completeGame, fetchGame, fetchGameStats, createRebuy } from '../api/client.ts';
 import { QRCodeDisplay } from './QRCodeDisplay.tsx';
 import { GamePlayerManagement } from './GamePlayerManagement.tsx';
-import type { HandResponse, PlayerHandResponse } from '../api/types.ts';
+import type { HandResponse, PlayerHandResponse, PlayerInfo, GameStatsPlayerEntry } from '../api/types.ts';
 
 const resultColors: Record<string, string> = {
   won: '#16a34a',
@@ -19,9 +19,10 @@ function ResultBadge({ ph }: ResultBadgeProps) {
   const color = resultColors[ph.result] || '#6b7280';
   const icon = ph.result === 'won' ? '\ud83c\udfc6 ' : '';
   const street = ph.outcome_street ? ` (${ph.outcome_street})` : '';
+  const handDesc = ph.winning_hand_description ? ` — ${ph.winning_hand_description}` : '';
   return (
     <span style={{ color, fontWeight: ph.result === 'won' ? 700 : 400, marginRight: '0.5rem' }}>
-      {icon}{ph.player_name} {ph.result}{street}
+      {icon}{ph.player_name} {ph.result}{street}{handDesc}
     </span>
   );
 }
@@ -43,11 +44,24 @@ export function HandDashboard({ gameId, players: playerNames, onSelectHand, onBa
   const [showQR, setShowQR] = useState(false);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
+  const [gamePlayers, setGamePlayers] = useState<PlayerInfo[]>([]);
+  const [playerStats, setPlayerStats] = useState<GameStatsPlayerEntry[]>([]);
+  const [rebuyingPlayer, setRebuyingPlayer] = useState<string | null>(null);
+  const [rebuyError, setRebuyError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchHands(gameId)
       .then((data) => setHands(data))
       .catch((err: Error) => setError(err.message || 'Failed to fetch hands'));
+  }, [gameId]);
+
+  function loadTotals() {
+    fetchGame(gameId).then(data => setGamePlayers(data.players || [])).catch(() => {});
+    fetchGameStats(gameId).then(data => setPlayerStats(data.player_stats || [])).catch(() => {});
+  }
+
+  useEffect(() => {
+    loadTotals();
   }, [gameId]);
 
   if (error) {
@@ -104,6 +118,19 @@ export function HandDashboard({ gameId, players: playerNames, onSelectHand, onBa
     });
   }
 
+  async function handleRebuy(playerName: string, amount: number) {
+    setRebuyingPlayer(playerName);
+    setRebuyError(null);
+    try {
+      await createRebuy(gameId, playerName, { amount });
+      loadTotals();
+    } catch (err) {
+      setRebuyError((err as Error).message || 'Rebuy failed');
+    } finally {
+      setRebuyingPlayer(null);
+    }
+  }
+
   return (
     <div style={styles.container}>
       <h2 style={styles.heading}>{hands.length} Hands</h2>
@@ -111,23 +138,57 @@ export function HandDashboard({ gameId, players: playerNames, onSelectHand, onBa
         Back to Games
       </button>
       <GamePlayerManagement gameId={gameId} />
+      {gamePlayers.length > 0 && (
+        <div data-testid="player-totals" style={styles.playerTotals}>
+          <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem' }}>Player Totals</h3>
+          {gamePlayers.map(player => {
+            const stat = playerStats.find(s => s.player_name === player.name);
+            const total = (player.buy_in ?? 0) + (player.total_rebuys ?? 0) + (stat?.profit_loss ?? 0);
+            const canRebuy = total <= 0 && !!player.buy_in;
+            const formatted = total < 0
+              ? `-$${Math.abs(total).toFixed(2)}`
+              : `$${total.toFixed(2)}`;
+            return (
+              <div key={player.name} style={styles.playerTotalRow}>
+                <span>{player.name}</span>
+                <span style={{ fontWeight: 600 }}>{formatted}</span>
+                <button
+                  data-testid={`rebuy-btn-${player.name}`}
+                  disabled={!canRebuy || rebuyingPlayer === player.name}
+                  style={{
+                    ...styles.rebuyBtn,
+                    opacity: canRebuy ? 1 : 0.4,
+                    cursor: canRebuy ? 'pointer' : 'not-allowed',
+                  }}
+                  onClick={() => handleRebuy(player.name, player.buy_in ?? 0)}
+                >
+                  {rebuyingPlayer === player.name ? 'Rebuying…' : 'Rebuy'}
+                </button>
+              </div>
+            );
+          })}
+          {rebuyError && (
+            <div data-testid="rebuy-error" style={{ color: '#991b1b', fontSize: '0.85rem', marginTop: '0.5rem' }}>{rebuyError}</div>
+          )}
+        </div>
+      )}
       <div data-testid="hand-list" style={styles.handList}>
-        {hands.map((hand) => (
-          <div
-            key={hand.hand_number}
-            data-testid="hand-row"
-            onClick={() => onSelectHand(hand.hand_number)}
-            style={styles.row}
-          >
-            <div>Hand #{hand.hand_number}</div>
-            <div data-testid="result-badges" style={styles.resultBadges}>
-              {hand.player_hands.map((ph) => (
-                <ResultBadge key={ph.player_hand_id} ph={ph} />
-              ))}
+          {hands.map((hand) => (
+            <div
+              key={hand.hand_number}
+              data-testid="hand-row"
+              onClick={() => onSelectHand(hand.hand_number)}
+              style={styles.row}
+            >
+              <div>Hand #{hand.hand_number}</div>
+              <div data-testid="result-badges" style={styles.resultBadges}>
+                {hand.player_hands.map((ph) => (
+                  <ResultBadge key={ph.player_hand_id} ph={ph} />
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
       <button data-testid="start-hand-btn" onClick={handleStartHand} disabled={starting} style={styles.button}>
         {starting ? 'Starting…' : 'Start Hand'}
       </button>
@@ -293,5 +354,27 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     justifyContent: 'space-between',
     gap: '0.5rem',
+  },
+  playerTotals: {
+    marginBottom: '0.75rem',
+    padding: '0.75rem',
+    border: '1px solid #e5e7eb',
+    borderRadius: '8px',
+    background: '#f9fafb',
+  },
+  playerTotalRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '0.5rem',
+    padding: '0.25rem 0',
+  },
+  rebuyBtn: {
+    padding: '0.25rem 0.75rem',
+    fontSize: '0.85rem',
+    border: '1px solid #6366f1',
+    borderRadius: '6px',
+    background: '#eef2ff',
+    color: '#4f46e5',
   },
 };

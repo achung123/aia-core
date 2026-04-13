@@ -23,9 +23,11 @@ vi.mock('../api/client.ts', () => ({
   fetchSessions: vi.fn(),
   fetchHands: vi.fn(() => Promise.resolve([])),
   fetchEquity: vi.fn(() => Promise.resolve({ equities: [] })),
-  fetchGame: vi.fn(),
+  fetchGame: vi.fn(() => Promise.resolve({ players: [] })),
   fetchHand: vi.fn(),
-  fetchHandStatus: vi.fn(() => Promise.resolve({ hand_number: 1, community_recorded: false, players: [] })),
+  fetchGameStats: vi.fn(() => Promise.resolve({ player_stats: [] })),
+  createRebuy: vi.fn(),
+  fetchHandStatus: vi.fn(() => Promise.resolve({ hand_number: 1, community_recorded: false, players: [], street_complete: true, current_player_name: null, legal_actions: [], amount_to_call: 0, pot: 0, phase: 'preflop' })),
   fetchBlinds: vi.fn(() => Promise.resolve({ small_blind: 0.25, big_blind: 0.50, blind_timer_minutes: 15, blind_timer_paused: false, blind_timer_started_at: null, blind_timer_remaining_seconds: null })),
 }));
 
@@ -102,7 +104,7 @@ vi.mock('./GamePlayerManagement.tsx', () => ({
     <div data-testid="game-player-management">Players:{gameId}</div>,
 }));
 
-import { startHand as startHandApi, addPlayerToHand, updateHolecards, updateFlop, updateTurn, updateRiver, patchPlayerResult, fetchHands, fetchHand, fetchHandStatus, fetchSessions, fetchEquity } from '../api/client.ts';
+import { startHand as startHandApi, addPlayerToHand, updateHolecards, updateFlop, updateTurn, updateRiver, patchPlayerResult, fetchHands, fetchHand, fetchHandStatus, fetchSessions } from '../api/client.ts';
 import { DealerApp } from './DealerApp.tsx';
 
 const defaultTestPlayers: Player[] = [
@@ -796,6 +798,14 @@ describe('DealerApp finish hand flow', () => {
     });
   }
 
+  function setRiverCommunity() {
+    act(() => {
+      useDealerStore.setState((s) => ({
+        community: { ...s.community, turn: 'Qd', turnRecorded: true, river: '9c', riverRecorded: true },
+      }));
+    });
+  }
+
   it('does not show Finish Hand button when no community cards and no outcomes', async () => {
     const container = renderToContainer(<DealerApp />);
     await clickStartHand(container);
@@ -811,19 +821,21 @@ describe('DealerApp finish hand flow', () => {
     expect(findButton(container, 'Finish Hand')).toBeUndefined();
   });
 
-  it('shows Finish Hand button when outcome recorded without community cards', async () => {
+  it('shows Finish Hand button when all but one player folded without community cards', async () => {
     const container = renderToContainer(<DealerApp />);
     await clickStartHand(container);
     await directOutcome(container, 'Alice', 'Folded');
+    await directOutcome(container, 'Bob', 'Folded');
 
     expect(findButton(container, 'Finish Hand')).not.toBeUndefined();
   });
 
-  it('shows Finish Hand button when community cards + at least one outcome recorded', async () => {
+  it('shows Finish Hand button when river dealt with active players', async () => {
     const container = renderToContainer(<DealerApp />);
     await clickStartHand(container);
     await captureCommunityCards(container);
     await directOutcome(container, 'Alice', 'Folded');
+    setRiverCommunity();
 
     expect(findButton(container, 'Finish Hand')).not.toBeUndefined();
   });
@@ -833,6 +845,7 @@ describe('DealerApp finish hand flow', () => {
     await clickStartHand(container);
     await captureCommunityCards(container);
     await directOutcome(container, 'Alice', 'Folded');
+    setRiverCommunity();
 
     act(() => {
       findButton(container, 'Finish Hand')!.click();
@@ -852,6 +865,7 @@ describe('DealerApp finish hand flow', () => {
     await clickStartHand(container);
     await captureCommunityCards(container);
     await directOutcome(container, 'Alice', 'Folded');
+    setRiverCommunity();
 
     act(() => {
       findButton(container, 'Finish Hand')!.click();
@@ -874,6 +888,7 @@ describe('DealerApp finish hand flow', () => {
     await clickStartHand(container);
     await captureCommunityCards(container);
     await directOutcome(container, 'Alice', 'Folded');
+    setRiverCommunity();
 
     act(() => {
       findButton(container, 'Finish Hand')!.click();
@@ -920,6 +935,7 @@ describe('DealerApp finish hand flow', () => {
     await clickStartHand(container);
     await captureCommunityCards(container);
     await directOutcome(container, 'Alice', 'Folded');
+    setRiverCommunity();
 
     act(() => {
       findButton(container, 'Finish Hand')!.click();
@@ -961,6 +977,7 @@ describe('DealerApp finish hand flow', () => {
     await completePlayer(container, 'Alice');
     await completePlayer(container, 'Bob');
     await completePlayer(container, 'Charlie');
+    setRiverCommunity();
 
     act(() => {
       findButton(container, 'Finish Hand')!.click();
@@ -993,6 +1010,7 @@ describe('DealerApp finish hand flow', () => {
     await clickStartHand(container);
     await captureCommunityCards(container);
     await directOutcome(container, 'Alice', 'Folded');
+    setRiverCommunity();
 
     // Bob and Charlie are both uncaptured ('playing')
     act(() => {
@@ -1071,10 +1089,16 @@ describe('DealerApp hand status polling', () => {
     (fetchHandStatus as ReturnType<typeof vi.fn>).mockResolvedValue({
       hand_number: 1,
       community_recorded: false,
+      street_complete: true,
+      current_player_name: null,
+      legal_actions: [],
+      amount_to_call: 0,
+      pot: 0,
+      phase: 'preflop',
       players: [
-        { name: 'Alice', participation_status: 'idle', card_1: null, card_2: null, result: null, outcome_street: null },
-        { name: 'Bob', participation_status: 'idle', card_1: null, card_2: null, result: null, outcome_street: null },
-        { name: 'Charlie', participation_status: 'idle', card_1: null, card_2: null, result: null, outcome_street: null },
+        { name: 'Alice', participation_status: 'idle', card_1: null, card_2: null, result: null, outcome_street: null, is_current_turn: false },
+        { name: 'Bob', participation_status: 'idle', card_1: null, card_2: null, result: null, outcome_street: null, is_current_turn: false },
+        { name: 'Charlie', participation_status: 'idle', card_1: null, card_2: null, result: null, outcome_street: null, is_current_turn: false },
       ],
     });
   });
@@ -1701,13 +1725,7 @@ describe('DealerApp incremental community card capture', () => {
   });
 });
 
-describe('DealerApp showdown flow', () => {
-  const playersWithCards: Player[] = [
-    { name: 'Alice', card1: 'Ah', card2: 'Kd', recorded: true, status: 'playing', outcomeStreet: null },
-    { name: 'Bob', card1: '9s', card2: 'Tc', recorded: true, status: 'playing', outcomeStreet: null },
-    { name: 'Charlie', card1: null, card2: null, recorded: false, status: 'folded', outcomeStreet: 'flop' },
-  ];
-
+describe('DealerApp smart finish hand logic', () => {
   const riverCommunity: CommunityCards = {
     flop1: 'Js', flop2: 'Tc', flop3: '5h', flopRecorded: true,
     turn: 'Qd', turnRecorded: true,
@@ -1717,112 +1735,30 @@ describe('DealerApp showdown flow', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (fetchHands as ReturnType<typeof vi.fn>).mockResolvedValue([]);
-    (fetchEquity as ReturnType<typeof vi.fn>).mockResolvedValue({
-      equities: [
-        { player_name: 'Alice', equity: 1.0 },
-        { player_name: 'Bob', equity: 0.0 },
-      ],
+    (fetchHandStatus as ReturnType<typeof vi.fn>).mockResolvedValue({
+      hand_number: 1, community_recorded: false, players: [],
+      street_complete: true, current_player_name: null, legal_actions: [],
+      amount_to_call: 0, pot: 0, phase: 'preflop',
     });
+  });
+
+  it('shows Finish Hand when all but one player have folded', () => {
     useDealerStore.setState({
       ...defaultTestState,
       currentStep: 'activeHand',
       currentHandId: 1,
-      players: playersWithCards.map((p) => ({ ...p })),
-      community: { ...riverCommunity },
-    });
-  });
-
-  it('showdown button calls fetchEquity and navigates to review (AC2, AC5)', async () => {
-    const container = renderToContainer(<DealerApp />);
-
-    act(() => {
-      container.querySelector<HTMLButtonElement>('[data-testid="showdown-btn"]')!.click();
-    });
-
-    await vi.waitFor(() => {
-      expect(fetchEquity).toHaveBeenCalledWith(42, 1);
-    });
-
-    await vi.waitFor(() => {
-      expect(container.textContent).toContain('Hand Review');
-    });
-  });
-
-  it('maps equity ~1.0 to won and ~0.0 to lost (AC2)', async () => {
-    const container = renderToContainer(<DealerApp />);
-
-    act(() => {
-      container.querySelector<HTMLButtonElement>('[data-testid="showdown-btn"]')!.click();
-    });
-
-    await vi.waitFor(() => {
-      const state = useDealerStore.getState();
-      const alice = state.players.find((p) => p.name === 'Alice');
-      const bob = state.players.find((p) => p.name === 'Bob');
-      expect(alice?.status).toBe('won');
-      expect(bob?.status).toBe('lost');
-    });
-  });
-
-  it('maps split equity to both won (AC2 split)', async () => {
-    (fetchEquity as ReturnType<typeof vi.fn>).mockResolvedValue({
-      equities: [
-        { player_name: 'Alice', equity: 0.5 },
-        { player_name: 'Bob', equity: 0.5 },
+      players: [
+        { name: 'Alice', card1: 'Ah', card2: 'Kd', recorded: true, status: 'playing', outcomeStreet: null },
+        { name: 'Bob', card1: '9s', card2: 'Tc', recorded: true, status: 'folded', outcomeStreet: 'preflop' },
+        { name: 'Charlie', card1: null, card2: null, recorded: false, status: 'folded', outcomeStreet: 'flop' },
       ],
+      community: { ...emptyCommunity },
     });
-
     const container = renderToContainer(<DealerApp />);
-
-    act(() => {
-      container.querySelector<HTMLButtonElement>('[data-testid="showdown-btn"]')!.click();
-    });
-
-    await vi.waitFor(() => {
-      const state = useDealerStore.getState();
-      const alice = state.players.find((p) => p.name === 'Alice');
-      const bob = state.players.find((p) => p.name === 'Bob');
-      expect(alice?.status).toBe('won');
-      expect(bob?.status).toBe('won');
-    });
+    expect(findButton(container, 'Finish Hand')).toBeTruthy();
   });
 
-  it('infers outcome street from community card count (AC4)', async () => {
-    const flopCommunity: CommunityCards = {
-      flop1: 'Js', flop2: 'Tc', flop3: '5h', flopRecorded: true,
-      turn: null, turnRecorded: false,
-      river: null, riverRecorded: false,
-    };
-    useDealerStore.setState({ community: { ...flopCommunity } });
-
-    const container = renderToContainer(<DealerApp />);
-
-    act(() => {
-      container.querySelector<HTMLButtonElement>('[data-testid="showdown-btn"]')!.click();
-    });
-
-    await vi.waitFor(() => {
-      const state = useDealerStore.getState();
-      const alice = state.players.find((p) => p.name === 'Alice');
-      expect(alice?.outcomeStreet).toBe('flop');
-    });
-  });
-
-  it('auto-proposes won for single non-folded player without calling equity (AC3)', async () => {
-    // When only 1 non-folded player with cards remains among active players,
-    // mapEquityToOutcomes returns auto-won. Set up 2 non-folded with cards
-    // but mock equity to return only Alice (Bob missing → inconclusive via equity,
-    // but mapEquityToOutcomes sees only 1 active if we mark Bob folded in equity logic).
-    // AC3 is thoroughly tested in showdownHelpers.test.ts.
-    // Here we verify the handler navigates to review when equity returns an auto-win.
-    (fetchEquity as ReturnType<typeof vi.fn>).mockResolvedValue({
-      equities: [
-        { player_name: 'Alice', equity: 1.0 },
-        { player_name: 'Bob', equity: 0.0 },
-      ],
-    });
-
-    // Set only 2 players: Alice (playing) + Bob (playing), community recorded
+  it('shows Finish Hand when river dealt with multiple active players', () => {
     useDealerStore.setState({
       ...defaultTestState,
       currentStep: 'activeHand',
@@ -1833,74 +1769,94 @@ describe('DealerApp showdown flow', () => {
       ],
       community: { ...riverCommunity },
     });
-
     const container = renderToContainer(<DealerApp />);
+    expect(findButton(container, 'Finish Hand')).toBeTruthy();
+  });
 
+  it('does not show Finish Hand when multiple active players and river not dealt', () => {
+    useDealerStore.setState({
+      ...defaultTestState,
+      currentStep: 'activeHand',
+      currentHandId: 1,
+      players: [
+        { name: 'Alice', card1: 'Ah', card2: 'Kd', recorded: true, status: 'playing', outcomeStreet: null },
+        { name: 'Bob', card1: '9s', card2: 'Tc', recorded: true, status: 'playing', outcomeStreet: null },
+      ],
+      community: { ...emptyCommunity, flop1: 'Js', flop2: 'Tc', flop3: '5h', flopRecorded: true },
+    });
+    const container = renderToContainer(<DealerApp />);
+    expect(findButton(container, 'Finish Hand')).toBeFalsy();
+  });
+
+  it('auto-sets lone remaining player as winner when finishing with all others folded', async () => {
+    useDealerStore.setState({
+      ...defaultTestState,
+      currentStep: 'activeHand',
+      currentHandId: 1,
+      players: [
+        { name: 'Alice', card1: 'Ah', card2: 'Kd', recorded: true, status: 'playing', outcomeStreet: null },
+        { name: 'Bob', card1: '9s', card2: 'Tc', recorded: true, status: 'folded', outcomeStreet: 'preflop' },
+        { name: 'Charlie', card1: null, card2: null, recorded: false, status: 'folded', outcomeStreet: 'flop' },
+      ],
+      community: { ...emptyCommunity, flop1: 'Js', flop2: 'Tc', flop3: '5h', flopRecorded: true },
+    });
+    const container = renderToContainer(<DealerApp />);
+    const finishBtn = findButton(container, 'Finish Hand')!;
+
+    act(() => { finishBtn.click(); });
+
+    // Should show confirm dialog since Alice has status='playing' (uncaptured)
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="finish-confirm-dialog"]')).not.toBeNull();
+    });
+
+    // Click confirm
     act(() => {
-      container.querySelector<HTMLButtonElement>('[data-testid="showdown-btn"]')!.click();
+      findButton(container, 'Confirm')!.click();
     });
 
     await vi.waitFor(() => {
       const state = useDealerStore.getState();
       const alice = state.players.find((p) => p.name === 'Alice');
       expect(alice?.status).toBe('won');
-      expect(alice?.outcomeStreet).toBe('river');
+      expect(alice?.outcomeStreet).toBe('flop');
+      expect(state.currentStep).toBe('review');
     });
   });
 
-  it('navigates to review with blank results on equity error (AC6)', async () => {
-    (fetchEquity as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Equity unavailable'));
-
-    const container = renderToContainer(<DealerApp />);
-
-    act(() => {
-      container.querySelector<HTMLButtonElement>('[data-testid="showdown-btn"]')!.click();
-    });
-
-    await vi.waitFor(() => {
-      expect(container.textContent).toContain('Hand Review');
-      // Players should still have 'playing' status (blank results)
-      const state = useDealerStore.getState();
-      const alice = state.players.find((p) => p.name === 'Alice');
-      expect(alice?.status).toBe('playing');
-    });
-  });
-
-  it('navigates to review with blank results when equity data is inconclusive (AC6)', async () => {
-    (fetchEquity as ReturnType<typeof vi.fn>).mockResolvedValue({
-      equities: [
-        { player_name: 'Alice', equity: 1.0 },
-        // Bob missing — inconclusive
+  it('navigates to review without auto-winner when multiple active players remain', async () => {
+    useDealerStore.setState({
+      ...defaultTestState,
+      currentStep: 'activeHand',
+      currentHandId: 1,
+      players: [
+        { name: 'Alice', card1: 'Ah', card2: 'Kd', recorded: true, status: 'won', outcomeStreet: 'river' },
+        { name: 'Bob', card1: '9s', card2: 'Tc', recorded: true, status: 'lost', outcomeStreet: 'river' },
       ],
+      community: { ...riverCommunity },
     });
-
     const container = renderToContainer(<DealerApp />);
+    const finishBtn = findButton(container, 'Finish Hand')!;
 
-    act(() => {
-      container.querySelector<HTMLButtonElement>('[data-testid="showdown-btn"]')!.click();
-    });
+    act(() => { finishBtn.click(); });
 
     await vi.waitFor(() => {
-      expect(container.textContent).toContain('Hand Review');
       const state = useDealerStore.getState();
+      expect(state.currentStep).toBe('review');
+      // Should not have changed statuses
       const alice = state.players.find((p) => p.name === 'Alice');
-      expect(alice?.status).toBe('playing'); // not pre-filled
+      expect(alice?.status).toBe('won');
     });
   });
 
-  it('sets outcome street on proposed results (AC4 + AC5)', async () => {
+  it('does not show Showdown button in street row', () => {
+    useDealerStore.setState({
+      ...defaultTestState,
+      currentStep: 'activeHand',
+      currentHandId: 1,
+      community: { ...riverCommunity },
+    });
     const container = renderToContainer(<DealerApp />);
-
-    act(() => {
-      container.querySelector<HTMLButtonElement>('[data-testid="showdown-btn"]')!.click();
-    });
-
-    await vi.waitFor(() => {
-      const state = useDealerStore.getState();
-      const alice = state.players.find((p) => p.name === 'Alice');
-      const bob = state.players.find((p) => p.name === 'Bob');
-      expect(alice?.outcomeStreet).toBe('river');
-      expect(bob?.outcomeStreet).toBe('river');
-    });
+    expect(container.querySelector('[data-testid="showdown-btn"]')).toBeNull();
   });
 });

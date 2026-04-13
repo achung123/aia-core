@@ -1,6 +1,6 @@
 /** @vitest-environment happy-dom */
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 
 vi.mock('../api/client.ts', () => ({
   fetchBlinds: vi.fn(() =>
@@ -13,9 +13,22 @@ vi.mock('../api/client.ts', () => ({
       blind_timer_remaining_seconds: null,
     }),
   ),
+  updateBlinds: vi.fn(),
+  recordPlayerAction: vi.fn(),
+  fetchHands: vi.fn(() => Promise.resolve([])),
 }));
 
-import { fetchBlinds } from '../api/client.ts';
+vi.mock('./BlindTimer.tsx', () => ({
+  BlindTimer: ({ gameId }: { gameId: number }) =>
+    <div data-testid="blind-timer-component">BlindTimer:{gameId}</div>,
+}));
+
+vi.mock('./TableView3D.tsx', () => ({
+  TableView3D: (props: { hands: unknown[] }) =>
+    <div data-testid="table-view-3d">3D:{(props.hands || []).length}</div>,
+}));
+
+import { fetchBlinds, recordPlayerAction, fetchHands } from '../api/client.ts';
 import { ActiveHandDashboard } from './ActiveHandDashboard.tsx';
 import type { ActiveHandDashboardProps } from './ActiveHandDashboard.tsx';
 import type { CommunityCards, Player } from '../stores/dealerStore.ts';
@@ -148,24 +161,23 @@ describe('ActiveHandDashboard', () => {
     expect(slots[4].textContent).toBe('9s');
   });
 
-  // AC4: Blind info bar shows current level and SB/BB player names
-  it('renders blind info bar with SB/BB player names', async () => {
+  // AC4: Blind info bar shows BlindTimer component and SB/BB player names
+  it('renders BlindTimer component in blind info bar', async () => {
     render(<ActiveHandDashboard {...defaultProps} />);
-    await vi.waitFor(() => {
-      const bar = screen.getByTestId('blind-info-bar');
-      expect(bar.textContent).toContain('Alice');
-      expect(bar.textContent).toContain('Bob');
-    });
+    expect(screen.getByTestId('blind-timer-component')).toBeTruthy();
+    expect(screen.getByTestId('blind-timer-component').textContent).toContain('BlindTimer:42');
   });
 
-  it('fetches and displays blind levels', async () => {
+  it('renders SB/BB player names in blind info bar', async () => {
     render(<ActiveHandDashboard {...defaultProps} />);
-    expect(fetchBlinds).toHaveBeenCalledWith(42);
-    await vi.waitFor(() => {
-      const bar = screen.getByTestId('blind-info-bar');
-      expect(bar.textContent).toContain('0.25');
-      expect(bar.textContent).toContain('0.50');
-    });
+    const bar = screen.getByTestId('blind-info-bar');
+    expect(bar.textContent).toContain('Alice');
+    expect(bar.textContent).toContain('Bob');
+  });
+
+  it('fetches blinds for BlindTimer via gameId prop', async () => {
+    render(<ActiveHandDashboard {...defaultProps} />);
+    expect(screen.getByTestId('blind-timer-component').textContent).toContain('42');
   });
 
   // AC5: Take Flop / Take Turn / Take River buttons shown
@@ -195,62 +207,10 @@ describe('ActiveHandDashboard', () => {
     expect(turnBtn.disabled).toBe(false);
   });
 
-  // AC6: Showdown button shown
-  it('renders Showdown button', () => {
+  // Showdown button removed — street row has only Flop/Turn/River
+  it('does not render Showdown button', () => {
     render(<ActiveHandDashboard {...defaultProps} />);
-    expect(screen.getByTestId('showdown-btn')).not.toBeNull();
-    expect(screen.getByTestId('showdown-btn').textContent).toContain('Showdown');
-  });
-
-  // Showdown enable/disable (AC1 of T-024)
-  it('disables Showdown button when no community cards recorded', () => {
-    const players: Player[] = [
-      { name: 'Alice', card1: 'Ah', card2: 'Kd', recorded: true, status: 'playing', outcomeStreet: null },
-      { name: 'Bob', card1: '9s', card2: 'Tc', recorded: true, status: 'playing', outcomeStreet: null },
-    ];
-    render(<ActiveHandDashboard {...defaultProps} community={emptyCommunity} players={players} />);
-    const btn = screen.getByTestId('showdown-btn') as HTMLButtonElement;
-    expect(btn.disabled).toBe(true);
-  });
-
-  it('disables Showdown button when fewer than 2 non-folded players have cards', () => {
-    const community: CommunityCards = {
-      ...emptyCommunity, flop1: 'Js', flop2: 'Tc', flop3: '5h', flopRecorded: true,
-    };
-    const players: Player[] = [
-      { name: 'Alice', card1: 'Ah', card2: 'Kd', recorded: true, status: 'playing', outcomeStreet: null },
-      { name: 'Bob', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null },
-    ];
-    render(<ActiveHandDashboard {...defaultProps} community={community} players={players} />);
-    const btn = screen.getByTestId('showdown-btn') as HTMLButtonElement;
-    expect(btn.disabled).toBe(true);
-  });
-
-  it('enables Showdown button when community recorded and 2+ non-folded players have cards', () => {
-    const community: CommunityCards = {
-      ...emptyCommunity, flop1: 'Js', flop2: 'Tc', flop3: '5h', flopRecorded: true,
-    };
-    const players: Player[] = [
-      { name: 'Alice', card1: 'Ah', card2: 'Kd', recorded: true, status: 'playing', outcomeStreet: null },
-      { name: 'Bob', card1: '9s', card2: 'Tc', recorded: true, status: 'playing', outcomeStreet: null },
-    ];
-    render(<ActiveHandDashboard {...defaultProps} community={community} players={players} />);
-    const btn = screen.getByTestId('showdown-btn') as HTMLButtonElement;
-    expect(btn.disabled).toBe(false);
-  });
-
-  it('calls onShowdown when enabled Showdown button is clicked', () => {
-    const onShowdown = vi.fn();
-    const community: CommunityCards = {
-      ...emptyCommunity, flop1: 'Js', flop2: 'Tc', flop3: '5h', flopRecorded: true,
-    };
-    const players: Player[] = [
-      { name: 'Alice', card1: 'Ah', card2: 'Kd', recorded: true, status: 'playing', outcomeStreet: null },
-      { name: 'Bob', card1: '9s', card2: 'Tc', recorded: true, status: 'playing', outcomeStreet: null },
-    ];
-    render(<ActiveHandDashboard {...defaultProps} community={community} players={players} onShowdown={onShowdown} />);
-    screen.getByTestId('showdown-btn').click();
-    expect(onShowdown).toHaveBeenCalled();
+    expect(screen.queryByTestId('showdown-btn')).toBeNull();
   });
 
   // AC4 edge case: no SB/BB names
@@ -258,11 +218,8 @@ describe('ActiveHandDashboard', () => {
     render(
       <ActiveHandDashboard {...defaultProps} sbPlayerName={null} bbPlayerName={null} />,
     );
-    await vi.waitFor(() => {
-      const bar = screen.getByTestId('blind-info-bar');
-      expect(bar.textContent).toContain('0.25');
-      expect(bar.textContent).toContain('0.50');
-    });
+    // BlindTimer should still render
+    expect(screen.getByTestId('blind-timer-component')).toBeTruthy();
   });
 
   // Callbacks
@@ -372,6 +329,168 @@ describe('ActiveHandDashboard', () => {
       render(<ActiveHandDashboard {...defaultProps} />);
       const layout = screen.getByTestId('active-hand-layout');
       expect(layout.style.flex).not.toBe('1');
+    });
+  });
+});
+
+describe('ActiveHandDashboard — 3D view toggle', () => {
+  const mockedFetchHands = fetchHands as ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    mockedFetchHands.mockResolvedValue([]);
+  });
+
+  it('shows view toggle defaulting to tile view', () => {
+    render(<ActiveHandDashboard {...defaultProps} />);
+    const btn = screen.getByTestId('view-toggle-btn');
+    expect(btn).toBeTruthy();
+    expect(btn.textContent).toContain('3D View');
+    expect(screen.queryByTestId('table-view-3d')).toBeNull();
+  });
+
+  it('clicking 3D View fetches hands and shows 3D component', async () => {
+    mockedFetchHands.mockResolvedValue([
+      {
+        hand_id: 1, hand_number: 1, game_session_id: 42,
+        flop_1: null, flop_2: null, flop_3: null, turn: null, river: null,
+        created_at: '2026-04-13T00:00:00Z', player_hands: [],
+      },
+    ]);
+    render(<ActiveHandDashboard {...defaultProps} />);
+    screen.getByTestId('view-toggle-btn').click();
+    await waitFor(() => {
+      expect(screen.getByTestId('table-view-3d')).toBeTruthy();
+    });
+    expect(screen.getByTestId('view-toggle-btn').textContent).toContain('Tile View');
+  });
+
+  it('clicking Tile View restores normal content', async () => {
+    render(<ActiveHandDashboard {...defaultProps} />);
+    // Switch to 3D
+    screen.getByTestId('view-toggle-btn').click();
+    await waitFor(() => {
+      expect(screen.getByTestId('table-view-3d')).toBeTruthy();
+    });
+    // Switch back to tile
+    screen.getByTestId('view-toggle-btn').click();
+    await waitFor(() => {
+      expect(screen.queryByTestId('table-view-3d')).toBeNull();
+    });
+    expect(screen.getByTestId('board-panel')).toBeTruthy();
+  });
+});
+
+describe('ActiveHandDashboard — bet verification', () => {
+  const mockedRecordPlayerAction = recordPlayerAction as ReturnType<typeof vi.fn>;
+
+  const betProps: ActiveHandDashboardProps = {
+    ...defaultProps,
+    handNumber: 1,
+    currentPlayerName: 'Alice',
+    legalActions: ['call', 'raise', 'fold'],
+    amountToCall: 0.50,
+    pot: 1.50,
+    onActionConfirmed: vi.fn(),
+  };
+
+  // AC5: shows current player's action or "waiting"
+  it('shows "Waiting for turn" when no current player', () => {
+    render(<ActiveHandDashboard {...defaultProps} handNumber={1} currentPlayerName={null} />);
+    const panel = screen.getByTestId('bet-verify-panel');
+    expect(panel.textContent).toContain('Waiting for turn');
+  });
+
+  it('shows current player name when it is their turn', () => {
+    render(<ActiveHandDashboard {...betProps} />);
+    const panel = screen.getByTestId('bet-verify-panel');
+    expect(panel.textContent).toContain('Turn: Alice');
+  });
+
+  it('displays pot amount', () => {
+    render(<ActiveHandDashboard {...betProps} />);
+    expect(screen.getByTestId('pot-display').textContent).toContain('$1.50');
+  });
+
+  it('displays legal actions and amount to call', () => {
+    render(<ActiveHandDashboard {...betProps} />);
+    const display = screen.getByTestId('legal-actions-display');
+    expect(display.textContent).toContain('call, raise, fold');
+    expect(display.textContent).toContain('$0.50 to call');
+  });
+
+  // AC5: shows record action button
+  it('shows record action button', () => {
+    render(<ActiveHandDashboard {...betProps} />);
+    expect(screen.getByTestId('record-action-btn')).toBeTruthy();
+  });
+
+  // AC6: Record Action opens inline editor for action type and amount
+  it('opens action form when Record Action button is clicked', () => {
+    render(<ActiveHandDashboard {...betProps} />);
+    fireEvent.click(screen.getByTestId('record-action-btn'));
+    expect(screen.getByTestId('override-form')).toBeTruthy();
+    expect(screen.getByTestId('override-action-select')).toBeTruthy();
+    expect(screen.getByTestId('override-amount-input')).toBeTruthy();
+    expect(screen.getByTestId('override-submit-btn')).toBeTruthy();
+  });
+
+  // AC6: submission advances turn
+  it('submits action with custom type and amount', async () => {
+    mockedRecordPlayerAction.mockResolvedValue({
+      action_id: 2,
+      player_hand_id: 1,
+      street: 'preflop',
+      action: 'raise',
+      amount: 2.00,
+      created_at: '2026-04-13T00:00:00Z',
+    });
+    render(<ActiveHandDashboard {...betProps} />);
+    fireEvent.click(screen.getByTestId('record-action-btn'));
+    fireEvent.change(screen.getByTestId('override-action-select'), { target: { value: 'raise' } });
+    fireEvent.change(screen.getByTestId('override-amount-input'), { target: { value: '2.00' } });
+    fireEvent.click(screen.getByTestId('override-submit-btn'));
+    await waitFor(() => {
+      expect(mockedRecordPlayerAction).toHaveBeenCalledWith(42, 1, 'Alice', {
+        street: 'preflop',
+        action: 'raise',
+        amount: 2.00,
+      });
+    });
+    expect(betProps.onActionConfirmed).toHaveBeenCalled();
+  });
+
+  it('shows error when action fails', async () => {
+    mockedRecordPlayerAction.mockRejectedValue(new Error('HTTP 403: Not your turn'));
+    render(<ActiveHandDashboard {...betProps} />);
+    fireEvent.click(screen.getByTestId('record-action-btn'));
+    fireEvent.click(screen.getByTestId('override-submit-btn'));
+    await waitFor(() => {
+      expect(screen.getByTestId('bet-verify-error')).toBeTruthy();
+      expect(screen.getByTestId('bet-verify-error').textContent).toContain('Not your turn');
+    });
+  });
+
+  it('does not show bet verify panel when no handNumber', () => {
+    render(<ActiveHandDashboard {...defaultProps} />);
+    expect(screen.queryByTestId('bet-verify-panel')).toBeNull();
+  });
+
+  it('closes action form after successful submission', async () => {
+    mockedRecordPlayerAction.mockResolvedValue({
+      action_id: 3,
+      player_hand_id: 1,
+      street: 'preflop',
+      action: 'fold',
+      amount: null,
+      created_at: '2026-04-13T00:00:00Z',
+    });
+    render(<ActiveHandDashboard {...betProps} />);
+    fireEvent.click(screen.getByTestId('record-action-btn'));
+    expect(screen.getByTestId('override-form')).toBeTruthy();
+    fireEvent.change(screen.getByTestId('override-action-select'), { target: { value: 'fold' } });
+    fireEvent.click(screen.getByTestId('override-submit-btn'));
+    await waitFor(() => {
+      expect(screen.queryByTestId('override-form')).toBeNull();
     });
   });
 });

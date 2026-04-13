@@ -43,6 +43,7 @@ class GameSession(Base):
     blind_timer_paused = Column(Boolean, nullable=False, default=False)
     blind_timer_started_at = Column(DateTime, nullable=True)
     blind_timer_remaining_seconds = Column(Integer, nullable=True)
+    default_buy_in = Column(Float, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     players = relationship('Player', secondary='game_players', back_populates='games')
@@ -79,6 +80,8 @@ class Hand(Base):
     source_upload_id = Column(
         Integer, ForeignKey('image_uploads.upload_id'), nullable=True
     )
+    pot = Column(Float, nullable=False, default=0)
+    side_pots = Column(String, nullable=False, default='[]')
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     game_session = relationship('GameSession', back_populates='hands')
@@ -98,6 +101,7 @@ class PlayerHand(Base):
     result = Column(String, nullable=True)
     profit_loss = Column(Float, nullable=True)
     outcome_street = Column(String, nullable=True)
+    is_all_in = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     hand = relationship('Hand', back_populates='player_hands')

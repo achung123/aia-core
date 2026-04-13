@@ -7,9 +7,10 @@ vi.mock('../api/client.ts', () => ({
   patchPlayerResult: vi.fn(() => Promise.resolve({})),
   updateCommunityCards: vi.fn(() => Promise.resolve({})),
   updateHolecards: vi.fn(() => Promise.resolve({})),
+  fetchEquity: vi.fn(() => Promise.resolve({ equities: [] })),
 }));
 
-import { patchPlayerResult, updateCommunityCards, updateHolecards } from '../api/client.ts';
+import { patchPlayerResult, updateCommunityCards, updateHolecards, fetchEquity } from '../api/client.ts';
 import { ReviewScreen } from './ReviewScreen.tsx';
 import type { ReviewScreenProps } from './ReviewScreen.tsx';
 import type { Player, CommunityCards } from '../stores/dealerStore.ts';
@@ -592,5 +593,80 @@ describe('ReviewScreen — partial save failure', () => {
     expect(updateCommunityCards).not.toHaveBeenCalled();
     // Alice result should be retried
     expect(patchPlayerResult).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ReviewScreen — winning hand descriptions', () => {
+  it('calls fetchEquity on mount with gameId and handId', async () => {
+    render(<ReviewScreen {...makeProps()} />);
+    await waitFor(() => {
+      expect(fetchEquity).toHaveBeenCalledWith(42, 3);
+    });
+  });
+
+  it('displays winning hand description for players with hole cards', async () => {
+    (fetchEquity as ReturnType<typeof vi.fn>).mockResolvedValue({
+      equities: [
+        { player_name: 'Alice', equity: 0.65, winning_hand_description: 'Pair of Jacks' },
+        { player_name: 'Bob', equity: 0.35, winning_hand_description: 'High Card' },
+      ],
+    });
+
+    const { container } = render(<ReviewScreen {...makeProps()} />);
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="review-player-Alice-hand-desc"]')).not.toBeNull();
+    });
+    expect(container.querySelector('[data-testid="review-player-Alice-hand-desc"]')!.textContent).toContain('Pair of Jacks');
+    expect(container.querySelector('[data-testid="review-player-Bob-hand-desc"]')!.textContent).toContain('High Card');
+  });
+
+  it('does not display hand description for players without hole cards', async () => {
+    (fetchEquity as ReturnType<typeof vi.fn>).mockResolvedValue({
+      equities: [
+        { player_name: 'Alice', equity: 0.65, winning_hand_description: 'Pair of Jacks' },
+        { player_name: 'Bob', equity: 0.35, winning_hand_description: 'High Card' },
+      ],
+    });
+
+    const { container } = render(<ReviewScreen {...makeProps()} />);
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="review-player-Alice-hand-desc"]')).not.toBeNull();
+    });
+    // Charlie has no hole cards — should not show hand desc
+    expect(container.querySelector('[data-testid="review-player-Charlie-hand-desc"]')).toBeNull();
+  });
+
+  it('shows trophy emoji for winners', async () => {
+    (fetchEquity as ReturnType<typeof vi.fn>).mockResolvedValue({
+      equities: [
+        { player_name: 'Alice', equity: 0.65, winning_hand_description: 'Pair of Jacks' },
+        { player_name: 'Bob', equity: 0.35, winning_hand_description: 'High Card' },
+      ],
+    });
+
+    const { container } = render(<ReviewScreen {...makeProps()} />);
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="review-player-Alice-hand-desc"]')).not.toBeNull();
+    });
+    // Alice has result 'won' — should show trophy
+    expect(container.querySelector('[data-testid="review-player-Alice-hand-desc"]')!.textContent).toContain('🏆');
+    // Bob has result 'lost' — no trophy
+    expect(container.querySelector('[data-testid="review-player-Bob-hand-desc"]')!.textContent).not.toContain('🏆');
+  });
+
+  it('gracefully handles fetchEquity failure', async () => {
+    (fetchEquity as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Network error'));
+
+    const { container } = render(<ReviewScreen {...makeProps()} />);
+
+    // Wait a tick — no hand descriptions should show, no error displayed
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+    expect(container.querySelector('[data-testid="review-player-Alice-hand-desc"]')).toBeNull();
+    expect(container.querySelector('[data-testid="review-player-Bob-hand-desc"]')).toBeNull();
   });
 });

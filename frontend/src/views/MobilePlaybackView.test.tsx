@@ -58,8 +58,8 @@ const HANDS: HandResponse[] = [
     source_upload_id: null,
     created_at: '2026-04-05T12:00:00Z',
     player_hands: [
-      { player_hand_id: 1, hand_id: 1, player_id: 1, player_name: 'Alice', card_1: '2h', card_2: '3h', result: 'won', profit_loss: 50, outcome_street: null },
-      { player_hand_id: 2, hand_id: 1, player_id: 2, player_name: 'Bob', card_1: '4d', card_2: '5d', result: 'lost', profit_loss: -50, outcome_street: null },
+      { player_hand_id: 1, hand_id: 1, player_id: 1, player_name: 'Alice', card_1: '2h', card_2: '3h', result: 'won', profit_loss: 50, outcome_street: null, winning_hand_description: null },
+      { player_hand_id: 2, hand_id: 1, player_id: 2, player_name: 'Bob', card_1: '4d', card_2: '5d', result: 'lost', profit_loss: -50, outcome_street: null, winning_hand_description: null },
     ],
   },
 ];
@@ -281,5 +281,27 @@ describe('MobilePlaybackView', () => {
         expect(vi.mocked(calculateEquity).mock.calls.length).toBeGreaterThan(callsBefore);
       });
     }
+  });
+
+  it('uses flex column layout so canvas does not extend behind HUD', () => {
+    const container = renderToContainer(<MobilePlaybackView />);
+    const wrapper = container.querySelector('[data-testid="mobile-canvas"]') as HTMLElement;
+    expect(wrapper.style.display).toBe('flex');
+    expect(wrapper.style.flexDirection).toBe('column');
+  });
+
+  it('canvas area has overflow hidden and flex:1', () => {
+    const container = renderToContainer(<MobilePlaybackView />);
+    const canvasArea = container.querySelector('[data-testid="canvas-area"]') as HTMLElement;
+    expect(canvasArea).toBeTruthy();
+    expect(canvasArea.style.overflow).toBe('hidden');
+    expect(canvasArea.style.flex).toContain('1');
+  });
+
+  it('scrubber mount is not position:absolute (no longer overlaid)', () => {
+    const container = renderToContainer(<MobilePlaybackView />);
+    const scrubberMount = container.querySelector('[data-testid="scrubber-mount"]') as HTMLElement;
+    expect(scrubberMount).toBeTruthy();
+    expect(scrubberMount.style.position).not.toBe('absolute');
   });
 });

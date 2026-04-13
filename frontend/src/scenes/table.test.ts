@@ -10,6 +10,7 @@ vi.mock('three', () => {
     x: number; y: number; z: number;
     constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; }
     set(x: number, y: number, z: number) { this.x = x; this.y = y; this.z = z; return this; }
+    copy(v: { x: number; y: number; z: number }) { this.x = v.x; this.y = v.y; this.z = v.z; return this; }
   }
   class PerspectiveCamera {
     position = new Vector3();
@@ -53,6 +54,7 @@ afterEach(() => {
 });
 
 import { initScene } from './table.ts';
+import { DEFAULT_OVERHEAD_POSITION } from './seatCamera.ts';
 
 function makeCanvas(w = 800, h = 600): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
@@ -84,12 +86,13 @@ describe('initScene', () => {
     result.dispose();
   });
 
-  it('sets camera position above and in front of origin', () => {
+  it('sets camera position to DEFAULT_OVERHEAD_POSITION', () => {
     const canvas = makeCanvas();
     const result = initScene(canvas);
 
-    expect(result.camera.position.y).toBe(8);
-    expect(result.camera.position.z).toBe(5);
+    expect(result.camera.position.x).toBe(DEFAULT_OVERHEAD_POSITION.x);
+    expect(result.camera.position.y).toBe(DEFAULT_OVERHEAD_POSITION.y);
+    expect(result.camera.position.z).toBe(DEFAULT_OVERHEAD_POSITION.z);
 
     result.dispose();
   });

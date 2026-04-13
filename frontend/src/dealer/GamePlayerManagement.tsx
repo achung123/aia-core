@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
-import { fetchGame, togglePlayerStatus, addPlayerToGame } from '../api/client.ts';
+import { fetchGame, togglePlayerStatus, addPlayerToGame, assignPlayerSeat, createRebuy } from '../api/client.ts';
 import type { PlayerInfo } from '../api/types.ts';
+import { SeatPicker } from '../components/SeatPicker.tsx';
+import type { SeatData } from '../components/SeatPicker.tsx';
 
 export interface GamePlayerManagementProps {
   gameId: number;
@@ -13,11 +15,17 @@ export function GamePlayerManagement({ gameId }: GamePlayerManagementProps) {
   const [actionError, setActionError] = useState<string | null>(null);
   const [nameInput, setNameInput] = useState('');
   const [adding, setAdding] = useState(false);
+  const [reassigningPlayer, setReassigningPlayer] = useState<string | null>(null);
+  const [rebuyPlayer, setRebuyPlayer] = useState<string | null>(null);
+  const [rebuyAmount, setRebuyAmount] = useState('');
+  const [rebuyLoading, setRebuyLoading] = useState(false);
+  const [defaultBuyIn, setDefaultBuyIn] = useState<number | null>(null);
 
   useEffect(() => {
     fetchGame(gameId)
       .then((game) => {
         setPlayers(game.players || []);
+        setDefaultBuyIn(game.default_buy_in ?? null);
       })
       .catch((err) => {
         setFetchError(err instanceof Error ? err.message : String(err));
@@ -67,6 +75,50 @@ export function GamePlayerManagement({ gameId }: GamePlayerManagementProps) {
     }
   }
 
+  async function handleReassignSeat(seatNumber: number) {
+    if (!reassigningPlayer) return;
+    setActionError(null);
+    try {
+      const result = await assignPlayerSeat(gameId, reassigningPlayer, { seat_number: seatNumber });
+      setPlayers((prev) =>
+        prev.map((p) => (p.name === result.name ? { ...p, seat_number: result.seat_number } : p)),
+      );
+      setReassigningPlayer(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setActionError(message);
+    }
+  }
+
+  function seatDataFromPlayers(): SeatData[] {
+    return players
+      .filter((p) => p.seat_number !== null)
+      .map((p) => ({ seatNumber: p.seat_number!, playerName: p.name }));
+  }
+
+  async function handleRebuy() {
+    if (!rebuyPlayer) return;
+    const amount = parseFloat(rebuyAmount);
+    if (!amount || amount <= 0) {
+      setActionError('Rebuy amount must be greater than 0');
+      return;
+    }
+    setActionError(null);
+    setRebuyLoading(true);
+    try {
+      await createRebuy(gameId, rebuyPlayer, { amount });
+      // Refresh player list to show updated rebuy stats
+      const game = await fetchGame(gameId);
+      setPlayers(game.players || []);
+      setRebuyPlayer(null);
+      setRebuyAmount('');
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRebuyLoading(false);
+    }
+  }
+
   if (loading) {
     return <div style={styles.container}>Loading players…</div>;
   }
@@ -85,6 +137,28 @@ export function GamePlayerManagement({ gameId }: GamePlayerManagementProps) {
             <span style={player.is_active ? styles.nameActive : styles.nameInactive}>
               {player.name}
             </span>
+            {player.buy_in != null && (
+              <span data-testid={`buy-in-${player.name}`} style={styles.buyInBadge}>
+                ${player.buy_in.toFixed(2)}
+              </span>
+            )}
+            <span data-testid={`seat-number-${player.name}`} style={styles.seatBadge}>
+              {player.seat_number !== null ? `Seat ${player.seat_number}` : '–'}
+            </span>
+            <button
+              data-testid={`rebuy-btn-${player.name}`}
+              style={styles.reassignBtn}
+              onClick={() => setRebuyPlayer(rebuyPlayer === player.name ? null : player.name)}
+            >
+              Rebuy
+            </button>
+            <button
+              data-testid={`reassign-btn-${player.name}`}
+              style={styles.reassignBtn}
+              onClick={() => setReassigningPlayer(reassigningPlayer === player.name ? null : player.name)}
+            >
+              Reassign Seat
+            </button>
             <label style={styles.toggleLabel}>
               <input
                 type="checkbox"
@@ -98,6 +172,44 @@ export function GamePlayerManagement({ gameId }: GamePlayerManagementProps) {
           </div>
         ))}
       </div>
+
+      {rebuyPlayer && (
+        <div data-testid="rebuy-panel" style={styles.reassignPanel}>
+          <p style={styles.reassignLabel}>Rebuy for {rebuyPlayer}</p>
+          <div style={styles.addRow}>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder={defaultBuyIn ? `$${defaultBuyIn.toFixed(2)}` : 'Amount'}
+              value={rebuyAmount}
+              onChange={(e) => setRebuyAmount(e.target.value)}
+              data-testid="rebuy-amount-input"
+              style={styles.input}
+            />
+            <button
+              data-testid="rebuy-confirm-btn"
+              onClick={handleRebuy}
+              disabled={rebuyLoading}
+              style={styles.addButton}
+            >
+              {rebuyLoading ? 'Processing…' : 'Confirm Rebuy'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {reassigningPlayer && (
+        <div data-testid="seat-reassign-panel" style={styles.reassignPanel}>
+          <p style={styles.reassignLabel}>Reassign seat for {reassigningPlayer}</p>
+          <SeatPicker
+            seats={seatDataFromPlayers()}
+            currentPlayerSeat={players.find((p) => p.name === reassigningPlayer)?.seat_number ?? null}
+            onSelect={handleReassignSeat}
+            onSkip={() => setReassigningPlayer(null)}
+          />
+        </div>
+      )}
 
       {actionError && (
         <div data-testid="action-error" style={styles.error}>{actionError}</div>
@@ -191,5 +303,41 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#fff',
     cursor: 'pointer',
     minHeight: '44px',
+  },
+  seatBadge: {
+    fontSize: '0.8rem',
+    color: '#6b7280',
+    minWidth: '55px',
+    textAlign: 'center' as const,
+  },
+  buyInBadge: {
+    fontSize: '0.8rem',
+    color: '#4ade80',
+    fontWeight: 600,
+    minWidth: '55px',
+    textAlign: 'center' as const,
+  },
+  reassignBtn: {
+    padding: '0.2rem 0.5rem',
+    fontSize: '0.75rem',
+    border: '1px solid #c7d2fe',
+    borderRadius: '6px',
+    background: '#eef2ff',
+    cursor: 'pointer',
+    color: '#4f46e5',
+    fontWeight: 600,
+  },
+  reassignPanel: {
+    padding: '0.75rem',
+    marginBottom: '0.75rem',
+    border: '1px solid #c7d2fe',
+    borderRadius: '8px',
+    background: '#f5f3ff',
+  },
+  reassignLabel: {
+    fontSize: '0.9rem',
+    fontWeight: 600,
+    marginBottom: '0.25rem',
+    color: '#312e81',
   },
 };

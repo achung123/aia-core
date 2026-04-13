@@ -255,46 +255,47 @@ class TestPlayerFlowIntegration:
         assert actions_resp.status_code == 200
         actions = actions_resp.json()
 
-        # We recorded 8 actions total:
-        # preflop: Alice bet, Bob call, Charlie fold
+        # We recorded 8 manual actions + 2 auto-posted blind actions = 10 total:
+        # preflop: SB blind, BB blind, Alice bet, Bob call, Charlie fold
         # flop: Alice check, Bob bet, Alice call
         # river: Alice check, Bob check
-        assert len(actions) == 8
+        assert len(actions) == 10
 
-        # Verify action details and ordering
-        assert actions[0]['player_name'] == 'Alice'
-        assert actions[0]['street'] == 'preflop'
-        assert actions[0]['action'] == 'bet'
-        assert actions[0]['amount'] == 20.0
+        # Verify manual action details and ordering (skip blind actions)
+        manual = [a for a in actions if a['action'] != 'blind']
+        assert manual[0]['player_name'] == 'Alice'
+        assert manual[0]['street'] == 'preflop'
+        assert manual[0]['action'] == 'bet'
+        assert manual[0]['amount'] == 20.0
 
-        assert actions[1]['player_name'] == 'Bob'
-        assert actions[1]['street'] == 'preflop'
-        assert actions[1]['action'] == 'call'
+        assert manual[1]['player_name'] == 'Bob'
+        assert manual[1]['street'] == 'preflop'
+        assert manual[1]['action'] == 'call'
 
-        assert actions[2]['player_name'] == 'Charlie'
-        assert actions[2]['street'] == 'preflop'
-        assert actions[2]['action'] == 'fold'
+        assert manual[2]['player_name'] == 'Charlie'
+        assert manual[2]['street'] == 'preflop'
+        assert manual[2]['action'] == 'fold'
 
-        assert actions[3]['player_name'] == 'Alice'
-        assert actions[3]['street'] == 'flop'
-        assert actions[3]['action'] == 'check'
+        assert manual[3]['player_name'] == 'Alice'
+        assert manual[3]['street'] == 'flop'
+        assert manual[3]['action'] == 'check'
 
-        assert actions[4]['player_name'] == 'Bob'
-        assert actions[4]['street'] == 'flop'
-        assert actions[4]['action'] == 'bet'
-        assert actions[4]['amount'] == 30.0
+        assert manual[4]['player_name'] == 'Bob'
+        assert manual[4]['street'] == 'flop'
+        assert manual[4]['action'] == 'bet'
+        assert manual[4]['amount'] == 30.0
 
-        assert actions[5]['player_name'] == 'Alice'
-        assert actions[5]['street'] == 'flop'
-        assert actions[5]['action'] == 'call'
+        assert manual[5]['player_name'] == 'Alice'
+        assert manual[5]['street'] == 'flop'
+        assert manual[5]['action'] == 'call'
 
-        assert actions[6]['player_name'] == 'Alice'
-        assert actions[6]['street'] == 'river'
-        assert actions[6]['action'] == 'check'
+        assert manual[6]['player_name'] == 'Alice'
+        assert manual[6]['street'] == 'river'
+        assert manual[6]['action'] == 'check'
 
-        assert actions[7]['player_name'] == 'Bob'
-        assert actions[7]['street'] == 'river'
-        assert actions[7]['action'] == 'check'
+        assert manual[7]['player_name'] == 'Bob'
+        assert manual[7]['street'] == 'river'
+        assert manual[7]['action'] == 'check'
 
         # All actions have created_at timestamps
         for a in actions:

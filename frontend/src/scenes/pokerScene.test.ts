@@ -8,6 +8,8 @@ const mockOrbitControls = {
   enableZoom: false,
   enableRotate: false,
   enablePan: false,
+  minDistance: 0,
+  maxDistance: 0,
   touches: {} as Record<string, number>,
   target: null as unknown,
   update: vi.fn(),
@@ -270,6 +272,8 @@ describe('touch controls', () => {
     mockOrbitControls.enableZoom = false;
     mockOrbitControls.enableRotate = false;
     mockOrbitControls.enablePan = false;
+    mockOrbitControls.minDistance = 0;
+    mockOrbitControls.maxDistance = 0;
     mockOrbitControls.touches = {};
     ({ createPokerScene } = await import('./pokerScene.ts'));
   });
@@ -406,5 +410,100 @@ describe('touch controls', () => {
     expect(result.controls).toBe(mockOrbitControls);
 
     result.dispose();
+  });
+
+  it('enforces minDistance and maxDistance on OrbitControls', () => {
+    const canvas = makeCanvas();
+    const result = createPokerScene(canvas);
+
+    expect(mockOrbitControls.minDistance).toBe(8);
+    expect(mockOrbitControls.maxDistance).toBe(30);
+
+    result.dispose();
+  });
+
+  it('default camera position matches DEFAULT_OVERHEAD_POSITION from seatCamera', async () => {
+    const { DEFAULT_OVERHEAD_POSITION } = await import('./seatCamera.ts');
+    const canvas = makeCanvas();
+    const result = createPokerScene(canvas);
+
+    expect(result.camera.position.x).toBe(DEFAULT_OVERHEAD_POSITION.x);
+    expect(result.camera.position.y).toBe(DEFAULT_OVERHEAD_POSITION.y);
+    expect(result.camera.position.z).toBe(DEFAULT_OVERHEAD_POSITION.z);
+
+    result.dispose();
+  });
+});
+
+describe('externalResize option', () => {
+  let createPokerScene: (canvas: HTMLCanvasElement, options?: PokerSceneOptions) => PokerSceneResult;
+  let addSpy: ReturnType<typeof vi.spyOn>;
+  let removeSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    mockOrbitControls.enableDamping = false;
+    mockOrbitControls.enableZoom = false;
+    mockOrbitControls.enableRotate = false;
+    mockOrbitControls.enablePan = false;
+    mockOrbitControls.minDistance = 0;
+    mockOrbitControls.maxDistance = 0;
+    mockOrbitControls.touches = {};
+    addSpy = vi.spyOn(window, 'addEventListener');
+    removeSpy = vi.spyOn(window, 'removeEventListener');
+    ({ createPokerScene } = await import('./pokerScene.ts'));
+  });
+
+  afterEach(() => {
+    addSpy.mockRestore();
+    removeSpy.mockRestore();
+  });
+
+  it('attaches window resize listener by default', () => {
+    const canvas = makeCanvas();
+    const result = createPokerScene(canvas);
+
+    const resizeCalls = addSpy.mock.calls.filter(([type]) => type === 'resize');
+    expect(resizeCalls.length).toBe(1);
+
+    result.dispose();
+  });
+
+  it('attaches window resize listener when externalResize is false', () => {
+    const canvas = makeCanvas();
+    const result = createPokerScene(canvas, { externalResize: false });
+
+    const resizeCalls = addSpy.mock.calls.filter(([type]) => type === 'resize');
+    expect(resizeCalls.length).toBe(1);
+
+    result.dispose();
+  });
+
+  it('does NOT attach window resize listener when externalResize is true', () => {
+    const canvas = makeCanvas();
+    const result = createPokerScene(canvas, { externalResize: true });
+
+    const resizeCalls = addSpy.mock.calls.filter(([type]) => type === 'resize');
+    expect(resizeCalls.length).toBe(0);
+
+    result.dispose();
+  });
+
+  it('dispose does not call removeEventListener for resize when externalResize is true', () => {
+    const canvas = makeCanvas();
+    const result = createPokerScene(canvas, { externalResize: true });
+    result.dispose();
+
+    const removeCalls = removeSpy.mock.calls.filter(([type]) => type === 'resize');
+    expect(removeCalls.length).toBe(0);
+  });
+
+  it('dispose removes window resize listener when externalResize is false', () => {
+    const canvas = makeCanvas();
+    const result = createPokerScene(canvas, { externalResize: false });
+    result.dispose();
+
+    const removeCalls = removeSpy.mock.calls.filter(([type]) => type === 'resize');
+    expect(removeCalls.length).toBe(1);
   });
 });

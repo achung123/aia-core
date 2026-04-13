@@ -6,13 +6,22 @@ import json
 from datetime import date, datetime, timedelta, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.database.models import GamePlayer, GameSession, Hand, Player, PlayerHand, Rebuy
+from app.database.models import (
+    GamePlayer,
+    GameSession,
+    Hand,
+    HandState,
+    Player,
+    PlayerHand,
+    PlayerHandAction,
+    Rebuy,
+)
 from app.database.session import get_db
 from pydantic_models.app_models import (
     AddPlayerToGameRequest,
@@ -28,6 +37,7 @@ from pydantic_models.app_models import (
     PlayerStatusUpdate,
     RebuyCreate,
     RebuyResponse,
+    SeatAssignmentRequest,
 )
 
 
@@ -108,7 +118,11 @@ def create_game_session(
     payload: GameSessionCreate,
     db: Annotated[Session, Depends(get_db)],
 ):
-    game = GameSession(game_date=payload.game_date, status='active')
+    game = GameSession(
+        game_date=payload.game_date,
+        status='active',
+        default_buy_in=payload.default_buy_in,
+    )
     db.add(game)
     db.flush()  # populate game_id without committing
 
@@ -141,7 +155,7 @@ def create_game_session(
                 game_id=game.game_id,
                 player_id=player.player_id,
                 seat_number=seat,
-                buy_in=buy_ins.get(name),
+                buy_in=buy_ins.get(name, payload.default_buy_in),
             )
         )
 
@@ -157,6 +171,7 @@ def create_game_session(
         players=_build_players(db, game.game_id),
         hand_count=len(game.hands),
         winners=_parse_winners(game.winners),
+        default_buy_in=game.default_buy_in,
     )
 
 
@@ -177,6 +192,7 @@ def get_game_session(
         players=_build_players(db, game.game_id),
         hand_count=len(game.hands),
         winners=_parse_winners(game.winners),
+        default_buy_in=game.default_buy_in,
     )
 
 
@@ -205,6 +221,7 @@ def complete_game_session(
         players=_build_players(db, game.game_id),
         hand_count=len(game.hands),
         winners=_parse_winners(game.winners),
+        default_buy_in=game.default_buy_in,
     )
 
 
@@ -231,6 +248,7 @@ def reactivate_game_session(
         players=_build_players(db, game.game_id),
         hand_count=len(game.hands),
         winners=_parse_winners(game.winners),
+        default_buy_in=game.default_buy_in,
     )
 
 
@@ -391,10 +409,22 @@ def delete_game(
     if game is None:
         raise HTTPException(status_code=404, detail='Game session not found')
 
-    # Delete child records: player_hands → hands → game_players → game
+    # Delete child records: actions → player_hands → hand_states → hands → game_players → game
     for hand in game.hands:
+        player_hand_ids = [
+            ph.player_hand_id
+            for ph in db.query(PlayerHand)
+            .filter(PlayerHand.hand_id == hand.hand_id)
+            .all()
+        ]
+        if player_hand_ids:
+            db.query(PlayerHandAction).filter(
+                PlayerHandAction.player_hand_id.in_(player_hand_ids)
+            ).delete(synchronize_session=False)
         db.query(PlayerHand).filter(PlayerHand.hand_id == hand.hand_id).delete()
+        db.query(HandState).filter(HandState.hand_id == hand.hand_id).delete()
         db.delete(hand)
+    db.query(Rebuy).filter(Rebuy.game_id == game_id).delete()
     db.query(GamePlayer).filter(GamePlayer.game_id == game_id).delete()
     db.delete(game)
     db.commit()
@@ -465,11 +495,34 @@ def add_player_to_game(
     )
     next_seat = (max_seat or 0) + 1
 
+    # Use requested seat_number if provided; check for conflicts
+    seat = payload.seat_number if payload.seat_number is not None else next_seat
+    if payload.seat_number is not None:
+        occupant = (
+            db.query(GamePlayer)
+            .filter(
+                GamePlayer.game_id == game_id,
+                GamePlayer.seat_number == payload.seat_number,
+                GamePlayer.is_active.is_(True),
+            )
+            .first()
+        )
+        if occupant is not None:
+            occupant_name = (
+                db.query(Player.name)
+                .filter(Player.player_id == occupant.player_id)
+                .scalar()
+            )
+            raise HTTPException(
+                status_code=409,
+                detail=f'Seat {payload.seat_number} is already occupied by {occupant_name!r}',
+            )
+
     gp = GamePlayer(
         game_id=game_id,
         player_id=player.player_id,
         is_active=True,
-        seat_number=next_seat,
+        seat_number=seat,
         buy_in=payload.buy_in,
     )
     db.add(gp)
@@ -477,6 +530,92 @@ def add_player_to_game(
 
     return AddPlayerToGameResponse(
         player_name=player.name,
+        is_active=gp.is_active,
+        seat_number=gp.seat_number,
+        buy_in=gp.buy_in,
+    )
+
+
+@router.patch(
+    '/{game_id}/players/{player_name}/seat',
+    response_model=PlayerInfo,
+)
+def assign_player_seat(
+    game_id: int,
+    player_name: str,
+    payload: SeatAssignmentRequest,
+    db: Annotated[Session, Depends(get_db)],
+    force: bool = Query(default=False),
+):
+    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
+    if game is None:
+        raise HTTPException(status_code=404, detail='Game session not found')
+
+    # After hands have started, only dealer (force=true) can reassign seats
+    if not force:
+        hand_count = db.query(Hand).filter(Hand.game_id == game_id).count()
+        if hand_count > 0:
+            raise HTTPException(
+                status_code=403,
+                detail='Seat reassignment requires dealer override (?force=true) after hands have started',
+            )
+
+    player = (
+        db.query(Player).filter(func.lower(Player.name) == player_name.lower()).first()
+    )
+    if player is None:
+        raise HTTPException(
+            status_code=404, detail=f'Player {player_name!r} not found in this game'
+        )
+
+    gp = (
+        db.query(GamePlayer)
+        .filter(
+            GamePlayer.game_id == game_id,
+            GamePlayer.player_id == player.player_id,
+        )
+        .first()
+    )
+    if gp is None:
+        raise HTTPException(
+            status_code=404, detail=f'Player {player_name!r} not found in this game'
+        )
+
+    # Check seat conflict — ignore the requesting player and inactive players
+    occupant = (
+        db.query(GamePlayer)
+        .filter(
+            GamePlayer.game_id == game_id,
+            GamePlayer.seat_number == payload.seat_number,
+            GamePlayer.is_active.is_(True),
+            GamePlayer.player_id != player.player_id,
+        )
+        .first()
+    )
+    if occupant is not None:
+        occupant_name = (
+            db.query(Player.name)
+            .filter(Player.player_id == occupant.player_id)
+            .scalar()
+        )
+        raise HTTPException(
+            status_code=409,
+            detail=f'Seat {payload.seat_number} is already occupied by {occupant_name!r}',
+        )
+
+    gp.seat_number = payload.seat_number
+    db.commit()
+    db.refresh(gp)
+
+    # Build full PlayerInfo for response
+    players = _build_players(db, game_id)
+    for p in players:
+        if p.name == player.name:
+            return p
+
+    # Fallback (should not be reached)
+    return PlayerInfo(
+        name=player.name,
         is_active=gp.is_active,
         seat_number=gp.seat_number,
         buy_in=gp.buy_in,

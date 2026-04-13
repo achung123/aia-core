@@ -82,4 +82,12 @@ describe('SessionScrubber', () => {
     expect(slider).toBeInTheDocument();
     expect(slider.getAttribute('type')).toBe('range');
   });
+
+  it('calls onChange on input event for live drag responsiveness', () => {
+    const spy = vi.fn();
+    render(<SessionScrubber handCount={10} currentHand={1} onChange={spy} />);
+    const slider = screen.getByTestId('session-slider');
+    fireEvent.input(slider, { target: { value: '5' } });
+    expect(spy).toHaveBeenCalledWith(5);
+  });
 });

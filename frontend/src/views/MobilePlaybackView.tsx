@@ -192,24 +192,42 @@ export function MobilePlaybackView() {
   /* Three.js scene lifecycle */
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    const wrapper = wrapperRef.current;
+    if (!canvas || !wrapper) return;
 
     let cancelled = false;
+    let ro: ResizeObserver | null = null;
 
     function init(): void {
       if (cancelled) return;
       if (canvas!.clientWidth > 0 && canvas!.clientHeight > 0) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const scene: any = createPokerScene(canvas, {
-          width: window.innerWidth,
-          height: window.innerHeight,
+          width: canvas!.clientWidth,
+          height: canvas!.clientHeight,
         });
         sceneRef.current = scene;
-        scene.camera.position.set(0, 14, 3);
+        scene.camera.position.set(0, 18, 6);
         scene.camera.lookAt(0, 0, 0);
         scene.camera.updateProjectionMatrix();
         if (scene.controls) {
           scene.controls.saveState();
+        }
+
+        // ResizeObserver to re-bound canvas when container changes
+        const canvasArea = canvas!.parentElement;
+        if (canvasArea) {
+          ro = new ResizeObserver((entries) => {
+            for (const entry of entries) {
+              const { width, height } = entry.contentRect;
+              if (width > 0 && height > 0) {
+                scene.renderer.setSize(width, height);
+                scene.camera.aspect = width / height;
+                scene.camera.updateProjectionMatrix();
+              }
+            }
+          });
+          ro.observe(canvasArea);
         }
       } else {
         requestAnimationFrame(init);
@@ -219,6 +237,7 @@ export function MobilePlaybackView() {
 
     return () => {
       cancelled = true;
+      if (ro) ro.disconnect();
       labelsRef.current.forEach(el => el.remove());
       labelsRef.current = [];
       if (sceneRef.current) {
@@ -308,11 +327,14 @@ export function MobilePlaybackView() {
     createSeatLabelsForPlayers(playerNames);
 
     if (sceneRef.current) {
-      sceneRef.current.update({
-        cardData,
-        seatPlayerMap,
-        plMap: {},
-        streetIndex: STREET_INDEX['Pre-Flop'],
+      const scene = sceneRef.current;
+      requestAnimationFrame(() => {
+        scene.update({
+          cardData,
+          seatPlayerMap,
+          plMap: {},
+          streetIndex: STREET_INDEX['Pre-Flop'],
+        });
       });
     }
   }
@@ -338,11 +360,14 @@ export function MobilePlaybackView() {
         seatPlayerMap[i] = name;
       });
 
-      sceneRef.current.update({
-        cardData,
-        seatPlayerMap,
-        plMap: {},
-        streetIndex: STREET_INDEX[streetName] ?? 0,
+      const scene = sceneRef.current;
+      requestAnimationFrame(() => {
+        scene.update({
+          cardData,
+          seatPlayerMap,
+          plMap: {},
+          streetIndex: STREET_INDEX[streetName] ?? 0,
+        });
       });
     }
   }
@@ -425,9 +450,7 @@ export function MobilePlaybackView() {
       data-testid="mobile-canvas"
       style={mobileStyles.wrapper}
     >
-      <canvas ref={canvasRef} style={mobileStyles.canvas} />
-
-      {/* Back button */}
+      {/* Back button (overlay on canvas) */}
       {activeGameId && (
         <button
           data-testid="back-button"
@@ -438,7 +461,12 @@ export function MobilePlaybackView() {
         </button>
       )}
 
-      {/* Scrubber controls */}
+      {/* Canvas area — flex:1 fills space between HUD */}
+      <div data-testid="canvas-area" style={mobileStyles.canvasArea}>
+        <canvas ref={canvasRef} style={mobileStyles.canvas} />
+      </div>
+
+      {/* Scrubber controls — below the canvas, not overlaid */}
       <div data-testid="scrubber-mount" style={mobileStyles.scrubberMount}>
         {hands.length > 0 && (
           <div>
@@ -468,6 +496,7 @@ export function MobilePlaybackView() {
           onClick={() => setDrawerOpen(o => !o)}
           style={mobileStyles.drawerToggle}
         >
+          <span style={{ display: 'block', width: 40, height: 4, background: '#6366f1', borderRadius: 2, margin: '0 auto 6px' }} />
           {drawerOpen ? '▼ Sessions' : '▲ Sessions'}
         </button>
 
@@ -520,7 +549,8 @@ export function MobilePlaybackView() {
 /* ── Styles ───────────────────────────────────────────────────── */
 
 const mobileStyles: Record<string, CSSProperties> = {
-  wrapper: { position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' },
+  wrapper: { display: 'flex', flexDirection: 'column', position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' },
+  canvasArea: { flex: 1, position: 'relative', overflow: 'hidden' },
   canvas: { display: 'block', width: '100%', height: '100%' },
   backButton: {
     position: 'absolute',
@@ -538,24 +568,29 @@ const mobileStyles: Record<string, CSSProperties> = {
     cursor: 'pointer',
     fontFamily: 'system-ui, sans-serif',
   },
-  scrubberMount: { position: 'absolute', bottom: 60, left: 0, right: 0, zIndex: 5 },
+  scrubberMount: { zIndex: 5, flexShrink: 0 },
   drawer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
     background: '#1a1a2e',
-    borderTop: '2px solid #333',
+    borderTop: '2px solid #6366f1',
+    borderRadius: '14px 14px 0 0',
     zIndex: 10,
     maxHeight: '60vh',
   },
   drawerToggle: {
     width: '100%',
-    padding: 10,
-    background: '#222',
-    color: '#fff',
+    padding: '12px 16px',
+    minHeight: 48,
+    background: 'linear-gradient(180deg, #252250, #1a1a2e)',
+    color: '#c7d2fe',
     border: 'none',
+    borderRadius: '14px 14px 0 0',
     cursor: 'pointer',
-    fontSize: 14,
+    fontSize: 15,
+    fontWeight: 600,
+    letterSpacing: '0.02em',
   },
 };

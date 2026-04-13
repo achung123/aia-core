@@ -103,6 +103,7 @@ export function SessionScrubber({ handCount, currentHand, onChange }: SessionScr
           step={1}
           value={currentHand}
           style={styles.range}
+          onInput={(e) => onChange(parseInt((e.target as HTMLInputElement).value, 10))}
           onChange={(e) => onChange(parseInt(e.target.value, 10))}
         />
       </div>

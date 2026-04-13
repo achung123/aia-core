@@ -31,6 +31,8 @@ import {
   getDefaultCameraPosition,
   DEFAULT_OVERHEAD_POSITION,
   DEFAULT_OVERHEAD_TARGET,
+  SEAT_CAMERA_HEIGHT,
+  SEAT_CAMERA_BEHIND,
 } from './seatCamera.ts';
 
 describe('computeSeatCameraPosition', () => {
@@ -223,5 +225,23 @@ describe('animateCameraToSeat', () => {
     flushRaf(200);
 
     expect(controls.update).toHaveBeenCalled();
+  });
+});
+
+describe('camera default constants', () => {
+  it('DEFAULT_OVERHEAD_POSITION Y is 18 for full-table visibility on mobile', () => {
+    expect(DEFAULT_OVERHEAD_POSITION.y).toBe(18);
+  });
+
+  it('DEFAULT_OVERHEAD_POSITION Z is 6 for zoomed-out default', () => {
+    expect(DEFAULT_OVERHEAD_POSITION.z).toBe(6);
+  });
+
+  it('SEAT_CAMERA_HEIGHT is 8 for wider seat-snap perspective', () => {
+    expect(SEAT_CAMERA_HEIGHT).toBe(8);
+  });
+
+  it('SEAT_CAMERA_BEHIND is 1.6 for wider seat-snap perspective', () => {
+    expect(SEAT_CAMERA_BEHIND).toBe(1.6);
   });
 });

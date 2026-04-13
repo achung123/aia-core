@@ -110,7 +110,7 @@ class TestGetHandShowsFolded:
         alice_ph = next(ph for ph in player_hands if ph['player_name'] == 'Alice')
         bob_ph = next(ph for ph in player_hands if ph['player_name'] == 'Bob')
         assert alice_ph['result'] == 'folded'
-        assert bob_ph['result'] is None  # Bob is unaffected
+        assert bob_ph['result'] == 'won'  # fold-to-one awards the pot
 
 
 class TestAlreadyFoldedReturns400:

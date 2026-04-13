@@ -31,6 +31,10 @@ import type {
   PlayerStatusResponse,
   PlayerActionCreate,
   PlayerActionResponse,
+  PlayerInfo,
+  SeatAssignmentRequest,
+  RebuyCreate,
+  RebuyResponse,
 } from './types.ts';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -316,6 +320,22 @@ export function fetchBlinds(gameId: number): Promise<BlindsResponse> {
 export function updateBlinds(gameId: number, data: BlindsUpdate): Promise<BlindsResponse> {
   return request<BlindsResponse>(`/games/${gameId}/blinds`, {
     method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+}
+
+export function assignPlayerSeat(gameId: number, playerName: string, data: SeatAssignmentRequest): Promise<PlayerInfo> {
+  return request<PlayerInfo>(`/games/${gameId}/players/${encodeURIComponent(playerName)}/seat`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+}
+
+export function createRebuy(gameId: number, playerName: string, data: RebuyCreate): Promise<RebuyResponse> {
+  return request<RebuyResponse>(`/games/${gameId}/players/${encodeURIComponent(playerName)}/rebuys`, {
+    method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });

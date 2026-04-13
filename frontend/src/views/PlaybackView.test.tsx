@@ -55,8 +55,8 @@ const HANDS: HandResponse[] = [
     source_upload_id: null,
     created_at: '2026-02-15T12:00:00Z',
     player_hands: [
-      { player_hand_id: 1, hand_id: 1, player_id: 1, player_name: 'Alice', card_1: '2h', card_2: '3h', result: 'won', profit_loss: 50, outcome_street: null },
-      { player_hand_id: 2, hand_id: 1, player_id: 2, player_name: 'Bob', card_1: '4d', card_2: '5d', result: 'lost', profit_loss: -50, outcome_street: null },
+      { player_hand_id: 1, hand_id: 1, player_id: 1, player_name: 'Alice', card_1: '2h', card_2: '3h', result: 'won', profit_loss: 50, outcome_street: null, winning_hand_description: null },
+      { player_hand_id: 2, hand_id: 1, player_id: 2, player_name: 'Bob', card_1: '4d', card_2: '5d', result: 'lost', profit_loss: -50, outcome_street: null, winning_hand_description: null },
     ],
   },
 ];
@@ -177,5 +177,27 @@ describe('PlaybackView', () => {
       expect(label).toBeTruthy();
       expect(label!.textContent).toBe('Hand 1 / 1');
     });
+  });
+
+  it('canvas area has overflow hidden to bound the 3D canvas', () => {
+    const { container } = render(<PlaybackView />);
+    const canvasArea = container.querySelector('[data-testid="canvas-area"]') as HTMLElement;
+    expect(canvasArea).toBeTruthy();
+    expect(canvasArea.style.overflow).toBe('hidden');
+  });
+
+  it('canvas area uses flex:1 to fill space between HUD elements', () => {
+    const { container } = render(<PlaybackView />);
+    const canvasArea = container.querySelector('[data-testid="canvas-area"]') as HTMLElement;
+    expect(canvasArea).toBeTruthy();
+    expect(canvasArea.style.flex).toContain('1');
+  });
+
+  it('main area uses flex column layout', () => {
+    const { container } = render(<PlaybackView />);
+    const layout = container.querySelector('[data-testid="playback-layout"]') as HTMLElement;
+    const mainDiv = layout?.children[1] as HTMLElement;
+    expect(mainDiv.style.display).toBe('flex');
+    expect(mainDiv.style.flexDirection).toBe('column');
   });
 });

@@ -93,8 +93,8 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 'bold',
     border: '2px dashed #6366f1',
     borderRadius: '12px',
-    background: '#eef2ff',
-    color: '#4338ca',
+    background: 'rgba(99, 102, 241, 0.15)',
+    color: '#a5b4fc',
     cursor: 'pointer',
     marginBottom: '1rem',
     WebkitTapHighlightColor: 'transparent',
@@ -134,14 +134,14 @@ const styles: Record<string, React.CSSProperties> = {
     WebkitTapHighlightColor: 'transparent',
   },
   cardActive: {
-    borderColor: 'indigo',
-    background: '#eef2ff',
-    color: '#312e81',
+    borderColor: '#6366f1',
+    background: 'rgba(99, 102, 241, 0.12)',
+    color: '#c7d2fe',
   },
   cardComplete: {
-    borderColor: '#d1d5db',
-    background: '#f9fafb',
-    color: '#6b7280',
+    borderColor: '#2e303a',
+    background: '#1e1f2b',
+    color: '#94a3b8',
   },
   cardDate: {
     fontWeight: 'bold',
@@ -164,6 +164,6 @@ const styles: Record<string, React.CSSProperties> = {
   winnersRow: {
     fontSize: '0.85rem',
     fontWeight: 600,
-    color: '#16a34a',
+    color: '#4ade80',
   },
 };

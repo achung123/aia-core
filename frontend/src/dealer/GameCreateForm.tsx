@@ -15,6 +15,7 @@ function todayStr(): string {
 
 export function GameCreateForm({ onGameCreated }: GameCreateFormProps) {
   const [date, setDate] = useState(todayStr);
+  const [buyInAmount, setBuyInAmount] = useState('');
   const [players, setPlayers] = useState<PlayerResponse[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -67,9 +68,11 @@ export function GameCreateForm({ onGameCreated }: GameCreateFormProps) {
     setError(null);
     setSubmitting(true);
     try {
+      const parsedBuyIn = buyInAmount.trim() ? parseFloat(buyInAmount) : undefined;
       const result = await createSession({
         game_date: date,
         player_names: [...selected],
+        default_buy_in: parsedBuyIn && parsedBuyIn > 0 ? parsedBuyIn : undefined,
       });
       onGameCreated(result.game_id, result.player_names, result.game_date);
     } catch (err) {
@@ -91,6 +94,20 @@ export function GameCreateForm({ onGameCreated }: GameCreateFormProps) {
           type="date"
           value={date}
           onChange={e => setDate(e.target.value)}
+          style={styles.dateInput}
+        />
+      </label>
+
+      <label style={styles.label}>
+        Buy-in Amount
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          placeholder="e.g. 20.00"
+          value={buyInAmount}
+          onChange={e => setBuyInAmount(e.target.value)}
+          data-testid="buy-in-input"
           style={styles.dateInput}
         />
       </label>

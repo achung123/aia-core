@@ -1,6 +1,7 @@
 """Hands router - handles hand-related endpoints."""
 
 import hashlib
+import json
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
@@ -17,7 +18,13 @@ from app.database.models import (
     PlayerHandAction,
 )
 from app.database.session import get_db
+from app.services.betting import (
+    compute_side_pots,
+    get_legal_actions,
+    is_street_complete,
+)
 from app.services.equity import calculate_equity, calculate_player_equity
+from app.services.hand_ranking import describe_hand
 from pydantic_models.app_models import (
     CommunityCardsUpdate,
     EquityResponse,
@@ -42,11 +49,14 @@ from pydantic_models.card_validator import validate_no_duplicate_cards
 
 router = APIRouter(prefix='/games', tags=['hands'])
 
-PHASE_ORDER = ['preflop', 'flop', 'turn', 'river', 'showdown']
+PHASE_ORDER = ['awaiting_cards', 'preflop', 'flop', 'turn', 'river', 'showdown']
 
 
 def _get_active_seat_order(
-    db: Session, game_id: int, hand: Hand
+    db: Session,
+    game_id: int,
+    hand: Hand,
+    exclude_all_in: bool = False,
 ) -> list[tuple[int, int]]:
     """Return list of (seat_number, player_id) for active non-folded players, sorted by seat."""
     active_gps = (
@@ -59,10 +69,13 @@ def _get_active_seat_order(
         .all()
     )
     folded_ids = {ph.player_id for ph in hand.player_hands if ph.result == 'folded'}
+    excluded = set(folded_ids)
+    if exclude_all_in:
+        excluded |= {ph.player_id for ph in hand.player_hands if ph.is_all_in}
     return [
         (gp.seat_number or 0, gp.player_id)
         for gp in active_gps
-        if gp.player_id not in folded_ids
+        if gp.player_id not in excluded
     ]
 
 
@@ -116,8 +129,8 @@ def _next_seat(
     hand: Hand,
     current_seat: int,
 ) -> int | None:
-    """Advance to the next non-folded active player seat after current_seat."""
-    seats = _get_active_seat_order(db, game_id, hand)
+    """Advance to the next non-folded, non-all-in active player seat after current_seat."""
+    seats = _get_active_seat_order(db, game_id, hand, exclude_all_in=True)
     if not seats:
         return None
     after = [s for s in seats if s[0] > current_seat]
@@ -151,26 +164,41 @@ def _can_advance_to_phase(hand: Hand, target_phase: str) -> bool:
     return True  # preflop always ok
 
 
+def _get_actions_this_street(db: Session, hand: Hand, street: str) -> list[dict]:
+    """Get all actions for a given street as dicts for the betting module."""
+    actions = (
+        db.query(PlayerHandAction, PlayerHand.player_id)
+        .join(PlayerHand, PlayerHandAction.player_hand_id == PlayerHand.player_hand_id)
+        .filter(
+            PlayerHand.hand_id == hand.hand_id,
+            PlayerHandAction.street == street,
+        )
+        .order_by(PlayerHandAction.created_at)
+        .all()
+    )
+    return [
+        {'player_id': pid, 'action': a.action, 'amount': a.amount} for a, pid in actions
+    ]
+
+
 def _try_advance_phase(db: Session, game_id: int, hand: Hand, state: HandState) -> None:
-    """If all non-folded players have acted in this phase, try to advance."""
+    """If all non-folded players have acted with equalized bets, try to advance."""
     seats = _get_active_seat_order(db, game_id, hand)
     if len(seats) <= 1:
         return
 
-    # Count actions in current phase by non-folded active players
     active_non_folded_ids = {pid for _, pid in seats}
-    actions_this_phase = (
-        db.query(PlayerHandAction)
-        .join(PlayerHand, PlayerHandAction.player_hand_id == PlayerHand.player_hand_id)
-        .filter(
-            PlayerHand.hand_id == hand.hand_id,
-            PlayerHandAction.street == state.phase,
-            PlayerHand.player_id.in_(active_non_folded_ids),
-        )
-        .count()
-    )
+    all_in_ids = {ph.player_id for ph in hand.player_hands if ph.is_all_in}
 
-    if actions_this_phase < len(active_non_folded_ids):
+    actions_this_street = _get_actions_this_street(db, hand, state.phase)
+
+    if not is_street_complete(
+        actions_this_street,
+        active_non_folded_ids,
+        all_in_ids,
+        state.phase,
+        hand.bb_player_id,
+    ):
         return
 
     # All acted — try to advance
@@ -183,10 +211,79 @@ def _try_advance_phase(db: Session, game_id: int, hand: Hand, state: HandState) 
     # Refresh hand to get latest community cards
     db.refresh(hand)
     if not _can_advance_to_phase(hand, next_phase):
+        # Street is complete but community cards aren't dealt yet.
+        # Clear current_seat so no player is prompted to act.
+        state.current_seat = None
         return  # Can't advance yet — not enough community cards
 
     state.phase = next_phase
     state.current_seat = _first_to_act_seat(db, game_id, hand, next_phase)
+
+
+def _activate_preflop(db: Session, game_id: int, hand: Hand, state: HandState) -> None:
+    """Transition from awaiting_cards to preflop: post blinds and set first-to-act."""
+    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
+    sb = game.small_blind if game else 0.10
+    bb = game.big_blind if game else 0.20
+
+    sb_ph = (
+        db.query(PlayerHand)
+        .filter(
+            PlayerHand.hand_id == hand.hand_id,
+            PlayerHand.player_id == hand.sb_player_id,
+        )
+        .first()
+    )
+    bb_ph = (
+        db.query(PlayerHand)
+        .filter(
+            PlayerHand.hand_id == hand.hand_id,
+            PlayerHand.player_id == hand.bb_player_id,
+        )
+        .first()
+    )
+    db.add(
+        PlayerHandAction(
+            player_hand_id=sb_ph.player_hand_id,
+            street='preflop',
+            action='blind',
+            amount=sb,
+        )
+    )
+    db.add(
+        PlayerHandAction(
+            player_hand_id=bb_ph.player_hand_id,
+            street='preflop',
+            action='blind',
+            amount=bb,
+        )
+    )
+    hand.pot = sb + bb
+
+    state.phase = 'preflop'
+    state.current_seat = _first_to_act_seat(db, game_id, hand, 'preflop')
+
+
+def _resolve_side_pot_names(side_pots_raw: list[dict], db: Session) -> list[dict]:
+    """Replace eligible_player_ids (ints) with eligible_players (names)."""
+    if not side_pots_raw:
+        return []
+    all_ids = {pid for sp in side_pots_raw for pid in sp.get('eligible_player_ids', [])}
+    if not all_ids:
+        return [
+            {'amount': sp['amount'], 'eligible_players': []} for sp in side_pots_raw
+        ]
+    players = db.query(Player).filter(Player.player_id.in_(all_ids)).all()
+    id_to_name = {p.player_id: p.name for p in players}
+    return [
+        {
+            'amount': sp['amount'],
+            'eligible_players': [
+                id_to_name.get(pid, str(pid)) for pid in sp['eligible_player_ids']
+            ],
+        }
+        for sp in side_pots_raw
+    ]
 
 
 def _get_player_name_for_seat(
@@ -258,11 +355,74 @@ def get_hand_status(
             )
         )
 
+    raw_side_pots = json.loads(hand.side_pots) if hand.side_pots else []
+    state = db.query(HandState).filter(HandState.hand_id == hand.hand_id).first()
+
+    # Try phase advancement (community cards may have been dealt since last action)
+    if state:
+        _try_advance_phase(db, game_id, hand, state)
+        db.commit()
+        db.refresh(state)
+        db.refresh(hand)
+
     body = HandStatusResponse(
         hand_number=hand.hand_number,
         community_recorded=community_recorded,
         players=players,
+        current_player_name=None,
+        legal_actions=[],
+        amount_to_call=0,
+        pot=hand.pot or 0,
+        side_pots=_resolve_side_pot_names(raw_side_pots, db),
+        phase=state.phase if state else 'preflop',
     )
+
+    # Add betting state info if hand state exists
+    if state and state.current_seat is not None:
+        body.current_player_name = _get_player_name_for_seat(
+            db, game_id, state.current_seat
+        )
+        # Compute legal actions for the current player
+        current_gp = (
+            db.query(GamePlayer)
+            .filter(
+                GamePlayer.game_id == game_id,
+                GamePlayer.seat_number == state.current_seat,
+            )
+            .first()
+        )
+        if current_gp:
+            actions_data = _get_actions_this_street(db, hand, state.phase)
+            game_session = (
+                db.query(GameSession).filter(GameSession.game_id == game_id).first()
+            )
+            sb = game_session.small_blind if game_session else 0.10
+            bb = game_session.big_blind if game_session else 0.20
+            la = get_legal_actions(
+                state.phase, actions_data, current_gp.player_id, (sb, bb)
+            )
+            body.legal_actions = la['legal_actions']
+            body.amount_to_call = la['amount_to_call']
+
+    # Compute street_complete flag (independent of current_seat)
+    if state and state.phase not in ('awaiting_cards', 'showdown'):
+        actions_data_sc = _get_actions_this_street(db, hand, state.phase)
+        seats = _get_active_seat_order(db, game_id, hand)
+        active_non_folded_ids = {pid for _, pid in seats}
+        all_in_ids = {ph.player_id for ph in hand.player_hands if ph.is_all_in}
+        body.street_complete = is_street_complete(
+            actions_data_sc,
+            active_non_folded_ids,
+            all_in_ids,
+            state.phase,
+            hand.bb_player_id,
+        )
+
+    # Set is_current_turn on each player entry
+    for p in body.players:
+        p.is_current_turn = (
+            body.current_player_name is not None and p.name == body.current_player_name
+        )
 
     etag = '"' + hashlib.md5(body.model_dump_json().encode()).hexdigest() + '"'
 
@@ -420,13 +580,13 @@ def start_hand(
     for gp in active_gps:
         ph = PlayerHand(hand_id=hand.hand_id, player_id=gp.player_id)
         db.add(ph)
+    db.flush()
 
-    # Create HandState with phase=preflop and first-to-act seat
-    first_seat = _first_to_act_seat(db, game_id, hand, 'preflop')
+    # Start in awaiting_cards phase — blinds post after all players capture cards
     hand_state = HandState(
         hand_id=hand.hand_id,
-        phase='preflop',
-        current_seat=first_seat,
+        phase='awaiting_cards',
+        current_seat=None,
         action_index=0,
     )
     db.add(hand_state)
@@ -524,46 +684,62 @@ def get_hand_equity(
         raise HTTPException(status_code=404, detail='Hand not found')
 
     # Collect players with non-null hole cards
-    players_with_cards: list[tuple[str, list[tuple[str, str]]]] = []
+    players_with_cards: list[tuple[str, list[tuple[str, str]], list[str]]] = []
     for ph in hand.player_hands:
         if ph.card_1 is None or ph.card_2 is None:
             continue
         p = db.query(Player).filter(Player.player_id == ph.player_id).first()
         player_name = p.name if p else ''
         hole_cards = [_db_card_to_tuple(ph.card_1), _db_card_to_tuple(ph.card_2)]
-        players_with_cards.append((player_name, hole_cards))
+        raw_hole = [ph.card_1, ph.card_2]
+        players_with_cards.append((player_name, hole_cards, raw_hole))
 
     # Gather community cards
     community_cards: list[tuple[str, str]] = []
+    raw_community: list[str] = []
     for card_str in [hand.flop_1, hand.flop_2, hand.flop_3, hand.turn, hand.river]:
         if card_str is not None:
             community_cards.append(_db_card_to_tuple(card_str))
+            raw_community.append(card_str)
 
     # Player-perspective equity: single player vs random opponents
     if player is not None:
-        target = [(name, hc) for name, hc in players_with_cards if name == player]
+        target = [
+            (name, hc, raw) for name, hc, raw in players_with_cards if name == player
+        ]
         if not target:
             return EquityResponse(equities=[])
-        target_name, target_cards = target[0]
+        target_name, target_cards, target_raw = target[0]
         num_opponents = len(players_with_cards) - 1
         if num_opponents < 1:
             return EquityResponse(equities=[])
         eq = calculate_player_equity(target_cards, num_opponents, community_cards)
+        hand_desc = describe_hand(target_raw, raw_community)
         return EquityResponse(
-            equities=[{'player_name': target_name, 'equity': round(eq, 4)}]
+            equities=[
+                {
+                    'player_name': target_name,
+                    'equity': round(eq, 4),
+                    'winning_hand_description': hand_desc,
+                }
+            ]
         )
 
     # Standard multi-player equity
     if len(players_with_cards) < 2:
         return EquityResponse(equities=[])
 
-    player_hole_cards = [hc for _, hc in players_with_cards]
+    player_hole_cards = [hc for _, hc, _ in players_with_cards]
     equities = calculate_equity(player_hole_cards, community_cards)
 
     return EquityResponse(
         equities=[
-            {'player_name': name, 'equity': round(eq, 4)}
-            for (name, _), eq in zip(players_with_cards, equities, strict=False)
+            {
+                'player_name': name,
+                'equity': round(eq, 4),
+                'winning_hand_description': describe_hand(raw, raw_community),
+            }
+            for (name, _, raw), eq in zip(players_with_cards, equities, strict=False)
         ]
     )
 
@@ -621,9 +797,14 @@ def edit_community_cards(
 
 def _build_hand_response(hand: Hand, db: Session) -> HandResponse:
     """Build a HandResponse from a Hand ORM object."""
+    community = [
+        c for c in [hand.flop_1, hand.flop_2, hand.flop_3, hand.turn, hand.river] if c
+    ]
     player_hand_responses: list[PlayerHandResponse] = []
     for ph in hand.player_hands:
         player = db.query(Player).filter(Player.player_id == ph.player_id).first()
+        hole = [c for c in [ph.card_1, ph.card_2] if c]
+        hand_desc = describe_hand(hole, community) if len(hole) == 2 else None
         player_hand_responses.append(
             PlayerHandResponse(
                 player_hand_id=ph.player_hand_id,
@@ -635,6 +816,7 @@ def _build_hand_response(hand: Hand, db: Session) -> HandResponse:
                 result=ph.result,
                 profit_loss=ph.profit_loss,
                 outcome_street=ph.outcome_street,
+                winning_hand_description=hand_desc,
             )
         )
     sb_name = None
@@ -649,6 +831,7 @@ def _build_hand_response(hand: Hand, db: Session) -> HandResponse:
             db.query(Player).filter(Player.player_id == hand.bb_player_id).first()
         )
         bb_name = bb_player.name if bb_player else None
+    raw_side_pots = json.loads(hand.side_pots) if hand.side_pots else []
     return HandResponse(
         hand_id=hand.hand_id,
         game_id=hand.game_id,
@@ -661,6 +844,8 @@ def _build_hand_response(hand: Hand, db: Session) -> HandResponse:
         created_at=hand.created_at,
         sb_player_name=sb_name,
         bb_player_name=bb_name,
+        pot=hand.pot or 0,
+        side_pots=_resolve_side_pot_names(raw_side_pots, db),
         player_hands=player_hand_responses,
     )
 
@@ -860,6 +1045,13 @@ def edit_player_hole_cards(
     ph.card_1 = str(payload.card_1) if payload.card_1 is not None else None
     ph.card_2 = str(payload.card_2) if payload.card_2 is not None else None
 
+    # Check if all players now have cards → transition to preflop
+    state = db.query(HandState).filter(HandState.hand_id == hand.hand_id).first()
+    if state and state.phase == 'awaiting_cards':
+        all_have_cards = all(p.card_1 is not None for p in hand.player_hands)
+        if all_have_cards:
+            _activate_preflop(db, game_id, hand, state)
+
     db.commit()
     db.refresh(ph)
 
@@ -1038,7 +1230,16 @@ def delete_hand(
     if hand is None:
         raise HTTPException(status_code=404, detail='Hand not found')
 
+    player_hand_ids = [
+        ph.player_hand_id
+        for ph in db.query(PlayerHand).filter(PlayerHand.hand_id == hand.hand_id).all()
+    ]
+    if player_hand_ids:
+        db.query(PlayerHandAction).filter(
+            PlayerHandAction.player_hand_id.in_(player_hand_ids)
+        ).delete(synchronize_session=False)
     db.query(PlayerHand).filter(PlayerHand.hand_id == hand.hand_id).delete()
+    db.query(HandState).filter(HandState.hand_id == hand.hand_id).delete()
     db.delete(hand)
     db.commit()
 
@@ -1390,16 +1591,35 @@ def record_player_action(
 
     # Turn-order validation (skip if force=true or no hand state)
     hand_state = db.query(HandState).filter(HandState.hand_id == hand.hand_id).first()
+    if hand_state and hand_state.phase == 'awaiting_cards':
+        raise HTTPException(
+            status_code=403,
+            detail='Awaiting card capture — all players must submit cards before betting',
+        )
     if hand_state and not force:
         expected_name = _get_player_name_for_seat(db, game_id, hand_state.current_seat)
         if expected_name and expected_name.lower() != player_name.lower():
             raise HTTPException(
-                status_code=409,
+                status_code=403,
                 detail=(
                     f"It is {expected_name}'s turn (seat {hand_state.current_seat}), "
                     f"not {player_name}'s"
                 ),
             )
+
+    # Compute amount_to_call before recording the action (for all-in detection)
+    amount_to_call = 0.0
+    if hand_state:
+        actions_data = _get_actions_this_street(db, hand, hand_state.phase)
+        street_contribs: dict[int, float] = {}
+        for a in actions_data:
+            pid = a['player_id']
+            if a['action'] in ('blind', 'call', 'bet', 'raise'):
+                street_contribs[pid] = street_contribs.get(pid, 0) + (
+                    a.get('amount') or 0
+                )
+        max_contrib = max(street_contribs.values()) if street_contribs else 0
+        amount_to_call = max_contrib - street_contribs.get(player.player_id, 0)
 
     if payload.action == 'fold':
         if player_hand.result == 'folded':
@@ -1416,6 +1636,49 @@ def record_player_action(
         amount=payload.amount,
     )
     db.add(action)
+
+    # Update pot
+    if payload.amount and payload.action in ('call', 'bet', 'raise', 'blind'):
+        hand.pot = (hand.pot or 0) + payload.amount
+
+    # Detect all-in: explicit flag from client or auto-detect call-for-less
+    if payload.is_all_in:
+        player_hand.is_all_in = True
+    elif payload.action == 'call' and payload.amount is not None and amount_to_call > 0:
+        if payload.amount < amount_to_call:
+            player_hand.is_all_in = True
+
+    db.flush()
+
+    # Check fold-to-one
+    if payload.action == 'fold':
+        non_folded = [ph for ph in hand.player_hands if ph.result != 'folded']
+        if len(non_folded) == 1:
+            non_folded[0].result = 'won'
+            if hand_state:
+                hand_state.phase = 'showdown'
+                hand_state.current_seat = None
+            db.commit()
+            db.refresh(action)
+            return action
+
+    # Compute side pots if there are all-in players
+    all_in_phs = [ph for ph in hand.player_hands if ph.is_all_in]
+    if all_in_phs:
+        cumulative: dict[int, float] = {}
+        for ph in hand.player_hands:
+            total = sum(
+                a.amount or 0
+                for a in ph.actions
+                if a.action in ('blind', 'call', 'bet', 'raise') and a.amount
+            )
+            cumulative[ph.player_id] = total
+        non_folded_ids = {
+            ph.player_id for ph in hand.player_hands if ph.result != 'folded'
+        }
+        all_in_ids = {ph.player_id for ph in all_in_phs}
+        side_pots = compute_side_pots(cumulative, all_in_ids, non_folded_ids)
+        hand.side_pots = json.dumps(side_pots)
 
     # Advance turn state
     if hand_state:

@@ -7,13 +7,15 @@ vi.mock('../api/client.ts', () => ({
   fetchGame: vi.fn(),
   togglePlayerStatus: vi.fn(),
   addPlayerToGame: vi.fn(),
+  assignPlayerSeat: vi.fn(),
 }));
 
-import { fetchGame, togglePlayerStatus, addPlayerToGame } from '../api/client.ts';
+import { fetchGame, togglePlayerStatus, addPlayerToGame, assignPlayerSeat } from '../api/client.ts';
 
 const mockedFetchGame = fetchGame as ReturnType<typeof vi.fn>;
 const mockedTogglePlayerStatus = togglePlayerStatus as ReturnType<typeof vi.fn>;
 const mockedAddPlayerToGame = addPlayerToGame as ReturnType<typeof vi.fn>;
+const mockedAssignPlayerSeat = assignPlayerSeat as ReturnType<typeof vi.fn>;
 
 const GAME_RESPONSE = {
   game_id: 42,
@@ -189,6 +191,88 @@ describe('GamePlayerManagement', () => {
     render(<GamePlayerManagement gameId={42} />);
     await waitFor(() => {
       expect(screen.getByText('Players')).toBeTruthy();
+    });
+  });
+
+  // AC4: player list shows seat numbers
+  it('displays seat number for each player', async () => {
+    render(<GamePlayerManagement gameId={42} />);
+    await waitFor(() => {
+      expect(screen.getByText('Alice')).toBeTruthy();
+    });
+    expect(screen.getByTestId('seat-number-Alice').textContent).toContain('Seat 1');
+    expect(screen.getByTestId('seat-number-Bob').textContent).toContain('Seat 2');
+    expect(screen.getByTestId('seat-number-Charlie').textContent).toContain('Seat 3');
+  });
+
+  // AC4: "Reassign" opens seat picker
+  it('shows seat picker when Reassign Seat is clicked', async () => {
+    render(<GamePlayerManagement gameId={42} />);
+    await waitFor(() => {
+      expect(screen.getByText('Alice')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTestId('reassign-btn-Alice'));
+    await waitFor(() => {
+      expect(screen.getByTestId('seat-reassign-panel')).toBeTruthy();
+      expect(screen.getByTestId('seat-picker')).toBeTruthy();
+      expect(screen.getByText(/Reassign seat for Alice/)).toBeTruthy();
+    });
+  });
+
+  it('closes seat picker when Reassign Seat is toggled off', async () => {
+    render(<GamePlayerManagement gameId={42} />);
+    await waitFor(() => {
+      expect(screen.getByText('Alice')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTestId('reassign-btn-Alice'));
+    await waitFor(() => {
+      expect(screen.getByTestId('seat-reassign-panel')).toBeTruthy();
+    });
+    // Click again to toggle off
+    fireEvent.click(screen.getByTestId('reassign-btn-Alice'));
+    await waitFor(() => {
+      expect(screen.queryByTestId('seat-reassign-panel')).toBeNull();
+    });
+  });
+
+  // AC4: Reassignment calls PATCH .../seat
+  it('calls assignPlayerSeat when a seat is selected in reassignment', async () => {
+    mockedAssignPlayerSeat.mockResolvedValue({ name: 'Alice', is_active: true, seat_number: 5, buy_in: null });
+    render(<GamePlayerManagement gameId={42} />);
+    await waitFor(() => {
+      expect(screen.getByText('Alice')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTestId('reassign-btn-Alice'));
+    await waitFor(() => {
+      expect(screen.getByTestId('seat-picker')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTestId('seat-5'));
+    await waitFor(() => {
+      expect(mockedAssignPlayerSeat).toHaveBeenCalledWith(42, 'Alice', { seat_number: 5 });
+    });
+    // Seat should update in the player list
+    await waitFor(() => {
+      expect(screen.getByTestId('seat-number-Alice').textContent).toContain('Seat 5');
+    });
+    // Reassign panel should close
+    expect(screen.queryByTestId('seat-reassign-panel')).toBeNull();
+  });
+
+  // AC4: conflict error displayed on 409
+  it('shows error on 409 conflict during seat reassignment', async () => {
+    mockedAssignPlayerSeat.mockRejectedValue(new Error('HTTP 409: Seat 2 is already occupied by Bob'));
+    render(<GamePlayerManagement gameId={42} />);
+    await waitFor(() => {
+      expect(screen.getByText('Alice')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTestId('reassign-btn-Alice'));
+    await waitFor(() => {
+      expect(screen.getByTestId('seat-picker')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTestId('seat-5'));
+    await waitFor(() => {
+      expect(screen.getByTestId('action-error')).toBeTruthy();
+      expect(screen.getByTestId('action-error').textContent).toContain('Seat 2 is already occupied');
     });
   });
 });

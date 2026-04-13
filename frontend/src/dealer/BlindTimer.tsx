@@ -61,6 +61,22 @@ export function BlindTimer({ gameId, onAdvanceBlinds }: BlindTimerProps) {
     }
   }, [gameId, paused]);
 
+  const handleReset = useCallback(async () => {
+    if (!blinds) return;
+    try {
+      const updated = await updateBlinds(gameId, {
+        small_blind: blinds.small_blind,
+        big_blind: blinds.big_blind,
+      });
+      setPaused(updated.blind_timer_paused);
+      if (updated.blind_timer_remaining_seconds != null) {
+        setRemaining(Math.max(0, updated.blind_timer_remaining_seconds));
+      }
+    } catch {
+      /* ignore errors */
+    }
+  }, [gameId, blinds]);
+
   const timerActive = remaining != null;
   const expired = remaining != null && remaining <= 0;
 
@@ -81,6 +97,15 @@ export function BlindTimer({ gameId, onAdvanceBlinds }: BlindTimerProps) {
           onClick={handlePauseResume}
         >
           {paused ? '▶ Resume' : '⏸ Pause'}
+        </button>
+      )}
+      {timerActive && !expired && (
+        <button
+          data-testid="blind-reset-btn"
+          style={styles.pauseBtn}
+          onClick={handleReset}
+        >
+          ↺ Reset
         </button>
       )}
       {expired && (

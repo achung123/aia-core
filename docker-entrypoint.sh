@@ -1,6 +1,9 @@
 #!/bin/sh
 set -e
 
+# Ensure upload directory exists (bind-mount may not create it)
+mkdir -p /app/uploads
+
 if [ "$SEED_DATA" = "1" ]; then
   # Use an ephemeral demo database so real poker.db is never touched
   export DATABASE_URL="sqlite:///./demo.db"

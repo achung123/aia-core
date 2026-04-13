@@ -570,9 +570,10 @@ function HandDetails({ session, onRefresh }: HandDetailsProps) {
                     {(h.player_hands || []).map((p: PlayerHandResponse, idx: number) => {
                       const cards = [p.card_1, p.card_2].filter(Boolean) as string[];
                       const hand = cards.length ? formatCards(cards) : '??';
+                      const street = p.outcome_street ? ` (${p.outcome_street})` : '';
                       return (
                         <div key={idx} style={{ whiteSpace: 'nowrap' }}>
-                          {p.player_name} [{hand}] {p.result || '?'}
+                          {p.player_name} [{hand}] {p.result || '?'}{street}
                         </div>
                       );
                     })}
@@ -607,11 +608,12 @@ function HandDetails({ session, onRefresh }: HandDetailsProps) {
                 {(h.player_hands || []).map((p: PlayerHandResponse, idx: number) => {
                   const cards = [p.card_1, p.card_2].filter(Boolean) as string[];
                   const hand = cards.length ? formatCards(cards) : '??';
+                  const street = p.outcome_street ? ` (${p.outcome_street})` : '';
                   return (
                     <div key={idx} className="hand-card-player">
                       <span className="hand-card-player-name">{p.player_name}</span>
                       <span className="hand-card-player-cards">{hand}</span>
-                      <span className="hand-card-player-result">{p.result || '?'}</span>
+                      <span className="hand-card-player-result">{p.result || '?'}{street}</span>
                     </div>
                   );
                 })}

@@ -123,6 +123,7 @@ class GameSessionCreate(BaseModel):
     game_date: date
     player_names: list[PlayerName] = Field(..., min_length=1)
     player_buy_ins: dict[str, float] | None = None
+    default_buy_in: float | None = None
 
 
 class GameSessionListItem(BaseModel):
@@ -170,6 +171,7 @@ class GameSessionResponse(BaseModel):
     players: list[PlayerInfo] = []
     hand_count: int
     winners: list[str] = []
+    default_buy_in: float | None = None
 
 
 class CompleteGameRequest(BaseModel):
@@ -208,6 +210,15 @@ class HandCreate(BaseModel):
     river: Card | None = None
     player_entries: list[PlayerHandEntry] = []
 
+    @model_validator(mode='after')
+    def flop_all_or_none(self) -> HandCreate:
+        flop_fields = [self.flop_1, self.flop_2, self.flop_3]
+        set_count = sum(f is not None for f in flop_fields)
+        if set_count not in (0, 3):
+            msg = 'Flop must have all three cards or none; partial flop is not allowed'
+            raise ValueError(msg)
+        return self
+
 
 class PlayerHandResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -218,9 +229,10 @@ class PlayerHandResponse(BaseModel):
     player_name: str
     card_1: str | None = None
     card_2: str | None = None
-    result: str | None = None
+    result: ResultEnum | None = None
     profit_loss: float | None = None
     outcome_street: str | None = None
+    winning_hand_description: str | None = None
 
 
 class HandResponse(BaseModel):
@@ -237,6 +249,8 @@ class HandResponse(BaseModel):
     source_upload_id: int | None = None
     sb_player_name: str | None = None
     bb_player_name: str | None = None
+    pot: float = 0
+    side_pots: list = []
     created_at: datetime
     player_hands: list[PlayerHandResponse] = []
 
@@ -403,6 +417,7 @@ class CSVCommitSummary(BaseModel):
 class PlayerEquityEntry(BaseModel):
     player_name: str
     equity: float
+    winning_hand_description: str | None = None
 
 
 class EquityResponse(BaseModel):
@@ -414,14 +429,22 @@ class PlayerStatusEntry(BaseModel):
     participation_status: str
     card_1: str | None = None
     card_2: str | None = None
-    result: str | None = None
+    result: ResultEnum | None = None
     outcome_street: str | None = None
+    is_current_turn: bool = False
 
 
 class HandStatusResponse(BaseModel):
     hand_number: int
     community_recorded: bool
     players: list[PlayerStatusEntry]
+    current_player_name: str | None = None
+    legal_actions: list[str] = []
+    amount_to_call: float = 0
+    pot: float = 0
+    side_pots: list = []
+    street_complete: bool = False
+    phase: str = 'preflop'
 
 
 class BlindsResponse(BaseModel):
@@ -450,9 +473,14 @@ class ActionEnum(str, Enum):
     RAISE = 'raise'
 
 
+class SeatAssignmentRequest(BaseModel):
+    seat_number: int = Field(ge=1, le=10)
+
+
 class AddPlayerToGameRequest(BaseModel):
     player_name: PlayerName
     buy_in: float | None = None
+    seat_number: int | None = Field(default=None, ge=1, le=10)
 
 
 class AddPlayerToGameResponse(BaseModel):
@@ -476,7 +504,8 @@ class PlayerActionCreate(BaseModel):
 
     street: StreetEnum
     action: ActionEnum
-    amount: float | None = None
+    amount: float | None = Field(default=None, ge=0)
+    is_all_in: bool = False
 
 
 class PlayerActionResponse(BaseModel):

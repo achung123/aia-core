@@ -162,4 +162,58 @@ describe('GameCreateForm', () => {
     expect(screen.queryByText('Game Mode')).toBeNull();
     expect(screen.queryByText('Dealer Centric')).toBeNull();
   });
+
+  it('renders buy-in input field', async () => {
+    render(<GameCreateForm onGameCreated={() => {}} />);
+    await waitFor(() => {
+      expect(screen.getByText('Alice')).toBeTruthy();
+    });
+    expect(screen.getByTestId('buy-in-input')).toBeTruthy();
+    expect(screen.getByText('Buy-in Amount')).toBeTruthy();
+  });
+
+  it('sends default_buy_in when buy-in amount is provided', async () => {
+    mockedCreateSession.mockResolvedValue({
+      game_id: 42,
+      player_names: ['Alice', 'Bob'],
+      game_date: '2026-04-11',
+      default_buy_in: 20.0,
+    });
+    render(<GameCreateForm onGameCreated={() => {}} />);
+    await waitFor(() => {
+      expect(screen.getByText('Alice')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByText('Alice'));
+    fireEvent.click(screen.getByText('Bob'));
+    fireEvent.change(screen.getByTestId('buy-in-input'), { target: { value: '20' } });
+    fireEvent.submit(document.querySelector('form')!);
+
+    await waitFor(() => {
+      expect(mockedCreateSession).toHaveBeenCalledWith(
+        expect.objectContaining({ default_buy_in: 20 }),
+      );
+    });
+  });
+
+  it('omits default_buy_in when buy-in input is empty', async () => {
+    mockedCreateSession.mockResolvedValue({
+      game_id: 42,
+      player_names: ['Alice', 'Bob'],
+      game_date: '2026-04-11',
+    });
+    render(<GameCreateForm onGameCreated={() => {}} />);
+    await waitFor(() => {
+      expect(screen.getByText('Alice')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByText('Alice'));
+    fireEvent.click(screen.getByText('Bob'));
+    fireEvent.submit(document.querySelector('form')!);
+
+    await waitFor(() => {
+      const call = mockedCreateSession.mock.calls[0][0];
+      expect(call.default_buy_in).toBeUndefined();
+    });
+  });
 });

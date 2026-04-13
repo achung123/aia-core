@@ -205,4 +205,52 @@ describe('BlindTimer', () => {
     });
     expect(screen.queryByTestId('blind-pause-btn')).toBeNull();
   });
+
+  // Reset button
+  it('shows Reset button when timer is active', async () => {
+    mockFetchBlinds.mockResolvedValue(blindsData({ blind_timer_remaining_seconds: 600 }));
+    render(<BlindTimer gameId={1} />);
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('blind-reset-btn')).toBeDefined();
+    });
+    expect(screen.getByTestId('blind-reset-btn').textContent).toContain('Reset');
+  });
+
+  it('hides Reset button when no timer is active', async () => {
+    mockFetchBlinds.mockResolvedValue(blindsData({
+      blind_timer_started_at: null,
+      blind_timer_remaining_seconds: null,
+    }));
+    render(<BlindTimer gameId={1} />);
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('blind-level')).toBeDefined();
+    });
+    expect(screen.queryByTestId('blind-reset-btn')).toBeNull();
+  });
+
+  it('calls updateBlinds with same blind values to reset timer', async () => {
+    mockFetchBlinds.mockResolvedValue(blindsData({ blind_timer_remaining_seconds: 300 }));
+    mockUpdateBlinds.mockResolvedValue(blindsData({ blind_timer_remaining_seconds: 900, blind_timer_paused: false }));
+    render(<BlindTimer gameId={1} />);
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('blind-reset-btn')).toBeDefined();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('blind-reset-btn'));
+    });
+    expect(mockUpdateBlinds).toHaveBeenCalledWith(1, { small_blind: 0.25, big_blind: 0.50 });
+  });
+
+  it('updates local state after reset', async () => {
+    mockFetchBlinds.mockResolvedValue(blindsData({ blind_timer_remaining_seconds: 300 }));
+    mockUpdateBlinds.mockResolvedValue(blindsData({ blind_timer_remaining_seconds: 900, blind_timer_paused: false }));
+    render(<BlindTimer gameId={1} />);
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('blind-countdown').textContent).toBe('5:00');
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('blind-reset-btn'));
+    });
+    expect(screen.getByTestId('blind-countdown').textContent).toBe('15:00');
+  });
 });

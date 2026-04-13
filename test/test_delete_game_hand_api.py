@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, StaticPool
 from sqlalchemy.orm import sessionmaker
 
-from app.database.models import Base
+from app.database.models import Base, Hand, HandState, PlayerHand, PlayerHandAction
 from app.database.session import get_db
 from app.main import app
 
@@ -108,6 +108,37 @@ class TestDeleteHand:
         resp = client.delete(f'/games/{game["game_id"]}/hands/999')
         assert resp.status_code == 404
 
+    def test_delete_hand_cascades_hand_state(self, client):
+        """Deleting a hand with a HandState row must not 500."""
+        game = _seed_game(client)
+        _seed_hand(client, game['game_id'])
+        db = next(override_get_db())
+        hand = db.query(Hand).first()
+        db.add(HandState(hand_id=hand.hand_id, phase='preflop'))
+        db.commit()
+        resp = client.delete(f'/games/{game["game_id"]}/hands/1')
+        assert resp.status_code == 204
+        assert db.query(HandState).count() == 0
+
+    def test_delete_hand_cascades_player_hand_actions(self, client):
+        """Deleting a hand with PlayerHandAction rows must not 500."""
+        game = _seed_game(client)
+        _seed_hand(client, game['game_id'])
+        db = next(override_get_db())
+        ph = db.query(PlayerHand).first()
+        db.add(
+            PlayerHandAction(
+                player_hand_id=ph.player_hand_id,
+                street='preflop',
+                action='call',
+                amount=0.20,
+            )
+        )
+        db.commit()
+        resp = client.delete(f'/games/{game["game_id"]}/hands/1')
+        assert resp.status_code == 204
+        assert db.query(PlayerHandAction).count() == 0
+
 
 class TestDeleteGame:
     def test_delete_game_returns_204(self, client):
@@ -132,3 +163,35 @@ class TestDeleteGame:
     def test_delete_game_404_nonexistent(self, client):
         resp = client.delete('/games/999')
         assert resp.status_code == 404
+
+    def test_delete_game_cascades_hand_states(self, client):
+        """Deleting a game with HandState rows must not 500."""
+        game = _seed_game(client)
+        _seed_hand(client, game['game_id'])
+        # Insert a HandState row for the hand (simulates dealer flow)
+        db = next(override_get_db())
+        hand = db.query(Hand).first()
+        db.add(HandState(hand_id=hand.hand_id, phase='preflop'))
+        db.commit()
+        resp = client.delete(f'/games/{game["game_id"]}')
+        assert resp.status_code == 204
+        assert db.query(HandState).count() == 0
+
+    def test_delete_game_cascades_player_hand_actions(self, client):
+        """Deleting a game with PlayerHandAction rows must not 500."""
+        game = _seed_game(client)
+        _seed_hand(client, game['game_id'])
+        db = next(override_get_db())
+        ph = db.query(PlayerHand).first()
+        db.add(
+            PlayerHandAction(
+                player_hand_id=ph.player_hand_id,
+                street='preflop',
+                action='call',
+                amount=0.20,
+            )
+        )
+        db.commit()
+        resp = client.delete(f'/games/{game["game_id"]}')
+        assert resp.status_code == 204
+        assert db.query(PlayerHandAction).count() == 0

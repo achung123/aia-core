@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useLayoutEffect } from 'react';
 import { useDealerStore, validateOutcomeStreets } from '../stores/dealerStore.ts';
 import type { CardDetectionEntry, ResultEnum, StreetEnum } from '../api/types.ts';
 import type { OutcomeResult, OutcomeStreet } from './OutcomeButtons.tsx';
@@ -11,8 +11,8 @@ import { CameraCapture } from './CameraCapture.tsx';
 import { DetectionReview } from './DetectionReview.tsx';
 import { OutcomeButtons } from './OutcomeButtons.tsx';
 import { ReviewScreen } from './ReviewScreen.tsx';
-import { addPlayerToHand, updateHolecards, updateFlop, updateTurn, updateRiver, patchPlayerResult, fetchGame, fetchHand, fetchHandStatus, fetchEquity } from '../api/client.ts';
-import { mapEquityToOutcomes, inferOutcomeStreet } from './showdownHelpers.ts';
+import { addPlayerToHand, updateHolecards, updateFlop, updateTurn, updateRiver, patchPlayerResult, fetchGame, fetchHand, fetchHandStatus } from '../api/client.ts';
+import { inferOutcomeStreet } from './showdownHelpers.ts';
 import { usePolling } from '../hooks/usePolling.ts';
 
 interface ReviewData {
@@ -43,6 +43,23 @@ export function DealerApp() {
   const [finishError] = useState<string | null>(null);
   const [finishing] = useState(false);
 
+  // Betting state from hand status polling
+  const [currentPlayerName, setCurrentPlayerName] = useState<string | null>(null);
+  const [legalActions, setLegalActions] = useState<string[]>([]);
+  const [amountToCall, setAmountToCall] = useState(0);
+  const [pot, setPot] = useState(0);
+  const [streetComplete, setStreetComplete] = useState(true);
+  const [handPhase, setHandPhase] = useState<string>('preflop');
+  const [pollTick, setPollTick] = useState(0);
+
+  // Guard: reset to gameSelector if persisted state is inconsistent
+  useLayoutEffect(() => {
+    const needsGame = currentStep === 'dashboard' || currentStep === 'activeHand' || currentStep === 'review';
+    if (needsGame && !gameId) {
+      setStep('gameSelector');
+    }
+  }, [currentStep, gameId, setStep]);
+
   // Emit legacy custom event for non-Zustand subscribers (e.g., LandingPage)
   useEffect(() => {
     return useDealerStore.subscribe(() => {
@@ -59,6 +76,14 @@ export function DealerApp() {
         .then((data) => {
           if (signal.aborted) return;
           updateParticipation(data);
+
+          // Update betting state for ActiveHandDashboard
+          setCurrentPlayerName(data.current_player_name ?? null);
+          setLegalActions(data.legal_actions ?? []);
+          setAmountToCall(data.amount_to_call ?? 0);
+          setPot(data.pot ?? 0);
+          setStreetComplete(data.street_complete ?? false);
+          setHandPhase(data.phase ?? 'preflop');
 
           const joinedPlayers = (data.players || []).filter(
             (p) => p.participation_status === 'joined' || p.participation_status === 'handed_back',
@@ -280,40 +305,6 @@ export function DealerApp() {
     setOutcomeError(null);
   }
 
-  async function handleShowdown() {
-    setPatchError(null);
-    const nonFolded = players.filter(
-      (p) => p.status !== 'folded' && p.status !== 'not_playing',
-    );
-    const street = inferOutcomeStreet(community);
-
-    // AC3: Single non-folded player → auto-propose won
-    if (nonFolded.length <= 1) {
-      if (nonFolded.length === 1) {
-        setPlayerResult({ name: nonFolded[0].name, status: 'won', outcomeStreet: street });
-      }
-      setStep('review');
-      return;
-    }
-
-    // AC2: Call equity endpoint, map results
-    try {
-      const data = await fetchEquity(gameId!, currentHandId!);
-      const proposed = mapEquityToOutcomes(data.equities, players, community);
-      if (proposed) {
-        // AC5: Pre-fill proposed results
-        for (const r of proposed) {
-          setPlayerResult({ name: r.name, status: r.status, outcomeStreet: r.outcomeStreet });
-        }
-      }
-      // AC5/AC6: Navigate to review
-      setStep('review');
-    } catch {
-      // AC6: Inconclusive — navigate to review with blank results
-      setStep('review');
-    }
-  }
-
   function handleFinishHand() {
     // Validate outcome streets are consistent
     const validationError = validateOutcomeStreets(players);
@@ -332,12 +323,23 @@ export function DealerApp() {
 
   function doFinishHand() {
     setShowFinishConfirm(false);
+
+    // Auto-set lone remaining player as winner when all others folded
+    const nonFolded = players.filter(
+      (p) => p.status !== 'folded' && p.status !== 'not_playing',
+    );
+    if (nonFolded.length === 1) {
+      const street = inferOutcomeStreet(community);
+      setPlayerResult({ name: nonFolded[0].name, status: 'won', outcomeStreet: street });
+    }
+
     setStep('review');
   }
 
+  const activePlayers = players.filter((p) => p.status !== 'folded' && p.status !== 'not_playing');
   const canFinish =
-    players.length > 0 &&
-    players.some((p) => p.status !== 'playing');
+    (activePlayers.length <= 1 && players.some((p) => p.status === 'folded')) ||
+    (activePlayers.length > 1 && community.riverRecorded);
 
   const isActiveHandOverlay = !!(captureTarget || reviewData || outcomeTarget);
 
@@ -374,6 +376,7 @@ export function DealerApp() {
           {!isActiveHandOverlay && (
             <ActiveHandDashboard
               gameId={gameId}
+              handNumber={currentHandId ?? undefined}
               community={community}
               players={players}
               sbPlayerName={sbPlayerName}
@@ -383,9 +386,15 @@ export function DealerApp() {
               onMarkNotPlaying={handleMarkNotPlaying}
               canFinish={canFinish}
               onFinishHand={handleFinishHand}
-              onShowdown={handleShowdown}
               onBack={() => setStep('dashboard')}
               patchError={patchError}
+              currentPlayerName={currentPlayerName}
+              legalActions={legalActions}
+              amountToCall={amountToCall}
+              pot={pot}
+              streetComplete={streetComplete}
+              handPhase={handPhase}
+              onActionConfirmed={() => setPollTick((t) => t + 1)}
             />
           )}
 
@@ -500,6 +509,7 @@ const shellStyle: React.CSSProperties = {
 
 const bottomNavStyle: React.CSSProperties = {
   position: 'fixed',
+  top: 'auto',
   bottom: 0,
   left: 0,
   right: 0,
@@ -507,6 +517,7 @@ const bottomNavStyle: React.CSSProperties = {
   justifyContent: 'space-around',
   background: '#0f1117',
   borderTop: '1px solid #2e303a',
+  borderBottom: 'none',
   padding: '0.5rem 0',
   zIndex: 100,
 };
@@ -558,5 +569,3 @@ const dialogButtonRow: React.CSSProperties = {
   marginTop: '1rem',
   gap: '0.5rem',
 };
-
-

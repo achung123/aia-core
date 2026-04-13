@@ -4,12 +4,14 @@ import { addPokerTable, computeSeatPositions } from './tableGeometry.ts';
 import { createChipStacks } from './chipStacks.ts';
 import { createCommunityCards } from './communityCards.ts';
 import { createHoleCards } from './holeCards.ts';
+import { DEFAULT_OVERHEAD_POSITION } from './seatCamera.ts';
 
 export interface PokerSceneOptions {
   width?: number;
   height?: number;
   seatCount?: number;
   antialias?: boolean;
+  externalResize?: boolean;
 }
 
 export interface HandState {
@@ -46,6 +48,7 @@ const DEFAULTS: Required<PokerSceneOptions> = {
   height: 600,
   seatCount: 10,
   antialias: true,
+  externalResize: false,
 };
 
 /**
@@ -70,7 +73,7 @@ export function createPokerScene(
 
   // --- Camera ---
   const camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 1000);
-  camera.position.set(0, 8, 5);
+  camera.position.set(DEFAULT_OVERHEAD_POSITION.x, DEFAULT_OVERHEAD_POSITION.y, DEFAULT_OVERHEAD_POSITION.z);
   camera.lookAt(0, 0, 0);
 
   // --- OrbitControls (touch-enabled) ---
@@ -79,6 +82,8 @@ export function createPokerScene(
   controls.enableZoom = true;
   controls.enableRotate = true;
   controls.enablePan = false;
+  controls.minDistance = 8;
+  controls.maxDistance = 30;
   controls.touches = {
     ONE: THREE.TOUCH?.ROTATE ?? 0,
     TWO: THREE.TOUCH?.DOLLY_ROTATE ?? 3,
@@ -135,7 +140,9 @@ export function createPokerScene(
     camera.aspect = rw / rh;
     camera.updateProjectionMatrix();
   }
-  window.addEventListener('resize', onResize);
+  if (!opts.externalResize) {
+    window.addEventListener('resize', onResize);
+  }
 
   // --- Animation loop ---
   let rafId: number;
@@ -147,7 +154,9 @@ export function createPokerScene(
   animate();
 
   // Self-heal initial size
-  onResize();
+  if (!opts.externalResize) {
+    onResize();
+  }
 
   // --- update(handState) ---
   function update(handState: HandState): void {
@@ -184,7 +193,9 @@ export function createPokerScene(
   // --- dispose ---
   function dispose(): void {
     cancelAnimationFrame(rafId);
-    window.removeEventListener('resize', onResize);
+    if (!opts.externalResize) {
+      window.removeEventListener('resize', onResize);
+    }
     canvas.removeEventListener('contextmenu', onContextMenu);
     canvas.removeEventListener('touchend', onTouchEnd);
     controls.dispose();

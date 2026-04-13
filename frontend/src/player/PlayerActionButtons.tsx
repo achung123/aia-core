@@ -9,6 +9,9 @@ export interface PlayerActionButtonsProps {
   handNumber: number;
   playerName: string;
   communityCardCount: number;
+  legalActions?: string[];
+  amountToCall?: number;
+  pot?: number;
 }
 
 export function getStreet(communityCardCount: number): StreetEnum {
@@ -20,13 +23,17 @@ export function getStreet(communityCardCount: number): StreetEnum {
   }
 }
 
-export function PlayerActionButtons({ gameId, handNumber, playerName, communityCardCount }: PlayerActionButtonsProps) {
+export function PlayerActionButtons({
+  gameId, handNumber, playerName, communityCardCount,
+  legalActions = [], amountToCall = 0, pot = 0,
+}: PlayerActionButtonsProps) {
   const [actedOnCount, setActedOnCount] = useState(-1);
   const hasActed = actedOnCount === communityCardCount;
   const [chipAction, setChipAction] = useState<'bet' | 'raise' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const street = getStreet(communityCardCount);
+  const actions = legalActions.length > 0 ? legalActions : ['fold', 'check', 'call', 'bet', 'raise'];
 
   async function handleAction(action: ActionEnum, amount?: number) {
     setError(null);
@@ -59,53 +66,94 @@ export function PlayerActionButtons({ gameId, handNumber, playerName, communityC
   return (
     <div data-testid="action-buttons">
       {error && <p data-testid="action-error" style={{ color: '#dc2626' }}>{error}</p>}
+      <div data-testid="betting-info" style={styles.bettingInfo}>
+        <span style={styles.potLabel}>Pot: ${pot.toFixed(2)}</span>
+        {amountToCall > 0 && (
+          <span style={styles.callLabel}>${amountToCall.toFixed(2)} to call</span>
+        )}
+        {amountToCall > 0 && (
+          <span data-testid="pot-odds" style={styles.oddsLabel}>
+            Odds: {((pot / amountToCall) + 1).toFixed(1)}:1
+          </span>
+        )}
+      </div>
       <div style={styles.buttonRow}>
-        <button
-          data-testid="action-fold"
-          disabled={hasActed}
-          onClick={() => handleAction('fold')}
-          style={{ ...styles.button, ...styles.foldBtn }}
-        >
-          Fold
-        </button>
-        <button
-          data-testid="action-check"
-          disabled={hasActed}
-          onClick={() => handleAction('check')}
-          style={styles.button}
-        >
-          Check
-        </button>
-        <button
-          data-testid="action-call"
-          disabled={hasActed}
-          onClick={() => handleAction('call')}
-          style={styles.button}
-        >
-          Call
-        </button>
-        <button
-          data-testid="action-bet"
-          disabled={hasActed}
-          onClick={() => setChipAction('bet')}
-          style={{ ...styles.button, ...styles.betBtn }}
-        >
-          Bet
-        </button>
-        <button
-          data-testid="action-raise"
-          disabled={hasActed}
-          onClick={() => setChipAction('raise')}
-          style={{ ...styles.button, ...styles.raiseBtn }}
-        >
-          Raise
-        </button>
+        {actions.includes('fold') && (
+          <button
+            data-testid="action-fold"
+            disabled={hasActed}
+            onClick={() => handleAction('fold')}
+            style={{ ...styles.button, ...styles.foldBtn }}
+          >
+            Fold
+          </button>
+        )}
+        {actions.includes('check') && (
+          <button
+            data-testid="action-check"
+            disabled={hasActed}
+            onClick={() => handleAction('check')}
+            style={styles.button}
+          >
+            Check
+          </button>
+        )}
+        {actions.includes('call') && (
+          <button
+            data-testid="action-call"
+            disabled={hasActed}
+            onClick={() => handleAction('call', amountToCall || undefined)}
+            style={styles.button}
+          >
+            Call{amountToCall > 0 ? ` $${amountToCall.toFixed(2)}` : ''}
+          </button>
+        )}
+        {actions.includes('bet') && (
+          <button
+            data-testid="action-bet"
+            disabled={hasActed}
+            onClick={() => setChipAction('bet')}
+            style={{ ...styles.button, ...styles.betBtn }}
+          >
+            Bet
+          </button>
+        )}
+        {actions.includes('raise') && (
+          <button
+            data-testid="action-raise"
+            disabled={hasActed}
+            onClick={() => setChipAction('raise')}
+            style={{ ...styles.button, ...styles.raiseBtn }}
+          >
+            Raise
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
 const styles: Record<string, React.CSSProperties> = {
+  bettingInfo: {
+    display: 'flex',
+    justifyContent: 'center',
+    gap: '1rem',
+    marginBottom: '0.5rem',
+    fontSize: '0.95rem',
+    color: '#e2e8f0',
+  },
+  potLabel: {
+    fontWeight: 'bold',
+    color: '#4ade80',
+  },
+  callLabel: {
+    fontWeight: 'bold',
+    color: '#fbbf24',
+  },
+  oddsLabel: {
+    fontWeight: 'bold',
+    color: '#60a5fa',
+  },
   buttonRow: {
     display: 'flex',
     flexWrap: 'wrap',

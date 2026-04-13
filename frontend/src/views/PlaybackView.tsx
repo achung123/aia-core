@@ -200,9 +200,25 @@ export function PlaybackView() {
 
       window.addEventListener('resize', syncPositions);
       controls.addEventListener('change', syncPositions);
+
+      // ResizeObserver to re-bound canvas when container changes
+      const ro = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          const { width, height } = entry.contentRect;
+          if (width > 0 && height > 0) {
+            renderer.setSize(width, height);
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            syncPositions();
+          }
+        }
+      });
+      ro.observe(area!);
+
       syncPositions();
 
       teardown = () => {
+        ro.disconnect();
         window.removeEventListener('resize', syncPositions);
         controls.removeEventListener('change', syncPositions);
         labelsRef.current.forEach((el: HTMLDivElement) => el.remove());
@@ -277,11 +293,13 @@ export function PlaybackView() {
 
       const idx = handNumber - 1;
       const cardData = handToCardData(hands[idx]);
-      scene.update({
-        cardData,
-        seatPlayerMap,
-        plMap: computeCumulativePL(hands, idx),
-        streetIndex: 0,
+      requestAnimationFrame(() => {
+        scene.update({
+          cardData,
+          seatPlayerMap,
+          plMap: computeCumulativePL(hands, idx),
+          streetIndex: 0,
+        });
       });
     },
     [hands, seatPlayerMap],
@@ -297,11 +315,13 @@ export function PlaybackView() {
 
       const idx = currentHand - 1;
       const cardData = handToCardData(hands[idx]);
-      scene.update({
-        cardData,
-        seatPlayerMap,
-        plMap: computeCumulativePL(hands, idx),
-        streetIndex: STREET_INDEX[streetName] ?? 0,
+      requestAnimationFrame(() => {
+        scene.update({
+          cardData,
+          seatPlayerMap,
+          plMap: computeCumulativePL(hands, idx),
+          streetIndex: STREET_INDEX[streetName] ?? 0,
+        });
       });
     },
     [hands, currentHand, seatPlayerMap],
@@ -436,8 +456,8 @@ const styles: Record<string, CSSProperties> = {
   sessionRow: { padding: 8, cursor: 'pointer', color: '#ddd', borderBottom: '1px solid #333' },
   sessionDate: { fontWeight: 600 },
   sessionInfo: { fontSize: 11, color: '#999' },
-  main: { flex: 1, display: 'flex', flexDirection: 'column' },
-  canvasArea: { flex: 1, position: 'relative' },
+  main: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' },
+  canvasArea: { flex: 1, position: 'relative', overflow: 'hidden' },
   canvas: { display: 'block', width: '100%', height: '100%' },
   spinner: {
     position: 'absolute',

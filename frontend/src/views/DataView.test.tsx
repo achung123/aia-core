@@ -40,8 +40,8 @@ const HANDS: HandResponse[] = [
     flop_1: 'Ah', flop_2: 'Kd', flop_3: 'Qc', turn: 'Js', river: 'Tc',
     source_upload_id: null, created_at: '2026-04-01T12:00:00Z',
     player_hands: [
-      { player_hand_id: 1, hand_id: 1, player_id: 1, player_name: 'Alice', card_1: '2h', card_2: '3h', result: 'won', profit_loss: 50, outcome_street: null },
-      { player_hand_id: 2, hand_id: 1, player_id: 2, player_name: 'Bob', card_1: '4d', card_2: '5d', result: 'lost', profit_loss: -50, outcome_street: null },
+      { player_hand_id: 1, hand_id: 1, player_id: 1, player_name: 'Alice', card_1: '2h', card_2: '3h', result: 'won', profit_loss: 50, outcome_street: 'river' },
+      { player_hand_id: 2, hand_id: 1, player_id: 2, player_name: 'Bob', card_1: '4d', card_2: '5d', result: 'lost', profit_loss: -50, outcome_street: 'flop' },
     ],
   },
 ];
@@ -172,6 +172,16 @@ describe('DataView', () => {
     fireEvent.click(screen.getByText('2026-04-01'));
     // Hand detail row should be gone
     expect(screen.queryByText('+ Add Hand')).toBeNull();
+  });
+
+  it('shows outcome_street next to result in expanded hand details', async () => {
+    render(<DataView />);
+    await waitFor(() => screen.getByText('2026-04-01'));
+    fireEvent.click(screen.getByText('2026-04-01'));
+    await waitFor(() => {
+      expect(screen.getAllByText(/\(river\)/).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/\(flop\)/).length).toBeGreaterThan(0);
+    });
   });
 
   it('data-view has mobile-responsive styling (no horizontal overflow on narrow screens)', () => {

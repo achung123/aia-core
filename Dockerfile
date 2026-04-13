@@ -24,6 +24,9 @@ COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 COPY alembic.ini /app/alembic.ini
 COPY alembic /app/alembic
 
+# Ensure uploads directory exists for bind-mount target
+RUN mkdir -p /app/uploads
+
 ENV PYTHONPATH=/app/src
 
 EXPOSE 8000

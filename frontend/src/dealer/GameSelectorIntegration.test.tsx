@@ -17,8 +17,10 @@ vi.mock('../api/client.js', () => ({
   fetchSessions: vi.fn(),
   fetchHands: vi.fn(() => Promise.resolve([])),
   fetchEquity: vi.fn(() => Promise.resolve({ equities: [] })),
-  fetchGame: vi.fn(),
+  fetchGame: vi.fn(() => Promise.resolve({ players: [] })),
   fetchHand: vi.fn(),
+  fetchGameStats: vi.fn(() => Promise.resolve({ player_stats: [] })),
+  createRebuy: vi.fn(),
   fetchHandStatus: vi.fn(() => Promise.resolve({ hand_number: 1, community_recorded: false, players: [] })),
   fetchBlinds: vi.fn(() => Promise.resolve({ small_blind: 0.25, big_blind: 0.50, blind_timer_minutes: 15, blind_timer_paused: false, blind_timer_started_at: null, blind_timer_remaining_seconds: null })),
 }));

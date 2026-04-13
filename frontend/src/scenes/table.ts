@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { DEFAULT_OVERHEAD_POSITION } from './seatCamera.ts';
 
 export interface InitSceneResult {
   renderer: THREE.WebGLRenderer;
@@ -23,7 +24,7 @@ export function initScene(canvasElement: HTMLCanvasElement): InitSceneResult {
     0.1,
     1000,
   );
-  camera.position.set(0, 8, 5);
+  camera.position.copy(DEFAULT_OVERHEAD_POSITION);
   camera.lookAt(0, 0, 0);
 
   // Lighting

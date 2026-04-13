@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.database.models import GamePlayer, GameSession, Hand, Player, PlayerHand
 from app.database.session import get_db
-from pydantic_models.app_models import CSVCommitSummary
+from pydantic_models.app_models import CSVCommitSummary, ResultEnum
 from pydantic_models.csv_schema import (
     CSV_COLUMNS,
     CSV_COLUMN_FORMATS,
@@ -155,13 +155,23 @@ async def commit_csv(
                     )
 
                 pl_str = row['profit_loss'].strip()
+                raw_result = row['result'].strip() or None
+                if raw_result is not None:
+                    try:
+                        raw_result = ResultEnum(raw_result).value
+                    except ValueError:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f'Invalid result {raw_result!r} for player {player_name!r}. '
+                            f'Must be one of: {[e.value for e in ResultEnum]}',
+                        ) from None
                 db.add(
                     PlayerHand(
                         hand_id=hand.hand_id,
                         player_id=player.player_id,
                         card_1=row['hole_card_1'].strip(),
                         card_2=row['hole_card_2'].strip(),
-                        result=row['result'].strip() or None,
+                        result=raw_result,
                         profit_loss=float(pl_str) if pl_str else None,
                     )
                 )

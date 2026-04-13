@@ -6,7 +6,7 @@ export default function NavBar() {
   const dealerGameActive = gameId !== null;
 
   return (
-    <nav>
+    <nav className="top-nav">
       <NavLink to="/">Home</NavLink>
       <NavLink
         to="/playback"

@@ -1,5 +1,7 @@
 """Tests for GET /games/{game_id}/hands/{hand_number}/actions endpoint."""
 
+from conftest import activate_hand
+
 
 def _seed_game_with_hand(client):
     """Create a game with two players, start a hand. Returns (game_id, hand_number)."""
@@ -11,24 +13,26 @@ def _seed_game_with_hand(client):
     game_id = resp.json()['game_id']
     hand_resp = client.post(f'/games/{game_id}/hands/start')
     assert hand_resp.status_code == 201
-    return game_id, hand_resp.json()['hand_number']
+    hand = hand_resp.json()
+    activate_hand(client, game_id, hand)
+    return game_id, hand['hand_number']
 
 
 class TestGetHandActionsOrdering:
     def test_returns_actions_ordered_by_created_at(self, client):
         game_id, hand_number = _seed_game_with_hand(client)
 
-        # Record several actions
+        # Record several actions (use force=true to bypass turn order)
         client.post(
-            f'/games/{game_id}/hands/{hand_number}/players/Alice/actions',
+            f'/games/{game_id}/hands/{hand_number}/players/Alice/actions?force=true',
             json={'street': 'preflop', 'action': 'call', 'amount': 0.20},
         )
         client.post(
-            f'/games/{game_id}/hands/{hand_number}/players/Bob/actions',
+            f'/games/{game_id}/hands/{hand_number}/players/Bob/actions?force=true',
             json={'street': 'preflop', 'action': 'check'},
         )
         client.post(
-            f'/games/{game_id}/hands/{hand_number}/players/Alice/actions',
+            f'/games/{game_id}/hands/{hand_number}/players/Alice/actions?force=true',
             json={'street': 'flop', 'action': 'bet', 'amount': 1.00},
         )
 
@@ -36,7 +40,8 @@ class TestGetHandActionsOrdering:
         assert resp.status_code == 200
 
         actions = resp.json()
-        assert len(actions) == 3
+        # 2 blind actions + 3 recorded = 5
+        assert len(actions) == 5
 
         # Verify ordering by created_at ascending
         timestamps = [a['created_at'] for a in actions]
@@ -64,15 +69,16 @@ class TestGetHandActionsOrdering:
         game_id, hand_number = _seed_game_with_hand(client)
 
         client.post(
-            f'/games/{game_id}/hands/{hand_number}/players/Alice/actions',
+            f'/games/{game_id}/hands/{hand_number}/players/Alice/actions?force=true',
             json={'street': 'preflop', 'action': 'raise', 'amount': 2.50},
         )
 
         resp = client.get(f'/games/{game_id}/hands/{hand_number}/actions')
         actions = resp.json()
 
-        assert len(actions) == 1
-        action = actions[0]
+        # 2 blind actions + 1 raise = 3
+        assert len(actions) == 3
+        action = actions[-1]  # last action is the raise
         assert action['player_name'] == 'Alice'
         assert action['street'] == 'preflop'
         assert action['action'] == 'raise'
@@ -81,12 +87,15 @@ class TestGetHandActionsOrdering:
 
 
 class TestGetHandActionsEmptyCase:
-    def test_returns_empty_list_when_no_actions(self, client):
+    def test_returns_blind_actions_only_after_start(self, client):
         game_id, hand_number = _seed_game_with_hand(client)
 
         resp = client.get(f'/games/{game_id}/hands/{hand_number}/actions')
         assert resp.status_code == 200
-        assert resp.json() == []
+        # start-all now auto-posts 2 blind actions
+        actions = resp.json()
+        assert len(actions) == 2
+        assert all(a['action'] == 'blind' for a in actions)
 
 
 class TestGetHandActions404:

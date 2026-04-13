@@ -4,12 +4,14 @@ import {
   fetchGame,
   fetchHands,
   fetchHandStatusConditional,
+  fetchGameStats,
   updateHolecards,
-  patchPlayerResult,
 } from '../api/client.ts';
 import type {
   GameSessionListItem,
   CardDetectionEntry,
+  PlayerInfo,
+  GameStatsPlayerEntry,
 } from '../api/types.ts';
 import { CameraCapture } from '../dealer/CameraCapture.tsx';
 import { DetectionReview } from '../dealer/DetectionReview.tsx';
@@ -65,11 +67,9 @@ function parsePlayerFromHash(): string | null {
 interface PlayerStatusViewProps {
   status: ParticipationStatus;
   onCapture: () => void;
-  onHandBack: () => void;
-  handingBack: boolean;
 }
 
-function PlayerStatusView({ status, onCapture, onHandBack, handingBack }: PlayerStatusViewProps) {
+function PlayerStatusView({ status, onCapture }: PlayerStatusViewProps) {
   switch (status) {
     case 'pending':
       return (
@@ -87,27 +87,19 @@ function PlayerStatusView({ status, onCapture, onHandBack, handingBack }: Player
     case 'joined':
       return (
         <div>
-          <p style={{ color: '#16a34a' }}>Cards submitted ✓</p>
-          <button
-            data-testid="hand-back-btn"
-            style={styles.handBackBtn}
-            onClick={onHandBack}
-            disabled={handingBack}
-          >
-            {handingBack ? 'Handing back…' : 'Hand Back Cards'}
-          </button>
+          <p style={{ color: '#4ade80' }}>Cards submitted ✓</p>
         </div>
       );
     case 'folded':
-      return <p style={{ color: '#dc2626' }}>Folded</p>;
+      return <p style={{ color: '#f87171' }}>Folded</p>;
     case 'handed_back':
-      return <p style={{ color: '#2563eb' }}>Waiting for dealer decision…</p>;
+      return <p style={{ color: '#60a5fa' }}>Waiting for dealer decision…</p>;
     case 'won':
-      return <p style={{ color: '#16a34a' }}>You won!</p>;
+      return <p style={{ color: '#4ade80' }}>You won! 🏆</p>;
     case 'lost':
-      return <p style={{ color: '#6b7280' }}>You lost.</p>;
+      return <p style={{ color: '#94a3b8' }}>You lost.</p>;
     default:
-      return <p style={{ color: '#6b7280' }}>Waiting for hand…</p>;
+      return <p style={{ color: '#94a3b8' }}>Waiting for hand…</p>;
   }
 }
 
@@ -126,16 +118,21 @@ export function PlayerApp() {
   const [captureStep, setCaptureStep] = useState<CaptureStep>(null);
   const [reviewData, setReviewData] = useState<ReviewData | null>(null);
   const [captureError, setCaptureError] = useState<string | null>(null);
-  const [handingBack, setHandingBack] = useState(false);
-  const [handBackError, setHandBackError] = useState<string | null>(null);
   const [noActiveHand, setNoActiveHand] = useState(false);
   const [communityCardCount, setCommunityCardCount] = useState(0);
   const handNumberRef = useRef<number | null>(null);
+  const [isMyTurn, setIsMyTurn] = useState(false);
+  const [legalActions, setLegalActions] = useState<string[]>([]);
+  const [amountToCall, setAmountToCall] = useState(0);
+  const [pot, setPot] = useState(0);
+  const [runningTotal, setRunningTotal] = useState<number | null>(null);
 
   const loadPlayers = useCallback(function loadPlayers(id: number) {
     setPlayersLoading(true);
     fetchGame(id)
-      .then(data => setPlayers(data.player_names || []))
+      .then(data => {
+        setPlayers(data.player_names || []);
+      })
       .catch(err => setError(err.message))
       .finally(() => setPlayersLoading(false));
   }, []);
@@ -208,8 +205,8 @@ export function PlayerApp() {
   function handleSelectPlayer(name: string) {
     setPlayerName(name);
     setPlayerStatus('idle');
-    setStep('playing');
     if (gameId) saveSession(gameId, name);
+    setStep('playing');
   }
 
   function handleChangePlayer() {
@@ -284,20 +281,27 @@ export function PlayerApp() {
     setCaptureStep('camera');
   }
 
-  async function handleHandBack() {
-    setHandingBack(true);
-    setHandBackError(null);
-    try {
-      await patchPlayerResult(gameId!, handNumber!, playerName!, { result: 'handed_back' });
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to hand back cards';
-      setHandBackError(message);
-    } finally {
-      setHandingBack(false);
-    }
+  const etagRef = useRef<string | null>(null);
+
+  function loadRunningTotal() {
+    if (!gameId || !playerName) return;
+    Promise.all([fetchGame(gameId), fetchGameStats(gameId)])
+      .then(([gameData, statsData]) => {
+        const player = (gameData.players || []).find((p: PlayerInfo) => p.name === playerName);
+        const stat = (statsData.player_stats || []).find((s: GameStatsPlayerEntry) => s.player_name === playerName);
+        if (player) {
+          const total = (player.buy_in ?? 0) + (player.total_rebuys ?? 0) + (stat?.profit_loss ?? 0);
+          setRunningTotal(total);
+        }
+      })
+      .catch(() => {});
   }
 
-  const etagRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (step === 'playing' && gameId && playerName) {
+      loadRunningTotal();
+    }
+  }, [step, gameId, playerName]);
 
   const { isReconnecting: playerReconnecting } = usePolling({
     intervalMs: 5000,
@@ -333,21 +337,35 @@ export function PlayerApp() {
               etagRef.current = result.etag;
               if (!result.data) return;
               setCommunityRecorded(result.data.community_recorded);
+              setLegalActions(result.data.legal_actions ?? []);
+              setAmountToCall(result.data.amount_to_call ?? 0);
+              setPot(result.data.pot ?? 0);
               const me = result.data.players.find(p => p.name === playerName);
               if (me) {
                 setPlayerStatus(me.participation_status as ParticipationStatus);
+                setIsMyTurn(me.is_current_turn ?? false);
               }
+              loadRunningTotal();
             });
         }),
   });
 
   if (step === 'playing') {
+    const stackColor = runningTotal === null ? '#94a3b8' : runningTotal > 0 ? '#4ade80' : runningTotal < 0 ? '#f87171' : '#e2e8f0';
+
     return (
       <div style={styles.container}>
-        <h1>Player Mode</h1>
-        <p>Game #{gameId}</p>
-        <h2 style={styles.heading}>{playerName}</h2>
-        {handNumber && <p style={{ color: '#6b7280', margin: '0 0 0.75rem' }}>Hand #{handNumber}</p>}
+        <p style={{ color: '#94a3b8', margin: '0 0 0.25rem', fontSize: '0.85rem' }}>Game #{gameId}</p>
+        <h2 style={styles.playerName}>{playerName}</h2>
+        {runningTotal !== null && (
+          <p
+            data-testid="player-stack"
+            style={{ color: stackColor, fontWeight: 700, fontSize: '1.1rem', margin: '0 0 0.5rem' }}
+          >
+            Stack: {runningTotal < 0 ? `-$${Math.abs(runningTotal).toFixed(2)}` : `$${runningTotal.toFixed(2)}`}
+          </p>
+        )}
+        {handNumber && <p style={{ color: '#64748b', margin: '0 0 0.75rem', fontSize: '0.85rem' }}>Hand #{handNumber}</p>}
 
         {captureStep === 'camera' && gameId && (
           <CameraCapture
@@ -372,7 +390,7 @@ export function PlayerApp() {
         {!captureStep && (
           <>
             {noActiveHand && (
-              <p data-testid="no-active-hand" style={{ color: '#6b7280' }}>No hands yet — waiting for dealer</p>
+              <p data-testid="no-active-hand" style={{ color: '#94a3b8' }}>No hands yet — waiting for dealer</p>
             )}
             {playerReconnecting && (
               <p data-testid="player-reconnecting" style={{ color: '#ca8a04', fontSize: '0.85rem' }}>Reconnecting…</p>
@@ -382,16 +400,20 @@ export function PlayerApp() {
               <PlayerStatusView
               status={playerStatus}
               onCapture={handleStartCapture}
-              onHandBack={handleHandBack}
-              handingBack={handingBack}
             />
-            {playerStatus === 'joined' && handNumber && (
+            {playerStatus === 'joined' && handNumber && isMyTurn && (
               <PlayerActionButtons
                 gameId={gameId!}
                 handNumber={handNumber}
                 playerName={playerName!}
                 communityCardCount={communityCardCount}
+                legalActions={legalActions}
+                amountToCall={amountToCall}
+                pot={pot}
               />
+            )}
+            {playerStatus === 'joined' && handNumber && !isMyTurn && (
+              <p data-testid="waiting-turn" style={{ color: '#ca8a04' }}>Waiting for your turn…</p>
             )}
             {captureError && (
               <div style={styles.error}>
@@ -400,18 +422,6 @@ export function PlayerApp() {
                   data-testid="capture-retry-btn"
                   style={styles.captureBtn}
                   onClick={handleStartCapture}
-                >
-                  Retry
-                </button>
-              </div>
-            )}
-            {handBackError && (
-              <div style={styles.error}>
-                <p>{handBackError}</p>
-                <button
-                  data-testid="hand-back-retry-btn"
-                  style={styles.handBackBtn}
-                  onClick={handleHandBack}
                 >
                   Retry
                 </button>
@@ -429,24 +439,25 @@ export function PlayerApp() {
             window.location.hash = `#/player/table?game=${gameId}&player=${encodeURIComponent(playerName!)}`;
           }}
         >
-          Table View
+          🎬 Table View
         </button>
 
-        <button
-          data-testid="change-player-btn"
-          style={styles.changeBtn}
-          onClick={handleChangePlayer}
-        >
-          Change Player
-        </button>
-
-        <button
-          data-testid="leave-game-btn"
-          style={styles.changeBtn}
-          onClick={handleLeaveGame}
-        >
-          Leave Game
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+          <button
+            data-testid="change-player-btn"
+            style={styles.changeBtn}
+            onClick={handleChangePlayer}
+          >
+            Switch Player
+          </button>
+          <button
+            data-testid="leave-game-btn"
+            style={styles.changeBtn}
+            onClick={handleLeaveGame}
+          >
+            Leave Game
+          </button>
+        </div>
       </div>
     );
   }
@@ -520,14 +531,21 @@ const styles: Record<string, CSSProperties> = {
     maxWidth: '480px',
     margin: '0 auto',
     padding: '1rem',
+    textAlign: 'center',
   },
   heading: {
     fontSize: '1.4rem',
     marginBottom: '0.75rem',
   },
+  playerName: {
+    fontSize: '1.6rem',
+    fontWeight: 700,
+    margin: '0 0 0.25rem',
+    color: '#f1f5f9',
+  },
   error: {
-    color: '#dc2626',
-    padding: '1rem 0',
+    color: '#f87171',
+    padding: '0.75rem 0',
   },
   list: {
     display: 'flex',
@@ -540,9 +558,9 @@ const styles: Record<string, CSSProperties> = {
     gap: '0.4rem',
     padding: '1rem',
     borderRadius: '12px',
-    border: '2px solid indigo',
-    background: '#eef2ff',
-    color: '#312e81',
+    border: '2px solid #6366f1',
+    background: 'rgba(99, 102, 241, 0.12)',
+    color: '#c7d2fe',
     cursor: 'pointer',
     textAlign: 'left',
     width: '100%',
@@ -556,7 +574,7 @@ const styles: Record<string, CSSProperties> = {
   gameId: {
     fontWeight: 'normal',
     fontSize: '0.85rem',
-    color: '#6b7280',
+    color: '#94a3b8',
   },
   cardDetails: {
     display: 'flex',
@@ -564,17 +582,15 @@ const styles: Record<string, CSSProperties> = {
     fontSize: '0.9rem',
   },
   changeBtn: {
-    marginTop: '1rem',
-    padding: '0.75rem 1.5rem',
-    minHeight: '48px',
-    minWidth: '48px',
-    width: '100%',
+    flex: 1,
+    padding: '0.6rem 1rem',
+    minHeight: '44px',
     borderRadius: '8px',
-    border: '1px solid #6b7280',
-    background: '#f3f4f6',
-    color: '#374151',
+    border: '1px solid #2e303a',
+    background: '#1e1f2b',
+    color: '#94a3b8',
     cursor: 'pointer',
-    fontSize: '1rem',
+    fontSize: '0.9rem',
   },
   captureBtn: {
     marginTop: '0.5rem',
@@ -590,17 +606,17 @@ const styles: Record<string, CSSProperties> = {
     color: '#fff',
     cursor: 'pointer',
   },
-  handBackBtn: {
-    marginTop: '0.5rem',
+  tableViewBtn: {
+    marginTop: '1rem',
     padding: '0.75rem 1.5rem',
     minHeight: '48px',
-    minWidth: '48px',
+    width: '100%',
     fontSize: '1rem',
     fontWeight: 'bold',
-    border: 'none',
+    border: '2px solid #6366f1',
     borderRadius: '8px',
-    background: '#2563eb',
-    color: '#fff',
+    background: 'rgba(99, 102, 241, 0.15)',
+    color: '#a5b4fc',
     cursor: 'pointer',
   },
 };

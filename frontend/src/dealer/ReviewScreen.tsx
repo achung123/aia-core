@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type React from 'react';
 import { CardPicker } from './CardPicker.tsx';
-import { patchPlayerResult, updateCommunityCards, updateHolecards } from '../api/client.ts';
+import { patchPlayerResult, updateCommunityCards, updateHolecards, fetchEquity } from '../api/client.ts';
 import type { Player, CommunityCards } from '../stores/dealerStore.ts';
-import type { ResultEnum, StreetEnum } from '../api/types.ts';
+import type { ResultEnum, StreetEnum, PlayerEquityEntry } from '../api/types.ts';
 
 type CommunityField = 'flop1' | 'flop2' | 'flop3' | 'turn' | 'river';
 
@@ -95,6 +95,13 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showFinishConfirm, setShowFinishConfirm] = useState(false);
+  const [equityData, setEquityData] = useState<PlayerEquityEntry[]>([]);
+
+  useEffect(() => {
+    fetchEquity(gameId, handId)
+      .then((res) => setEquityData(res.equities))
+      .catch(() => { /* graceful degradation — no hand descriptions */ });
+  }, [gameId, handId]);
 
   const allTerminal = editPlayers.every((p) => TERMINAL_RESULTS.includes(p.result));
   const [savedResults, setSavedResults] = useState<Set<string>>(() => new Set());
@@ -330,6 +337,21 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
               </div>
             </div>
 
+            {/* Winning Hand Description */}
+            {player.card1 && player.card2 && (() => {
+              const entry = equityData.find((e) => e.player_name === player.name);
+              if (!entry?.winning_hand_description) return null;
+              const isWinner = player.result === 'won';
+              return (
+                <div
+                  data-testid={`review-player-${player.name}-hand-desc`}
+                  style={styles.handDescBadge}
+                >
+                  {isWinner ? `🏆 ${entry.winning_hand_description}` : entry.winning_hand_description}
+                </div>
+              );
+            })()}
+
             {/* Outcome Street Dropdown */}
             <div style={styles.playerRow}>
               <span style={styles.label}>Street:</span>
@@ -483,6 +505,14 @@ const styles: Record<string, React.CSSProperties> = {
     background: '#4f46e5',
     color: '#fff',
     borderColor: '#4f46e5',
+  },
+  handDescBadge: {
+    padding: '0.2rem 0.5rem',
+    fontSize: '0.8rem',
+    color: '#a5b4fc',
+    background: 'rgba(79, 70, 229, 0.1)',
+    borderRadius: '4px',
+    marginBottom: '0.4rem',
   },
   streetSelect: {
     padding: '0.3rem 0.5rem',
