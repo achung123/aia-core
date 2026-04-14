@@ -7,10 +7,10 @@ export interface GameCreateFormProps {
 }
 
 function todayStr(): string {
-  const d = new Date();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${d.getFullYear()}-${mm}-${dd}`;
+  const today = new Date();
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  const dd = String(today.getDate()).padStart(2, '0');
+  return `${today.getFullYear()}-${mm}-${dd}`;
 }
 
 export function GameCreateForm({ onGameCreated }: GameCreateFormProps) {
@@ -116,19 +116,19 @@ export function GameCreateForm({ onGameCreated }: GameCreateFormProps) {
         <legend style={styles.legend}>Players (select at least 2)</legend>
         {loading && <p>Loading players…</p>}
         <div style={styles.chipContainer}>
-          {players.map(p => {
-            const active = selected.has(p.name);
+          {players.map(player => {
+            const active = selected.has(player.name);
             return (
               <button
-                key={p.player_id}
+                key={player.player_id}
                 type="button"
-                onClick={() => togglePlayer(p.name)}
+                onClick={() => togglePlayer(player.name)}
                 style={{
                   ...styles.chip,
                   ...(active ? styles.chipActive : {}),
                 }}
               >
-                {p.name}
+                {player.name}
               </button>
             );
           })}

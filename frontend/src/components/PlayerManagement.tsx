@@ -74,9 +74,9 @@ export function PlayerManagement() {
             </tr>
           </thead>
           <tbody>
-            {players.map(p => (
-              <tr key={p.player_id}>
-                <td>{p.name}</td>
+            {players.map(player => (
+              <tr key={player.player_id}>
+                <td>{player.name}</td>
               </tr>
             ))}
           </tbody>

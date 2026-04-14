@@ -35,11 +35,11 @@ export function EquityOverlay({
 
   for (let i = 0; i < seatCount; i++) {
     const name = seatPlayerMap[i];
-    const eq = name !== undefined ? equityMap[name] : undefined;
-    const hasEquity = eq !== undefined && eq !== null;
+    const equityValue = name !== undefined ? equityMap[name] : undefined;
+    const hasEquity = equityValue !== undefined && equityValue !== null;
 
-    const pct = hasEquity ? (eq * 100).toFixed(1) : '';
-    const hue = hasEquity ? Math.round(eq * 120) : 0;
+    const pct = hasEquity ? (equityValue * 100).toFixed(1) : '';
+    const hue = hasEquity ? Math.round(equityValue * 120) : 0;
 
     const posStyle: React.CSSProperties = seatPositions?.[i]
       ? { left: `${seatPositions[i].x}px`, top: `${seatPositions[i].y}px` }

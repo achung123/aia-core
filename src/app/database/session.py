@@ -7,11 +7,11 @@ from sqlalchemy.orm import sessionmaker
 
 DATABASE_URL = os.environ.get('DATABASE_URL', 'sqlite:///./poker.db')
 
-_connect_args = (
+_connection_arguments = (
     {'check_same_thread': False} if DATABASE_URL.startswith('sqlite') else {}
 )
 
-engine = create_engine(DATABASE_URL, connect_args=_connect_args)
+engine = create_engine(DATABASE_URL, connect_args=_connection_arguments)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 

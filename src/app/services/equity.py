@@ -5,7 +5,7 @@ from __future__ import annotations
 import random
 from itertools import combinations
 
-from app.services.evaluator import RANK_VAL, SUIT_VAL, best_score as _best_score
+from app.services.evaluator import RANK_VAL, SUIT_VAL, find_best_five_card_score
 
 # ---------------------------------------------------------------------------
 # Card helpers
@@ -13,13 +13,18 @@ from app.services.evaluator import RANK_VAL, SUIT_VAL, best_score as _best_score
 
 
 def _to_internal(card: tuple[str, str]) -> tuple[int, int]:
-    """Convert (rank, suit) to internal (r, s) ints."""
+    """Convert (rank, suit) to internal (rank_index, suit_index) ints."""
     return (RANK_VAL[card[0]], SUIT_VAL[card[1]])
 
 
 def _build_deck(known: list[tuple[int, int]]) -> list[tuple[int, int]]:
-    used = {r * 4 + s for r, s in known}
-    return [(r, s) for r in range(13) for s in range(4) if r * 4 + s not in used]
+    used = {rank_index * 4 + suit_index for rank_index, suit_index in known}
+    return [
+        (rank_index, suit_index)
+        for rank_index in range(13)
+        for suit_index in range(4)
+        if rank_index * 4 + suit_index not in used
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -27,14 +32,17 @@ def _build_deck(known: list[tuple[int, int]]) -> list[tuple[int, int]]:
 # ---------------------------------------------------------------------------
 
 
-def _eval_board(
+def _evaluate_board(
     players: list[list[tuple[int, int]]],
     board: list[tuple[int, int]],
 ) -> list[float]:
-    scores = [_best_score(p + board) for p in players]
-    mx = max(scores)
-    winner_count = scores.count(mx)
-    return [1.0 / winner_count if s == mx else 0.0 for s in scores]
+    scores = [find_best_five_card_score(player_cards + board) for player_cards in players]
+    max_score = max(scores)
+    winner_count = scores.count(max_score)
+    return [
+        1.0 / winner_count if score_value == max_score else 0.0
+        for score_value in scores
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -61,12 +69,15 @@ def calculate_equity(
     if num_players == 1:
         return [1.0]
 
-    players = [[_to_internal(c) for c in hc] for hc in player_hole_cards]
-    board = [_to_internal(c) for c in community_cards]
+    players = [
+        [_to_internal(card) for card in hole_cards]
+        for hole_cards in player_hole_cards
+    ]
+    board = [_to_internal(card) for card in community_cards]
 
     all_known = list(board)
-    for p in players:
-        all_known.extend(p)
+    for player_cards in players:
+        all_known.extend(player_cards)
     deck = _build_deck(all_known)
 
     remaining = 5 - len(board)
@@ -74,28 +85,28 @@ def calculate_equity(
     wins = [0.0] * num_players
 
     if remaining == 0:
-        return _eval_board(players, board)
+        return _evaluate_board(players, board)
 
     if remaining <= 2:
         # Exhaustive enumeration
-        n = 0
+        trial_count = 0
         for combo in combinations(deck, remaining):
-            b = board + list(combo)
-            result = _eval_board(players, b)
-            for j in range(num_players):
-                wins[j] += result[j]
-            n += 1
-        return [w / n for w in wins]
+            full_board = board + list(combo)
+            result = _evaluate_board(players, full_board)
+            for player_index in range(num_players):
+                wins[player_index] += result[player_index]
+            trial_count += 1
+        return [win_total / trial_count for win_total in wins]
 
     # Monte Carlo for 3+ remaining cards
-    iters = 5000
-    for _ in range(iters):
+    iterations = 5000
+    for _ in range(iterations):
         random.shuffle(deck)
-        b = board + deck[:remaining]
-        result = _eval_board(players, b)
-        for j in range(num_players):
-            wins[j] += result[j]
-    return [w / iters for w in wins]
+        full_board = board + deck[:remaining]
+        result = _evaluate_board(players, full_board)
+        for player_index in range(num_players):
+            wins[player_index] += result[player_index]
+    return [win_total / iterations for win_total in wins]
 
 
 def calculate_player_equity(
@@ -116,28 +127,32 @@ def calculate_player_equity(
     if num_opponents == 0:
         return 1.0
 
-    player = [_to_internal(c) for c in hole_cards]
-    board = [_to_internal(c) for c in community_cards]
+    player = [_to_internal(card) for card in hole_cards]
+    board = [_to_internal(card) for card in community_cards]
 
     all_known = list(board) + player
     deck = _build_deck(all_known)
 
     remaining = 5 - len(board)
-    iters = 5000
+    iterations = 5000
     wins = 0.0
 
-    for _ in range(iters):
+    for _ in range(iterations):
         random.shuffle(deck)
-        idx = 0
+        deal_index = 0
         # Deal random hole cards to opponents
         opponents = []
         for _ in range(num_opponents):
-            opponents.append([deck[idx], deck[idx + 1]])
-            idx += 2
+            opponents.append([deck[deal_index], deck[deal_index + 1]])
+            deal_index += 2
         # Deal remaining community cards
-        b = board + deck[idx : idx + remaining] if remaining > 0 else board
+        full_board = (
+            board + deck[deal_index : deal_index + remaining]
+            if remaining > 0
+            else board
+        )
         all_players = [player] + opponents
-        result = _eval_board(all_players, b)
+        result = _evaluate_board(all_players, full_board)
         wins += result[0]
 
-    return wins / iters
+    return wins / iterations

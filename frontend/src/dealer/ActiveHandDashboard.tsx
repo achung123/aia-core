@@ -435,50 +435,50 @@ export function ActiveHandDashboard({
         {/* Player Panel — player tiles + finish button */}
         <div data-testid="player-panel" style={isWide ? styles.panelScroll : styles.panelStack}>
           <div data-testid="player-list" style={styles.playerList}>
-            {players.filter((p) => p.status !== 'not_playing').map((p) => {
-              const needsAction = p.status === 'handed_back';
+            {players.filter((player) => player.status !== 'not_playing').map((player) => {
+              const needsAction = player.status === 'handed_back';
               const showOutcomeBtn = onDirectOutcome && needsAction;
-              const showSitOutBtn = onMarkNotPlaying && (p.status === 'playing' || p.status === 'idle');
+              const showSitOutBtn = onMarkNotPlaying && (player.status === 'playing' || player.status === 'idle');
               return (
                 <div
-                  key={p.name}
-                  data-testid={`player-row-${p.name}`}
+                  key={player.name}
+                  data-testid={`player-row-${player.name}`}
                   style={{
                     ...styles.playerRow,
-                    backgroundColor: statusColors[p.status] || '#ffffff',
+                    backgroundColor: statusColors[player.status] || '#ffffff',
                     ...(needsAction ? { borderColor: '#f59e0b', boxShadow: '0 0 0 2px #fbbf24' } : {}),
                   }}
                 >
                   <button
-                    data-testid={`player-tile-${p.name}`}
+                    data-testid={`player-tile-${player.name}`}
                     style={styles.playerNameCol}
-                    onClick={() => onTileSelect(p.name)}
+                    onClick={() => onTileSelect(player.name)}
                   >
-                    <span style={styles.tileName}>{p.name}</span>
+                    <span style={styles.tileName}>{player.name}</span>
                   </button>
-                  {potContributions && (potContributions[p.name] ?? 0) > 0 && (
-                    <span data-testid={`pot-contrib-${p.name}`} style={styles.potContribBadge}>
-                      ${potContributions[p.name].toFixed(2)}
+                  {potContributions && (potContributions[player.name] ?? 0) > 0 && (
+                    <span data-testid={`pot-contrib-${player.name}`} style={styles.potContribBadge}>
+                      ${potContributions[player.name].toFixed(2)}
                     </span>
                   )}
                   <div style={styles.statusCol}>
                     <span style={styles.statusText}>
-                      {needsAction ? '⚠️ Decide outcome' : formatStatus(p.status, p.outcomeStreet)}
+                      {needsAction ? '⚠️ Decide outcome' : formatStatus(player.status, player.outcomeStreet)}
                     </span>
                     {showOutcomeBtn && (
                       <button
-                        data-testid={`outcome-btn-${p.name}`}
+                        data-testid={`outcome-btn-${player.name}`}
                         style={styles.outcomeButton}
-                        onClick={() => onDirectOutcome(p.name)}
+                        onClick={() => onDirectOutcome(player.name)}
                       >
                         📋
                       </button>
                     )}
                     {showSitOutBtn && (
                       <button
-                        data-testid={`sitout-btn-${p.name}`}
+                        data-testid={`sitout-btn-${player.name}`}
                         style={styles.sitOutButton}
-                        onClick={() => onMarkNotPlaying(p.name)}
+                        onClick={() => onMarkNotPlaying(player.name)}
                       >
                         Sit Out
                       </button>

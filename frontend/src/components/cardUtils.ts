@@ -2,10 +2,10 @@ const VALID_RANKS = new Set(['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 
 const VALID_SUITS = new Set(['H', 'D', 'C', 'S']);
 
 export function isValidCard(str: string): boolean {
-  const s = str.trim().toUpperCase();
-  if (!s) return false;
-  const suit = s.slice(-1);
-  const rank = s.slice(0, -1);
+  const upperCaseCard = str.trim().toUpperCase();
+  if (!upperCaseCard) return false;
+  const suit = upperCaseCard.slice(-1);
+  const rank = upperCaseCard.slice(0, -1);
   return VALID_RANKS.has(rank) && VALID_SUITS.has(suit);
 }
 

@@ -12,18 +12,18 @@ const resultColors: Record<string, string> = {
 };
 
 interface ResultBadgeProps {
-  ph: PlayerHandResponse;
+  playerHand: PlayerHandResponse;
 }
 
-function ResultBadge({ ph }: ResultBadgeProps) {
-  if (!ph.result) return <span>{ph.player_name} </span>;
-  const color = resultColors[ph.result] || '#6b7280';
-  const icon = ph.result === 'won' ? '\ud83c\udfc6 ' : '';
-  const street = ph.outcome_street ? ` (${ph.outcome_street})` : '';
-  const handDesc = ph.winning_hand_description ? ` — ${ph.winning_hand_description}` : '';
+function ResultBadge({ playerHand }: ResultBadgeProps) {
+  if (!playerHand.result) return <span>{playerHand.player_name} </span>;
+  const color = resultColors[playerHand.result] || '#6b7280';
+  const icon = playerHand.result === 'won' ? '\ud83c\udfc6 ' : '';
+  const street = playerHand.outcome_street ? ` (${playerHand.outcome_street})` : '';
+  const handDesc = playerHand.winning_hand_description ? ` — ${playerHand.winning_hand_description}` : '';
   return (
-    <span style={{ color, fontWeight: ph.result === 'won' ? 700 : 400, marginRight: '0.5rem' }}>
-      {icon}{ph.player_name} {ph.result}{street}{handDesc}
+    <span style={{ color, fontWeight: playerHand.result === 'won' ? 700 : 400, marginRight: '0.5rem' }}>
+      {icon}{playerHand.player_name} {playerHand.result}{street}{handDesc}
     </span>
   );
 }
@@ -80,10 +80,10 @@ export function HandDashboard({ gameId, players: playerNames, onSelectHand, onBa
   const lastHand = sortedHands[0] ?? null;
   const lastHandIncomplete = lastHand !== null &&
     lastHand.player_hands.length > 0 &&
-    lastHand.player_hands.some((ph) => ph.result === null);
+    lastHand.player_hands.some((playerHand) => playerHand.result === null);
 
   // Guard: check if there are at least 2 active players (only when player data loaded)
-  const activePlayerCount = seatPlayers.filter((p) => p.is_active).length;
+  const activePlayerCount = seatPlayers.filter((player) => player.is_active).length;
   const tooFewPlayers = seatPlayers.length > 0 && activePlayerCount < 2;
 
   const startHandDisabled = starting || lastHandIncomplete || tooFewPlayers;
@@ -127,7 +127,7 @@ export function HandDashboard({ gameId, players: playerNames, onSelectHand, onBa
   function toggleWinner(name: string) {
     setWinnerError(null);
     setSelectedWinners((prev) => {
-      if (prev.includes(name)) return prev.filter((n) => n !== name);
+      if (prev.includes(name)) return prev.filter((existing) => existing !== name);
       if (prev.length >= 2) return prev; // max 2
       return [...prev, name];
     });
@@ -160,8 +160,8 @@ export function HandDashboard({ gameId, players: playerNames, onSelectHand, onBa
                 )}
               </div>
               <div data-testid="result-badges" style={styles.resultBadges}>
-                {hand.player_hands.map((ph) => (
-                  <ResultBadge key={ph.player_hand_id} ph={ph} />
+                {hand.player_hands.map((playerHand) => (
+                  <ResultBadge key={playerHand.player_hand_id} playerHand={playerHand} />
                 ))}
               </div>
             </div>
@@ -192,14 +192,14 @@ export function HandDashboard({ gameId, players: playerNames, onSelectHand, onBa
         <div data-testid="seat-manager-panel" style={styles.seatPanel}>
           <p style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.5rem', color: '#312e81' }}>Select a player to assign a seat</p>
           <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: '0.5rem', marginBottom: '0.5rem' }}>
-            {seatPlayers.filter((p) => p.is_active).map((p) => (
+            {seatPlayers.filter((player) => player.is_active).map((player) => (
               <button
-                key={p.name}
-                data-testid={`seat-assign-player-${p.name}`}
+                key={player.name}
+                data-testid={`seat-assign-player-${player.name}`}
                 style={styles.seatPlayerBtn}
-                onClick={() => setSeatReassigning(p.name)}
+                onClick={() => setSeatReassigning(player.name)}
               >
-                {p.name} {p.seat_number !== null ? `(Seat ${p.seat_number})` : '(No seat)'}
+                {player.name} {player.seat_number !== null ? `(Seat ${player.seat_number})` : '(No seat)'}
               </button>
             ))}
           </div>
@@ -209,20 +209,20 @@ export function HandDashboard({ gameId, players: playerNames, onSelectHand, onBa
         <div data-testid="seat-reassign-panel" style={styles.seatPanel}>
           <p style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.25rem', color: '#312e81' }}>Assign seat for {seatReassigning}</p>
           <SeatPicker
-            seats={seatPlayers.filter((p) => p.seat_number !== null).map((p) => ({ seatNumber: p.seat_number!, playerName: p.name }))}
-            currentPlayerSeat={seatPlayers.find((p) => p.name === seatReassigning)?.seat_number ?? null}
+            seats={seatPlayers.filter((player) => player.seat_number !== null).map((player) => ({ seatNumber: player.seat_number!, playerName: player.name }))}
+            currentPlayerSeat={seatPlayers.find((player) => player.name === seatReassigning)?.seat_number ?? null}
             onSelect={async (seatNumber) => {
               setSeatError(null);
-              const occupant = seatPlayers.find((p) => p.seat_number === seatNumber && p.name !== seatReassigning);
+              const occupant = seatPlayers.find((existing) => existing.seat_number === seatNumber && existing.name !== seatReassigning);
               const isSwap = !!occupant;
               try {
                 const result = await assignPlayerSeat(gameId, seatReassigning!, { seat_number: seatNumber }, isSwap);
-                const oldSeat = seatPlayers.find((p) => p.name === seatReassigning)?.seat_number ?? null;
+                const oldSeat = seatPlayers.find((existing) => existing.name === seatReassigning)?.seat_number ?? null;
                 setSeatPlayers((prev) =>
-                  prev.map((p) => {
-                    if (p.name === result.name) return { ...p, seat_number: result.seat_number };
-                    if (isSwap && occupant && p.name === occupant.name) return { ...p, seat_number: oldSeat };
-                    return p;
+                  prev.map((existing) => {
+                    if (existing.name === result.name) return { ...existing, seat_number: result.seat_number };
+                    if (isSwap && occupant && existing.name === occupant.name) return { ...existing, seat_number: oldSeat };
+                    return existing;
                   }),
                 );
                 setSeatReassigning(null);
@@ -238,7 +238,7 @@ export function HandDashboard({ gameId, players: playerNames, onSelectHand, onBa
       )}
       <button
         data-testid="toggle-qr-btn"
-        onClick={() => setShowQR((v) => !v)}
+        onClick={() => setShowQR((prev) => !prev)}
         style={styles.qrButton}
       >
         {showQR ? 'Hide QR' : 'Show QR'}

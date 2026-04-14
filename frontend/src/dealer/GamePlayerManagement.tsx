@@ -39,7 +39,7 @@ export function GamePlayerManagement({ gameId }: GamePlayerManagementProps) {
     const newActive = !player.is_active;
     // Optimistic update
     setPlayers((prev) =>
-      prev.map((p) => (p.name === player.name ? { ...p, is_active: newActive } : p)),
+      prev.map((existing) => (existing.name === player.name ? { ...existing, is_active: newActive } : existing)),
     );
     setActionError(null);
     try {
@@ -47,7 +47,7 @@ export function GamePlayerManagement({ gameId }: GamePlayerManagementProps) {
     } catch (err) {
       // Revert on error
       setPlayers((prev) =>
-        prev.map((p) => (p.name === player.name ? { ...p, is_active: player.is_active } : p)),
+        prev.map((existing) => (existing.name === player.name ? { ...existing, is_active: player.is_active } : existing)),
       );
       setActionError(err instanceof Error ? err.message : String(err));
     }
@@ -79,19 +79,19 @@ export function GamePlayerManagement({ gameId }: GamePlayerManagementProps) {
     if (!reassigningPlayer) return;
     setActionError(null);
     // Detect if this is a swap (target seat is occupied by another player)
-    const occupant = players.find((p) => p.seat_number === seatNumber && p.name !== reassigningPlayer);
+    const occupant = players.find((existing) => existing.seat_number === seatNumber && existing.name !== reassigningPlayer);
     const isSwap = !!occupant;
     try {
       const result = await assignPlayerSeat(gameId, reassigningPlayer, { seat_number: seatNumber }, isSwap);
       setPlayers((prev) => {
-        let updated = prev.map((p) =>
-          p.name === result.name ? { ...p, seat_number: result.seat_number } : p,
+        let updated = prev.map((existing) =>
+          existing.name === result.name ? { ...existing, seat_number: result.seat_number } : existing,
         );
         // If swap, move occupant to the requesting player's old seat
         if (isSwap && occupant) {
-          const oldSeat = prev.find((p) => p.name === reassigningPlayer)?.seat_number ?? null;
-          updated = updated.map((p) =>
-            p.name === occupant.name ? { ...p, seat_number: oldSeat } : p,
+          const oldSeat = prev.find((existing) => existing.name === reassigningPlayer)?.seat_number ?? null;
+          updated = updated.map((existing) =>
+            existing.name === occupant.name ? { ...existing, seat_number: oldSeat } : existing,
           );
         }
         return updated;
@@ -105,8 +105,8 @@ export function GamePlayerManagement({ gameId }: GamePlayerManagementProps) {
 
   function seatDataFromPlayers(): SeatData[] {
     return players
-      .filter((p) => p.seat_number !== null)
-      .map((p) => ({ seatNumber: p.seat_number!, playerName: p.name }));
+      .filter((player) => player.seat_number !== null)
+      .map((player) => ({ seatNumber: player.seat_number!, playerName: player.name }));
   }
 
   async function handleRebuy() {
@@ -217,7 +217,7 @@ export function GamePlayerManagement({ gameId }: GamePlayerManagementProps) {
           <p style={styles.reassignLabel}>Assign seat for {reassigningPlayer}</p>
           <SeatPicker
             seats={seatDataFromPlayers()}
-            currentPlayerSeat={players.find((p) => p.name === reassigningPlayer)?.seat_number ?? null}
+            currentPlayerSeat={players.find((player) => player.name === reassigningPlayer)?.seat_number ?? null}
             onSelect={handleReassignSeat}
             onSkip={() => setReassigningPlayer(null)}
             allowSwap

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.services.evaluator import RANK_VAL, SUIT_VAL, best_hand as _best_hand
+from app.services.evaluator import RANK_VAL, SUIT_VAL, find_best_five_card_hand
 
 RANK_NAMES = {
     0: '2',
@@ -43,11 +43,11 @@ def _parse_card(card_str: str) -> tuple[int, int] | None:
         return None
     suit_char = card_str[-1]
     rank_str = card_str[:-1]
-    r = RANK_VAL.get(rank_str.upper() if len(rank_str) == 1 else rank_str)
-    s = SUIT_VAL.get(suit_char)
-    if r is None or s is None:
+    rank_value = RANK_VAL.get(rank_str.upper() if len(rank_str) == 1 else rank_str)
+    suit_value = SUIT_VAL.get(suit_char)
+    if rank_value is None or suit_value is None:
         return None
-    return (r, s)
+    return (rank_value, suit_value)
 
 
 CATEGORY_NAMES = {
@@ -87,31 +87,31 @@ def describe_hand(
     if len(valid) < 5:
         return None
 
-    cat, group_ranks = _best_hand(valid)
-    base = CATEGORY_NAMES[cat]
+    category, group_ranks = find_best_five_card_hand(valid)
+    base = CATEGORY_NAMES[category]
 
     # Add detail for common hands
-    if cat == 1 and group_ranks:  # Pair
+    if category == 1 and group_ranks:  # Pair
         return f'Pair of {RANK_NAMES_PLURAL.get(group_ranks[0], "?")}'
-    if cat == 2 and len(group_ranks) >= 2:  # Two Pair
+    if category == 2 and len(group_ranks) >= 2:  # Two Pair
         high = RANK_NAMES_PLURAL.get(group_ranks[0], '?')
         low = RANK_NAMES_PLURAL.get(group_ranks[1], '?')
         return f'Two Pair, {high} and {low}'
-    if cat == 3 and group_ranks:  # Three of a Kind
+    if category == 3 and group_ranks:  # Three of a Kind
         return f'Three of a Kind, {RANK_NAMES_PLURAL.get(group_ranks[0], "?")}'
-    if cat == 6 and len(group_ranks) >= 2:  # Full House
+    if category == 6 and len(group_ranks) >= 2:  # Full House
         trips = RANK_NAMES_PLURAL.get(group_ranks[0], '?')
         pair = RANK_NAMES_PLURAL.get(group_ranks[1], '?')
         return f'Full House, {trips} full of {pair}'
-    if cat == 7 and group_ranks:  # Four of a Kind
+    if category == 7 and group_ranks:  # Four of a Kind
         return f'Four of a Kind, {RANK_NAMES_PLURAL.get(group_ranks[0], "?")}'
-    if cat == 4 and group_ranks:  # Straight
-        hi = RANK_NAMES.get(group_ranks[0], '?')
-        return f'Straight, {hi} high'
-    if cat == 8 and group_ranks:  # Straight Flush
-        hi = RANK_NAMES.get(group_ranks[0], '?')
+    if category == 4 and group_ranks:  # Straight
+        high_rank_name = RANK_NAMES.get(group_ranks[0], '?')
+        return f'Straight, {high_rank_name} high'
+    if category == 8 and group_ranks:  # Straight Flush
+        high_rank_name = RANK_NAMES.get(group_ranks[0], '?')
         if group_ranks[0] == 12:
             return 'Royal Flush'
-        return f'Straight Flush, {hi} high'
+        return f'Straight Flush, {high_rank_name} high'
 
     return base

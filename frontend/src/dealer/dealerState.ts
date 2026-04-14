@@ -66,18 +66,18 @@ function initPlayer(name: string): Player {
 export function validateOutcomeStreets(players: Player[]): string | null {
   // Collect all players that have a decisive result AND an outcome_street
   const decided = players.filter(
-    (p) => (p.status === 'won' || p.status === 'lost' || p.status === 'folded') && p.outcomeStreet,
+    (player) => (player.status === 'won' || player.status === 'lost' || player.status === 'folded') && player.outcomeStreet,
   );
   if (decided.length === 0) return null;
 
   // Separate showdown players (won/lost) from folders
-  const showdown = decided.filter((p) => p.status === 'won' || p.status === 'lost');
-  const folders = decided.filter((p) => p.status === 'folded');
+  const showdown = decided.filter((player) => player.status === 'won' || player.status === 'lost');
+  const folders = decided.filter((player) => player.status === 'folded');
 
   // All showdown players must share the same outcome_street
-  const showdownStreets = new Set(showdown.map((p) => p.outcomeStreet));
+  const showdownStreets = new Set(showdown.map((player) => player.outcomeStreet));
   if (showdownStreets.size > 1) {
-    const mismatch = showdown.map((p) => `${p.name} (${p.outcomeStreet})`).join(', ');
+    const mismatch = showdown.map((player) => `${player.name} (${player.outcomeStreet})`).join(', ');
     return `Winners and losers must share the same outcome street. Found: ${mismatch}. Please fix before finishing.`;
   }
 
@@ -85,9 +85,9 @@ export function validateOutcomeStreets(players: Player[]): string | null {
   if (showdownStreets.size === 1) {
     const showdownStreet = [...showdownStreets][0]!;
     const showdownOrder = STREET_ORDER[showdownStreet] ?? -1;
-    const latefolders = folders.filter((p) => (STREET_ORDER[p.outcomeStreet!] ?? -1) > showdownOrder);
+    const latefolders = folders.filter((player) => (STREET_ORDER[player.outcomeStreet!] ?? -1) > showdownOrder);
     if (latefolders.length > 0) {
-      const mismatch = latefolders.map((p) => `${p.name} (${p.outcomeStreet})`).join(', ');
+      const mismatch = latefolders.map((player) => `${player.name} (${player.outcomeStreet})`).join(', ');
       return `Folders must fold on or before the showdown street (${showdownStreet}). Late: ${mismatch}. Please fix before finishing.`;
     }
   }
@@ -115,8 +115,8 @@ export function reducer(state: DealerState, action: DealerAction): DealerState {
       const { name, card1, card2 } = action.payload;
       return {
         ...state,
-        players: state.players.map((p) =>
-          p.name === name ? { ...p, card1, card2, recorded: true } : p,
+        players: state.players.map((player) =>
+          player.name === name ? { ...player, card1, card2, recorded: true } : player,
         ),
       };
     }
@@ -163,7 +163,7 @@ export function reducer(state: DealerState, action: DealerAction): DealerState {
       return {
         ...state,
         currentHandId: null,
-        players: state.players.map((p) => initPlayer(p.name)),
+        players: state.players.map((player) => initPlayer(player.name)),
         community: { ...emptyCommunity },
         handCount: state.handCount + 1,
         currentStep: 'dashboard',
@@ -173,8 +173,8 @@ export function reducer(state: DealerState, action: DealerAction): DealerState {
       const { name, status, outcomeStreet } = action.payload;
       return {
         ...state,
-        players: state.players.map((p) =>
-          p.name === name ? { ...p, status, outcomeStreet: outcomeStreet || null } : p,
+        players: state.players.map((player) =>
+          player.name === name ? { ...player, status, outcomeStreet: outcomeStreet || null } : player,
         ),
       };
     }
@@ -184,8 +184,8 @@ export function reducer(state: DealerState, action: DealerAction): DealerState {
 
     case 'LOAD_HAND': {
       const hand = action.payload;
-      const phMap = new Map(
-        hand.player_hands.map((ph) => [ph.player_name, ph]),
+      const playerHandMap = new Map(
+        hand.player_hands.map((playerHand) => [playerHand.player_name, playerHand]),
       );
       const hasFlopCards = hand.flop_1 != null;
       return {
@@ -200,16 +200,16 @@ export function reducer(state: DealerState, action: DealerAction): DealerState {
           river: hand.river,
           riverRecorded: hand.river != null,
         },
-        players: state.players.map((p) => {
-          const ph = phMap.get(p.name);
-          if (!ph) return initPlayer(p.name);
+        players: state.players.map((player) => {
+          const playerHand = playerHandMap.get(player.name);
+          if (!playerHand) return initPlayer(player.name);
           return {
-            name: p.name,
-            card1: ph.card_1 || null,
-            card2: ph.card_2 || null,
+            name: player.name,
+            card1: playerHand.card_1 || null,
+            card2: playerHand.card_2 || null,
             recorded: true,
-            status: ph.result || 'playing',
-            outcomeStreet: ph.outcome_street || null,
+            status: playerHand.result || 'playing',
+            outcomeStreet: playerHand.outcome_street || null,
             lastAction: null,
           };
         }),
@@ -220,7 +220,7 @@ export function reducer(state: DealerState, action: DealerAction): DealerState {
       return {
         ...state,
         currentHandId: null,
-        players: state.players.map((p) => initPlayer(p.name)),
+        players: state.players.map((player) => initPlayer(player.name)),
         community: { ...emptyCommunity },
         handCount: state.handCount + 1,
         currentStep: 'dashboard',
@@ -231,20 +231,20 @@ export function reducer(state: DealerState, action: DealerAction): DealerState {
 
     case 'UPDATE_PARTICIPATION': {
       const statusMap = new Map(
-        action.payload.players.map((p) => [p.name, p]),
+        action.payload.players.map((player) => [player.name, player]),
       );
       return {
         ...state,
-        players: state.players.map((p) => {
-          const entry = statusMap.get(p.name);
-          if (entry == null) return p;
-          const ps = entry.participation_status;
+        players: state.players.map((player) => {
+          const entry = statusMap.get(player.name);
+          if (entry == null) return player;
+          const participationStatus = entry.participation_status;
           // Don't let a stale poll reset a manually-recorded player to idle/playing
-          if (p.recorded && (ps === 'idle' || ps === 'playing')) return p;
+          if (player.recorded && (participationStatus === 'idle' || participationStatus === 'playing')) return player;
           // Don't let poll revert a locally-set sit-out (not_playing) status
-          if (p.status === 'not_playing' && (ps === 'idle' || ps === 'playing')) return p;
-          const newOutcomeStreet = entry.outcome_street ?? p.outcomeStreet;
-          return { ...p, status: ps, outcomeStreet: newOutcomeStreet };
+          if (player.status === 'not_playing' && (participationStatus === 'idle' || participationStatus === 'playing')) return player;
+          const newOutcomeStreet = entry.outcome_street ?? player.outcomeStreet;
+          return { ...player, status: participationStatus, outcomeStreet: newOutcomeStreet };
         }),
       };
     }

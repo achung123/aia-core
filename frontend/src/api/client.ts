@@ -189,19 +189,19 @@ export function reactivateGame(gameId: number): Promise<GameSessionResponse> {
 export async function uploadCsvValidate(file: File): Promise<CsvValidationResponse> {
   const form = new FormData();
   form.append('file', file);
-  const r = await fetch(`${BASE_URL}/upload/csv`, { method: 'POST', body: form });
-  const body = await r.json();
-  if (!r.ok) throw new Error(body.detail || `HTTP ${r.status}`);
+  const response = await fetch(`${BASE_URL}/upload/csv`, { method: 'POST', body: form });
+  const body = await response.json();
+  if (!response.ok) throw new Error(body.detail || `HTTP ${response.status}`);
   return body as CsvValidationResponse;
 }
 
 export async function uploadCsvCommit(file: File): Promise<CSVCommitSummary> {
   const form = new FormData();
   form.append('file', file);
-  const r = await fetch(`${BASE_URL}/upload/csv/commit`, { method: 'POST', body: form });
-  const body = await r.json();
-  if (!r.ok) {
-    const detail = typeof body.detail === 'object' ? JSON.stringify(body.detail) : (body.detail || `HTTP ${r.status}`);
+  const response = await fetch(`${BASE_URL}/upload/csv/commit`, { method: 'POST', body: form });
+  const body = await response.json();
+  if (!response.ok) {
+    const detail = typeof body.detail === 'object' ? JSON.stringify(body.detail) : (body.detail || `HTTP ${response.status}`);
     throw new Error(detail);
   }
   return body as CSVCommitSummary;
@@ -210,10 +210,10 @@ export async function uploadCsvCommit(file: File): Promise<CSVCommitSummary> {
 export async function uploadImage(gameId: number, file: File): Promise<ImageUploadResponse> {
   const form = new FormData();
   form.append('file', file);
-  const r = await fetch(`${BASE_URL}/games/${gameId}/hands/image`, { method: 'POST', body: form });
-  const body = await r.json();
-  if (!r.ok) {
-    const detail = typeof body.detail === 'object' ? JSON.stringify(body.detail) : (body.detail || `HTTP ${r.status}`);
+  const response = await fetch(`${BASE_URL}/games/${gameId}/hands/image`, { method: 'POST', body: form });
+  const body = await response.json();
+  if (!response.ok) {
+    const detail = typeof body.detail === 'object' ? JSON.stringify(body.detail) : (body.detail || `HTTP ${response.status}`);
     throw new Error(detail);
   }
   return body as ImageUploadResponse;
@@ -281,19 +281,19 @@ export function exportGameZipUrl(gameId: number): string {
 export async function uploadZipValidate(file: File): Promise<ZipValidationResponse> {
   const form = new FormData();
   form.append('file', file);
-  const r = await fetch(`${BASE_URL}/upload/zip`, { method: 'POST', body: form });
-  const body = await r.json();
-  if (!r.ok) throw new Error(body.detail || `HTTP ${r.status}`);
+  const response = await fetch(`${BASE_URL}/upload/zip`, { method: 'POST', body: form });
+  const body = await response.json();
+  if (!response.ok) throw new Error(body.detail || `HTTP ${response.status}`);
   return body as ZipValidationResponse;
 }
 
 export async function uploadZipCommit(file: File): Promise<ZipCommitSummary> {
   const form = new FormData();
   form.append('file', file);
-  const r = await fetch(`${BASE_URL}/upload/zip/commit`, { method: 'POST', body: form });
-  const body = await r.json();
-  if (!r.ok) {
-    const detail = typeof body.detail === 'object' ? JSON.stringify(body.detail) : (body.detail || `HTTP ${r.status}`);
+  const response = await fetch(`${BASE_URL}/upload/zip/commit`, { method: 'POST', body: form });
+  const body = await response.json();
+  if (!response.ok) {
+    const detail = typeof body.detail === 'object' ? JSON.stringify(body.detail) : (body.detail || `HTTP ${response.status}`);
     throw new Error(detail);
   }
   return body as ZipCommitSummary;

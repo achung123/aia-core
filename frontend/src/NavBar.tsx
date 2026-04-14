@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { useDealerStore } from './stores/dealerStore';
 
 export default function NavBar() {
-  const gameId = useDealerStore((s) => s.gameId);
+  const gameId = useDealerStore((state) => state.gameId);
   const dealerGameActive = gameId !== null;
 
   return (

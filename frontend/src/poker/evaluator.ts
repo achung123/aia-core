@@ -7,8 +7,8 @@ export interface Card {
 }
 
 export interface InternalCard {
-  r: number;
-  s: number;
+  rank: number;
+  suit: number;
 }
 
 export enum HandRank {
@@ -34,7 +34,7 @@ const SCORE_BASE = 14; // base > 13 to avoid collisions
 const SCORE_BASE_POWER_5 = SCORE_BASE ** 5;
 
 function convertCardToInternal(card: Card): InternalCard {
-  return { r: RANK_VALUE[card.rank], s: SUIT_VALUE[card.suit] };
+  return { rank: RANK_VALUE[card.rank], suit: SUIT_VALUE[card.suit] };
 }
 
 function computeHandScore(category: number, kickers: number[]): number {
@@ -45,8 +45,8 @@ function computeHandScore(category: number, kickers: number[]): number {
 
 // Evaluate exactly 5 internal cards → numeric score (higher = better)
 function evaluateFiveCardHand(card0: InternalCard, card1: InternalCard, card2: InternalCard, card3: InternalCard, card4: InternalCard): number {
-  const ranksDescending = [card0.r, card1.r, card2.r, card3.r, card4.r].sort((a, b) => b - a);
-  const isFlush = card0.s === card1.s && card1.s === card2.s && card2.s === card3.s && card3.s === card4.s;
+  const ranksDescending = [card0.rank, card1.rank, card2.rank, card3.rank, card4.rank].sort((a, b) => b - a);
+  const isFlush = card0.suit === card1.suit && card1.suit === card2.suit && card2.suit === card3.suit && card3.suit === card4.suit;
 
   // Straight detection
   let isStraight = false, straightHighCard = -1;
@@ -57,7 +57,7 @@ function evaluateFiveCardHand(card0: InternalCard, card1: InternalCard, card2: I
 
   // Rank frequencies — sorted by count desc then rank desc
   const rankFrequencies = new Int8Array(13);
-  rankFrequencies[card0.r]++; rankFrequencies[card1.r]++; rankFrequencies[card2.r]++; rankFrequencies[card3.r]++; rankFrequencies[card4.r]++;
+  rankFrequencies[card0.rank]++; rankFrequencies[card1.rank]++; rankFrequencies[card2.rank]++; rankFrequencies[card3.rank]++; rankFrequencies[card4.rank]++;
   const frequencyGroups: [number, number][] = [];
   for (let i = 12; i >= 0; i--) if (rankFrequencies[i]) frequencyGroups.push([i, rankFrequencies[i]]);
   frequencyGroups.sort((a, b) => b[1] - a[1] || b[0] - a[0]);
@@ -91,11 +91,11 @@ function findBestFiveCardScore(cards: InternalCard[]): number {
 
 function buildRemainingDeck(knownCards: InternalCard[]): InternalCard[] {
   const usedCardIds = new Set<number>();
-  for (const card of knownCards) usedCardIds.add(card.r * 4 + card.s);
+  for (const card of knownCards) usedCardIds.add(card.rank * 4 + card.suit);
   const deck: InternalCard[] = [];
-  for (let rank = 0; rank < 13; rank++)
-    for (let suit = 0; suit < 4; suit++)
-      if (!usedCardIds.has(rank * 4 + suit)) deck.push({ r: rank, s: suit });
+  for (let rankIndex = 0; rankIndex < 13; rankIndex++)
+    for (let suitIndex = 0; suitIndex < 4; suitIndex++)
+      if (!usedCardIds.has(rankIndex * 4 + suitIndex)) deck.push({ rank: rankIndex, suit: suitIndex });
   return deck;
 }
 

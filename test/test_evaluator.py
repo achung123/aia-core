@@ -3,11 +3,11 @@
 from app.services.evaluator import (
     RANK_VAL,
     SUIT_VAL,
-    best_hand,
-    best_score,
-    classify5,
-    eval5,
-    score,
+    classify_five_cards,
+    compute_hand_score,
+    evaluate_five_cards,
+    find_best_five_card_hand,
+    find_best_five_card_score,
 )
 
 
@@ -56,73 +56,95 @@ def _c(rank_int: int, suit_int: int) -> tuple[int, int]:
     return (rank_int, suit_int)
 
 
-class TestClassify5:
-    """classify5 returns (category, kickers) for each hand type."""
+class TestClassifyFiveCards:
+    """classify_five_cards returns (category, kickers) for each hand type."""
 
     def test_high_card(self):
         # A K 9 7 2, mixed suits
-        cat, _ = classify5(_c(12, 0), _c(11, 1), _c(7, 2), _c(5, 3), _c(0, 0))
-        assert cat == 0
+        category, _ = classify_five_cards(
+            _c(12, 0), _c(11, 1), _c(7, 2), _c(5, 3), _c(0, 0)
+        )
+        assert category == 0
 
     def test_pair(self):
         # AA 9 7 2
-        cat, kickers = classify5(_c(12, 0), _c(12, 1), _c(7, 2), _c(5, 3), _c(0, 0))
-        assert cat == 1
+        category, kickers = classify_five_cards(
+            _c(12, 0), _c(12, 1), _c(7, 2), _c(5, 3), _c(0, 0)
+        )
+        assert category == 1
         assert kickers[0] == 12  # pair rank
 
     def test_two_pair(self):
         # AA KK 2
-        cat, kickers = classify5(_c(12, 0), _c(12, 1), _c(11, 2), _c(11, 3), _c(0, 0))
-        assert cat == 2
+        category, kickers = classify_five_cards(
+            _c(12, 0), _c(12, 1), _c(11, 2), _c(11, 3), _c(0, 0)
+        )
+        assert category == 2
         assert kickers[0] == 12
         assert kickers[1] == 11
 
     def test_three_of_a_kind(self):
         # AAA K 2
-        cat, kickers = classify5(_c(12, 0), _c(12, 1), _c(12, 2), _c(11, 3), _c(0, 0))
-        assert cat == 3
+        category, kickers = classify_five_cards(
+            _c(12, 0), _c(12, 1), _c(12, 2), _c(11, 3), _c(0, 0)
+        )
+        assert category == 3
         assert kickers[0] == 12
 
     def test_straight(self):
         # 5 6 7 8 9 mixed suits
-        cat, kickers = classify5(_c(3, 0), _c(4, 1), _c(5, 2), _c(6, 3), _c(7, 0))
-        assert cat == 4
+        category, kickers = classify_five_cards(
+            _c(3, 0), _c(4, 1), _c(5, 2), _c(6, 3), _c(7, 0)
+        )
+        assert category == 4
         assert kickers[0] == 7  # high card of straight
 
     def test_wheel_straight(self):
         # A 2 3 4 5 mixed suits
-        cat, kickers = classify5(_c(12, 0), _c(0, 1), _c(1, 2), _c(2, 3), _c(3, 0))
-        assert cat == 4
+        category, kickers = classify_five_cards(
+            _c(12, 0), _c(0, 1), _c(1, 2), _c(2, 3), _c(3, 0)
+        )
+        assert category == 4
         assert kickers[0] == 3  # wheel high is 5 (value 3)
 
     def test_flush(self):
         # A K 9 7 2 all hearts
-        cat, _ = classify5(_c(12, 0), _c(11, 0), _c(7, 0), _c(5, 0), _c(0, 0))
-        assert cat == 5
+        category, _ = classify_five_cards(
+            _c(12, 0), _c(11, 0), _c(7, 0), _c(5, 0), _c(0, 0)
+        )
+        assert category == 5
 
     def test_full_house(self):
         # AAA KK
-        cat, kickers = classify5(_c(12, 0), _c(12, 1), _c(12, 2), _c(11, 3), _c(11, 0))
-        assert cat == 6
+        category, kickers = classify_five_cards(
+            _c(12, 0), _c(12, 1), _c(12, 2), _c(11, 3), _c(11, 0)
+        )
+        assert category == 6
         assert kickers[0] == 12
         assert kickers[1] == 11
 
     def test_four_of_a_kind(self):
         # AAAA K
-        cat, kickers = classify5(_c(12, 0), _c(12, 1), _c(12, 2), _c(12, 3), _c(11, 0))
-        assert cat == 7
+        category, kickers = classify_five_cards(
+            _c(12, 0), _c(12, 1), _c(12, 2), _c(12, 3), _c(11, 0)
+        )
+        assert category == 7
         assert kickers[0] == 12
 
     def test_straight_flush(self):
         # 5h 6h 7h 8h 9h
-        cat, kickers = classify5(_c(3, 0), _c(4, 0), _c(5, 0), _c(6, 0), _c(7, 0))
-        assert cat == 8
+        category, kickers = classify_five_cards(
+            _c(3, 0), _c(4, 0), _c(5, 0), _c(6, 0), _c(7, 0)
+        )
+        assert category == 8
         assert kickers[0] == 7
 
     def test_royal_flush(self):
         # 10s Js Qs Ks As
-        cat, kickers = classify5(_c(8, 3), _c(9, 3), _c(10, 3), _c(11, 3), _c(12, 3))
-        assert cat == 8
+        category, kickers = classify_five_cards(
+            _c(8, 3), _c(9, 3), _c(10, 3), _c(11, 3), _c(12, 3)
+        )
+        assert category == 8
         assert kickers[0] == 12
 
 
@@ -131,20 +153,23 @@ class TestClassify5:
 # ---------------------------------------------------------------------------
 
 
-class TestScore:
-    """score(cat, kickers) produces correct ordering."""
+class TestComputeHandScore:
+    """compute_hand_score(category, kickers) produces correct ordering."""
 
     def test_higher_category_always_wins(self):
         # Pair < Two Pair < Trips < Straight < Flush < Full House < Quads < SF
-        cats = list(range(9))
-        scores = [score(c, [12, 11, 10, 9, 8]) for c in cats]
+        categories = list(range(9))
+        scores = [
+            compute_hand_score(category, [12, 11, 10, 9, 8])
+            for category in categories
+        ]
         assert scores == sorted(scores)
 
     def test_same_category_kicker_breaks_tie(self):
         # Pair of Aces > Pair of Kings
-        s_aa = score(1, [12, 11, 10, 9])
-        s_kk = score(1, [11, 12, 10, 9])
-        assert s_aa > s_kk
+        score_aces = compute_hand_score(1, [12, 11, 10, 9])
+        score_kings = compute_hand_score(1, [11, 12, 10, 9])
+        assert score_aces > score_kings
 
 
 # ---------------------------------------------------------------------------
@@ -152,13 +177,13 @@ class TestScore:
 # ---------------------------------------------------------------------------
 
 
-class TestEval5:
-    """eval5 returns the same score as score(classify5(...))."""
+class TestEvaluateFiveCards:
+    """evaluate_five_cards returns the same score as compute_hand_score(classify_five_cards(...))."""
 
-    def test_eval5_matches_classify_then_score(self):
+    def test_evaluate_five_cards_matches_classify_then_score(self):
         cards = (_c(12, 0), _c(12, 1), _c(7, 2), _c(5, 3), _c(0, 0))
-        cat, kickers = classify5(*cards)
-        assert eval5(*cards) == score(cat, kickers)
+        category, kickers = classify_five_cards(*cards)
+        assert evaluate_five_cards(*cards) == compute_hand_score(category, kickers)
 
 
 # ---------------------------------------------------------------------------
@@ -166,8 +191,8 @@ class TestEval5:
 # ---------------------------------------------------------------------------
 
 
-class TestBestHand:
-    """best_hand picks the best 5-card combo from 5-7 cards."""
+class TestFindBestFiveCardHand:
+    """find_best_five_card_hand picks the best 5-card combo from 5-7 cards."""
 
     def test_selects_flush_over_pair(self):
         # 7 cards: Ah Kh Qh Jh 2h 3d 3c (flush in hearts beats pair of 3s)
@@ -180,8 +205,8 @@ class TestBestHand:
             _c(1, 1),
             _c(1, 2),
         ]
-        cat, _ = best_hand(cards)
-        assert cat == 5  # flush
+        category, _ = find_best_five_card_hand(cards)
+        assert category == 5  # flush
 
     def test_returns_correct_category_full_house(self):
         # 7 cards containing AAA KK + junk
@@ -194,16 +219,16 @@ class TestBestHand:
             _c(5, 3),
             _c(0, 2),
         ]
-        cat, kickers = best_hand(cards)
-        assert cat == 6  # full house
+        category, kickers = find_best_five_card_hand(cards)
+        assert category == 6  # full house
         assert kickers[0] == 12
         assert kickers[1] == 11
 
 
-class TestBestScore:
-    """best_score returns a numeric score consistent with best_hand."""
+class TestFindBestFiveCardScore:
+    """find_best_five_card_score returns a numeric score consistent with find_best_five_card_hand."""
 
-    def test_consistent_with_best_hand(self):
+    def test_consistent_with_find_best_five_card_hand(self):
         cards = [
             _c(12, 0),
             _c(12, 1),
@@ -213,10 +238,12 @@ class TestBestScore:
             _c(5, 3),
             _c(0, 2),
         ]
-        cat, kickers = best_hand(cards)
-        assert best_score(cards) == score(cat, kickers)
+        category, kickers = find_best_five_card_hand(cards)
+        assert find_best_five_card_score(cards) == compute_hand_score(category, kickers)
 
     def test_flush_beats_straight(self):
         flush_cards = [_c(12, 0), _c(10, 0), _c(7, 0), _c(5, 0), _c(3, 0)]
         straight_cards = [_c(4, 0), _c(5, 1), _c(6, 2), _c(7, 3), _c(8, 0)]
-        assert best_score(flush_cards) > best_score(straight_cards)
+        assert find_best_five_card_score(flush_cards) > find_best_five_card_score(
+            straight_cards
+        )

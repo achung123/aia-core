@@ -47,14 +47,14 @@ function handToCardData(hand: HandResponse): CardData {
     flop: [parseCard(hand.flop_1), parseCard(hand.flop_2), parseCard(hand.flop_3)],
     turn: parseCard(hand.turn),
     river: parseCard(hand.river),
-    player_hands: (hand.player_hands || []).map(ph => ({
-      player_name: ph.player_name,
+    player_hands: (hand.player_hands || []).map(playerHand => ({
+      player_name: playerHand.player_name,
       hole_cards:
-        ph.card_1 && ph.card_2
-          ? ([parseCard(ph.card_1)!, parseCard(ph.card_2)!] as [ParsedCard, ParsedCard])
+        playerHand.card_1 && playerHand.card_2
+          ? ([parseCard(playerHand.card_1)!, parseCard(playerHand.card_2)!] as [ParsedCard, ParsedCard])
           : null,
-      result: RESULT_MAP[ph.result ?? ''] || ph.result || '',
-      profit_loss: ph.profit_loss ?? null,
+      result: RESULT_MAP[playerHand.result ?? ''] || playerHand.result || '',
+      profit_loss: playerHand.profit_loss ?? null,
     })),
   };
 }
@@ -276,11 +276,11 @@ export function PlaybackView() {
     const seatPlayerMap: Record<number, string> = {};
     const seen = new Set<string>();
     const playerNames: string[] = [];
-    list.forEach(h => {
-      (h.player_hands || []).forEach(ph => {
-        if (ph.player_name && !seen.has(ph.player_name)) {
-          seen.add(ph.player_name);
-          playerNames.push(ph.player_name);
+    list.forEach(hand => {
+      (hand.player_hands || []).forEach(playerHand => {
+        if (playerHand.player_name && !seen.has(playerHand.player_name)) {
+          seen.add(playerHand.player_name);
+          playerNames.push(playerHand.player_name);
         }
       });
     });
@@ -313,11 +313,11 @@ export function PlaybackView() {
       const seatPlayerMap: Record<number, string> = {};
       const seen = new Set<string>();
       const playerNames: string[] = [];
-      hands.forEach(h => {
-        (h.player_hands || []).forEach(ph => {
-          if (ph.player_name && !seen.has(ph.player_name)) {
-            seen.add(ph.player_name);
-            playerNames.push(ph.player_name);
+      hands.forEach(hand => {
+        (hand.player_hands || []).forEach(playerHand => {
+          if (playerHand.player_name && !seen.has(playerHand.player_name)) {
+            seen.add(playerHand.player_name);
+            playerNames.push(playerHand.player_name);
           }
         });
       });
@@ -409,7 +409,7 @@ export function PlaybackView() {
 
     const cardData = handToCardData(hand);
     const playersWithCards = (cardData.player_hands || []).filter(
-      ph => ph.hole_cards && ph.hole_cards.length === 2 && ph.hole_cards[0] && ph.hole_cards[1],
+      playerHand => playerHand.hole_cards && playerHand.hole_cards.length === 2 && playerHand.hole_cards[0] && playerHand.hole_cards[1],
     );
 
     if (playersWithCards.length < 2) {
@@ -418,16 +418,16 @@ export function PlaybackView() {
     }
 
     const communityCards = communityForStreet(cardData, currentStreet);
-    const holeCards = playersWithCards.map(ph => ph.hole_cards!);
+    const holeCards = playersWithCards.map(playerHand => playerHand.hole_cards!);
 
     try {
       setEquityLoading(true);
       const results = calculateEquity(holeCards, communityCards);
-      const eqMap: Record<string, number> = {};
-      playersWithCards.forEach((ph, i) => {
-        eqMap[ph.player_name] = results[i].equity;
+      const equities: Record<string, number> = {};
+      playersWithCards.forEach((playerHand, i) => {
+        equities[playerHand.player_name] = results[i].equity;
       });
-      setEquityMap(Object.keys(eqMap).length > 0 ? eqMap : null);
+      setEquityMap(Object.keys(equities).length > 0 ? equities : null);
     } catch {
       setEquityMap(null);
     } finally {

@@ -42,29 +42,29 @@ export function GameSelector({ onSelectGame, onNewGame }: GameSelectorProps) {
       )}
 
       <div style={styles.list}>
-        {sessions.map(s => {
-          const isActive = s.status === 'active';
+        {sessions.map(session => {
+          const isActive = session.status === 'active';
           return (
             <button
-              key={s.game_id}
+              key={session.game_id}
               data-testid="game-card"
               style={{
                 ...styles.card,
                 ...(isActive ? styles.cardActive : styles.cardComplete),
               }}
-              onClick={() => onSelectGame(s.game_id)}
+              onClick={() => onSelectGame(session.game_id)}
             >
-              <div style={styles.cardDate}>{s.game_date} <span style={styles.gameId}>#{s.game_id}</span></div>
+              <div style={styles.cardDate}>{session.game_date} <span style={styles.gameId}>#{session.game_id}</span></div>
               <div data-testid="card-details" style={styles.cardDetails}>
                 <span style={styles.badge}>
                   {isActive ? '● Active' : 'Complete'}
                 </span>
-                <span>{s.player_count} players</span>
-                <span>{s.hand_count} hands</span>
+                <span>{session.player_count} players</span>
+                <span>{session.hand_count} hands</span>
               </div>
-              {s.winners && s.winners.length > 0 && (
+              {session.winners && session.winners.length > 0 && (
                 <div style={styles.winnersRow}>
-                  🏆 {s.winners.join(', ')}
+                  🏆 {session.winners.join(', ')}
                 </div>
               )}
             </button>

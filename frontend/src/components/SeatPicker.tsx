@@ -31,7 +31,7 @@ function seatPosition(index: number, total: number): { left: string; top: string
 
 export function SeatPicker({ seats, currentPlayerSeat, onSelect, onSkip, allowSwap }: SeatPickerProps) {
   // Build a full 10-seat array, filling in provided seats
-  const seatMap = new Map(seats.map((s) => [s.seatNumber, s]));
+  const seatMap = new Map(seats.map((seat) => [seat.seatNumber, seat]));
   const allSeats: SeatData[] = [];
   for (let i = 1; i <= 10; i++) {
     allSeats.push(seatMap.get(i) || { seatNumber: i, playerName: null });

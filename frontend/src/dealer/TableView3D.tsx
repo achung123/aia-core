@@ -28,13 +28,13 @@ function handToCardData(hand: HandResponse) {
     flop: [parseCard(hand.flop_1), parseCard(hand.flop_2), parseCard(hand.flop_3)],
     turn: parseCard(hand.turn),
     river: parseCard(hand.river),
-    player_hands: (hand.player_hands || []).map(ph => ({
-      player_name: ph.player_name,
+    player_hands: (hand.player_hands || []).map(playerHand => ({
+      player_name: playerHand.player_name,
       hole_cards:
-        ph.card_1 && ph.card_2
-          ? ([parseCard(ph.card_1)!, parseCard(ph.card_2)!] as [ParsedCard, ParsedCard])
+        playerHand.card_1 && playerHand.card_2
+          ? ([parseCard(playerHand.card_1)!, parseCard(playerHand.card_2)!] as [ParsedCard, ParsedCard])
           : null,
-      result: RESULT_MAP[ph.result ?? ''] || ph.result || '',
+      result: RESULT_MAP[playerHand.result ?? ''] || playerHand.result || '',
     })),
   };
 }
@@ -48,8 +48,8 @@ function computeStreetIndex(hand: HandResponse): number {
 
 function buildSeatPlayerMap(hand: HandResponse): Record<number, string> {
   const map: Record<number, string> = {};
-  (hand.player_hands || []).forEach((ph, i) => {
-    map[i] = ph.player_name;
+  (hand.player_hands || []).forEach((playerHand, i) => {
+    map[i] = playerHand.player_name;
   });
   return map;
 }

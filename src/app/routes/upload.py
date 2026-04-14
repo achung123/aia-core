@@ -167,7 +167,7 @@ async def commit_csv(
                         )
                     )
 
-                pl_str = row['profit_loss'].strip()
+                profit_loss_string = row['profit_loss'].strip()
                 raw_result = row['result'].strip() or None
                 if raw_result is not None:
                     try:
@@ -185,7 +185,7 @@ async def commit_csv(
                         card_1=row['hole_card_1'].strip(),
                         card_2=row['hole_card_2'].strip(),
                         result=raw_result,
-                        profit_loss=float(pl_str) if pl_str else None,
+                        profit_loss=float(profit_loss_string) if profit_loss_string else None,
                         outcome_street=row.get('outcome_street', '').strip() or None,
                         is_all_in=row.get('is_all_in', '').strip().lower() == 'true',
                     )
@@ -210,10 +210,10 @@ async def commit_csv(
 def _read_zip_csvs(content: bytes) -> dict[str, str]:
     """Extract CSV files from a ZIP archive."""
     try:
-        zf = zipfile.ZipFile(io.BytesIO(content))
+        zip_archive = zipfile.ZipFile(io.BytesIO(content))
     except zipfile.BadZipFile as exc:
         raise HTTPException(status_code=400, detail='Invalid ZIP file') from exc
-    return {name: zf.read(name).decode('utf-8') for name in zf.namelist()}
+    return {name: zip_archive.read(name).decode('utf-8') for name in zip_archive.namelist()}
 
 
 def _validate_zip_structure(files: dict[str, str]) -> list[str]:
@@ -323,7 +323,7 @@ async def commit_zip(
                 buy_in = row.get('buy_in', '').strip()
                 chips = row.get('current_chips', '').strip()
                 is_active = row.get('is_active', 'true').strip().lower() != 'false'
-                gp = GamePlayer(
+                game_player = GamePlayer(
                     game_id=game.game_id,
                     player_id=player.player_id,
                     seat_number=int(seat) if seat else None,
@@ -331,7 +331,7 @@ async def commit_zip(
                     current_chips=float(chips) if chips else None,
                     is_active=is_active,
                 )
-                db.add(gp)
+                db.add(game_player)
             db.flush()
 
         # Parse hands.csv
@@ -383,7 +383,7 @@ async def commit_zip(
                     )
                     db.flush()
 
-                pl_str = row.get('profit_loss', '').strip()
+                profit_loss_string = row.get('profit_loss', '').strip()
                 raw_result = row.get('result', '').strip() or None
                 if raw_result:
                     try:
@@ -391,17 +391,17 @@ async def commit_zip(
                     except ValueError:
                         pass
 
-                ph = PlayerHand(
+                player_hand = PlayerHand(
                     hand_id=hand.hand_id,
                     player_id=player.player_id,
                     card_1=row.get('hole_card_1', '').strip() or None,
                     card_2=row.get('hole_card_2', '').strip() or None,
                     result=raw_result,
-                    profit_loss=float(pl_str) if pl_str else None,
+                    profit_loss=float(profit_loss_string) if profit_loss_string else None,
                     outcome_street=row.get('outcome_street', '').strip() or None,
                     is_all_in=row.get('is_all_in', '').strip().lower() == 'true',
                 )
-                db.add(ph)
+                db.add(player_hand)
                 db.flush()
 
         # Parse actions.csv (optional)
@@ -415,7 +415,7 @@ async def commit_zip(
                     continue
                 player = _get_or_create_player(name)
                 # Find the PlayerHand for this player+hand
-                ph = (
+                player_hand = (
                     db.query(PlayerHand)
                     .filter(
                         PlayerHand.hand_id == hand.hand_id,
@@ -423,12 +423,12 @@ async def commit_zip(
                     )
                     .first()
                 )
-                if not ph:
+                if not player_hand:
                     continue
                 amt = row.get('amount', '').strip()
                 db.add(
                     PlayerHandAction(
-                        player_hand_id=ph.player_hand_id,
+                        player_hand_id=player_hand.player_hand_id,
                         street=row['street'].strip(),
                         action=row['action'].strip(),
                         amount=float(amt) if amt else None,

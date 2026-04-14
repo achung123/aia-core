@@ -34,14 +34,22 @@ def get_active_seat_order(
         )
         .all()
     )
-    folded_ids = {ph.player_id for ph in hand.player_hands if ph.result == 'folded'}
+    folded_ids = {
+        player_hand.player_id
+        for player_hand in hand.player_hands
+        if player_hand.result == 'folded'
+    }
     excluded = set(folded_ids)
     if exclude_all_in:
-        excluded |= {ph.player_id for ph in hand.player_hands if ph.is_all_in}
+        excluded |= {
+            player_hand.player_id
+            for player_hand in hand.player_hands
+            if player_hand.is_all_in
+        }
     return [
-        (gp.seat_number or 0, gp.player_id)
-        for gp in active_gps
-        if gp.player_id not in excluded
+        (game_player.seat_number or 0, game_player.player_id)
+        for game_player in active_gps
+        if game_player.player_id not in excluded
     ]
 
 
@@ -58,32 +66,46 @@ def first_to_act_seat(
 
     if phase == 'preflop':
         # First-to-act is the player after BB
-        bb_gp = (
+        big_blind_game_player = (
             db.query(GamePlayer)
             .filter(
-                GamePlayer.game_id == game_id, GamePlayer.player_id == hand.bb_player_id
+                GamePlayer.game_id == game_id,
+                GamePlayer.player_id == hand.bb_player_id,
             )
             .first()
         )
-        bb_seat = bb_gp.seat_number if bb_gp and bb_gp.seat_number else 0
+        big_blind_seat = (
+            big_blind_game_player.seat_number
+            if big_blind_game_player and big_blind_game_player.seat_number
+            else 0
+        )
         # Find first active non-folded seat after BB
-        after_bb = [s for s in seats if s[0] > bb_seat]
-        if after_bb:
-            return after_bb[0][0]
+        after_big_blind = [
+            seat_pair for seat_pair in seats if seat_pair[0] > big_blind_seat
+        ]
+        if after_big_blind:
+            return after_big_blind[0][0]
         # Wrap around
         return seats[0][0]
     else:
         # Post-flop: first active non-folded player after dealer (SB seat)
-        sb_gp = (
+        small_blind_game_player = (
             db.query(GamePlayer)
             .filter(
-                GamePlayer.game_id == game_id, GamePlayer.player_id == hand.sb_player_id
+                GamePlayer.game_id == game_id,
+                GamePlayer.player_id == hand.sb_player_id,
             )
             .first()
         )
-        sb_seat = sb_gp.seat_number if sb_gp and sb_gp.seat_number else 0
+        small_blind_seat = (
+            small_blind_game_player.seat_number
+            if small_blind_game_player and small_blind_game_player.seat_number
+            else 0
+        )
         # SB acts first post-flop (seat >= sb_seat)
-        at_or_after = [s for s in seats if s[0] >= sb_seat]
+        at_or_after = [
+            seat_pair for seat_pair in seats if seat_pair[0] >= small_blind_seat
+        ]
         if at_or_after:
             return at_or_after[0][0]
         return seats[0][0]
@@ -127,15 +149,15 @@ def count_community_cards(hand: Hand) -> int:
 
 def can_advance_to_phase(hand: Hand, target_phase: str) -> bool:
     """Check if community cards are sufficient for the target phase."""
-    cc = count_community_cards(hand)
+    community_card_count = count_community_cards(hand)
     if target_phase == 'flop':
-        return cc >= 3
+        return community_card_count >= 3
     if target_phase == 'turn':
-        return cc >= 4
+        return community_card_count >= 4
     if target_phase == 'river':
-        return cc >= 5
+        return community_card_count >= 5
     if target_phase == 'showdown':
-        return cc >= 5
+        return community_card_count >= 5
     return True  # preflop always ok
 
 
@@ -152,7 +174,12 @@ def get_actions_this_street(db: Session, hand: Hand, street: str) -> list[dict]:
         .all()
     )
     return [
-        {'player_id': pid, 'action': a.action, 'amount': a.amount} for a, pid in actions
+        {
+            'player_id': player_id,
+            'action': action_record.action,
+            'amount': action_record.amount,
+        }
+        for action_record, player_id in actions
     ]
 
 
@@ -177,8 +204,12 @@ def try_advance_phase(
     if len(seats) <= 1:
         return False
 
-    active_non_folded_ids = {pid for _, pid in seats}
-    all_in_ids = {ph.player_id for ph in hand.player_hands if ph.is_all_in}
+    active_non_folded_ids = {player_id for _, player_id in seats}
+    all_in_ids = {
+        player_hand.player_id
+        for player_hand in hand.player_hands
+        if player_hand.is_all_in
+    }
 
     actions_this_street = (
         actions_cache
@@ -223,10 +254,10 @@ def try_advance_phase(
 def activate_preflop(db: Session, game_id: int, hand: Hand, state: HandState) -> None:
     """Transition from awaiting_cards to preflop: post blinds and set first-to-act."""
     game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
-    sb = game.small_blind if game else 0.10
-    bb = game.big_blind if game else 0.20
+    small_blind_amount = game.small_blind if game else 0.10
+    big_blind_amount = game.big_blind if game else 0.20
 
-    sb_ph = (
+    small_blind_player_hand = (
         db.query(PlayerHand)
         .filter(
             PlayerHand.hand_id == hand.hand_id,
@@ -234,7 +265,7 @@ def activate_preflop(db: Session, game_id: int, hand: Hand, state: HandState) ->
         )
         .first()
     )
-    bb_ph = (
+    big_blind_player_hand = (
         db.query(PlayerHand)
         .filter(
             PlayerHand.hand_id == hand.hand_id,
@@ -244,24 +275,24 @@ def activate_preflop(db: Session, game_id: int, hand: Hand, state: HandState) ->
     )
     db.add(
         PlayerHandAction(
-            player_hand_id=sb_ph.player_hand_id,
+            player_hand_id=small_blind_player_hand.player_hand_id,
             street='preflop',
             action='blind',
-            amount=sb,
+            amount=small_blind_amount,
         )
     )
     db.add(
         PlayerHandAction(
-            player_hand_id=bb_ph.player_hand_id,
+            player_hand_id=big_blind_player_hand.player_hand_id,
             street='preflop',
             action='blind',
-            amount=bb,
+            amount=big_blind_amount,
         )
     )
-    hand.pot = sb + bb
+    hand.pot = small_blind_amount + big_blind_amount
 
     # Deduct blinds from player chip stacks
-    sb_gp = (
+    small_blind_game_player = (
         db.query(GamePlayer)
         .filter(
             GamePlayer.game_id == game_id,
@@ -269,7 +300,7 @@ def activate_preflop(db: Session, game_id: int, hand: Hand, state: HandState) ->
         )
         .first()
     )
-    bb_gp = (
+    big_blind_game_player = (
         db.query(GamePlayer)
         .filter(
             GamePlayer.game_id == game_id,
@@ -277,10 +308,14 @@ def activate_preflop(db: Session, game_id: int, hand: Hand, state: HandState) ->
         )
         .first()
     )
-    if sb_gp and sb_gp.current_chips is not None:
-        sb_gp.current_chips = round(sb_gp.current_chips - sb, 2)
-    if bb_gp and bb_gp.current_chips is not None:
-        bb_gp.current_chips = round(bb_gp.current_chips - bb, 2)
+    if small_blind_game_player and small_blind_game_player.current_chips is not None:
+        small_blind_game_player.current_chips = round(
+            small_blind_game_player.current_chips - small_blind_amount, 2
+        )
+    if big_blind_game_player and big_blind_game_player.current_chips is not None:
+        big_blind_game_player.current_chips = round(
+            big_blind_game_player.current_chips - big_blind_amount, 2
+        )
 
     state.phase = 'preflop'
     state.current_seat = first_to_act_seat(db, game_id, hand, 'preflop')

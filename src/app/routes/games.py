@@ -76,19 +76,22 @@ def _build_players(db: Session, game_id: int) -> list[PlayerInfo]:
         .group_by(Rebuy.player_id)
         .all()
     )
-    rebuy_map = {r.player_id: (r.rebuy_count, r.total_rebuys) for r in rebuy_rows}
+    rebuy_map = {
+        rebuy_row.player_id: (rebuy_row.rebuy_count, rebuy_row.total_rebuys)
+        for rebuy_row in rebuy_rows
+    }
 
     return [
         PlayerInfo(
-            name=r.name,
-            is_active=r.is_active,
-            seat_number=r.seat_number,
-            buy_in=r.buy_in,
-            current_chips=r.current_chips,
-            rebuy_count=rebuy_map.get(r.player_id, (0, 0.0))[0],
-            total_rebuys=rebuy_map.get(r.player_id, (0, 0.0))[1],
+            name=player_row.name,
+            is_active=player_row.is_active,
+            seat_number=player_row.seat_number,
+            buy_in=player_row.buy_in,
+            current_chips=player_row.current_chips,
+            rebuy_count=rebuy_map.get(player_row.player_id, (0, 0.0))[0],
+            total_rebuys=rebuy_map.get(player_row.player_id, (0, 0.0))[1],
         )
-        for r in rows
+        for player_row in rows
     ]
 
 
@@ -371,24 +374,30 @@ def export_game_csv(
     game_date_str = game.game_date.strftime('%m-%d-%Y') if game.game_date else ''
 
     for hand in hands:
-        for ph in hand.player_hands:
-            player = db.query(Player).filter(Player.player_id == ph.player_id).first()
+        for player_hand in hand.player_hands:
+            player = (
+                db.query(Player)
+                .filter(Player.player_id == player_hand.player_id)
+                .first()
+            )
             writer.writerow(
                 [
                     game_date_str,
                     hand.hand_number,
                     player.name if player else '',
-                    ph.card_1 or '',
-                    ph.card_2 or '',
+                    player_hand.card_1 or '',
+                    player_hand.card_2 or '',
                     hand.flop_1 or '',
                     hand.flop_2 or '',
                     hand.flop_3 or '',
                     hand.turn or '',
                     hand.river or '',
-                    ph.result or '',
-                    ph.profit_loss if ph.profit_loss is not None else '',
-                    ph.outcome_street or '',
-                    'true' if ph.is_all_in else 'false',
+                    player_hand.result or '',
+                    player_hand.profit_loss
+                    if player_hand.profit_loss is not None
+                    else '',
+                    player_hand.outcome_street or '',
+                    'true' if player_hand.is_all_in else 'false',
                 ]
             )
 
@@ -430,11 +439,11 @@ def export_game_zip(
             winners_str = str(game.winners)
 
     buf = io.BytesIO()
-    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zip_file:
         # game_info.csv
-        gi = io.StringIO()
-        gi_w = csv.writer(gi)
-        gi_w.writerow(
+        game_info_buffer = io.StringIO()
+        game_info_writer = csv.writer(game_info_buffer)
+        game_info_writer.writerow(
             [
                 'game_date',
                 'status',
@@ -445,7 +454,7 @@ def export_game_zip(
                 'winners',
             ]
         )
-        gi_w.writerow(
+        game_info_writer.writerow(
             [
                 game_date_str,
                 game.status or '',
@@ -458,12 +467,12 @@ def export_game_zip(
                 winners_str,
             ]
         )
-        zf.writestr('game_info.csv', gi.getvalue())
+        zip_file.writestr('game_info.csv', game_info_buffer.getvalue())
 
         # players.csv
-        pl = io.StringIO()
-        pl_w = csv.writer(pl)
-        pl_w.writerow(
+        players_buffer = io.StringIO()
+        players_writer = csv.writer(players_buffer)
+        players_writer.writerow(
             [
                 'player_name',
                 'seat_number',
@@ -472,22 +481,26 @@ def export_game_zip(
                 'is_active',
             ]
         )
-        for gp, player in game_players:
-            pl_w.writerow(
+        for game_player, player in game_players:
+            players_writer.writerow(
                 [
                     player.name,
-                    gp.seat_number if gp.seat_number is not None else '',
-                    gp.buy_in if gp.buy_in is not None else '',
-                    gp.current_chips if gp.current_chips is not None else '',
-                    'true' if gp.is_active else 'false',
+                    game_player.seat_number
+                    if game_player.seat_number is not None
+                    else '',
+                    game_player.buy_in if game_player.buy_in is not None else '',
+                    game_player.current_chips
+                    if game_player.current_chips is not None
+                    else '',
+                    'true' if game_player.is_active else 'false',
                 ]
             )
-        zf.writestr('players.csv', pl.getvalue())
+        zip_file.writestr('players.csv', players_buffer.getvalue())
 
         # hands.csv (enhanced)
-        hd = io.StringIO()
-        hd_w = csv.writer(hd)
-        hd_w.writerow(
+        hands_buffer = io.StringIO()
+        hands_writer = csv.writer(hands_buffer)
+        hands_writer.writerow(
             [
                 'game_date',
                 'hand_number',
@@ -506,34 +519,38 @@ def export_game_zip(
             ]
         )
         for hand in hands:
-            for ph in hand.player_hands:
+            for player_hand in hand.player_hands:
                 player = (
-                    db.query(Player).filter(Player.player_id == ph.player_id).first()
+                    db.query(Player)
+                    .filter(Player.player_id == player_hand.player_id)
+                    .first()
                 )
-                hd_w.writerow(
+                hands_writer.writerow(
                     [
                         game_date_str,
                         hand.hand_number,
                         player.name if player else '',
-                        ph.card_1 or '',
-                        ph.card_2 or '',
+                        player_hand.card_1 or '',
+                        player_hand.card_2 or '',
                         hand.flop_1 or '',
                         hand.flop_2 or '',
                         hand.flop_3 or '',
                         hand.turn or '',
                         hand.river or '',
-                        ph.result or '',
-                        ph.profit_loss if ph.profit_loss is not None else '',
-                        ph.outcome_street or '',
-                        'true' if ph.is_all_in else 'false',
+                        player_hand.result or '',
+                        player_hand.profit_loss
+                        if player_hand.profit_loss is not None
+                        else '',
+                        player_hand.outcome_street or '',
+                        'true' if player_hand.is_all_in else 'false',
                     ]
                 )
-        zf.writestr('hands.csv', hd.getvalue())
+        zip_file.writestr('hands.csv', hands_buffer.getvalue())
 
         # actions.csv
-        ac = io.StringIO()
-        ac_w = csv.writer(ac)
-        ac_w.writerow(
+        actions_buffer = io.StringIO()
+        actions_writer = csv.writer(actions_buffer)
+        actions_writer.writerow(
             [
                 'hand_number',
                 'player_name',
@@ -543,12 +560,14 @@ def export_game_zip(
             ]
         )
         for hand in hands:
-            for ph in hand.player_hands:
+            for player_hand in hand.player_hands:
                 player = (
-                    db.query(Player).filter(Player.player_id == ph.player_id).first()
+                    db.query(Player)
+                    .filter(Player.player_id == player_hand.player_id)
+                    .first()
                 )
-                for action in ph.actions:
-                    ac_w.writerow(
+                for action in player_hand.actions:
+                    actions_writer.writerow(
                         [
                             hand.hand_number,
                             player.name if player else '',
@@ -557,23 +576,23 @@ def export_game_zip(
                             action.amount if action.amount is not None else '',
                         ]
                     )
-        zf.writestr('actions.csv', ac.getvalue())
+        zip_file.writestr('actions.csv', actions_buffer.getvalue())
 
         # rebuys.csv
-        rb = io.StringIO()
-        rb_w = csv.writer(rb)
-        rb_w.writerow(['player_name', 'amount'])
+        rebuys_buffer = io.StringIO()
+        rebuys_writer = csv.writer(rebuys_buffer)
+        rebuys_writer.writerow(['player_name', 'amount'])
         for rebuy in rebuys:
             player = (
                 db.query(Player).filter(Player.player_id == rebuy.player_id).first()
             )
-            rb_w.writerow(
+            rebuys_writer.writerow(
                 [
                     player.name if player else '',
                     rebuy.amount,
                 ]
             )
-        zf.writestr('rebuys.csv', rb.getvalue())
+        zip_file.writestr('rebuys.csv', rebuys_buffer.getvalue())
 
     buf.seek(0)
     filename = f'game_{game_id}_{game_date_str}.zip'
@@ -684,7 +703,7 @@ def add_player_to_game(
                 detail=f'Seat {payload.seat_number} is already occupied by {occupant_name!r}',
             )
 
-    gp = GamePlayer(
+    game_player = GamePlayer(
         game_id=game_id,
         player_id=player.player_id,
         is_active=True,
@@ -692,14 +711,14 @@ def add_player_to_game(
         buy_in=payload.buy_in,
         current_chips=payload.buy_in,
     )
-    db.add(gp)
+    db.add(game_player)
     db.commit()
 
     return AddPlayerToGameResponse(
         player_name=player.name,
-        is_active=gp.is_active,
-        seat_number=gp.seat_number,
-        buy_in=gp.buy_in,
+        is_active=game_player.is_active,
+        seat_number=game_player.seat_number,
+        buy_in=game_player.buy_in,
     )
 
 
@@ -733,7 +752,7 @@ def assign_player_seat(
             status_code=404, detail=f'Player {player_name!r} not found in this game'
         )
 
-    gp = (
+    game_player = (
         db.query(GamePlayer)
         .filter(
             GamePlayer.game_id == game_id,
@@ -741,7 +760,7 @@ def assign_player_seat(
         )
         .first()
     )
-    if gp is None:
+    if game_player is None:
         raise HTTPException(
             status_code=404, detail=f'Player {player_name!r} not found in this game'
         )
@@ -760,7 +779,7 @@ def assign_player_seat(
     if occupant is not None:
         if payload.swap:
             # Swap: move occupant to the requesting player's old seat
-            occupant.seat_number = gp.seat_number
+            occupant.seat_number = game_player.seat_number
         else:
             occupant_name = (
                 db.query(Player.name)
@@ -772,22 +791,22 @@ def assign_player_seat(
                 detail=f'Seat {payload.seat_number} is already occupied by {occupant_name!r}',
             )
 
-    gp.seat_number = payload.seat_number
+    game_player.seat_number = payload.seat_number
     db.commit()
-    db.refresh(gp)
+    db.refresh(game_player)
 
     # Build full PlayerInfo for response
     players = _build_players(db, game_id)
-    for p in players:
-        if p.name == player.name:
-            return p
+    for player_info in players:
+        if player_info.name == player.name:
+            return player_info
 
     # Fallback (should not be reached)
     return PlayerInfo(
         name=player.name,
-        is_active=gp.is_active,
-        seat_number=gp.seat_number,
-        buy_in=gp.buy_in,
+        is_active=game_player.is_active,
+        seat_number=game_player.seat_number,
+        buy_in=game_player.buy_in,
     )
 
 
@@ -811,7 +830,7 @@ def toggle_player_status(
             status_code=404, detail=f'Player {player_name!r} not in this game'
         )
 
-    gp = (
+    game_player = (
         db.query(GamePlayer)
         .filter(
             GamePlayer.game_id == game_id,
@@ -819,18 +838,18 @@ def toggle_player_status(
         )
         .first()
     )
-    if gp is None:
+    if game_player is None:
         raise HTTPException(
             status_code=404, detail=f'Player {player_name!r} not in this game'
         )
 
-    gp.is_active = payload.is_active
+    game_player.is_active = payload.is_active
     db.commit()
-    db.refresh(gp)
+    db.refresh(game_player)
 
     return PlayerStatusResponse(
         player_name=player.name,
-        is_active=gp.is_active,
+        is_active=game_player.is_active,
     )
 
 
@@ -846,7 +865,7 @@ def _get_game_player(db: Session, game_id: int, player_name: str):
             status_code=404, detail=f'Player {player_name!r} not in this game'
         )
 
-    gp = (
+    game_player = (
         db.query(GamePlayer)
         .filter(
             GamePlayer.game_id == game_id,
@@ -854,11 +873,11 @@ def _get_game_player(db: Session, game_id: int, player_name: str):
         )
         .first()
     )
-    if gp is None:
+    if game_player is None:
         raise HTTPException(
             status_code=404, detail=f'Player {player_name!r} not in this game'
         )
-    return game, player, gp
+    return game, player, game_player
 
 
 @router.post(
@@ -872,7 +891,7 @@ def create_rebuy(
     payload: RebuyCreate,
     db: Annotated[Session, Depends(get_db)],
 ):
-    _game, player, gp = _get_game_player(db, game_id, player_name)
+    _game, player, game_player = _get_game_player(db, game_id, player_name)
 
     rebuy = Rebuy(
         game_id=game_id,
@@ -881,14 +900,16 @@ def create_rebuy(
     )
     db.add(rebuy)
 
-    if not gp.is_active:
-        gp.is_active = True
+    if not game_player.is_active:
+        game_player.is_active = True
 
     # Add rebuy amount to player's chip stack
-    if gp.current_chips is not None:
-        gp.current_chips = round(gp.current_chips + payload.amount, 2)
+    if game_player.current_chips is not None:
+        game_player.current_chips = round(
+            game_player.current_chips + payload.amount, 2
+        )
     else:
-        gp.current_chips = payload.amount
+        game_player.current_chips = payload.amount
 
     db.commit()
     db.refresh(rebuy)
@@ -904,7 +925,7 @@ def list_rebuys(
     player_name: str,
     db: Annotated[Session, Depends(get_db)],
 ):
-    _game, player, _gp = _get_game_player(db, game_id, player_name)
+    _game, player, _game_player = _get_game_player(db, game_id, player_name)
 
     rebuys = (
         db.query(Rebuy)

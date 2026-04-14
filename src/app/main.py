@@ -8,8 +8,8 @@ from .routes import games, hands, images, players, upload, stats, search
 
 app = FastAPI(title='All In Analytics Core Backend', version='1.0.0')
 
-_raw_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:5173')
-_allowed_origins = [origin.strip() for origin in _raw_origins.split(',')]
+_raw_allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:5173')
+_allowed_origins = [origin.strip() for origin in _raw_allowed_origins.split(',')]
 
 if '*' in _allowed_origins:
     raise ValueError(

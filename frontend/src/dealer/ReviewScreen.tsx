@@ -57,22 +57,22 @@ const TERMINAL_RESULTS = ['won', 'lost', 'folded'];
 
 export function ReviewScreen({ gameId, handId, players, community, onSaved, onCancel }: ReviewScreenProps) {
   const participatingPlayers = players.filter(
-    (p) => p.status !== 'not_playing',
+    (player) => player.status !== 'not_playing',
   );
 
   const [editPlayers, setEditPlayers] = useState<EditablePlayer[]>(() =>
-    participatingPlayers.map((p) => {
-      const isAutoFold = !p.card1 && !p.card2 && !TERMINAL_RESULTS.includes(p.status);
+    participatingPlayers.map((player) => {
+      const isAutoFold = !player.card1 && !player.card2 && !TERMINAL_RESULTS.includes(player.status);
       return {
-        name: p.name,
-        card1: p.card1,
-        card2: p.card2,
-        origCard1: p.card1,
-        origCard2: p.card2,
-        result: isAutoFold ? 'folded' : p.status,
-        origResult: p.status,
-        outcomeStreet: p.outcomeStreet,
-        origOutcomeStreet: p.outcomeStreet,
+        name: player.name,
+        card1: player.card1,
+        card2: player.card2,
+        origCard1: player.card1,
+        origCard2: player.card2,
+        result: isAutoFold ? 'folded' : player.status,
+        origResult: player.status,
+        outcomeStreet: player.outcomeStreet,
+        origOutcomeStreet: player.outcomeStreet,
       };
     }),
   );
@@ -108,9 +108,9 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
       setHandPot(hand.pot ?? 0);
       // Store hand descriptions from the hand response (includes folded players)
       const descs: Record<string, string> = {};
-      for (const ph of hand.player_hands) {
-        if (ph.winning_hand_description) {
-          descs[ph.player_name] = ph.winning_hand_description;
+      for (const playerHand of hand.player_hands) {
+        if (playerHand.winning_hand_description) {
+          descs[playerHand.player_name] = playerHand.winning_hand_description;
         }
       }
       setHandDescriptions(descs);
@@ -135,11 +135,11 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
         const proposed = mapEquityToOutcomes(res.equities, players, community);
         if (proposed && proposed.length > 0) {
           setEditPlayers((prev) =>
-            prev.map((ep) => {
-              if (TERMINAL_RESULTS.includes(ep.result)) return ep; // already decided
-              const prop = proposed.find((r) => r.name === ep.name);
-              if (!prop) return ep;
-              return { ...ep, result: prop.status, outcomeStreet: prop.outcomeStreet };
+            prev.map((editPlayer) => {
+              if (TERMINAL_RESULTS.includes(editPlayer.result)) return editPlayer; // already decided
+              const prop = proposed.find((result) => result.name === editPlayer.name);
+              if (!prop) return editPlayer;
+              return { ...editPlayer, result: prop.status, outcomeStreet: prop.outcomeStreet };
             }),
           );
         }
@@ -147,7 +147,7 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
       .catch(() => { /* graceful degradation — no hand descriptions */ });
   }, [gameId, handId]);
 
-  const allTerminal = editPlayers.every((p) => TERMINAL_RESULTS.includes(p.result));
+  const allTerminal = editPlayers.every((player) => TERMINAL_RESULTS.includes(player.result));
   const [savedResults, setSavedResults] = useState<Set<string>>(() => new Set());
   const [savedHolecards, setSavedHolecards] = useState<Set<string>>(() => new Set());
   const [communitySaved, setCommunitySaved] = useState(false);
@@ -180,8 +180,8 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
       setEditCommunity((prev) => ({ ...prev, [cardEditTarget.field]: cardCode }));
     } else {
       setEditPlayers((prev) =>
-        prev.map((p) =>
-          p.name === cardEditTarget.name ? { ...p, [cardEditTarget.field]: cardCode } : p,
+        prev.map((player) =>
+          player.name === cardEditTarget.name ? { ...player, [cardEditTarget.field]: cardCode } : player,
         ),
       );
     }
@@ -194,13 +194,13 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
 
   function handleResultChange(name: string, result: string) {
     setEditPlayers((prev) =>
-      prev.map((p) => (p.name === name ? { ...p, result } : p)),
+      prev.map((player) => (player.name === name ? { ...player, result } : player)),
     );
   }
 
   function handleStreetChange(name: string, street: string) {
     setEditPlayers((prev) =>
-      prev.map((p) => (p.name === name ? { ...p, outcomeStreet: street } : p)),
+      prev.map((player) => (player.name === name ? { ...player, outcomeStreet: street } : player)),
     );
   }
 
@@ -209,17 +209,17 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
     setError(null);
 
     // Compute profit_loss for each player based on pot and contributions
-    const winners = editPlayers.filter((p) => p.result === 'won');
+    const winners = editPlayers.filter((player) => player.result === 'won');
     const numWinners = winners.length || 1;
     const pot = handPot;
 
-    function computeProfitLoss(p: EditablePlayer): number | null {
+    function computeProfitLoss(player: EditablePlayer): number | null {
       if (pot <= 0) return null; // no pot tracked — skip P&L
-      const contribution = playerContributions[p.name] ?? 0;
-      if (p.result === 'won') {
+      const contribution = playerContributions[player.name] ?? 0;
+      if (player.result === 'won') {
         return round2(pot / numWinners - contribution);
       }
-      if (p.result === 'lost' || p.result === 'folded') {
+      if (player.result === 'lost' || player.result === 'folded') {
         return round2(-contribution);
       }
       return null;
@@ -239,35 +239,35 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
     const mutations: LabeledMutation[] = [];
 
     // Patch only dirty player results not already saved
-    for (const p of editPlayers) {
-      const pl = computeProfitLoss(p);
-      const isDirty = p.result !== p.origResult || p.outcomeStreet !== p.origOutcomeStreet || pl !== null;
-      if (isDirty && !savedResults.has(p.name)) {
+    for (const player of editPlayers) {
+      const pl = computeProfitLoss(player);
+      const isDirty = player.result !== player.origResult || player.outcomeStreet !== player.origOutcomeStreet || pl !== null;
+      if (isDirty && !savedResults.has(player.name)) {
         mutations.push({
-          label: `${p.name} result`,
-          promise: patchPlayerResult(gameId, handId, p.name, {
-            result: p.result as ResultEnum,
+          label: `${player.name} result`,
+          promise: patchPlayerResult(gameId, handId, player.name, {
+            result: player.result as ResultEnum,
             profit_loss: pl,
-            outcome_street: (p.outcomeStreet || null) as StreetEnum | null,
+            outcome_street: (player.outcomeStreet || null) as StreetEnum | null,
           }),
           type: 'result',
-          playerName: p.name,
+          playerName: player.name,
         });
       }
     }
 
     // Update hole cards for players whose cards changed (not already saved)
-    for (const p of editPlayers) {
-      const isDirty = p.card1 !== p.origCard1 || p.card2 !== p.origCard2;
-      if (isDirty && !savedHolecards.has(p.name)) {
+    for (const player of editPlayers) {
+      const isDirty = player.card1 !== player.origCard1 || player.card2 !== player.origCard2;
+      if (isDirty && !savedHolecards.has(player.name)) {
         mutations.push({
-          label: `${p.name} cards`,
-          promise: updateHolecards(gameId, handId, p.name, {
-            card_1: p.card1,
-            card_2: p.card2,
+          label: `${player.name} cards`,
+          promise: updateHolecards(gameId, handId, player.name, {
+            card_1: player.card1,
+            card_2: player.card2,
           }),
           type: 'holecards',
-          playerName: p.name,
+          playerName: player.name,
         });
       }
     }
@@ -300,7 +300,7 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
       return;
     }
 
-    const results = await Promise.allSettled(mutations.map((m) => m.promise));
+    const results = await Promise.allSettled(mutations.map((mutation) => mutation.promise));
 
     const failed: string[] = [];
     const newSavedResults = new Set(savedResults);
@@ -381,18 +381,18 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
             <div style={styles.playerRow}>
               <span style={styles.label}>Result:</span>
               <div style={styles.resultGroup}>
-                {RESULT_OPTIONS.map((r) => (
+                {RESULT_OPTIONS.map((resultOption) => (
                   <button
-                    key={r}
-                    data-testid={`review-player-${player.name}-result-${r}`}
+                    key={resultOption}
+                    data-testid={`review-player-${player.name}-result-${resultOption}`}
                     style={{
                       ...styles.resultButton,
-                      ...(player.result === r ? styles.resultButtonActive : {}),
+                      ...(player.result === resultOption ? styles.resultButtonActive : {}),
                     }}
-                    aria-pressed={player.result === r ? 'true' : 'false'}
-                    onClick={() => handleResultChange(player.name, r)}
+                    aria-pressed={player.result === resultOption ? 'true' : 'false'}
+                    onClick={() => handleResultChange(player.name, resultOption)}
                   >
-                    {r.charAt(0).toUpperCase() + r.slice(1)}
+                    {resultOption.charAt(0).toUpperCase() + resultOption.slice(1)}
                   </button>
                 ))}
               </div>
@@ -428,9 +428,9 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
                 onChange={(e) => handleStreetChange(player.name, e.target.value)}
               >
                 <option value="">—</option>
-                {STREET_OPTIONS.map((s) => (
-                  <option key={s} value={s}>
-                    {s.charAt(0).toUpperCase() + s.slice(1)}
+                {STREET_OPTIONS.map((street) => (
+                  <option key={street} value={street}>
+                    {street.charAt(0).toUpperCase() + street.slice(1)}
                   </option>
                 ))}
               </select>
@@ -471,8 +471,8 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
           <div style={styles.dialog}>
             <h3 style={styles.dialogHeading}>Finish Hand?</h3>
             <ul style={styles.dialogList}>
-              {editPlayers.map((p) => (
-                <li key={p.name}>{p.name}: {p.result}</li>
+              {editPlayers.map((player) => (
+                <li key={player.name}>{player.name}: {player.result}</li>
               ))}
             </ul>
             <div style={styles.dialogButtons}>

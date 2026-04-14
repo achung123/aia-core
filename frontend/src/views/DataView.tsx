@@ -50,15 +50,15 @@ type SortColumn = 'date' | 'status' | 'hands' | 'players';
 
 function sortSessions(data: GameSessionListItem[], sortCol: SortColumn, sortAsc: boolean): GameSessionListItem[] {
   return [...data].sort((a, b) => {
-    let av: string | number;
-    let bv: string | number;
-    if (sortCol === 'date') { av = a.game_date || ''; bv = b.game_date || ''; }
-    else if (sortCol === 'status') { av = a.status || ''; bv = b.status || ''; }
-    else if (sortCol === 'hands') { av = a.hand_count ?? -1; bv = b.hand_count ?? -1; }
-    else if (sortCol === 'players') { av = a.player_count ?? -1; bv = b.player_count ?? -1; }
-    else { av = ''; bv = ''; }
-    if (av < bv) return sortAsc ? -1 : 1;
-    if (av > bv) return sortAsc ? 1 : -1;
+    let valueA: string | number;
+    let valueB: string | number;
+    if (sortCol === 'date') { valueA = a.game_date || ''; valueB = b.game_date || ''; }
+    else if (sortCol === 'status') { valueA = a.status || ''; valueB = b.status || ''; }
+    else if (sortCol === 'hands') { valueA = a.hand_count ?? -1; valueB = b.hand_count ?? -1; }
+    else if (sortCol === 'players') { valueA = a.player_count ?? -1; valueB = b.player_count ?? -1; }
+    else { valueA = ''; valueB = ''; }
+    if (valueA < valueB) return sortAsc ? -1 : 1;
+    if (valueA > valueB) return sortAsc ? 1 : -1;
     return 0;
   });
 }
@@ -97,7 +97,7 @@ function CreateGameModal({ onClose, onCreated }: CreateGameModalProps) {
   }, []);
 
   const handleSelectChange = (e: ChangeEvent<HTMLSelectElement>) => {
-    const selected = Array.from(e.target.selectedOptions).map(o => o.value);
+    const selected = Array.from(e.target.selectedOptions).map(option => option.value);
     setSelectedNames(selected);
   };
 
@@ -135,7 +135,7 @@ function CreateGameModal({ onClose, onCreated }: CreateGameModalProps) {
         <label>Players (select multiple)</label>
         <select multiple style={{ width: '100%', height: '120px', marginTop: '0.5rem' }}
           value={selectedNames} onChange={handleSelectChange}>
-          {players.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
+          {players.map(player => <option key={player.name} value={player.name}>{player.name}</option>)}
         </select>
         <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.5rem' }}>
           <input type="text" placeholder="New player name" style={{ flex: 1 }}
@@ -327,8 +327,8 @@ function ZipUploadModal({ onClose, onDone }: ZipUploadModalProps) {
 
 interface PlayerInput {
   name: string;
-  c1: string;
-  c2: string;
+  card1: string;
+  card2: string;
   result: string;
   profitLoss: string;
 }
@@ -349,27 +349,27 @@ function AddHandModal({ session, onClose, onDone }: AddHandModalProps) {
   useEffect(() => {
     fetchHands(session.game_id).then(hands => {
       const names = new Set<string>();
-      hands.forEach(h => (h.player_hands || []).forEach(ph => names.add(ph.player_name)));
-      setPlayerInputs(Array.from(names).map(name => ({ name, c1: '', c2: '', result: '', profitLoss: '' })));
+      hands.forEach(hand => (hand.player_hands || []).forEach(playerHand => names.add(playerHand.player_name)));
+      setPlayerInputs(Array.from(names).map(name => ({ name, card1: '', card2: '', result: '', profitLoss: '' })));
       setLoading(false);
     }).catch(err => { setError(err.message); setLoading(false); });
   }, [session.game_id]);
 
   const updatePlayer = (idx: number, field: keyof PlayerInput, value: string) => {
-    setPlayerInputs(prev => prev.map((p, i) => i === idx ? { ...p, [field]: value } : p));
+    setPlayerInputs(prev => prev.map((existing, i) => i === idx ? { ...existing, [field]: value } : existing));
   };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
     const entries = playerInputs
-      .filter(p => p.c1.trim() && p.c2.trim())
-      .map(p => ({
-        player_name: p.name,
-        card_1: p.c1.trim().toUpperCase(),
-        card_2: p.c2.trim().toUpperCase(),
-        result: (p.result || null) as ResultEnum | null,
-        profit_loss: p.profitLoss ? parseFloat(p.profitLoss) : null,
+      .filter(playerInput => playerInput.card1.trim() && playerInput.card2.trim())
+      .map(playerInput => ({
+        player_name: playerInput.name,
+        card_1: playerInput.card1.trim().toUpperCase(),
+        card_2: playerInput.card2.trim().toUpperCase(),
+        result: (playerInput.result || null) as ResultEnum | null,
+        profit_loss: playerInput.profitLoss ? parseFloat(playerInput.profitLoss) : null,
       }));
     if (!entries.length) { setError('At least one player must have cards'); return; }
     setSubmitting(true);
@@ -411,21 +411,21 @@ function AddHandModal({ session, onClose, onDone }: AddHandModalProps) {
             <legend>Player Hands</legend>
             {loading && <p className="loading">Loading players…</p>}
             {!loading && playerInputs.length === 0 && <p className="empty-msg">No players found in existing hands.</p>}
-            {playerInputs.map((p, i) => (
-              <div key={p.name} className="player-row">
-                <strong>{p.name}</strong>
+            {playerInputs.map((playerInput, i) => (
+              <div key={playerInput.name} className="player-row">
+                <strong>{playerInput.name}</strong>
                 <input type="text" placeholder="e.g. AH" style={{ width: '60px' }}
-                  value={p.c1} onChange={e => updatePlayer(i, 'c1', e.target.value)} />
+                  value={playerInput.card1} onChange={e => updatePlayer(i, 'card1', e.target.value)} />
                 <input type="text" placeholder="e.g. KD" style={{ width: '60px' }}
-                  value={p.c2} onChange={e => updatePlayer(i, 'c2', e.target.value)} />
-                <select value={p.result} onChange={e => updatePlayer(i, 'result', e.target.value)}>
+                  value={playerInput.card2} onChange={e => updatePlayer(i, 'card2', e.target.value)} />
+                <select value={playerInput.result} onChange={e => updatePlayer(i, 'result', e.target.value)}>
                   <option value="">--</option>
                   <option value="win">Win</option>
                   <option value="loss">Loss</option>
                   <option value="fold">Fold</option>
                 </select>
                 <input type="number" step="0.01" placeholder="0" style={{ width: '70px' }}
-                  value={p.profitLoss} onChange={e => updatePlayer(i, 'profitLoss', e.target.value)} />
+                  value={playerInput.profitLoss} onChange={e => updatePlayer(i, 'profitLoss', e.target.value)} />
               </div>
             ))}
           </fieldset>
@@ -444,10 +444,10 @@ function AddHandModal({ session, onClose, onDone }: AddHandModalProps) {
 
 interface PlayerEdit {
   playerName: string;
-  origC1: string | null;
-  origC2: string | null;
-  c1: string;
-  c2: string;
+  origCard1: string | null;
+  origCard2: string | null;
+  card1: string;
+  card2: string;
   result: string | null;
   profitLoss: number | null;
 }
@@ -468,21 +468,21 @@ function EditHandModal({ gameId, hand, onClose, onDone }: EditHandModalProps) {
     river: hand.river || '',
   });
   const [playerEdits, setPlayerEdits] = useState<PlayerEdit[]>(
-    (hand.player_hands || []).map(ph => ({
-      playerName: ph.player_name,
-      origC1: ph.card_1,
-      origC2: ph.card_2,
-      c1: ph.card_1 || '',
-      c2: ph.card_2 || '',
-      result: ph.result,
-      profitLoss: ph.profit_loss,
+    (hand.player_hands || []).map(playerHand => ({
+      playerName: playerHand.player_name,
+      origCard1: playerHand.card_1,
+      origCard2: playerHand.card_2,
+      card1: playerHand.card_1 || '',
+      card2: playerHand.card_2 || '',
+      result: playerHand.result,
+      profitLoss: playerHand.profit_loss,
     }))
   );
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const updatePlayerEdit = (idx: number, field: 'c1' | 'c2', value: string) => {
-    setPlayerEdits(prev => prev.map((p, i) => i === idx ? { ...p, [field]: value } : p));
+  const updatePlayerEdit = (idx: number, field: 'card1' | 'card2', value: string) => {
+    setPlayerEdits(prev => prev.map((existing, i) => i === idx ? { ...existing, [field]: value } : existing));
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -507,11 +507,11 @@ function EditHandModal({ gameId, hand, onClose, onDone }: EditHandModalProps) {
         });
       }
 
-      for (const pe of playerEdits) {
-        const newC1 = pe.c1.trim().toUpperCase();
-        const newC2 = pe.c2.trim().toUpperCase();
-        if (newC1 !== (pe.origC1 || '').toUpperCase() || newC2 !== (pe.origC2 || '').toUpperCase()) {
-          await updateHolecards(gameId, hand.hand_number, pe.playerName, {
+      for (const playerEdit of playerEdits) {
+        const newC1 = playerEdit.card1.trim().toUpperCase();
+        const newC2 = playerEdit.card2.trim().toUpperCase();
+        if (newC1 !== (playerEdit.origCard1 || '').toUpperCase() || newC2 !== (playerEdit.origCard2 || '').toUpperCase()) {
+          await updateHolecards(gameId, hand.hand_number, playerEdit.playerName, {
             card_1: newC1,
             card_2: newC2,
           });
@@ -545,15 +545,15 @@ function EditHandModal({ gameId, hand, onClose, onDone }: EditHandModalProps) {
           </fieldset>
           <fieldset>
             <legend>Player Hole Cards</legend>
-            {playerEdits.map((pe, i) => (
-              <div key={pe.playerName} className="player-row">
-                <strong>{pe.playerName}</strong>
+            {playerEdits.map((playerEdit, i) => (
+              <div key={playerEdit.playerName} className="player-row">
+                <strong>{playerEdit.playerName}</strong>
                 <input type="text" style={{ width: '60px' }}
-                  value={pe.c1} onChange={e => updatePlayerEdit(i, 'c1', e.target.value)} />
+                  value={playerEdit.card1} onChange={e => updatePlayerEdit(i, 'card1', e.target.value)} />
                 <input type="text" style={{ width: '60px' }}
-                  value={pe.c2} onChange={e => updatePlayerEdit(i, 'c2', e.target.value)} />
+                  value={playerEdit.card2} onChange={e => updatePlayerEdit(i, 'card2', e.target.value)} />
                 <span style={{ color: '#64748b', marginLeft: '0.5rem', fontSize: '0.82rem' }}>
-                  {pe.result || ''} {pe.profitLoss ?? ''}
+                  {playerEdit.result || ''} {playerEdit.profitLoss ?? ''}
                 </span>
               </div>
             ))}
@@ -588,10 +588,10 @@ function HandDetails({ session, onRefresh }: HandDetailsProps) {
       .catch(err => setError(err.message));
   }, [session.game_id]);
 
-  const handleDelete = async (h: HandResponse) => {
-    if (!confirm(`Delete hand #${h.hand_number}? This cannot be undone.`)) return;
+  const handleDelete = async (handToDelete: HandResponse) => {
+    if (!confirm(`Delete hand #${handToDelete.hand_number}? This cannot be undone.`)) return;
     try {
-      await deleteHand(session.game_id, h.hand_number);
+      await deleteHand(session.game_id, handToDelete.hand_number);
       onRefresh();
     } catch (err: unknown) {
       alert(`Delete failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -659,28 +659,28 @@ function HandDetails({ session, onRefresh }: HandDetailsProps) {
               </tr>
             </thead>
             <tbody>
-              {hands.map(h => (
-                <tr key={h.hand_id}>
-                  <td>{h.hand_number ?? '—'}</td>
-                  <td>{formatCards([h.flop_1, h.flop_2, h.flop_3])}</td>
-                  <td>{formatCard(h.turn)}</td>
-                  <td>{formatCard(h.river)}</td>
+              {hands.map(handRecord => (
+                <tr key={handRecord.hand_id}>
+                  <td>{handRecord.hand_number ?? '—'}</td>
+                  <td>{formatCards([handRecord.flop_1, handRecord.flop_2, handRecord.flop_3])}</td>
+                  <td>{formatCard(handRecord.turn)}</td>
+                  <td>{formatCard(handRecord.river)}</td>
                   <td>
-                    {(h.player_hands || []).map((p: PlayerHandResponse, idx: number) => {
-                      const cards = [p.card_1, p.card_2].filter(Boolean) as string[];
+                    {(handRecord.player_hands || []).map((playerHand: PlayerHandResponse, idx: number) => {
+                      const cards = [playerHand.card_1, playerHand.card_2].filter(Boolean) as string[];
                       const hand = cards.length ? formatCards(cards) : '??';
-                      const street = p.outcome_street ? ` (${p.outcome_street})` : '';
+                      const street = playerHand.outcome_street ? ` (${playerHand.outcome_street})` : '';
                       return (
                         <div key={idx} style={{ whiteSpace: 'nowrap' }}>
-                          {p.player_name} [{hand}] {p.result || '?'}{street}
+                          {playerHand.player_name} [{hand}] {playerHand.result || '?'}{street}
                         </div>
                       );
                     })}
-                    {(h.player_hands || []).length === 0 && '—'}
+                    {(handRecord.player_hands || []).length === 0 && '—'}
                   </td>
                   <td style={{ display: 'flex', gap: '0.25rem' }}>
-                    <button type="button" className="dv-btn dv-btn-sm" onClick={e => { e.stopPropagation(); setEditingHand(h); }}>Edit</button>
-                    <button type="button" className="dv-btn dv-btn-sm dv-btn-danger" onClick={e => { e.stopPropagation(); handleDelete(h); }}>🗑</button>
+                    <button type="button" className="dv-btn dv-btn-sm" onClick={e => { e.stopPropagation(); setEditingHand(handRecord); }}>Edit</button>
+                    <button type="button" className="dv-btn dv-btn-sm dv-btn-danger" onClick={e => { e.stopPropagation(); handleDelete(handRecord); }}>🗑</button>
                   </td>
                 </tr>
               ))}
@@ -688,31 +688,31 @@ function HandDetails({ session, onRefresh }: HandDetailsProps) {
           </table>
           {/* Mobile: card layout */}
           <div className="hand-cards">
-            {hands.map(h => (
-              <div key={h.hand_id} className="hand-card">
+            {hands.map(handRecord => (
+              <div key={handRecord.hand_id} className="hand-card">
                 <div className="hand-card-header">
-                  <span className="hand-card-num">Hand #{h.hand_number ?? '?'}</span>
+                  <span className="hand-card-num">Hand #{handRecord.hand_number ?? '?'}</span>
                   <span className="hand-card-actions">
-                    <button type="button" className="dv-btn dv-btn-sm" onClick={e => { e.stopPropagation(); setEditingHand(h); }}>Edit</button>
-                    <button type="button" className="dv-btn dv-btn-sm dv-btn-danger" onClick={e => { e.stopPropagation(); handleDelete(h); }}>🗑</button>
+                    <button type="button" className="dv-btn dv-btn-sm" onClick={e => { e.stopPropagation(); setEditingHand(handRecord); }}>Edit</button>
+                    <button type="button" className="dv-btn dv-btn-sm dv-btn-danger" onClick={e => { e.stopPropagation(); handleDelete(handRecord); }}>🗑</button>
                   </span>
                 </div>
                 <div className="hand-card-community">
-                  <span className="hand-card-label">Flop</span> {formatCards([h.flop_1, h.flop_2, h.flop_3])}
+                  <span className="hand-card-label">Flop</span> {formatCards([handRecord.flop_1, handRecord.flop_2, handRecord.flop_3])}
                   {' · '}
-                  <span className="hand-card-label">Turn</span> {formatCard(h.turn)}
+                  <span className="hand-card-label">Turn</span> {formatCard(handRecord.turn)}
                   {' · '}
-                  <span className="hand-card-label">River</span> {formatCard(h.river)}
+                  <span className="hand-card-label">River</span> {formatCard(handRecord.river)}
                 </div>
-                {(h.player_hands || []).map((p: PlayerHandResponse, idx: number) => {
-                  const cards = [p.card_1, p.card_2].filter(Boolean) as string[];
+                {(handRecord.player_hands || []).map((playerHand: PlayerHandResponse, idx: number) => {
+                  const cards = [playerHand.card_1, playerHand.card_2].filter(Boolean) as string[];
                   const hand = cards.length ? formatCards(cards) : '??';
-                  const street = p.outcome_street ? ` (${p.outcome_street})` : '';
+                  const street = playerHand.outcome_street ? ` (${playerHand.outcome_street})` : '';
                   return (
                     <div key={idx} className="hand-card-player">
-                      <span className="hand-card-player-name">{p.player_name}</span>
+                      <span className="hand-card-player-name">{playerHand.player_name}</span>
                       <span className="hand-card-player-cards">{hand}</span>
-                      <span className="hand-card-player-result">{p.result || '?'}{street}</span>
+                      <span className="hand-card-player-result">{playerHand.result || '?'}{street}</span>
                     </div>
                   );
                 })}
@@ -789,9 +789,9 @@ export function DataView() {
             </tr>
           </thead>
           <tbody id="session-tbody">
-            {sorted.map(s => (
-              <SessionRow key={s.game_id} session={s} expanded={expandedId === s.game_id}
-                onClick={() => handleRowClick(s.game_id)} onRefresh={handleRefresh} />
+            {sorted.map(session => (
+              <SessionRow key={session.game_id} session={session} expanded={expandedId === session.game_id}
+                onClick={() => handleRowClick(session.game_id)} onRefresh={handleRefresh} />
             ))}
           </tbody>
         </table>

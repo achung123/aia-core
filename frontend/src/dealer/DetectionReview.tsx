@@ -89,7 +89,7 @@ export function DetectionReview({ detections, imageUrl, mode, targetName, onConf
   }
 
   function handleConfirm(): void {
-    const cardValues = cards.map((d, i) => corrections[i] || d.detected_value);
+    const cardValues = cards.map((detection, i) => corrections[i] || detection.detected_value);
     onConfirm(targetName, cardValues);
   }
 
@@ -107,10 +107,10 @@ export function DetectionReview({ detections, imageUrl, mode, targetName, onConf
       )}
 
       <div style={styles.cardRow}>
-        {cards.map((d, i) => {
+        {cards.map((detection, i) => {
           const value = getCorrectedValue(i);
           const { rank, suit } = formatCard(value ?? '');
-          const conf = Math.round(d.confidence * 100);
+          const confidencePercent = Math.round(detection.confidence * 100);
           const color = SUIT_COLORS[suit] || '#1e293b';
           const isCorrected = i in corrections;
           const labelStyle = isCorrected
@@ -123,7 +123,7 @@ export function DetectionReview({ detections, imageUrl, mode, targetName, onConf
                 <span data-testid={`card-position-${i}`} style={styles.positionLabel}>{positionLabel}</span>
               )}
               <span style={{ ...styles.cardText, color }}>{rank}{suit}</span>
-              <span style={styles.confidence}>{isCorrected ? 'corrected' : `${conf}%`}</span>
+              <span style={styles.confidence}>{isCorrected ? 'corrected' : `${confidencePercent}%`}</span>
             </div>
           );
         })}
@@ -132,18 +132,18 @@ export function DetectionReview({ detections, imageUrl, mode, targetName, onConf
       {altIndex !== null && cards[altIndex]?.alternatives && (
         <div data-testid="alternatives-panel" style={styles.altPanel}>
           <div style={styles.altScroll}>
-            {cards[altIndex].alternatives!.map((alt, i) => {
-              const { rank, suit } = formatCard(alt.value);
+            {cards[altIndex].alternatives!.map((alternative, i) => {
+              const { rank, suit } = formatCard(alternative.value);
               const color = SUIT_COLORS[suit] || '#1e293b';
               return (
                 <button
                   key={i}
                   data-testid={`alt-card-${i}`}
                   style={{ ...styles.altButton, color }}
-                  onClick={() => handleAltSelect(alt.value)}
+                  onClick={() => handleAltSelect(alternative.value)}
                 >
                   <span style={styles.altCardText}>{rank}{suit}</span>
-                  <span style={styles.altConfidence}>{Math.round(alt.confidence * 100)}%</span>
+                  <span style={styles.altConfidence}>{Math.round(alternative.confidence * 100)}%</span>
                 </button>
               );
             })}

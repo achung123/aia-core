@@ -29,11 +29,11 @@ def get_legal_actions(
     """
     big_blind = blind_amounts[1]
     contributions: dict[int, float] = {}
-    for a in actions_this_street:
-        pid = a['player_id']
-        amt = a.get('amount') or 0
-        if a['action'] in ('blind', 'call', 'bet', 'raise'):
-            contributions[pid] = contributions.get(pid, 0) + amt
+    for action_record in actions_this_street:
+        player_id = action_record['player_id']
+        action_amount = action_record.get('amount') or 0
+        if action_record['action'] in ('blind', 'call', 'bet', 'raise'):
+            contributions[player_id] = contributions.get(player_id, 0) + action_amount
 
     max_contribution = max(contributions.values()) if contributions else 0
     my_contribution = contributions.get(current_player_id, 0)
@@ -45,7 +45,8 @@ def get_legal_actions(
         # "bet" only when no money is on the table this street;
         # otherwise it's "raise" (e.g. BB option preflop, or after a bet was matched).
         has_wager = any(
-            a['action'] in ('blind', 'bet', 'raise') for a in actions_this_street
+            action_record['action'] in ('blind', 'bet', 'raise')
+            for action_record in actions_this_street
         )
         legal = ['fold', 'check', 'raise'] if has_wager else ['fold', 'check', 'bet']
 
@@ -67,22 +68,27 @@ def get_legal_actions(
 def _last_raise_increment(actions_this_street: list[dict], big_blind: float) -> float:
     """Return the current minimum raise increment for the street."""
     last_raise_increment = big_blind
-    for a in actions_this_street:
-        amt = a.get('amount') or 0
-        if a['action'] in ('bet', 'raise'):
-            prev_contribs: dict[int, float] = {}
-            for prev in actions_this_street:
-                if prev is a:
+    for action_record in actions_this_street:
+        action_amount = action_record.get('amount') or 0
+        if action_record['action'] in ('bet', 'raise'):
+            previous_contributions: dict[int, float] = {}
+            for previous_action in actions_this_street:
+                if previous_action is action_record:
                     break
-                ppid = prev['player_id']
-                if prev['action'] in ('blind', 'call', 'bet', 'raise'):
-                    prev_contribs[ppid] = prev_contribs.get(ppid, 0) + (
-                        prev.get('amount') or 0
+                previous_player_id = previous_action['player_id']
+                if previous_action['action'] in ('blind', 'call', 'bet', 'raise'):
+                    previous_contributions[previous_player_id] = (
+                        previous_contributions.get(previous_player_id, 0)
+                        + (previous_action.get('amount') or 0)
                     )
-            max_before = max(prev_contribs.values()) if prev_contribs else 0.0
-            raiser_before = prev_contribs.get(a['player_id'], 0.0)
+            max_before = (
+                max(previous_contributions.values()) if previous_contributions else 0.0
+            )
+            raiser_before = previous_contributions.get(
+                action_record['player_id'], 0.0
+            )
             call_needed = max_before - raiser_before
-            increment = amt - call_needed
+            increment = action_amount - call_needed
             if increment > 0:
                 last_raise_increment = increment
     return round(last_raise_increment, 2)
@@ -183,9 +189,9 @@ def compute_side_pots(
         return []
 
     active_contributions = {
-        pid: amt
-        for pid, amt in player_contributions.items()
-        if pid in non_folded_player_ids
+        player_id: contribution_amount
+        for player_id, contribution_amount in player_contributions.items()
+        if player_id in non_folded_player_ids
     }
 
     if not active_contributions:
@@ -195,19 +201,19 @@ def compute_side_pots(
 
     pots = []
     prev_level = 0.0
-    remaining = [pid for pid, _ in sorted_players]
+    remaining = [player_id for player_id, _ in sorted_players]
 
-    for pid, contrib in sorted_players:
-        if contrib > prev_level:
-            pot_amount = round((contrib - prev_level) * len(remaining), 2)
+    for player_id, contribution_amount in sorted_players:
+        if contribution_amount > prev_level:
+            pot_amount = round((contribution_amount - prev_level) * len(remaining), 2)
             pots.append(
                 {
                     'amount': pot_amount,
                     'eligible_player_ids': list(remaining),
                 }
             )
-            prev_level = contrib
-        remaining.remove(pid)
+            prev_level = contribution_amount
+        remaining.remove(player_id)
 
     if len(pots) <= 1:
         return []
@@ -237,34 +243,38 @@ def is_street_complete(
 
     # Find the last aggressor index
     last_aggressor_idx = -1
-    for i, a in enumerate(actions_this_street):
-        if a['action'] in ('bet', 'raise'):
-            last_aggressor_idx = i
+    for action_index, action_record in enumerate(actions_this_street):
+        if action_record['action'] in ('bet', 'raise'):
+            last_aggressor_idx = action_index
 
     # For preflop with no voluntary raise, use BB blind as reference
     if last_aggressor_idx == -1 and phase == 'preflop':
-        for i, a in enumerate(actions_this_street):
-            if a['action'] == 'blind' and a['player_id'] == bb_player_id:
-                last_aggressor_idx = i
+        for action_index, action_record in enumerate(actions_this_street):
+            if (
+                action_record['action'] == 'blind'
+                and action_record['player_id'] == bb_player_id
+            ):
+                last_aggressor_idx = action_index
 
     if last_aggressor_idx == -1:
         # Post-flop, no bets — has everyone checked?
         checked_players = {
-            a['player_id']
-            for a in actions_this_street
-            if a['action'] == 'check' and a['player_id'] in acting_players
+            action_record['player_id']
+            for action_record in actions_this_street
+            if action_record['action'] == 'check'
+            and action_record['player_id'] in acting_players
         }
         return acting_players <= checked_players
 
     # Count voluntary actors since the last aggressor
     actors_since = set()
-    for i, a in enumerate(actions_this_street):
+    for action_index, action_record in enumerate(actions_this_street):
         if (
-            i > last_aggressor_idx
-            and a['player_id'] in acting_players
-            and a['action'] != 'blind'
+            action_index > last_aggressor_idx
+            and action_record['player_id'] in acting_players
+            and action_record['action'] != 'blind'
         ):
-            actors_since.add(a['player_id'])
+            actors_since.add(action_record['player_id'])
 
     # Aggressor counts if their action was voluntary (not a blind)
     aggressor_action = actions_this_street[last_aggressor_idx]
@@ -279,11 +289,13 @@ def is_street_complete(
 
     # Check contributions are equalized among acting players
     contributions: dict[int, float] = {}
-    for a in actions_this_street:
-        pid = a['player_id']
-        amt = a.get('amount') or 0
-        if a['action'] in ('blind', 'call', 'bet', 'raise'):
-            contributions[pid] = contributions.get(pid, 0) + amt
+    for action_record in actions_this_street:
+        player_id = action_record['player_id']
+        action_amount = action_record.get('amount') or 0
+        if action_record['action'] in ('blind', 'call', 'bet', 'raise'):
+            contributions[player_id] = contributions.get(player_id, 0) + action_amount
 
-    acting_contribs = {round(contributions.get(pid, 0), 2) for pid in acting_players}
+    acting_contribs = {
+        round(contributions.get(player_id, 0), 2) for player_id in acting_players
+    }
     return len(acting_contribs) <= 1

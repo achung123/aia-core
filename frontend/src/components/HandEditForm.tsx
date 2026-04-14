@@ -59,14 +59,14 @@ export function HandEditForm({ sessionId, handData, onSave, onCancel }: HandEdit
   });
 
   const [playerRows, setPlayerRows] = useState<PlayerEditRow[]>(() =>
-    (handData.player_hands || []).map(ph => ({
-      playerName: ph.player_name,
-      originalCard1: ph.card_1 || '',
-      originalCard2: ph.card_2 || '',
-      card1: mkField(ph.card_1 || ''),
-      card2: mkField(ph.card_2 || ''),
-      result: ph.result || '',
-      profitLoss: ph.profit_loss != null ? String(ph.profit_loss) : '',
+    (handData.player_hands || []).map(playerHand => ({
+      playerName: playerHand.player_name,
+      originalCard1: playerHand.card_1 || '',
+      originalCard2: playerHand.card_2 || '',
+      card1: mkField(playerHand.card_1 || ''),
+      card2: mkField(playerHand.card_2 || ''),
+      result: playerHand.result || '',
+      profitLoss: playerHand.profit_loss != null ? String(playerHand.profit_loss) : '',
     }))
   );
 
@@ -84,7 +84,7 @@ export function HandEditForm({ sessionId, handData, onSave, onCancel }: HandEdit
         comm.flop_3.value,
         comm.turn.value,
         comm.river.value,
-        ...rows.flatMap(r => [r.card1.value, r.card2.value]),
+        ...rows.flatMap(row => [row.card1.value, row.card2.value]),
       ].filter(v => v.trim());
 
       const dupes = findDuplicateCards(allVals);
@@ -102,10 +102,10 @@ export function HandEditForm({ sessionId, handData, onSave, onCancel }: HandEdit
           turn: markDup(comm.turn),
           river: markDup(comm.river),
         },
-        rows: rows.map(r => ({
-          ...r,
-          card1: markDup(r.card1),
-          card2: markDup(r.card2),
+        rows: rows.map(row => ({
+          ...row,
+          card1: markDup(row.card1),
+          card2: markDup(row.card2),
         })),
       };
     },
@@ -128,15 +128,15 @@ export function HandEditForm({ sessionId, handData, onSave, onCancel }: HandEdit
 
   function handlePlayerCardChange(idx: number, field: 'card1' | 'card2', value: string) {
     setPlayerRows(prev =>
-      prev.map((r, i) => (i === idx ? { ...r, [field]: { ...r[field], value } } : r))
+      prev.map((row, i) => (i === idx ? { ...row, [field]: { ...row[field], value } } : row))
     );
   }
 
   function handlePlayerCardBlur(idx: number, field: 'card1' | 'card2') {
     setPlayerRows(prev => {
-      const rows = prev.map((r, i) => {
-        if (i !== idx) return r;
-        return { ...r, [field]: validateCardField(r[field], true) };
+      const rows = prev.map((row, i) => {
+        if (i !== idx) return row;
+        return { ...row, [field]: validateCardField(row[field], true) };
       });
       const { comm, rows: dupRows } = runDuplicateCheck(community, rows);
       setCommunity(comm);
@@ -161,10 +161,10 @@ export function HandEditForm({ sessionId, handData, onSave, onCancel }: HandEdit
       river: validateCardField(community.river, false),
     };
 
-    let validatedRows = playerRows.map(r => ({
-      ...r,
-      card1: validateCardField(r.card1, true),
-      card2: validateCardField(r.card2, true),
+    let validatedRows = playerRows.map(row => ({
+      ...row,
+      card1: validateCardField(row.card1, true),
+      card2: validateCardField(row.card2, true),
     }));
 
     const dupResult = runDuplicateCheck(validatedComm, validatedRows);
@@ -180,7 +180,7 @@ export function HandEditForm({ sessionId, handData, onSave, onCancel }: HandEdit
       validatedComm.flop_3,
       validatedComm.turn,
       validatedComm.river,
-      ...validatedRows.flatMap(r => [r.card1, r.card2]),
+      ...validatedRows.flatMap(row => [row.card1, row.card2]),
     ];
 
     if (allFields.some(hasAnyError)) {
@@ -233,7 +233,7 @@ export function HandEditForm({ sessionId, handData, onSave, onCancel }: HandEdit
 
       const updatedPlayerHands = await Promise.all(
         validatedRows.map(async row => {
-          const origHand = handData.player_hands.find(ph => ph.player_name === row.playerName);
+          const origHand = handData.player_hands.find(playerHand => playerHand.player_name === row.playerName);
           if (!origHand) return null;
 
           const c1Changed = cardChanged(row.card1.value, row.originalCard1);
@@ -253,12 +253,12 @@ export function HandEditForm({ sessionId, handData, onSave, onCancel }: HandEdit
               }
             );
             // updateHolecards returns HandResponse, extract player hand
-            const updatedPh = (resp as HandResponse).player_hands?.find(
-              ph => ph.player_name === origHand.player_name
+            const updatedPlayerHand = (resp as HandResponse).player_hands?.find(
+              playerHand => playerHand.player_name === origHand.player_name
             );
-            if (updatedPh) {
-              card1 = updatedPh.card_1;
-              card2 = updatedPh.card_2;
+            if (updatedPlayerHand) {
+              card1 = updatedPlayerHand.card_1;
+              card2 = updatedPlayerHand.card_2;
             } else {
               card1 = normalizeCard(row.card1.value);
               card2 = normalizeCard(row.card2.value);
@@ -327,19 +327,19 @@ export function HandEditForm({ sessionId, handData, onSave, onCancel }: HandEdit
         <fieldset>
           <legend>Community Cards</legend>
           {renderCardField('Flop 1', `edit-${handBase}-community-flop_1`, community.flop_1, true,
-            v => handleCommunityChange('flop_1', v),
+            value => handleCommunityChange('flop_1', value),
             () => handleCommunityBlur('flop_1', true))}
           {renderCardField('Flop 2', `edit-${handBase}-community-flop_2`, community.flop_2, true,
-            v => handleCommunityChange('flop_2', v),
+            value => handleCommunityChange('flop_2', value),
             () => handleCommunityBlur('flop_2', true))}
           {renderCardField('Flop 3', `edit-${handBase}-community-flop_3`, community.flop_3, true,
-            v => handleCommunityChange('flop_3', v),
+            value => handleCommunityChange('flop_3', value),
             () => handleCommunityBlur('flop_3', true))}
           {renderCardField('Turn', `edit-${handBase}-community-turn`, community.turn, false,
-            v => handleCommunityChange('turn', v),
+            value => handleCommunityChange('turn', value),
             () => handleCommunityBlur('turn', false))}
           {renderCardField('River', `edit-${handBase}-community-river`, community.river, false,
-            v => handleCommunityChange('river', v),
+            value => handleCommunityChange('river', value),
             () => handleCommunityBlur('river', false))}
         </fieldset>
 
@@ -352,10 +352,10 @@ export function HandEditForm({ sessionId, handData, onSave, onCancel }: HandEdit
               <div className="player-row" key={row.playerName}>
                 <strong>{row.playerName}</strong>
                 {renderCardField('Card 1', `${idBase}-card1`, row.card1, true,
-                  v => handlePlayerCardChange(idx, 'card1', v),
+                  value => handlePlayerCardChange(idx, 'card1', value),
                   () => handlePlayerCardBlur(idx, 'card1'))}
                 {renderCardField('Card 2', `${idBase}-card2`, row.card2, true,
-                  v => handlePlayerCardChange(idx, 'card2', v),
+                  value => handlePlayerCardChange(idx, 'card2', value),
                   () => handlePlayerCardBlur(idx, 'card2'))}
 
                 <label htmlFor={`edit-result-${idBase}`}>Result</label>

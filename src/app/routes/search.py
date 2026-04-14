@@ -78,7 +78,7 @@ def search_hands(
     rows = query.offset((page - 1) * per_page).limit(per_page).all()
 
     results: list[HandSearchResult] = []
-    for hand, ph, player_obj, game in rows:
+    for hand, player_hand, player_obj, game in rows:
         results.append(
             HandSearchResult(
                 hand_id=hand.hand_id,
@@ -92,15 +92,15 @@ def search_hands(
                 river=hand.river,
                 created_at=hand.created_at,
                 player_hand=PlayerHandResponse(
-                    player_hand_id=ph.player_hand_id,
-                    hand_id=ph.hand_id,
-                    player_id=ph.player_id,
+                    player_hand_id=player_hand.player_hand_id,
+                    hand_id=player_hand.hand_id,
+                    player_id=player_hand.player_id,
                     player_name=player_obj.name,
-                    card_1=ph.card_1,
-                    card_2=ph.card_2,
-                    result=ph.result,
-                    profit_loss=ph.profit_loss,
-                    outcome_street=ph.outcome_street,
+                    card_1=player_hand.card_1,
+                    card_2=player_hand.card_2,
+                    result=player_hand.result,
+                    profit_loss=player_hand.profit_loss,
+                    outcome_street=player_hand.outcome_street,
                 ),
             )
         )

@@ -17,7 +17,7 @@ export function inferOutcomeStreet(community: CommunityCards): string {
 export function isShowdownEnabled(community: CommunityCards, players: Player[]): boolean {
   if (!community.flopRecorded) return false;
   const nonFoldedWithCards = players.filter(
-    (p) => p.status !== 'folded' && p.status !== 'not_playing' && p.card1 && p.card2,
+    (player) => player.status !== 'folded' && player.status !== 'not_playing' && player.card1 && player.card2,
   );
   return nonFoldedWithCards.length >= 2;
 }
@@ -30,7 +30,7 @@ export function mapEquityToOutcomes(
   const street = inferOutcomeStreet(community);
 
   const activePlayers = players.filter(
-    (p) => p.status !== 'folded' && p.status !== 'not_playing' && p.card1 && p.card2,
+    (player) => player.status !== 'folded' && player.status !== 'not_playing' && player.card1 && player.card2,
   );
 
   if (activePlayers.length === 0) return null;
@@ -43,10 +43,10 @@ export function mapEquityToOutcomes(
   // AC2: Map equity to outcomes
   const results: ProposedResult[] = [];
   for (const player of activePlayers) {
-    const eq = equities.find((e) => e.player_name === player.name);
-    if (!eq) return null; // inconclusive — missing equity data
+    const equityEntry = equities.find((entry) => entry.player_name === player.name);
+    if (!equityEntry) return null; // inconclusive — missing equity data
 
-    if (eq.equity > 0.001) {
+    if (equityEntry.equity > 0.001) {
       results.push({ name: player.name, status: 'won', outcomeStreet: street });
     } else {
       results.push({ name: player.name, status: 'lost', outcomeStreet: street });

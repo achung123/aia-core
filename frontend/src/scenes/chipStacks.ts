@@ -51,7 +51,7 @@ export function createChipStack(scene: THREE.Scene, position: THREE.Vector3): Ch
 
   function setHeight(targetHeight: number, color: number, duration: number = ANIM_DURATION): void {
     const col = new THREE.Color(color);
-    materials.forEach((m) => m.color.set(col));
+    materials.forEach((material) => material.color.set(col));
 
     if (animId !== null) {
       cancelAnimationFrame(animId);
@@ -81,7 +81,7 @@ export function createChipStack(scene: THREE.Scene, position: THREE.Vector3): Ch
       animId = null;
     }
     discGeom.dispose();
-    materials.forEach((m) => m.dispose());
+    materials.forEach((material) => material.dispose());
     scene.remove(group);
   }
 
@@ -117,10 +117,10 @@ export function createChipStacks(
     // Find max positive P/L and max absolute negative P/L for scaling
     let maxPL = 0;
     let maxLoss = 0;
-    Object.values(plObj).forEach((v) => {
-      if (v !== null && v !== undefined) {
-        if (v > maxPL) maxPL = v;
-        if (v < 0 && Math.abs(v) > maxLoss) maxLoss = Math.abs(v);
+    Object.values(plObj).forEach((value) => {
+      if (value !== null && value !== undefined) {
+        if (value > maxPL) maxPL = value;
+        if (value < 0 && Math.abs(value) > maxLoss) maxLoss = Math.abs(value);
       }
     });
 
@@ -153,7 +153,7 @@ export function createChipStacks(
   }
 
   function dispose(): void {
-    stacks.forEach((s) => s.dispose());
+    stacks.forEach((stack) => stack.dispose());
   }
 
   return { updateChipStacks, dispose };

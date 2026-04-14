@@ -13,11 +13,11 @@ logger = logging.getLogger('app.middleware')
 class RequestIdMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
         request_id = str(uuid.uuid4())
-        start = time.perf_counter()
+        start_time = time.perf_counter()
         try:
             response = await call_next(request)
         except Exception:
-            elapsed_ms = (time.perf_counter() - start) * 1000
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
             log_data = json.dumps(
                 {
                     'request_id': request_id,
@@ -32,7 +32,7 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
             response.headers['X-Request-Id'] = request_id
             response.headers['X-Response-Time-Ms'] = f'{elapsed_ms:.2f}'
             return response
-        elapsed_ms = (time.perf_counter() - start) * 1000
+        elapsed_ms = (time.perf_counter() - start_time) * 1000
         response.headers['X-Request-Id'] = request_id
         response.headers['X-Response-Time-Ms'] = f'{elapsed_ms:.2f}'
 

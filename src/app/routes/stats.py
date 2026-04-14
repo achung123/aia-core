@@ -57,22 +57,22 @@ def get_player_stats(
             river_pct=0.0,
         )
 
-    hands_won = sum(1 for ph in player_hands if ph.result == ResultEnum.WON)
-    hands_lost = sum(1 for ph in player_hands if ph.result == ResultEnum.LOST)
-    hands_folded = sum(1 for ph in player_hands if ph.result == ResultEnum.FOLDED)
+    hands_won = sum(1 for player_hand in player_hands if player_hand.result == ResultEnum.WON)
+    hands_lost = sum(1 for player_hand in player_hands if player_hand.result == ResultEnum.LOST)
+    hands_folded = sum(1 for player_hand in player_hands if player_hand.result == ResultEnum.FOLDED)
     win_rate = round(hands_won / total * 100, 2)
 
-    total_pl = sum(ph.profit_loss or 0.0 for ph in player_hands)
-    avg_pl_per_hand = round(total_pl / total, 2)
+    total_profit_loss = sum(player_hand.profit_loss or 0.0 for player_hand in player_hands)
+    average_profit_loss_per_hand = round(total_profit_loss / total, 2)
 
-    session_pl: dict[int, float] = {}
-    for ph in player_hands:
-        gid = ph.hand.game_id
-        session_pl[gid] = session_pl.get(gid, 0.0) + (ph.profit_loss or 0.0)
-    avg_pl_per_session = round(sum(session_pl.values()) / len(session_pl), 2)
+    profit_loss_by_session: dict[int, float] = {}
+    for player_hand in player_hands:
+        game_id = player_hand.hand.game_id
+        profit_loss_by_session[game_id] = profit_loss_by_session.get(game_id, 0.0) + (player_hand.profit_loss or 0.0)
+    average_profit_loss_per_session = round(sum(profit_loss_by_session.values()) / len(profit_loss_by_session), 2)
 
-    hands_with_turn = sum(1 for ph in player_hands if ph.hand.turn is not None)
-    hands_with_river = sum(1 for ph in player_hands if ph.hand.river is not None)
+    hands_with_turn = sum(1 for player_hand in player_hands if player_hand.hand.turn is not None)
+    hands_with_river = sum(1 for player_hand in player_hands if player_hand.hand.river is not None)
 
     return PlayerStatsResponse(
         player_name=player.name,
@@ -81,9 +81,9 @@ def get_player_stats(
         hands_lost=hands_lost,
         hands_folded=hands_folded,
         win_rate=win_rate,
-        total_profit_loss=round(total_pl, 2),
-        avg_profit_loss_per_hand=avg_pl_per_hand,
-        avg_profit_loss_per_session=avg_pl_per_session,
+        total_profit_loss=round(total_profit_loss, 2),
+        avg_profit_loss_per_hand=average_profit_loss_per_hand,
+        avg_profit_loss_per_session=average_profit_loss_per_session,
         flop_pct=100.0,
         turn_pct=round(hands_with_turn / total * 100, 2),
         river_pct=round(hands_with_river / total * 100, 2),
@@ -165,26 +165,26 @@ def get_game_stats(
 
     # Aggregate per-player
     stats: dict[int, dict] = {}
-    for ph in player_hands:
-        pid = ph.player_id
-        if pid not in stats:
-            stats[pid] = {
-                'player_name': ph.player.name,
+    for player_hand in player_hands:
+        player_id = player_hand.player_id
+        if player_id not in stats:
+            stats[player_id] = {
+                'player_name': player_hand.player.name,
                 'hands_played': 0,
                 'hands_won': 0,
                 'hands_lost': 0,
                 'hands_folded': 0,
                 'profit_loss': 0.0,
             }
-        s = stats[pid]
-        s['hands_played'] += 1
-        if ph.result == ResultEnum.WON:
-            s['hands_won'] += 1
-        elif ph.result == ResultEnum.LOST:
-            s['hands_lost'] += 1
-        elif ph.result == ResultEnum.FOLDED:
-            s['hands_folded'] += 1
-        s['profit_loss'] += ph.profit_loss or 0.0
+        player_stats_entry = stats[player_id]
+        player_stats_entry['hands_played'] += 1
+        if player_hand.result == ResultEnum.WON:
+            player_stats_entry['hands_won'] += 1
+        elif player_hand.result == ResultEnum.LOST:
+            player_stats_entry['hands_lost'] += 1
+        elif player_hand.result == ResultEnum.FOLDED:
+            player_stats_entry['hands_folded'] += 1
+        player_stats_entry['profit_loss'] += player_hand.profit_loss or 0.0
 
     # Include players registered in the session but with no results
     for player in game.players:
@@ -199,18 +199,18 @@ def get_game_stats(
             }
 
     player_stats = []
-    for s in stats.values():
-        total = s['hands_played']
-        win_rate = round(s['hands_won'] / total * 100, 2) if total > 0 else 0.0
+    for player_stats_entry in stats.values():
+        total = player_stats_entry['hands_played']
+        win_rate = round(player_stats_entry['hands_won'] / total * 100, 2) if total > 0 else 0.0
         player_stats.append(
             GameStatsPlayerEntry(
-                player_name=s['player_name'],
+                player_name=player_stats_entry['player_name'],
                 hands_played=total,
-                hands_won=s['hands_won'],
-                hands_lost=s['hands_lost'],
-                hands_folded=s['hands_folded'],
+                hands_won=player_stats_entry['hands_won'],
+                hands_lost=player_stats_entry['hands_lost'],
+                hands_folded=player_stats_entry['hands_folded'],
                 win_rate=win_rate,
-                profit_loss=round(s['profit_loss'], 2),
+                profit_loss=round(player_stats_entry['profit_loss'], 2),
             )
         )
 

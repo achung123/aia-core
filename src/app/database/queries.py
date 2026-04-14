@@ -39,7 +39,7 @@ def get_player_by_name_or_404(db: Session, player_name: str) -> Player:
 def get_player_hand_or_404(
     db: Session, hand_id: int, player_id: int, player_name: str
 ) -> PlayerHand:
-    ph = (
+    player_hand = (
         db.query(PlayerHand)
         .filter(
             PlayerHand.hand_id == hand_id,
@@ -47,9 +47,9 @@ def get_player_hand_or_404(
         )
         .first()
     )
-    if ph is None:
+    if player_hand is None:
         raise HTTPException(
             status_code=404,
             detail=f'Player {player_name!r} not found in this hand',
         )
-    return ph
+    return player_hand

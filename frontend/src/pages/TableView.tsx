@@ -54,19 +54,19 @@ function handToPlayerCardData(hand: HandResponse, viewingPlayer: string): CardDa
     flop: [parseCard(hand.flop_1), parseCard(hand.flop_2), parseCard(hand.flop_3)],
     turn: parseCard(hand.turn),
     river: parseCard(hand.river),
-    player_hands: (hand.player_hands || []).map(ph => {
-      const result = RESULT_MAP[ph.result ?? ''] || ph.result || '';
-      const isViewing = ph.player_name === viewingPlayer;
-      const hasCards = ph.card_1 && ph.card_2;
+    player_hands: (hand.player_hands || []).map(playerHand => {
+      const result = RESULT_MAP[playerHand.result ?? ''] || playerHand.result || '';
+      const isViewing = playerHand.player_name === viewingPlayer;
+      const hasCards = playerHand.card_1 && playerHand.card_2;
       const isFolded = result === 'fold';
 
       // Show cards for: viewing player always, or non-folded players at showdown
       const showCards = hasCards && (isViewing || (showdown && !isFolded));
 
       return {
-        player_name: ph.player_name,
+        player_name: playerHand.player_name,
         hole_cards: showCards
-          ? ([parseCard(ph.card_1)!, parseCard(ph.card_2)!] as [ParsedCard, ParsedCard])
+          ? ([parseCard(playerHand.card_1)!, parseCard(playerHand.card_2)!] as [ParsedCard, ParsedCard])
           : null,
         result,
       };
@@ -276,11 +276,11 @@ export function TableView() {
     const seatPlayerMap: Record<number, string> = {};
     const seen = new Set<string>();
     const names: string[] = [];
-    allHands.forEach(h => {
-      (h.player_hands || []).forEach(ph => {
-        if (ph.player_name && !seen.has(ph.player_name)) {
-          seen.add(ph.player_name);
-          names.push(ph.player_name);
+    allHands.forEach(hand => {
+      (hand.player_hands || []).forEach(playerHand => {
+        if (playerHand.player_name && !seen.has(playerHand.player_name)) {
+          seen.add(playerHand.player_name);
+          names.push(playerHand.player_name);
         }
       });
     });

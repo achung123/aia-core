@@ -91,29 +91,29 @@ export function DealerApp() {
 
           // Extract per-player pot contributions
           const contribs: Record<string, number> = {};
-          for (const p of data.players || []) {
-            if (p.pot_contribution > 0) {
-              contribs[p.name] = p.pot_contribution;
+          for (const player of data.players || []) {
+            if (player.pot_contribution > 0) {
+              contribs[player.name] = player.pot_contribution;
             }
           }
           setPotContributions(contribs);
 
           const joinedPlayers = (data.players || []).filter(
-            (p) => p.participation_status === 'joined' || p.participation_status === 'handed_back',
+            (player) => player.participation_status === 'joined' || player.participation_status === 'handed_back',
           );
-          const needsCards = joinedPlayers.some((jp) => {
-            const local = players.find((lp) => lp.name === jp.name);
-            return local && !local.card1 && !local.card2;
+          const needsCards = joinedPlayers.some((joinedPlayer) => {
+            const localPlayer = players.find((existingPlayer) => existingPlayer.name === joinedPlayer.name);
+            return localPlayer && !localPlayer.card1 && !localPlayer.card2;
           });
 
           if (needsCards) {
             fetchHand(gameId!, currentHandId!)
               .then((handData) => {
                 if (signal.aborted) return;
-                (handData.player_hands || []).forEach((ph) => {
-                  const local = players.find((lp) => lp.name === ph.player_name);
-                  if (local && !local.card1 && !local.card2 && ph.card_1 && ph.card_2) {
-                    setPlayerCards({ name: ph.player_name, card1: ph.card_1, card2: ph.card_2 });
+                (handData.player_hands || []).forEach((playerHand) => {
+                  const localPlayer = players.find((existingPlayer) => existingPlayer.name === playerHand.player_name);
+                  if (localPlayer && !localPlayer.card1 && !localPlayer.card2 && playerHand.card_1 && playerHand.card_2) {
+                    setPlayerCards({ name: playerHand.player_name, card1: playerHand.card_1, card2: playerHand.card_2 });
                   }
                 });
               })
@@ -159,7 +159,7 @@ export function DealerApp() {
     }
 
     // Participation mode: tile click activates players or opens outcome
-    const player = players.find((p) => p.name === name);
+    const player = players.find((existingPlayer) => existingPlayer.name === name);
     if (!player) return;
 
     if (player.status === 'playing' || player.status === 'idle') {
@@ -254,7 +254,7 @@ export function DealerApp() {
     } else {
       const card1 = cardValues[0] || null;
       const card2 = cardValues[1] || null;
-      const player = players.find((p) => p.name === targetName);
+      const player = players.find((existing) => existing.name === targetName);
       const isRetake = player?.recorded;
 
       setReviewData(null);
@@ -326,7 +326,7 @@ export function DealerApp() {
       return;
     }
 
-    const uncaptured = players.filter((p) => p.status === 'playing');
+    const uncaptured = players.filter((player) => player.status === 'playing');
     if (uncaptured.length === 0) {
       doFinishHand();
     } else {
@@ -339,7 +339,7 @@ export function DealerApp() {
 
     // Auto-set lone remaining player as winner when all others folded
     const nonFolded = players.filter(
-      (p) => p.status !== 'folded' && p.status !== 'not_playing',
+      (player) => player.status !== 'folded' && player.status !== 'not_playing',
     );
     if (nonFolded.length === 1) {
       const street = inferOutcomeStreet(community);
@@ -349,9 +349,9 @@ export function DealerApp() {
     setStep('review');
   }
 
-  const activePlayers = players.filter((p) => p.status !== 'folded' && p.status !== 'not_playing');
+  const activePlayers = players.filter((player) => player.status !== 'folded' && player.status !== 'not_playing');
   const canFinish =
-    (activePlayers.length <= 1 && players.some((p) => p.status === 'folded')) ||
+    (activePlayers.length <= 1 && players.some((player) => player.status === 'folded')) ||
     (activePlayers.length > 1 && community.riverRecorded);
 
   const isActiveHandOverlay = !!(captureTarget || reviewData || outcomeTarget);
@@ -371,7 +371,7 @@ export function DealerApp() {
       {currentStep === 'dashboard' && gameId && (
         <HandDashboard
           gameId={gameId}
-          players={players.map((p) => p.name)}
+          players={players.map((player) => player.name)}
           onSelectHand={handleSelectHand}
           onBack={() => setStep('gameSelector')}
         />
@@ -468,8 +468,8 @@ export function DealerApp() {
           <div style={dialogStyle}>
             <p>The following players will not be recorded for this hand:</p>
             <ul>
-              {players.filter((p) => p.status === 'playing').map((p) => (
-                <li key={p.name}>{p.name}</li>
+              {players.filter((player) => player.status === 'playing').map((player) => (
+                <li key={player.name}>{player.name}</li>
               ))}
             </ul>
             {finishError && <div style={{ color: '#991b1b', marginBottom: '0.5rem' }}>{finishError}</div>}

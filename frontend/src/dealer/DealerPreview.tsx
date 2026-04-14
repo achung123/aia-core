@@ -74,22 +74,22 @@ export function DealerPreview({ community, players }: DealerPreviewProps) {
   }, [community?.flop1, community?.turn, community?.river]);
   const [userOverride, setUserOverride] = useState<{ key: string; street: StreetName } | null>(null);
   const currentStreet: StreetName = (userOverride?.key === communityKey) ? userOverride.street : derivedStreet;
-  const setCurrentStreet = useCallback((s: StreetName) => {
-    setUserOverride({ key: communityKey, street: s });
+  const setCurrentStreet = useCallback((street: StreetName) => {
+    setUserOverride({ key: communityKey, street });
   }, [communityKey]);
-  const playerCardsKey = (players || []).map((p) => `${p.card1 ?? ''}|${p.card2 ?? ''}`).join(',');
+  const playerCardsKey = (players || []).map((player) => `${player.card1 ?? ''}|${player.card2 ?? ''}`).join(',');
   const equityMap = useMemo<Record<string, number>>(() => {
-    const playersWithCards = (players || []).filter((p) => p.card1 && p.card2);
+    const playersWithCards = (players || []).filter((player) => player.card1 && player.card2);
     if (playersWithCards.length < 2) return {};
     const boardCards = communityForStreet(community, currentStreet);
-    const holeCards = playersWithCards.map((p) => [parseCard(p.card1)!, parseCard(p.card2)!]);
+    const holeCards = playersWithCards.map((player) => [parseCard(player.card1)!, parseCard(player.card2)!]);
     try {
       const results = calculateEquity(holeCards, boardCards);
-      const eqMap: Record<string, number> = {};
-      playersWithCards.forEach((p, i) => {
-        eqMap[p.name] = Math.round(results[i].equity * 100);
+      const equities: Record<string, number> = {};
+      playersWithCards.forEach((player, i) => {
+        equities[player.name] = Math.round(results[i].equity * 100);
       });
-      return eqMap;
+      return equities;
     } catch {
       return {};
     }
@@ -137,11 +137,11 @@ export function DealerPreview({ community, players }: DealerPreviewProps) {
       const ch = domEl.clientHeight || 1;
       labels.forEach((label, i) => {
         if (seatPositions[i] && seatPositions[i].clone) {
-          const p = seatPositions[i].clone().project(camera);
-          if (p.z > 1) { label.style.display = 'none'; return; }
+          const projected = seatPositions[i].clone().project(camera);
+          if (projected.z > 1) { label.style.display = 'none'; return; }
           label.style.display = '';
-          const x = (p.x * 0.5 + 0.5) * cw;
-          const y = (1 - (p.y * 0.5 + 0.5)) * ch;
+          const x = (projected.x * 0.5 + 0.5) * cw;
+          const y = (1 - (projected.y * 0.5 + 0.5)) * ch;
           label.style.left = `${x}px`;
           label.style.top = `${y}px`;
           label.style.transform = 'translate(-50%, -50%)';
@@ -210,11 +210,11 @@ export function DealerPreview({ community, players }: DealerPreviewProps) {
           label.style.opacity = '0.3';
         }
         if (seatPositions[i] && seatPositions[i].clone) {
-          const p = seatPositions[i].clone().project(camera);
-          if (p.z > 1) { label.style.display = 'none'; return; }
+          const projected = seatPositions[i].clone().project(camera);
+          if (projected.z > 1) { label.style.display = 'none'; return; }
           label.style.display = '';
-          const x = (p.x * 0.5 + 0.5) * w;
-          const y = (1 - (p.y * 0.5 + 0.5)) * h;
+          const x = (projected.x * 0.5 + 0.5) * w;
+          const y = (1 - (projected.y * 0.5 + 0.5)) * h;
           label.style.left = `${x}px`;
           label.style.top = `${y}px`;
           label.style.transform = 'translate(-50%, -50%)';
@@ -225,7 +225,7 @@ export function DealerPreview({ community, players }: DealerPreviewProps) {
     expanded,
     currentStreet,
     community?.flop1, community?.flop2, community?.flop3, community?.turn, community?.river,
-    ...((players || []).flatMap((p) => [p.card1, p.card2, p.name, p.status])),
+    ...((players || []).flatMap((player) => [player.card1, player.card2, player.name, player.status])),
   ]);
 
   // ResizeObserver for responsive canvas + label reposition
@@ -242,18 +242,18 @@ export function DealerPreview({ community, players }: DealerPreviewProps) {
       sceneRef.current.camera.updateProjectionMatrix();
 
       // Reposition labels on resize
-      const { seatPositions, camera, renderer: r } = sceneRef.current;
-      const domEl = r.domElement;
+      const { seatPositions, camera, renderer: sceneRenderer } = sceneRef.current;
+      const domEl = sceneRenderer.domElement;
       if (domEl && seatPositions) {
         const cw = domEl.clientWidth || 1;
         const ch = domEl.clientHeight || 1;
         labelsRef.current.forEach((label, i) => {
           if (seatPositions[i] && seatPositions[i].clone) {
-            const p = seatPositions[i].clone().project(camera);
-            if (p.z > 1) { label.style.display = 'none'; return; }
+            const projected = seatPositions[i].clone().project(camera);
+            if (projected.z > 1) { label.style.display = 'none'; return; }
             label.style.display = '';
-            const x = (p.x * 0.5 + 0.5) * cw;
-            const y = (1 - (p.y * 0.5 + 0.5)) * ch;
+            const x = (projected.x * 0.5 + 0.5) * cw;
+            const y = (1 - (projected.y * 0.5 + 0.5)) * ch;
             label.style.left = `${x}px`;
             label.style.top = `${y}px`;
             label.style.transform = 'translate(-50%, -50%)';
@@ -280,7 +280,7 @@ export function DealerPreview({ community, players }: DealerPreviewProps) {
       <button
         data-testid="preview-toggle"
         style={toggleStyle}
-        onClick={() => setExpanded((v) => !v)}
+        onClick={() => setExpanded((prev) => !prev)}
       >
         {expanded ? 'Hide Table' : 'Show Table'}
       </button>
@@ -298,10 +298,10 @@ export function DealerPreview({ community, players }: DealerPreviewProps) {
       )}
       {expanded && hasEquity && (
         <div data-testid="equity-badges" style={badgeContainerStyle}>
-          {(players || []).map((p) =>
-            equityMap[p.name] != null ? (
-              <span key={p.name} data-testid={`equity-badge-${p.name}`} style={badgeStyle}>
-                {p.name}: {equityMap[p.name]}%
+          {(players || []).map((player) =>
+            equityMap[player.name] != null ? (
+              <span key={player.name} data-testid={`equity-badge-${player.name}`} style={badgeStyle}>
+                {player.name}: {equityMap[player.name]}%
               </span>
             ) : null,
           )}

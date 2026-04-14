@@ -2,8 +2,8 @@ import { type CSSProperties, type MouseEvent } from 'react';
 import { useDealerStore } from '../stores/dealerStore';
 
 export function LandingPage() {
-  const gameId = useDealerStore((s) => s.gameId);
-  const currentStep = useDealerStore((s) => s.currentStep);
+  const gameId = useDealerStore((state) => state.gameId);
+  const currentStep = useDealerStore((state) => state.currentStep);
   const gameActive = gameId !== null && currentStep !== 'gameSelector';
 
   const handlePlaybackClick = (e: MouseEvent<HTMLAnchorElement>): void => {

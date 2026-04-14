@@ -94,14 +94,14 @@ export function StatsSidebar({ hands, currentHandIndex }: StatsSidebarProps) {
       pot += hand.pot != null ? hand.pot : 0;
 
       if (hand.player_hands) {
-        for (const ph of hand.player_hands) {
-          const name = ph.player_name;
+        for (const playerHand of hand.player_hands) {
+          const name = playerHand.player_name;
           if (!(name in playerTotals)) {
             playerTotals[name] = 0;
             playerAllNull[name] = true;
           }
-          if (ph.profit_loss != null) {
-            playerTotals[name] += ph.profit_loss;
+          if (playerHand.profit_loss != null) {
+            playerTotals[name] += playerHand.profit_loss;
             playerAllNull[name] = false;
           }
         }
@@ -131,16 +131,16 @@ export function StatsSidebar({ hands, currentHandIndex }: StatsSidebarProps) {
           </tr>
         </thead>
         <tbody>
-          {players.map(p => (
-            <tr key={p.name}>
-              <td style={tdStyle}>{p.name}</td>
+          {players.map(playerStats => (
+            <tr key={playerStats.name}>
+              <td style={tdStyle}>{playerStats.name}</td>
               <td
                 style={{
                   ...tdRightStyle,
-                  ...(p.allNull ? {} : { color: p.total >= 0 ? '#4caf50' : '#f44336' }),
+                  ...(playerStats.allNull ? {} : { color: playerStats.total >= 0 ? '#4caf50' : '#f44336' }),
                 }}
               >
-                {p.allNull ? '\u2014' : formatPL(p.total)}
+                {playerStats.allNull ? '\u2014' : formatPL(playerStats.total)}
               </td>
             </tr>
           ))}

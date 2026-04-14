@@ -163,15 +163,15 @@ export function createHoleCards(scene: THREE.Scene, seatPositions: THREE.Vector3
       // Build seat entries from seatPlayerMap
       for (const [seatIdx, playerName] of Object.entries(seatPlayerMap)) {
         const idx = parseInt(seatIdx, 10);
-        const playerHand = (handData?.player_hands ?? []).find(ph => ph.player_name === playerName) || null;
+        const playerHand = (handData?.player_hands ?? []).find(existingHand => existingHand.player_name === playerName) || null;
         seatData.set(idx, { cards: [], sprite: null, playerHand });
       }
 
       // Place real hole cards face-up at each active seat
       for (const [seatIndex, data] of seatData) {
-        const ph = data.playerHand;
-        if (ph && ph.hole_cards) {
-          const [c0, c1] = ph.hole_cards;
+        const matchedHand = data.playerHand;
+        if (matchedHand && matchedHand.hole_cards) {
+          const [c0, c1] = matchedHand.hole_cards;
           placeCards(seatIndex, c0.rank, c0.suit, c1.rank, c1.suit, true);
         } else {
           // No hole card data — show face-down placeholders

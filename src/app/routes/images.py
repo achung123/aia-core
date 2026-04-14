@@ -87,8 +87,8 @@ async def upload_image(
     safe_name = os.path.basename(file.filename)
 
     tmp_path = os.path.join(upload_dir, f'tmp_{uuid.uuid4().hex}')
-    with open(tmp_path, 'wb') as f:
-        f.write(content)
+    with open(tmp_path, 'wb') as output_file:
+        output_file.write(content)
 
     record = ImageUpload(game_id=game_id, file_path=tmp_path, status='processing')
     db.add(record)
@@ -165,16 +165,16 @@ def get_detection_results(
             }
         try:
             results = detector.detect(upload.file_path)
-            for r in results:
+            for detection_result in results:
                 detection = CardDetection(
                     upload_id=upload_id,
-                    card_position=r['card_position'],
-                    detected_value=r['detected_value'],
-                    confidence=r['confidence'],
-                    bbox_x=r.get('bbox_x'),
-                    bbox_y=r.get('bbox_y'),
-                    bbox_width=r.get('bbox_width'),
-                    bbox_height=r.get('bbox_height'),
+                    card_position=detection_result['card_position'],
+                    detected_value=detection_result['detected_value'],
+                    confidence=detection_result['confidence'],
+                    bbox_x=detection_result.get('bbox_x'),
+                    bbox_y=detection_result.get('bbox_y'),
+                    bbox_width=detection_result.get('bbox_width'),
+                    bbox_height=detection_result.get('bbox_height'),
                 )
                 db.add(detection)
             upload.status = 'detected'
@@ -244,12 +244,12 @@ def confirm_detection(
         )
 
     # Collect all cards for duplicate validation
-    cc = payload.community_cards
-    all_cards = [str(cc.flop_1), str(cc.flop_2), str(cc.flop_3)]
-    if cc.turn is not None:
-        all_cards.append(str(cc.turn))
-    if cc.river is not None:
-        all_cards.append(str(cc.river))
+    community_cards = payload.community_cards
+    all_cards = [str(community_cards.flop_1), str(community_cards.flop_2), str(community_cards.flop_3)]
+    if community_cards.turn is not None:
+        all_cards.append(str(community_cards.turn))
+    if community_cards.river is not None:
+        all_cards.append(str(community_cards.river))
     for entry in payload.player_hands:
         if entry.card_1 is not None:
             all_cards.append(str(entry.card_1))
@@ -279,11 +279,11 @@ def confirm_detection(
     hand = Hand(
         game_id=game_id,
         hand_number=hand_number,
-        flop_1=str(cc.flop_1),
-        flop_2=str(cc.flop_2),
-        flop_3=str(cc.flop_3),
-        turn=str(cc.turn) if cc.turn is not None else None,
-        river=str(cc.river) if cc.river is not None else None,
+        flop_1=str(community_cards.flop_1),
+        flop_2=str(community_cards.flop_2),
+        flop_3=str(community_cards.flop_3),
+        turn=str(community_cards.turn) if community_cards.turn is not None else None,
+        river=str(community_cards.river) if community_cards.river is not None else None,
         source_upload_id=upload_id,
     )
     db.add(hand)
@@ -307,26 +307,26 @@ def confirm_detection(
                 detail=f'Player {entry.player_name!r} is not a participant in this game',
             )
 
-        ph = PlayerHand(
+        player_hand = PlayerHand(
             hand_id=hand.hand_id,
             player_id=player.player_id,
             card_1=str(entry.card_1) if entry.card_1 is not None else None,
             card_2=str(entry.card_2) if entry.card_2 is not None else None,
         )
-        db.add(ph)
+        db.add(player_hand)
         db.flush()
 
         player_hand_responses.append(
             PlayerHandResponse(
-                player_hand_id=ph.player_hand_id,
-                hand_id=ph.hand_id,
-                player_id=ph.player_id,
+                player_hand_id=player_hand.player_hand_id,
+                hand_id=player_hand.hand_id,
+                player_id=player_hand.player_id,
                 player_name=player.name,
-                card_1=ph.card_1,
-                card_2=ph.card_2,
-                result=ph.result,
-                profit_loss=ph.profit_loss,
-                outcome_street=ph.outcome_street,
+                card_1=player_hand.card_1,
+                card_2=player_hand.card_2,
+                result=player_hand.result,
+                profit_loss=player_hand.profit_loss,
+                outcome_street=player_hand.outcome_street,
             )
         )
 
@@ -339,14 +339,14 @@ def confirm_detection(
     # Build confirmed values map using the same position keys as detections
     confirmed_map = {}
     cc_positions = [
-        ('community_1', str(cc.flop_1)),
-        ('community_2', str(cc.flop_2)),
-        ('community_3', str(cc.flop_3)),
+        ('community_1', str(community_cards.flop_1)),
+        ('community_2', str(community_cards.flop_2)),
+        ('community_3', str(community_cards.flop_3)),
     ]
-    if cc.turn is not None:
-        cc_positions.append(('community_4', str(cc.turn)))
-    if cc.river is not None:
-        cc_positions.append(('community_5', str(cc.river)))
+    if community_cards.turn is not None:
+        cc_positions.append(('community_4', str(community_cards.turn)))
+    if community_cards.river is not None:
+        cc_positions.append(('community_5', str(community_cards.river)))
     for pos, val in cc_positions:
         confirmed_map[pos] = val
 

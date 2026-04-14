@@ -7,10 +7,10 @@ export interface SessionFormProps {
 }
 
 function todayStr(): string {
-  const d = new Date();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${d.getFullYear()}-${mm}-${dd}`;
+  const today = new Date();
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  const dd = String(today.getDate()).padStart(2, '0');
+  return `${today.getFullYear()}-${mm}-${dd}`;
 }
 
 type PlayerLoadState =
@@ -90,9 +90,9 @@ export function SessionForm({ onSessionCreated }: SessionFormProps) {
             <option disabled>No players found</option>
           )}
           {playerState.status === 'loaded' &&
-            playerState.players.map(p => (
-              <option key={p.player_id} value={p.name}>
-                {p.name}
+            playerState.players.map(player => (
+              <option key={player.player_id} value={player.name}>
+                {player.name}
               </option>
             ))}
         </select>
