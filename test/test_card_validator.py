@@ -2,7 +2,7 @@
 
 import pytest
 
-from pydantic_models.app_models import Card, CardRank, CardSuit
+from pydantic_models.common import Card, CardRank, CardSuit
 from pydantic_models.card_validator import validate_no_duplicate_cards
 
 

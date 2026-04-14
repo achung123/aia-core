@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, type CSSProperties } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { fetchPlayerEquity } from '../api/client.ts';
+
 import type { HandResponse } from '../api/types.ts';
 import { useHandPolling } from '../hooks/useHandPolling.ts';
 import { createPokerScene } from '../scenes/pokerScene.ts';
@@ -103,8 +103,7 @@ export function TableView() {
   const [error, setError] = useState<string | null>(null);
   const [currentHandIndex, setCurrentHandIndex] = useState(-1);
   const [currentHandNumber, setCurrentHandNumber] = useState(0);
-  const [equityPct, setEquityPct] = useState<number | null>(null);
-  const [showEquity, setShowEquity] = useState(true);
+
   const initialLoadDoneRef = useRef(false);
 
   const gameId = gameIdStr ? Number(gameIdStr) : null;
@@ -304,21 +303,7 @@ export function TableView() {
     });
   }
 
-  /* Fetch player-perspective equity for the current hand */
-  function fetchEquityForHand(handNumber: number): void {
-    if (!gameId || !playerName) return;
-    fetchPlayerEquity(gameId, handNumber, playerName)
-      .then(data => {
-        if (data.equities.length > 0) {
-          setEquityPct(data.equities[0].equity);
-        } else {
-          setEquityPct(null);
-        }
-      })
-      .catch(() => {
-        setEquityPct(null);
-      });
-  }
+
 
   /* Handle scrubber change */
   function handleScrubberChange(handNumber: number): void {
@@ -328,7 +313,6 @@ export function TableView() {
     const hand = hands.find(h => h.hand_number === handNumber);
     if (hand) {
       updateSceneForHand(hand);
-      fetchEquityForHand(handNumber);
     }
     dismissNewHand();
   }
@@ -355,7 +339,6 @@ export function TableView() {
       buildSeatMaps(hands);
       createSeatLabelsForPlayers(playerNamesRef.current);
       updateSceneForHand(latest);
-      fetchEquityForHand(latest.hand_number);
 
       if (sceneRef.current) {
         const playerSeatIndex = playerNamesRef.current.indexOf(playerName);
@@ -405,55 +388,45 @@ export function TableView() {
 
   return (
     <div ref={wrapperRef} style={styles.viewport}>
-      <canvas
-        ref={canvasRef}
-        style={styles.canvas}
-      />
-
-      {/* Overlay UI */}
-      <div style={styles.overlay}>
+      {/* Top HUD bar — in normal flow, never overlaps canvas */}
+      <div data-testid="hud-bar" style={styles.hudBar}>
         <button data-testid="back-to-hand-btn" style={styles.backBtn} onClick={handleBack}>
           ← Back to Hand
         </button>
         <button data-testid="reset-view-btn" style={styles.resetBtn} onClick={handleResetView}>
           Reset View
         </button>
-        <button
-          data-testid="equity-toggle-btn"
-          style={styles.resetBtn}
-          onClick={() => setShowEquity(prev => !prev)}
-        >
-          {showEquity ? 'Hide Equity' : 'Show Equity'}
-        </button>
+
         {loading && <p style={styles.loadingText}>Loading table…</p>}
         {error && <p style={styles.error}>{error}</p>}
       </div>
 
-      {/* Equity overlay near player's cards */}
-      {showEquity && equityPct !== null && (
-        <div data-testid="equity-overlay" style={styles.equityOverlay}>
-          {Math.round(equityPct * 100)}%
-        </div>
-      )}
+      {/* Canvas area — flex:1 fills space between HUD and scrubber */}
+      <div data-testid="canvas-area" style={styles.canvasArea}>
+        <canvas
+          ref={canvasRef}
+          style={styles.canvas}
+        />
 
-      {/* New hand available banner */}
-      {newHandAvailable && (
-        <div
-          data-testid="new-hand-banner"
-          style={styles.newHandBanner}
-          onClick={() => {
-            if (hands.length > 0) {
-              handleScrubberChange(hands[hands.length - 1].hand_number);
-            }
-          }}
-        >
-          New hand available — tap to view
-        </div>
-      )}
+        {/* New hand available banner */}
+        {newHandAvailable && (
+          <div
+            data-testid="new-hand-banner"
+            style={styles.newHandBanner}
+            onClick={() => {
+              if (hands.length > 0) {
+                handleScrubberChange(hands[hands.length - 1].hand_number);
+              }
+            }}
+          >
+            New hand available — tap to view
+          </div>
+        )}
+      </div>
 
-      {/* Hand scrubber at the bottom */}
+      {/* Scrubber — in normal flow below canvas */}
       {hands.length > 0 && (
-        <div style={styles.scrubberContainer}>
+        <div data-testid="scrubber-mount" style={styles.scrubberMount}>
           <SessionScrubber
             handCount={hands.length}
             currentHand={currentHandNumber}
@@ -472,6 +445,8 @@ const styles: Record<string, CSSProperties> = {
     padding: '1rem',
   },
   viewport: {
+    display: 'flex',
+    flexDirection: 'column',
     position: 'fixed',
     top: 0,
     left: 0,
@@ -480,87 +455,68 @@ const styles: Record<string, CSSProperties> = {
     overflow: 'hidden',
     background: '#1a1a2e',
   },
+  hudBar: {
+    display: 'flex',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: '6px',
+    padding: 'max(6px, env(safe-area-inset-top)) 8px 6px',
+    background: 'rgba(26, 26, 46, 0.95)',
+    flexShrink: 0,
+    zIndex: 5,
+  },
+  canvasArea: {
+    flex: 1,
+    position: 'relative',
+    overflow: 'hidden',
+    minHeight: 0,
+  },
   canvas: {
     width: '100%',
     height: '100%',
     display: 'block',
     touchAction: 'none',
   },
-  overlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    padding: 'max(8px, env(safe-area-inset-top)) 8px 0',
-    zIndex: 10,
-    pointerEvents: 'none',
-    display: 'flex',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: '6px',
-  },
   backBtn: {
-    pointerEvents: 'auto',
-    padding: '0.4rem 0.8rem',
-    minHeight: '40px',
+    padding: '0.3rem 0.6rem',
+    minHeight: '36px',
     fontSize: '0.85rem',
     fontWeight: 'bold',
     border: 'none',
     borderRadius: '8px',
-    background: 'rgba(79, 70, 229, 0.9)',
+    background: '#4f46e5',
     color: '#fff',
     cursor: 'pointer',
-    backdropFilter: 'blur(4px)',
   },
   resetBtn: {
-    pointerEvents: 'auto',
-    padding: '0.4rem 0.8rem',
-    minHeight: '40px',
+    padding: '0.3rem 0.6rem',
+    minHeight: '36px',
     fontSize: '0.85rem',
     fontWeight: 'bold',
     border: 'none',
     borderRadius: '8px',
-    background: 'rgba(55, 65, 81, 0.9)',
+    background: '#374151',
     color: '#fff',
     cursor: 'pointer',
-    backdropFilter: 'blur(4px)',
   },
   loadingText: {
     color: '#c7d2fe',
-    fontSize: '0.9rem',
+    fontSize: '0.85rem',
     margin: 0,
   },
   error: {
     color: '#f87171',
-    fontSize: '0.9rem',
+    fontSize: '0.85rem',
     margin: 0,
   },
-  scrubberContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
+  scrubberMount: {
+    flexShrink: 0,
+    zIndex: 5,
   },
-  equityOverlay: {
-    position: 'absolute',
-    bottom: '80px',
-    left: '50%',
-    transform: 'translateX(-50%)',
-    zIndex: 10,
-    background: 'rgba(16, 185, 129, 0.9)',
-    color: '#fff',
-    fontSize: '1.4rem',
-    fontWeight: 'bold',
-    padding: '6px 16px',
-    borderRadius: '12px',
-    pointerEvents: 'none',
-    textShadow: '0 1px 3px rgba(0,0,0,0.5)',
-  },
+
   newHandBanner: {
     position: 'absolute',
-    bottom: '70px',
+    bottom: '16px',
     left: '50%',
     transform: 'translateX(-50%)',
     zIndex: 11,

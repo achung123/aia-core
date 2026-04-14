@@ -9,11 +9,8 @@ from sqlalchemy.orm import Session
 
 from app.database.models import GameSession, Hand, Player, PlayerHand
 from app.database.session import get_db
-from pydantic_models.app_models import (
-    HandSearchResult,
-    PaginatedHandSearchResponse,
-    PlayerHandResponse,
-)
+from pydantic_models.hand_schemas import PlayerHandResponse
+from pydantic_models.search_schemas import HandSearchResult, PaginatedHandSearchResponse
 
 router = APIRouter(prefix='/hands', tags=['search'])
 

@@ -96,7 +96,6 @@ export function PlayerGrid({ players, community, onTileSelect, onDirectOutcome, 
                 onClick={() => onTileSelect(p.name)}
               >
                 <span style={styles.tileName}>{p.name}</span>
-                {p.recorded && <span style={styles.inlineCheck}>✅</span>}
               </button>
               <div style={styles.statusCol}>
                 <span style={styles.statusText}>

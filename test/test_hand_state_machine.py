@@ -176,16 +176,16 @@ class TestSeatAdvancement:
             json={'street': 'preflop', 'action': 'fold'},
         )
 
-        # Second player acts
+        # Second player acts (SB, needs 0.10 more to match BB blind)
         state = client.get(f'/games/{game_id}/hands/{hand_number}/state').json()
         p2 = state['current_player_name']
         assert p2 != p1
         client.post(
             f'/games/{game_id}/hands/{hand_number}/players/{p2}/actions',
-            json={'street': 'preflop', 'action': 'call', 'amount': 0.20},
+            json={'street': 'preflop', 'action': 'call', 'amount': 0.10},
         )
 
-        # Third player acts
+        # Third player acts (BB, amount_to_call == 0, checks)
         state = client.get(f'/games/{game_id}/hands/{hand_number}/state').json()
         p3 = state['current_player_name']
         assert p3 != p1  # Folded player is skipped
@@ -345,7 +345,7 @@ class TestForceBypass:
 
         resp = client.post(
             f'/games/{game_id}/hands/{hand_number}/players/{wrong_player}/actions?force=true',
-            json={'street': 'preflop', 'action': 'call', 'amount': 0.20},
+            json={'street': 'preflop', 'action': 'fold'},
         )
         assert resp.status_code == 201
 
@@ -428,13 +428,27 @@ class TestFullRotation:
         hn = hand['hand_number']
 
         seen_players = []
-        for _ in range(3):
-            state = client.get(f'/games/{game_id}/hands/{hn}/state').json()
-            seen_players.append(state['current_player_name'])
-            client.post(
-                f'/games/{game_id}/hands/{hn}/players/{state["current_player_name"]}/actions',
-                json={'street': 'preflop', 'action': 'call', 'amount': 0.20},
-            )
+        # UTG calls 0.20
+        state = client.get(f'/games/{game_id}/hands/{hn}/state').json()
+        seen_players.append(state['current_player_name'])
+        client.post(
+            f'/games/{game_id}/hands/{hn}/players/{state["current_player_name"]}/actions',
+            json={'street': 'preflop', 'action': 'call', 'amount': 0.20},
+        )
+        # SB calls 0.10
+        state = client.get(f'/games/{game_id}/hands/{hn}/state').json()
+        seen_players.append(state['current_player_name'])
+        client.post(
+            f'/games/{game_id}/hands/{hn}/players/{state["current_player_name"]}/actions',
+            json={'street': 'preflop', 'action': 'call', 'amount': 0.10},
+        )
+        # BB checks
+        state = client.get(f'/games/{game_id}/hands/{hn}/state').json()
+        seen_players.append(state['current_player_name'])
+        client.post(
+            f'/games/{game_id}/hands/{hn}/players/{state["current_player_name"]}/actions',
+            json={'street': 'preflop', 'action': 'check'},
+        )
 
         # All 3 unique players should have acted
         assert len(set(seen_players)) == 3
@@ -445,11 +459,12 @@ class TestFullRotation:
         hand = _start_hand(client, game_id)
         hn = hand['hand_number']
 
+        # Heads-up preflop: SB acts first, amount_to_call = 0.10
         state = client.get(f'/games/{game_id}/hands/{hn}/state').json()
         p1 = state['current_player_name']
         client.post(
             f'/games/{game_id}/hands/{hn}/players/{p1}/actions',
-            json={'street': 'preflop', 'action': 'call', 'amount': 0.20},
+            json={'street': 'preflop', 'action': 'call', 'amount': 0.10},
         )
 
         state = client.get(f'/games/{game_id}/hands/{hn}/state').json()
@@ -462,13 +477,22 @@ class TestFullRotation:
         hand = _start_hand(client, game_id)
         hn = hand['hand_number']
 
-        # Complete preflop
-        for _ in range(3):
-            state = client.get(f'/games/{game_id}/hands/{hn}/state').json()
-            client.post(
-                f'/games/{game_id}/hands/{hn}/players/{state["current_player_name"]}/actions',
-                json={'street': 'preflop', 'action': 'call', 'amount': 0.20},
-            )
+        # Complete preflop: UTG calls 0.20, SB calls 0.10, BB checks
+        state = client.get(f'/games/{game_id}/hands/{hn}/state').json()
+        client.post(
+            f'/games/{game_id}/hands/{hn}/players/{state["current_player_name"]}/actions',
+            json={'street': 'preflop', 'action': 'call', 'amount': 0.20},
+        )
+        state = client.get(f'/games/{game_id}/hands/{hn}/state').json()
+        client.post(
+            f'/games/{game_id}/hands/{hn}/players/{state["current_player_name"]}/actions',
+            json={'street': 'preflop', 'action': 'call', 'amount': 0.10},
+        )
+        state = client.get(f'/games/{game_id}/hands/{hn}/state').json()
+        client.post(
+            f'/games/{game_id}/hands/{hn}/players/{state["current_player_name"]}/actions',
+            json={'street': 'preflop', 'action': 'check'},
+        )
 
         # Deal flop
         client.patch(

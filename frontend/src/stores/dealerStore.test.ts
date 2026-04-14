@@ -34,8 +34,8 @@ describe('setGame', () => {
     expect(s.gameDate).toBe('2026-04-08');
     expect(s.currentStep).toBe('dashboard');
     expect(s.players).toEqual([
-      { name: 'Alice', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null },
-      { name: 'Bob', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null },
+      { name: 'Alice', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null, lastAction: null },
+      { name: 'Bob', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null, lastAction: null },
     ]);
     expect(s.community).toEqual({
       flop1: null, flop2: null, flop3: null, flopRecorded: false,
@@ -62,10 +62,10 @@ describe('setPlayerCards', () => {
     const s = getState();
 
     expect(s.players[0]).toEqual({
-      name: 'Alice', card1: 'Ah', card2: 'Kd', recorded: true, status: 'playing', outcomeStreet: null,
+      name: 'Alice', card1: 'Ah', card2: 'Kd', recorded: true, status: 'playing', outcomeStreet: null, lastAction: null,
     });
     expect(s.players[1]).toEqual({
-      name: 'Bob', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null,
+      name: 'Bob', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null, lastAction: null,
     });
   });
 });
@@ -152,8 +152,8 @@ describe('newHand (RESET_HAND equivalent)', () => {
     expect(s.gameDate).toBe('2026-04-08');
     expect(s.currentHandId).toBeNull();
     expect(s.players).toEqual([
-      { name: 'Alice', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null },
-      { name: 'Bob', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null },
+      { name: 'Alice', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null, lastAction: null },
+      { name: 'Bob', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null, lastAction: null },
     ]);
     expect(s.community).toEqual({
       flop1: null, flop2: null, flop3: null, flopRecorded: false,
@@ -185,8 +185,8 @@ describe('finishHand', () => {
     expect(s.currentHandId).toBeNull();
     expect(s.currentStep).toBe('dashboard');
     expect(s.players).toEqual([
-      { name: 'Alice', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null },
-      { name: 'Bob', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null },
+      { name: 'Alice', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null, lastAction: null },
+      { name: 'Bob', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null, lastAction: null },
     ]);
     expect(s.community).toEqual({
       flop1: null, flop2: null, flop3: null, flopRecorded: false,
@@ -293,13 +293,13 @@ describe('loadHand', () => {
       turn: 'JS', turnRecorded: true, river: 'QH', riverRecorded: true,
     });
     expect(s.players[0]).toEqual({
-      name: 'Alice', card1: 'AH', card2: 'KD', recorded: true, status: 'won', outcomeStreet: 'river',
+      name: 'Alice', card1: 'AH', card2: 'KD', recorded: true, status: 'won', outcomeStreet: 'river', lastAction: null,
     });
     expect(s.players[1]).toEqual({
-      name: 'Bob', card1: '9S', card2: 'TC', recorded: true, status: 'lost', outcomeStreet: 'turn',
+      name: 'Bob', card1: '9S', card2: 'TC', recorded: true, status: 'lost', outcomeStreet: 'turn', lastAction: null,
     });
     expect(s.players[2]).toEqual({
-      name: 'Charlie', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null,
+      name: 'Charlie', card1: null, card2: null, recorded: false, status: 'not_playing', outcomeStreet: null, lastAction: null,
     });
   });
 
@@ -326,7 +326,7 @@ describe('loadHand', () => {
       ],
     });
     expect(getState().players[0]).toEqual({
-      name: 'Alice', card1: null, card2: null, recorded: true, status: 'folded', outcomeStreet: null,
+      name: 'Alice', card1: null, card2: null, recorded: true, status: 'folded', outcomeStreet: null, lastAction: null,
     });
   });
 });

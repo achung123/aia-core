@@ -8,6 +8,8 @@ vi.mock('../api/client.ts', () => ({
   updateCommunityCards: vi.fn(() => Promise.resolve({})),
   updateHolecards: vi.fn(() => Promise.resolve({})),
   fetchEquity: vi.fn(() => Promise.resolve({ equities: [] })),
+  fetchHand: vi.fn(() => Promise.resolve({ pot: 0, player_hands: [] })),
+  fetchHandActions: vi.fn(() => Promise.resolve([])),
 }));
 
 import { patchPlayerResult, updateCommunityCards, updateHolecards, fetchEquity } from '../api/client.ts';
@@ -54,11 +56,11 @@ describe('ReviewScreen — rendering', () => {
 
   it('renders community cards', () => {
     const { container } = render(<ReviewScreen {...makeProps()} />);
-    expect(container.querySelector('[data-testid="review-community-flop1"]')?.textContent).toBe('Ah');
-    expect(container.querySelector('[data-testid="review-community-flop2"]')?.textContent).toBe('Kd');
-    expect(container.querySelector('[data-testid="review-community-flop3"]')?.textContent).toBe('9c');
-    expect(container.querySelector('[data-testid="review-community-turn"]')?.textContent).toBe('5s');
-    expect(container.querySelector('[data-testid="review-community-river"]')?.textContent).toBe('2h');
+    expect(container.querySelector('[data-testid="review-community-flop1"]')?.textContent).toBe('A♥');
+    expect(container.querySelector('[data-testid="review-community-flop2"]')?.textContent).toBe('K♦');
+    expect(container.querySelector('[data-testid="review-community-flop3"]')?.textContent).toBe('9♣');
+    expect(container.querySelector('[data-testid="review-community-turn"]')?.textContent).toBe('5♠');
+    expect(container.querySelector('[data-testid="review-community-river"]')?.textContent).toBe('2♥');
   });
 
   it('renders participating players and auto-folded players, excludes not_playing', () => {
@@ -75,10 +77,10 @@ describe('ReviewScreen — rendering', () => {
 
   it('renders player hole cards', () => {
     const { container } = render(<ReviewScreen {...makeProps()} />);
-    expect(container.querySelector('[data-testid="review-player-Alice-card1"]')?.textContent).toBe('Js');
-    expect(container.querySelector('[data-testid="review-player-Alice-card2"]')?.textContent).toBe('Tc');
-    expect(container.querySelector('[data-testid="review-player-Bob-card1"]')?.textContent).toBe('8h');
-    expect(container.querySelector('[data-testid="review-player-Bob-card2"]')?.textContent).toBe('7d');
+    expect(container.querySelector('[data-testid="review-player-Alice-card1"]')?.textContent).toBe('J♠');
+    expect(container.querySelector('[data-testid="review-player-Alice-card2"]')?.textContent).toBe('T♣');
+    expect(container.querySelector('[data-testid="review-player-Bob-card1"]')?.textContent).toBe('8♥');
+    expect(container.querySelector('[data-testid="review-player-Bob-card2"]')?.textContent).toBe('7♦');
   });
 
   it('renders dashes for null cards', () => {
@@ -127,7 +129,7 @@ describe('ReviewScreen — editing community cards', () => {
     fireEvent.click(container.querySelector('[data-testid="review-community-flop1"]')!);
     // CardPicker shows — click 'Q♠' to select Qs
     fireEvent.click(screen.getByText('Q♠'));
-    expect(container.querySelector('[data-testid="review-community-flop1"]')?.textContent).toBe('Qs');
+    expect(container.querySelector('[data-testid="review-community-flop1"]')?.textContent).toBe('Q♠');
   });
 });
 
@@ -142,7 +144,7 @@ describe('ReviewScreen — editing player cards', () => {
     const { container } = render(<ReviewScreen {...makeProps()} />);
     fireEvent.click(container.querySelector('[data-testid="review-player-Alice-card1"]')!);
     fireEvent.click(screen.getByText('3♥'));
-    expect(container.querySelector('[data-testid="review-player-Alice-card1"]')?.textContent).toBe('3h');
+    expect(container.querySelector('[data-testid="review-player-Alice-card1"]')?.textContent).toBe('3♥');
   });
 });
 
@@ -185,14 +187,17 @@ describe('ReviewScreen — Confirm & Save', () => {
 
     expect(patchPlayerResult).toHaveBeenCalledWith(42, 3, 'Alice', {
       result: 'lost',
+      profit_loss: null,
       outcome_street: 'river',
     });
     expect(patchPlayerResult).toHaveBeenCalledWith(42, 3, 'Bob', {
       result: 'won',
+      profit_loss: null,
       outcome_street: 'river',
     });
     expect(patchPlayerResult).toHaveBeenCalledWith(42, 3, 'Charlie', {
       result: 'won',
+      profit_loss: null,
       outcome_street: 'flop',
     });
 
@@ -328,6 +333,7 @@ describe('ReviewScreen — dirty tracking for results', () => {
     expect(patchPlayerResult).toHaveBeenCalledTimes(1);
     expect(patchPlayerResult).toHaveBeenCalledWith(42, 3, 'Alice', {
       result: 'lost',
+      profit_loss: null,
       outcome_street: 'river',
     });
   });
@@ -398,6 +404,7 @@ describe('ReviewScreen — auto-fold logic (AC2)', () => {
     await waitFor(() => {
       expect(patchPlayerResult).toHaveBeenCalledWith(42, 3, 'Bob', {
         result: 'folded',
+        profit_loss: null,
         outcome_street: null,
       });
       expect(onSaved).toHaveBeenCalled();
@@ -554,6 +561,7 @@ describe('ReviewScreen — partial save failure', () => {
     expect(patchPlayerResult).toHaveBeenCalledTimes(1);
     expect(patchPlayerResult).toHaveBeenCalledWith(42, 3, 'Alice', {
       result: 'lost',
+      profit_loss: null,
       outcome_street: 'river',
     });
   });

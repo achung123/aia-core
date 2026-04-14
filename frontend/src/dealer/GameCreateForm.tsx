@@ -15,7 +15,7 @@ function todayStr(): string {
 
 export function GameCreateForm({ onGameCreated }: GameCreateFormProps) {
   const [date, setDate] = useState(todayStr);
-  const [buyInAmount, setBuyInAmount] = useState('');
+  const [buyInAmount, setBuyInAmount] = useState('25');
   const [players, setPlayers] = useState<PlayerResponse[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);

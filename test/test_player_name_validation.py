@@ -108,7 +108,7 @@ class TestConfirmPlayerEntryValidation:
     def test_empty_player_name_in_confirm(self):
         from pydantic import ValidationError
 
-        from pydantic_models.app_models import ConfirmPlayerEntry
+        from pydantic_models.detection_schemas import ConfirmPlayerEntry
 
         with pytest.raises(ValidationError):
             ConfirmPlayerEntry(player_name='', card_1='2S', card_2='3S')
@@ -116,7 +116,7 @@ class TestConfirmPlayerEntryValidation:
     def test_whitespace_player_name_in_confirm(self):
         from pydantic import ValidationError
 
-        from pydantic_models.app_models import ConfirmPlayerEntry
+        from pydantic_models.detection_schemas import ConfirmPlayerEntry
 
         with pytest.raises(ValidationError):
             ConfirmPlayerEntry(player_name='   ', card_1='2S', card_2='3S')

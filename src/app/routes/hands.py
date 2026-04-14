@@ -2,11 +2,12 @@
 
 import hashlib
 import json
+from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.database.models import (
     GamePlayer,
@@ -17,17 +18,31 @@ from app.database.models import (
     PlayerHand,
     PlayerHandAction,
 )
+from app.database.queries import (
+    get_game_or_404,
+    get_hand_or_404,
+    get_player_by_name_or_404,
+    get_player_hand_or_404,
+)
 from app.database.session import get_db
 from app.services.betting import (
     compute_side_pots,
     get_legal_actions,
     is_street_complete,
+    validate_action,
 )
 from app.services.equity import calculate_equity, calculate_player_equity
 from app.services.hand_ranking import describe_hand
-from pydantic_models.app_models import (
+from app.services.hand_state import (
+    activate_preflop,
+    get_actions_this_street,
+    get_active_seat_order,
+    next_seat,
+    try_advance_phase,
+)
+from pydantic_models.detection_schemas import EquityResponse
+from pydantic_models.hand_schemas import (
     CommunityCardsUpdate,
-    EquityResponse,
     FlopUpdate,
     HandActionResponse,
     HandCreate,
@@ -49,223 +64,12 @@ from pydantic_models.card_validator import validate_no_duplicate_cards
 
 router = APIRouter(prefix='/games', tags=['hands'])
 
-PHASE_ORDER = ['awaiting_cards', 'preflop', 'flop', 'turn', 'river', 'showdown']
 
-
-def _get_active_seat_order(
-    db: Session,
-    game_id: int,
-    hand: Hand,
-    exclude_all_in: bool = False,
-) -> list[tuple[int, int]]:
-    """Return list of (seat_number, player_id) for active non-folded players, sorted by seat."""
-    active_gps = (
-        db.query(GamePlayer)
-        .filter(GamePlayer.game_id == game_id, GamePlayer.is_active.is_(True))
-        .order_by(
-            func.coalesce(GamePlayer.seat_number, 999999),
-            GamePlayer.player_id,
-        )
-        .all()
-    )
-    folded_ids = {ph.player_id for ph in hand.player_hands if ph.result == 'folded'}
-    excluded = set(folded_ids)
-    if exclude_all_in:
-        excluded |= {ph.player_id for ph in hand.player_hands if ph.is_all_in}
-    return [
-        (gp.seat_number or 0, gp.player_id)
-        for gp in active_gps
-        if gp.player_id not in excluded
-    ]
-
-
-def _first_to_act_seat(
-    db: Session,
-    game_id: int,
-    hand: Hand,
-    phase: str,
-) -> int | None:
-    """Determine the first-to-act seat for a given phase."""
-    seats = _get_active_seat_order(db, game_id, hand)
-    if not seats:
-        return None
-
-    if phase == 'preflop':
-        # First-to-act is the player after BB
-        bb_gp = (
-            db.query(GamePlayer)
-            .filter(
-                GamePlayer.game_id == game_id, GamePlayer.player_id == hand.bb_player_id
-            )
-            .first()
-        )
-        bb_seat = bb_gp.seat_number if bb_gp and bb_gp.seat_number else 0
-        # Find first active non-folded seat after BB
-        after_bb = [s for s in seats if s[0] > bb_seat]
-        if after_bb:
-            return after_bb[0][0]
-        # Wrap around
-        return seats[0][0]
-    else:
-        # Post-flop: first active non-folded player after dealer (SB seat)
-        sb_gp = (
-            db.query(GamePlayer)
-            .filter(
-                GamePlayer.game_id == game_id, GamePlayer.player_id == hand.sb_player_id
-            )
-            .first()
-        )
-        sb_seat = sb_gp.seat_number if sb_gp and sb_gp.seat_number else 0
-        # SB acts first post-flop (seat >= sb_seat)
-        at_or_after = [s for s in seats if s[0] >= sb_seat]
-        if at_or_after:
-            return at_or_after[0][0]
-        return seats[0][0]
-
-
-def _next_seat(
-    db: Session,
-    game_id: int,
-    hand: Hand,
-    current_seat: int,
-) -> int | None:
-    """Advance to the next non-folded, non-all-in active player seat after current_seat."""
-    seats = _get_active_seat_order(db, game_id, hand, exclude_all_in=True)
-    if not seats:
-        return None
-    after = [s for s in seats if s[0] > current_seat]
-    if after:
-        return after[0][0]
-    return seats[0][0]
-
-
-def _count_community_cards(hand: Hand) -> int:
-    count = 0
-    if hand.flop_1 is not None:
-        count += 3
-    if hand.turn is not None:
-        count += 1
-    if hand.river is not None:
-        count += 1
-    return count
-
-
-def _can_advance_to_phase(hand: Hand, target_phase: str) -> bool:
-    """Check if community cards are sufficient for the target phase."""
-    cc = _count_community_cards(hand)
-    if target_phase == 'flop':
-        return cc >= 3
-    if target_phase == 'turn':
-        return cc >= 4
-    if target_phase == 'river':
-        return cc >= 5
-    if target_phase == 'showdown':
-        return cc >= 5
-    return True  # preflop always ok
-
-
-def _get_actions_this_street(db: Session, hand: Hand, street: str) -> list[dict]:
-    """Get all actions for a given street as dicts for the betting module."""
-    actions = (
-        db.query(PlayerHandAction, PlayerHand.player_id)
-        .join(PlayerHand, PlayerHandAction.player_hand_id == PlayerHand.player_hand_id)
-        .filter(
-            PlayerHand.hand_id == hand.hand_id,
-            PlayerHandAction.street == street,
-        )
-        .order_by(PlayerHandAction.created_at)
-        .all()
-    )
-    return [
-        {'player_id': pid, 'action': a.action, 'amount': a.amount} for a, pid in actions
-    ]
-
-
-def _try_advance_phase(db: Session, game_id: int, hand: Hand, state: HandState) -> None:
-    """If all non-folded players have acted with equalized bets, try to advance."""
-    seats = _get_active_seat_order(db, game_id, hand)
-    if len(seats) <= 1:
-        return
-
-    active_non_folded_ids = {pid for _, pid in seats}
-    all_in_ids = {ph.player_id for ph in hand.player_hands if ph.is_all_in}
-
-    actions_this_street = _get_actions_this_street(db, hand, state.phase)
-
-    if not is_street_complete(
-        actions_this_street,
-        active_non_folded_ids,
-        all_in_ids,
-        state.phase,
-        hand.bb_player_id,
-    ):
-        return
-
-    # All acted — try to advance
-    phase_idx = PHASE_ORDER.index(state.phase)
-    if phase_idx >= len(PHASE_ORDER) - 1:
-        return  # Already at showdown
-
-    next_phase = PHASE_ORDER[phase_idx + 1]
-
-    # Refresh hand to get latest community cards
-    db.refresh(hand)
-    if not _can_advance_to_phase(hand, next_phase):
-        # Street is complete but community cards aren't dealt yet.
-        # Clear current_seat so no player is prompted to act.
-        state.current_seat = None
-        return  # Can't advance yet — not enough community cards
-
-    state.phase = next_phase
-    state.current_seat = _first_to_act_seat(db, game_id, hand, next_phase)
-
-    # Showdown is terminal — no player should act
-    if next_phase == 'showdown':
-        state.current_seat = None
-
-
-def _activate_preflop(db: Session, game_id: int, hand: Hand, state: HandState) -> None:
-    """Transition from awaiting_cards to preflop: post blinds and set first-to-act."""
-    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
-    sb = game.small_blind if game else 0.10
-    bb = game.big_blind if game else 0.20
-
-    sb_ph = (
-        db.query(PlayerHand)
-        .filter(
-            PlayerHand.hand_id == hand.hand_id,
-            PlayerHand.player_id == hand.sb_player_id,
-        )
-        .first()
-    )
-    bb_ph = (
-        db.query(PlayerHand)
-        .filter(
-            PlayerHand.hand_id == hand.hand_id,
-            PlayerHand.player_id == hand.bb_player_id,
-        )
-        .first()
-    )
-    db.add(
-        PlayerHandAction(
-            player_hand_id=sb_ph.player_hand_id,
-            street='preflop',
-            action='blind',
-            amount=sb,
-        )
-    )
-    db.add(
-        PlayerHandAction(
-            player_hand_id=bb_ph.player_hand_id,
-            street='preflop',
-            action='blind',
-            amount=bb,
-        )
-    )
-    hand.pot = sb + bb
-
-    state.phase = 'preflop'
-    state.current_seat = _first_to_act_seat(db, game_id, hand, 'preflop')
+def _touch_hand_state(db: Session, hand_id: int) -> None:
+    """Update HandState.updated_at to invalidate status ETags."""
+    hs = db.query(HandState).filter(HandState.hand_id == hand_id).first()
+    if hs:
+        hs.updated_at = datetime.now(timezone.utc)
 
 
 def _resolve_side_pot_names(side_pots_raw: list[dict], db: Session) -> list[dict]:
@@ -326,17 +130,40 @@ def get_hand_status(
     response: Response,
     if_none_match: Annotated[str | None, Header()] = None,
 ):
-    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
+    game = (
+        db.query(GameSession)
+        .options(selectinload(GameSession.players))
+        .filter(GameSession.game_id == game_id)
+        .first()
+    )
     if game is None:
         raise HTTPException(status_code=404, detail='Game session not found')
 
     hand = (
         db.query(Hand)
+        .options(selectinload(Hand.player_hands))
         .filter(Hand.game_id == game_id, Hand.hand_number == hand_number)
         .first()
     )
     if hand is None:
         raise HTTPException(status_code=404, detail='Hand not found')
+
+    # Cheap ETag pre-check — avoids heavy queries if nothing changed
+    state_meta = (
+        db.query(HandState.updated_at, HandState.phase)
+        .filter(HandState.hand_id == hand.hand_id)
+        .first()
+    )
+    if state_meta and if_none_match:
+        cheap_etag = (
+            '"'
+            + hashlib.md5(
+                f'{hand.hand_id}:{state_meta.updated_at}:{state_meta.phase}:{hand.pot}'.encode()
+            ).hexdigest()
+            + '"'
+        )
+        if if_none_match == cheap_etag:
+            return Response(status_code=304, headers={'etag': cheap_etag})
 
     community_recorded = any(
         c is not None for c in [hand.flop_1, hand.turn, hand.river]
@@ -344,6 +171,36 @@ def get_hand_status(
 
     # Build a lookup of player_id -> PlayerHand for this hand
     ph_by_player_id = {ph.player_id: ph for ph in hand.player_hands}
+
+    # Build a lookup of player_hand_id -> latest action name
+    last_action_by_ph_id: dict[int, str | None] = {}
+    for ph in hand.player_hands:
+        latest = (
+            db.query(PlayerHandAction)
+            .filter(PlayerHandAction.player_hand_id == ph.player_hand_id)
+            .order_by(PlayerHandAction.created_at.desc())
+            .first()
+        )
+        last_action_by_ph_id[ph.player_hand_id] = latest.action if latest else None
+
+    # Build a lookup of player_id -> current_chips from GamePlayer
+    gp_rows = (
+        db.query(GamePlayer.player_id, GamePlayer.current_chips)
+        .filter(GamePlayer.game_id == game_id)
+        .all()
+    )
+    chips_by_player_id = {gp.player_id: gp.current_chips for gp in gp_rows}
+
+    # Build a lookup of player_id -> total pot contribution (sum of all action amounts)
+    contrib_by_player_id: dict[int, float] = {}
+    for ph in hand.player_hands:
+        all_actions = (
+            db.query(PlayerHandAction.amount)
+            .filter(PlayerHandAction.player_hand_id == ph.player_hand_id)
+            .all()
+        )
+        total = round(sum(a.amount for a in all_actions if a.amount), 2)
+        contrib_by_player_id[ph.player_id] = total
 
     players: list[PlayerStatusEntry] = []
     for player in game.players:
@@ -356,18 +213,42 @@ def get_hand_status(
                 card_2=ph.card_2 if ph else None,
                 result=ph.result if ph else None,
                 outcome_street=ph.outcome_street if ph else None,
+                last_action=last_action_by_ph_id.get(ph.player_hand_id) if ph else None,
+                current_chips=chips_by_player_id.get(player.player_id),
+                pot_contribution=contrib_by_player_id.get(player.player_id, 0),
             )
         )
 
     raw_side_pots = json.loads(hand.side_pots) if hand.side_pots else []
     state = db.query(HandState).filter(HandState.hand_id == hand.hand_id).first()
 
-    # Try phase advancement (community cards may have been dealt since last action)
+    # Compute shared query data once before phase advancement
+    actions_data: list[dict] = []
+    seats: list[tuple[int, int]] = []
     if state:
-        _try_advance_phase(db, game_id, hand, state)
-        db.commit()
-        db.refresh(state)
-        db.refresh(hand)
+        old_phase = state.phase
+        actions_data = get_actions_this_street(db, hand, state.phase)
+        seats = get_active_seat_order(db, game_id, hand)
+        advanced = try_advance_phase(
+            db,
+            game_id,
+            hand,
+            state,
+            actions_cache=actions_data,
+            seats_cache=seats,
+        )
+        if advanced:
+            state.updated_at = datetime.now(timezone.utc)
+            db.commit()
+            db.refresh(state)
+            db.refresh(hand)
+        # If phase advanced, actions for the new phase are empty
+        if state.phase != old_phase:
+            actions_data = get_actions_this_street(db, hand, state.phase)
+
+    # Reuse already-fetched game for blind amounts
+    sb = game.small_blind if game else 0.10
+    bb = game.big_blind if game else 0.20
 
     body = HandStatusResponse(
         hand_number=hand.hand_number,
@@ -376,6 +257,8 @@ def get_hand_status(
         current_player_name=None,
         legal_actions=[],
         amount_to_call=0,
+        minimum_bet=None,
+        minimum_raise=None,
         pot=hand.pot or 0,
         side_pots=_resolve_side_pot_names(raw_side_pots, db),
         phase=state.phase if state else 'preflop',
@@ -396,26 +279,20 @@ def get_hand_status(
             .first()
         )
         if current_gp:
-            actions_data = _get_actions_this_street(db, hand, state.phase)
-            game_session = (
-                db.query(GameSession).filter(GameSession.game_id == game_id).first()
-            )
-            sb = game_session.small_blind if game_session else 0.10
-            bb = game_session.big_blind if game_session else 0.20
             la = get_legal_actions(
                 state.phase, actions_data, current_gp.player_id, (sb, bb)
             )
             body.legal_actions = la['legal_actions']
             body.amount_to_call = la['amount_to_call']
+            body.minimum_bet = la['minimum_bet']
+            body.minimum_raise = la['minimum_raise']
 
     # Compute street_complete flag (independent of current_seat)
     if state and state.phase not in ('awaiting_cards', 'showdown'):
-        actions_data_sc = _get_actions_this_street(db, hand, state.phase)
-        seats = _get_active_seat_order(db, game_id, hand)
         active_non_folded_ids = {pid for _, pid in seats}
         all_in_ids = {ph.player_id for ph in hand.player_hands if ph.is_all_in}
         body.street_complete = is_street_complete(
-            actions_data_sc,
+            actions_data,
             active_non_folded_ids,
             all_in_ids,
             state.phase,
@@ -428,7 +305,18 @@ def get_hand_status(
             body.current_player_name is not None and p.name == body.current_player_name
         )
 
-    etag = '"' + hashlib.md5(body.model_dump_json().encode()).hexdigest() + '"'
+    # Refresh state to get latest updated_at after any phase advancement
+    if state:
+        db.refresh(state)
+        etag = (
+            '"'
+            + hashlib.md5(
+                f'{hand.hand_id}:{state.updated_at}:{state.phase}:{hand.pot}'.encode()
+            ).hexdigest()
+            + '"'
+        )
+    else:
+        etag = '"' + hashlib.md5(body.model_dump_json().encode()).hexdigest() + '"'
 
     if if_none_match and if_none_match == etag:
         return Response(status_code=304, headers={'etag': etag})
@@ -442,12 +330,14 @@ def list_hands(
     game_id: int,
     db: Annotated[Session, Depends(get_db)],
 ):
-    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
-    if game is None:
-        raise HTTPException(status_code=404, detail='Game session not found')
+    get_game_or_404(db, game_id)
 
     hands = (
-        db.query(Hand).filter(Hand.game_id == game_id).order_by(Hand.hand_number).all()
+        db.query(Hand)
+        .options(selectinload(Hand.player_hands))
+        .filter(Hand.game_id == game_id)
+        .order_by(Hand.hand_number)
+        .all()
     )
 
     return [_build_hand_response(hand, db) for hand in hands]
@@ -462,21 +352,14 @@ def get_hand_actions(
     hand_number: int,
     db: Annotated[Session, Depends(get_db)],
 ):
-    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
-    if game is None:
-        raise HTTPException(status_code=404, detail='Game session not found')
+    get_game_or_404(db, game_id)
 
-    hand = (
-        db.query(Hand)
-        .filter(Hand.game_id == game_id, Hand.hand_number == hand_number)
-        .first()
-    )
-    if hand is None:
-        raise HTTPException(status_code=404, detail='Hand not found')
+    hand = get_hand_or_404(db, game_id, hand_number)
 
     actions = (
         db.query(PlayerHandAction)
         .join(PlayerHand, PlayerHandAction.player_hand_id == PlayerHand.player_hand_id)
+        .options(joinedload(PlayerHandAction.player_hand).joinedload(PlayerHand.player))
         .filter(PlayerHand.hand_id == hand.hand_id)
         .order_by(PlayerHandAction.created_at)
         .all()
@@ -500,9 +383,7 @@ def start_hand(
     db: Annotated[Session, Depends(get_db)],
 ):
     """Create a new hand, add all active players, and auto-assign SB/BB."""
-    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
-    if game is None:
-        raise HTTPException(status_code=404, detail='Game session not found')
+    get_game_or_404(db, game_id)
 
     # Get active players sorted by seat_number (nulls last), then player_id
     active_gps = (
@@ -601,6 +482,27 @@ def start_hand(
     return _build_hand_response(hand, db)
 
 
+@router.get('/{game_id}/hands/latest', response_model=HandResponse | None)
+def get_latest_hand(
+    game_id: int,
+    db: Annotated[Session, Depends(get_db)],
+):
+    """Return the most recent hand for a game, or null if no hands exist."""
+    get_game_or_404(db, game_id)
+
+    hand = (
+        db.query(Hand)
+        .options(selectinload(Hand.player_hands))
+        .filter(Hand.game_id == game_id)
+        .order_by(Hand.hand_number.desc())
+        .first()
+    )
+    if hand is None:
+        return None
+
+    return _build_hand_response(hand, db)
+
+
 @router.get(
     '/{game_id}/hands/{hand_number}/state',
     response_model=HandStateResponse,
@@ -611,26 +513,20 @@ def get_hand_state(
     db: Annotated[Session, Depends(get_db)],
 ):
     """Return the current turn state for a hand."""
-    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
-    if game is None:
-        raise HTTPException(status_code=404, detail='Game session not found')
+    get_game_or_404(db, game_id)
 
-    hand = (
-        db.query(Hand)
-        .filter(Hand.game_id == game_id, Hand.hand_number == hand_number)
-        .first()
-    )
-    if hand is None:
-        raise HTTPException(status_code=404, detail='Hand not found')
+    hand = get_hand_or_404(db, game_id, hand_number)
 
     state = db.query(HandState).filter(HandState.hand_id == hand.hand_id).first()
     if state is None:
         raise HTTPException(status_code=404, detail='Hand state not found')
 
     # Try phase advancement (community cards may have been dealt since last action)
-    _try_advance_phase(db, game_id, hand, state)
-    db.commit()
-    db.refresh(state)
+    advanced = try_advance_phase(db, game_id, hand, state)
+    if advanced:
+        state.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(state)
 
     current_name = _get_player_name_for_seat(db, game_id, state.current_seat)
 
@@ -648,12 +544,11 @@ def get_hand(
     hand_number: int,
     db: Annotated[Session, Depends(get_db)],
 ):
-    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
-    if game is None:
-        raise HTTPException(status_code=404, detail='Game session not found')
+    get_game_or_404(db, game_id)
 
     hand = (
         db.query(Hand)
+        .options(selectinload(Hand.player_hands))
         .filter(Hand.game_id == game_id, Hand.hand_number == hand_number)
         .first()
     )
@@ -675,22 +570,19 @@ def get_hand_equity(
     db: Annotated[Session, Depends(get_db)],
     player: str | None = None,
 ):
-    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
-    if game is None:
-        raise HTTPException(status_code=404, detail='Game session not found')
+    get_game_or_404(db, game_id)
 
-    hand = (
-        db.query(Hand)
-        .filter(Hand.game_id == game_id, Hand.hand_number == hand_number)
-        .first()
-    )
-    if hand is None:
-        raise HTTPException(status_code=404, detail='Hand not found')
+    hand = get_hand_or_404(db, game_id, hand_number)
 
-    # Collect players with non-null hole cards
+    # Collect non-folded players with non-null hole cards
+    folded_player_ids = {
+        ph.player_id for ph in hand.player_hands if ph.result == 'folded'
+    }
     players_with_cards: list[tuple[str, list[tuple[str, str]], list[str]]] = []
     for ph in hand.player_hands:
         if ph.card_1 is None or ph.card_2 is None:
+            continue
+        if ph.player_id in folded_player_ids:
             continue
         p = db.query(Player).filter(Player.player_id == ph.player_id).first()
         player_name = p.name if p else ''
@@ -755,17 +647,9 @@ def edit_community_cards(
     payload: CommunityCardsUpdate,
     db: Annotated[Session, Depends(get_db)],
 ):
-    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
-    if game is None:
-        raise HTTPException(status_code=404, detail='Game session not found')
+    get_game_or_404(db, game_id)
 
-    hand = (
-        db.query(Hand)
-        .filter(Hand.game_id == game_id, Hand.hand_number == hand_number)
-        .first()
-    )
-    if hand is None:
-        raise HTTPException(status_code=404, detail='Hand not found')
+    hand = get_hand_or_404(db, game_id, hand_number)
 
     # Build full card set: new community cards + existing player hole cards
     all_cards = [
@@ -793,6 +677,7 @@ def edit_community_cards(
     hand.turn = str(payload.turn) if payload.turn is not None else None
     hand.river = str(payload.river) if payload.river is not None else None
 
+    _touch_hand_state(db, hand.hand_id)
     db.commit()
     db.refresh(hand)
 
@@ -804,9 +689,18 @@ def _build_hand_response(hand: Hand, db: Session) -> HandResponse:
     community = [
         c for c in [hand.flop_1, hand.flop_2, hand.flop_3, hand.turn, hand.river] if c
     ]
+
+    # Batch-fetch all needed Player rows in one query
+    player_ids = {ph.player_id for ph in hand.player_hands}
+    if hand.sb_player_id:
+        player_ids.add(hand.sb_player_id)
+    if hand.bb_player_id:
+        player_ids.add(hand.bb_player_id)
+    players = db.query(Player).filter(Player.player_id.in_(player_ids)).all()
+    id_to_name = {p.player_id: p.name for p in players}
+
     player_hand_responses: list[PlayerHandResponse] = []
     for ph in hand.player_hands:
-        player = db.query(Player).filter(Player.player_id == ph.player_id).first()
         hole = [c for c in [ph.card_1, ph.card_2] if c]
         hand_desc = describe_hand(hole, community) if len(hole) == 2 else None
         player_hand_responses.append(
@@ -814,7 +708,7 @@ def _build_hand_response(hand: Hand, db: Session) -> HandResponse:
                 player_hand_id=ph.player_hand_id,
                 hand_id=ph.hand_id,
                 player_id=ph.player_id,
-                player_name=player.name if player else '',
+                player_name=id_to_name.get(ph.player_id, ''),
                 card_1=ph.card_1,
                 card_2=ph.card_2,
                 result=ph.result,
@@ -823,18 +717,8 @@ def _build_hand_response(hand: Hand, db: Session) -> HandResponse:
                 winning_hand_description=hand_desc,
             )
         )
-    sb_name = None
-    if hand.sb_player_id is not None:
-        sb_player = (
-            db.query(Player).filter(Player.player_id == hand.sb_player_id).first()
-        )
-        sb_name = sb_player.name if sb_player else None
-    bb_name = None
-    if hand.bb_player_id is not None:
-        bb_player = (
-            db.query(Player).filter(Player.player_id == hand.bb_player_id).first()
-        )
-        bb_name = bb_player.name if bb_player else None
+    sb_name = id_to_name.get(hand.sb_player_id) if hand.sb_player_id else None
+    bb_name = id_to_name.get(hand.bb_player_id) if hand.bb_player_id else None
     raw_side_pots = json.loads(hand.side_pots) if hand.side_pots else []
     return HandResponse(
         hand_id=hand.hand_id,
@@ -858,16 +742,8 @@ def _get_game_and_hand(
     game_id: int, hand_number: int, db: Session
 ) -> tuple[GameSession, Hand]:
     """Look up game + hand or raise 404."""
-    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
-    if game is None:
-        raise HTTPException(status_code=404, detail='Game session not found')
-    hand = (
-        db.query(Hand)
-        .filter(Hand.game_id == game_id, Hand.hand_number == hand_number)
-        .first()
-    )
-    if hand is None:
-        raise HTTPException(status_code=404, detail='Hand not found')
+    game = get_game_or_404(db, game_id)
+    hand = get_hand_or_404(db, game_id, hand_number)
     return game, hand
 
 
@@ -901,6 +777,7 @@ def set_flop(
     hand.flop_2 = str(payload.flop_2)
     hand.flop_3 = str(payload.flop_3)
 
+    _touch_hand_state(db, hand.hand_id)
     db.commit()
     db.refresh(hand)
     return _build_hand_response(hand, db)
@@ -938,6 +815,7 @@ def set_turn(
 
     hand.turn = str(payload.turn)
 
+    _touch_hand_state(db, hand.hand_id)
     db.commit()
     db.refresh(hand)
     return _build_hand_response(hand, db)
@@ -978,6 +856,7 @@ def set_river(
 
     hand.river = str(payload.river)
 
+    _touch_hand_state(db, hand.hand_id)
     db.commit()
     db.refresh(hand)
     return _build_hand_response(hand, db)
@@ -994,37 +873,13 @@ def edit_player_hole_cards(
     payload: HoleCardsUpdate,
     db: Annotated[Session, Depends(get_db)],
 ):
-    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
-    if game is None:
-        raise HTTPException(status_code=404, detail='Game session not found')
+    get_game_or_404(db, game_id)
 
-    hand = (
-        db.query(Hand)
-        .filter(Hand.game_id == game_id, Hand.hand_number == hand_number)
-        .first()
-    )
-    if hand is None:
-        raise HTTPException(status_code=404, detail='Hand not found')
+    hand = get_hand_or_404(db, game_id, hand_number)
 
-    player = (
-        db.query(Player).filter(func.lower(Player.name) == player_name.lower()).first()
-    )
-    if player is None:
-        raise HTTPException(status_code=404, detail=f'Player {player_name!r} not found')
+    player = get_player_by_name_or_404(db, player_name)
 
-    ph = (
-        db.query(PlayerHand)
-        .filter(
-            PlayerHand.hand_id == hand.hand_id,
-            PlayerHand.player_id == player.player_id,
-        )
-        .first()
-    )
-    if ph is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f'Player {player_name!r} not found in this hand',
-        )
+    ph = get_player_hand_or_404(db, hand.hand_id, player.player_id, player_name)
 
     # Build full card set: new hole cards + community cards + other players' hole cards
     all_cards = [str(c) for c in [payload.card_1, payload.card_2] if c is not None]
@@ -1054,7 +909,10 @@ def edit_player_hole_cards(
     if state and state.phase == 'awaiting_cards':
         all_have_cards = all(p.card_1 is not None for p in hand.player_hands)
         if all_have_cards:
-            _activate_preflop(db, game_id, hand, state)
+            activate_preflop(db, game_id, hand, state)
+
+    if state:
+        state.updated_at = datetime.now(timezone.utc)
 
     db.commit()
     db.refresh(ph)
@@ -1083,27 +941,11 @@ def add_player_to_hand(
     payload: PlayerHandEntry,
     db: Annotated[Session, Depends(get_db)],
 ):
-    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
-    if game is None:
-        raise HTTPException(status_code=404, detail='Game session not found')
+    game = get_game_or_404(db, game_id)
 
-    hand = (
-        db.query(Hand)
-        .filter(Hand.game_id == game_id, Hand.hand_number == hand_number)
-        .first()
-    )
-    if hand is None:
-        raise HTTPException(status_code=404, detail='Hand not found')
+    hand = get_hand_or_404(db, game_id, hand_number)
 
-    player = (
-        db.query(Player)
-        .filter(func.lower(Player.name) == payload.player_name.lower())
-        .first()
-    )
-    if player is None:
-        raise HTTPException(
-            status_code=404, detail=f'Player {payload.player_name!r} not found'
-        )
+    player = get_player_by_name_or_404(db, payload.player_name)
 
     game_player_ids = {p.player_id for p in game.players}
     if player.player_id not in game_player_ids:
@@ -1154,6 +996,7 @@ def add_player_to_hand(
         profit_loss=payload.profit_loss,
     )
     db.add(ph)
+    _touch_hand_state(db, hand.hand_id)
     db.commit()
     db.refresh(ph)
 
@@ -1180,38 +1023,15 @@ def remove_player_from_hand(
     player_name: str,
     db: Annotated[Session, Depends(get_db)],
 ):
-    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
-    if game is None:
-        raise HTTPException(status_code=404, detail='Game session not found')
+    get_game_or_404(db, game_id)
 
-    hand = (
-        db.query(Hand)
-        .filter(Hand.game_id == game_id, Hand.hand_number == hand_number)
-        .first()
-    )
-    if hand is None:
-        raise HTTPException(status_code=404, detail='Hand not found')
+    hand = get_hand_or_404(db, game_id, hand_number)
 
-    player = (
-        db.query(Player).filter(func.lower(Player.name) == player_name.lower()).first()
-    )
-    if player is None:
-        raise HTTPException(status_code=404, detail=f'Player {player_name!r} not found')
+    player = get_player_by_name_or_404(db, player_name)
 
-    ph = (
-        db.query(PlayerHand)
-        .filter(
-            PlayerHand.hand_id == hand.hand_id,
-            PlayerHand.player_id == player.player_id,
-        )
-        .first()
-    )
-    if ph is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f'Player {player_name!r} not found in this hand',
-        )
+    ph = get_player_hand_or_404(db, hand.hand_id, player.player_id, player_name)
 
+    _touch_hand_state(db, hand.hand_id)
     db.delete(ph)
     db.commit()
 
@@ -1222,28 +1042,11 @@ def delete_hand(
     hand_number: int,
     db: Annotated[Session, Depends(get_db)],
 ):
-    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
-    if game is None:
-        raise HTTPException(status_code=404, detail='Game session not found')
+    get_game_or_404(db, game_id)
 
-    hand = (
-        db.query(Hand)
-        .filter(Hand.game_id == game_id, Hand.hand_number == hand_number)
-        .first()
-    )
-    if hand is None:
-        raise HTTPException(status_code=404, detail='Hand not found')
+    hand = get_hand_or_404(db, game_id, hand_number)
 
-    player_hand_ids = [
-        ph.player_hand_id
-        for ph in db.query(PlayerHand).filter(PlayerHand.hand_id == hand.hand_id).all()
-    ]
-    if player_hand_ids:
-        db.query(PlayerHandAction).filter(
-            PlayerHandAction.player_hand_id.in_(player_hand_ids)
-        ).delete(synchronize_session=False)
-    db.query(PlayerHand).filter(PlayerHand.hand_id == hand.hand_id).delete()
-    db.query(HandState).filter(HandState.hand_id == hand.hand_id).delete()
+    # Cascade deletes player_hands → actions, hand_state via ORM cascade
     db.delete(hand)
     db.commit()
 
@@ -1254,9 +1057,7 @@ def record_hand(
     payload: HandCreate,
     db: Annotated[Session, Depends(get_db)],
 ):
-    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
-    if game is None:
-        raise HTTPException(status_code=404, detail='Game session not found')
+    game = get_game_or_404(db, game_id)
 
     all_cards = []
     for card in (
@@ -1307,16 +1108,7 @@ def record_hand(
     db.flush()
 
     for entry in payload.player_entries:
-        player = (
-            db.query(Player)
-            .filter(func.lower(Player.name) == entry.player_name.lower())
-            .first()
-        )
-        if player is None:
-            raise HTTPException(
-                status_code=404,
-                detail=f'Player {entry.player_name!r} not found',
-            )
+        player = get_player_by_name_or_404(db, entry.player_name)
         if player.player_id not in game_player_ids:
             raise HTTPException(
                 status_code=400,
@@ -1351,37 +1143,13 @@ def update_player_result(
     payload: PlayerResultUpdate,
     db: Annotated[Session, Depends(get_db)],
 ):
-    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
-    if game is None:
-        raise HTTPException(status_code=404, detail='Game session not found')
+    get_game_or_404(db, game_id)
 
-    hand = (
-        db.query(Hand)
-        .filter(Hand.game_id == game_id, Hand.hand_number == hand_number)
-        .first()
-    )
-    if hand is None:
-        raise HTTPException(status_code=404, detail='Hand not found')
+    hand = get_hand_or_404(db, game_id, hand_number)
 
-    player = (
-        db.query(Player).filter(func.lower(Player.name) == player_name.lower()).first()
-    )
-    if player is None:
-        raise HTTPException(status_code=404, detail=f'Player {player_name!r} not found')
+    player = get_player_by_name_or_404(db, player_name)
 
-    ph = (
-        db.query(PlayerHand)
-        .filter(
-            PlayerHand.hand_id == hand.hand_id,
-            PlayerHand.player_id == player.player_id,
-        )
-        .first()
-    )
-    if ph is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f'Player {player_name!r} not found in this hand',
-        )
+    ph = get_player_hand_or_404(db, hand.hand_id, player.player_id, player_name)
 
     # --- Outcome street validation ---
     # 'handed_back' is a participation marker, not an outcome — skip validation
@@ -1477,6 +1245,35 @@ def update_player_result(
     ph.profit_loss = payload.profit_loss
     ph.outcome_street = payload.outcome_street
 
+    # Credit/debit chip stack when profit_loss is set
+    if payload.profit_loss is not None:
+        gp = (
+            db.query(GamePlayer)
+            .filter(
+                GamePlayer.game_id == game_id,
+                GamePlayer.player_id == player.player_id,
+            )
+            .first()
+        )
+        if gp and gp.current_chips is not None:
+            # Compute player's total contribution from betting actions in this hand
+            actions = (
+                db.query(PlayerHandAction)
+                .filter(
+                    PlayerHandAction.player_hand_id == ph.player_hand_id,
+                    PlayerHandAction.action.in_(['blind', 'call', 'bet', 'raise']),
+                )
+                .all()
+            )
+            contribution = sum(a.amount or 0 for a in actions)
+            # credit = contribution + profit_loss
+            # For winners: equals pot share (positive)
+            # For losers/folders: equals 0 (contribution already deducted)
+            credit = round(contribution + payload.profit_loss, 2)
+            if credit != 0:
+                gp.current_chips = round(gp.current_chips + credit, 2)
+
+    _touch_hand_state(db, hand.hand_id)
     db.commit()
     db.refresh(ph)
 
@@ -1503,44 +1300,41 @@ def record_hand_results(
     payload: list[PlayerResultEntry],
     db: Annotated[Session, Depends(get_db)],
 ):
-    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
-    if game is None:
-        raise HTTPException(status_code=404, detail='Game session not found')
+    get_game_or_404(db, game_id)
 
-    hand = (
-        db.query(Hand)
-        .filter(Hand.game_id == game_id, Hand.hand_number == hand_number)
-        .first()
-    )
-    if hand is None:
-        raise HTTPException(status_code=404, detail='Hand not found')
+    hand = get_hand_or_404(db, game_id, hand_number)
 
     for entry in payload:
-        player = (
-            db.query(Player)
-            .filter(func.lower(Player.name) == entry.player_name.lower())
-            .first()
+        player = get_player_by_name_or_404(db, entry.player_name)
+        ph = get_player_hand_or_404(
+            db, hand.hand_id, player.player_id, entry.player_name
         )
-        if player is None:
-            raise HTTPException(
-                status_code=404,
-                detail=f'Player {entry.player_name!r} not found',
-            )
-        ph = (
-            db.query(PlayerHand)
-            .filter(
-                PlayerHand.hand_id == hand.hand_id,
-                PlayerHand.player_id == player.player_id,
-            )
-            .first()
-        )
-        if ph is None:
-            raise HTTPException(
-                status_code=404,
-                detail=f'Player {entry.player_name!r} not found in this hand',
-            )
         ph.result = entry.result
         ph.profit_loss = entry.profit_loss
+
+        # Credit/debit chip stack when profit_loss is set
+        if entry.profit_loss is not None:
+            gp = (
+                db.query(GamePlayer)
+                .filter(
+                    GamePlayer.game_id == game_id,
+                    GamePlayer.player_id == player.player_id,
+                )
+                .first()
+            )
+            if gp and gp.current_chips is not None:
+                actions = (
+                    db.query(PlayerHandAction)
+                    .filter(
+                        PlayerHandAction.player_hand_id == ph.player_hand_id,
+                        PlayerHandAction.action.in_(['blind', 'call', 'bet', 'raise']),
+                    )
+                    .all()
+                )
+                contribution = sum(a.amount or 0 for a in actions)
+                credit = round(contribution + entry.profit_loss, 2)
+                if credit != 0:
+                    gp.current_chips = round(gp.current_chips + credit, 2)
 
     db.commit()
     db.refresh(hand)
@@ -1561,23 +1355,11 @@ def record_player_action(
     db: Annotated[Session, Depends(get_db)],
     force: bool = Query(default=False),
 ):
-    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
-    if game is None:
-        raise HTTPException(status_code=404, detail='Game session not found')
+    get_game_or_404(db, game_id)
 
-    hand = (
-        db.query(Hand)
-        .filter(Hand.game_id == game_id, Hand.hand_number == hand_number)
-        .first()
-    )
-    if hand is None:
-        raise HTTPException(status_code=404, detail='Hand not found')
+    hand = get_hand_or_404(db, game_id, hand_number)
 
-    player = (
-        db.query(Player).filter(func.lower(Player.name) == player_name.lower()).first()
-    )
-    if player is None:
-        raise HTTPException(status_code=404, detail=f'Player {player_name!r} not found')
+    player = get_player_by_name_or_404(db, player_name)
 
     player_hand = (
         db.query(PlayerHand)
@@ -1592,6 +1374,29 @@ def record_player_action(
             status_code=404,
             detail=f'Player {player_name!r} is not recorded in this hand',
         )
+
+    game_player = (
+        db.query(GamePlayer)
+        .filter(
+            GamePlayer.game_id == game_id,
+            GamePlayer.player_id == player.player_id,
+        )
+        .first()
+    )
+
+    action_amount = payload.amount
+    if (
+        payload.is_all_in
+        and action_amount is None
+        and payload.action in ('bet', 'raise')
+    ):
+        current_chips = game_player.current_chips if game_player else None
+        if current_chips is None or current_chips <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail='Cannot infer all-in amount without a positive chip stack',
+            )
+        action_amount = round(current_chips, 2)
 
     # Turn-order validation (skip if force=true or no hand state)
     hand_state = db.query(HandState).filter(HandState.hand_id == hand.hand_id).first()
@@ -1614,7 +1419,7 @@ def record_player_action(
     # Compute amount_to_call before recording the action (for all-in detection)
     amount_to_call = 0.0
     if hand_state:
-        actions_data = _get_actions_this_street(db, hand, hand_state.phase)
+        actions_data = get_actions_this_street(db, hand, hand_state.phase)
         street_contribs: dict[int, float] = {}
         for a in actions_data:
             pid = a['player_id']
@@ -1623,7 +1428,31 @@ def record_player_action(
                     a.get('amount') or 0
                 )
         max_contrib = max(street_contribs.values()) if street_contribs else 0
-        amount_to_call = max_contrib - street_contribs.get(player.player_id, 0)
+        amount_to_call = round(
+            max_contrib - street_contribs.get(player.player_id, 0), 2
+        )
+
+    # --- NLHE action validation ---
+    if hand_state:
+        game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
+        bb = game.big_blind if game else 0.20
+        legal_info = get_legal_actions(
+            phase=hand_state.phase,
+            actions_this_street=actions_data,
+            current_player_id=player.player_id,
+            blind_amounts=(game.small_blind if game else 0.10, bb),
+        )
+        error = validate_action(
+            action=payload.action,
+            amount=action_amount,
+            legal_actions=legal_info['legal_actions'],
+            amount_to_call=legal_info['amount_to_call'],
+            actions_this_street=actions_data,
+            big_blind=bb,
+            is_all_in=payload.is_all_in,
+        )
+        if error:
+            raise HTTPException(status_code=400, detail=error)
 
     if payload.action == 'fold':
         if player_hand.result == 'folded':
@@ -1638,19 +1467,24 @@ def record_player_action(
         player_hand_id=player_hand.player_hand_id,
         street=payload.street,
         action=payload.action,
-        amount=payload.amount,
+        amount=action_amount,
     )
     db.add(action)
 
-    # Update pot
-    if payload.amount and payload.action in ('call', 'bet', 'raise', 'blind'):
-        hand.pot = (hand.pot or 0) + payload.amount
+    # Update pot and deduct from player's chip stack
+    if action_amount and payload.action in ('call', 'bet', 'raise', 'blind'):
+        hand.pot = (hand.pot or 0) + action_amount
+        # Deduct chips from the player's stack
+        if game_player and game_player.current_chips is not None:
+            game_player.current_chips = round(
+                game_player.current_chips - action_amount, 2
+            )
 
     # Detect all-in: explicit flag from client or auto-detect call-for-less
     if payload.is_all_in:
         player_hand.is_all_in = True
-    elif payload.action == 'call' and payload.amount is not None and amount_to_call > 0:
-        if payload.amount < amount_to_call:
+    elif payload.action == 'call' and action_amount is not None and amount_to_call > 0:
+        if action_amount < amount_to_call:
             player_hand.is_all_in = True
 
     db.flush()
@@ -1664,6 +1498,7 @@ def record_player_action(
             if hand_state:
                 hand_state.phase = 'showdown'
                 hand_state.current_seat = None
+                hand_state.updated_at = datetime.now(timezone.utc)
             db.commit()
             db.refresh(action)
             return action
@@ -1688,11 +1523,30 @@ def record_player_action(
 
     # Advance turn state
     if hand_state:
+        hand_state.updated_at = datetime.now(timezone.utc)
         hand_state.action_index += 1
-        next_s = _next_seat(db, game_id, hand, hand_state.current_seat)
+        # Compute shared query data once after flush
+        seats = get_active_seat_order(db, game_id, hand)
+        all_in_ids = {ph.player_id for ph in hand.player_hands if ph.is_all_in}
+        seats_excl_all_in = [(s, pid) for s, pid in seats if pid not in all_in_ids]
+        actions_data = get_actions_this_street(db, hand, hand_state.phase)
+        next_s = next_seat(
+            db,
+            game_id,
+            hand,
+            hand_state.current_seat,
+            seats_cache=seats_excl_all_in,
+        )
         hand_state.current_seat = next_s
         # Check if phase should advance
-        _try_advance_phase(db, game_id, hand, hand_state)
+        try_advance_phase(
+            db,
+            game_id,
+            hand,
+            hand_state,
+            actions_cache=actions_data,
+            seats_cache=seats,
+        )
 
     db.commit()
     db.refresh(action)

@@ -33,6 +33,23 @@ describe('CameraCapture', () => {
     expect(screen.getByText('Tap to open camera')).toBeDefined();
   });
 
+  it('file input is not display:none so mobile browsers allow programmatic click', () => {
+    render(<CameraCapture {...defaultProps} />);
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    expect(input).toBeTruthy();
+    // display:none inputs cannot be .click()-ed on iOS Safari / Android WebView
+    expect(input.style.display).not.toBe('none');
+  });
+
+  it('Open Camera button triggers file input click', () => {
+    render(<CameraCapture {...defaultProps} />);
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const clickSpy = vi.spyOn(input, 'click');
+    fireEvent.click(screen.getByText('Open Camera'));
+    expect(clickSpy).toHaveBeenCalled();
+    clickSpy.mockRestore();
+  });
+
   it('calls onCancel when Cancel button is clicked', () => {
     const onCancel = vi.fn();
     render(<CameraCapture {...defaultProps} onCancel={onCancel} />);

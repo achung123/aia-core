@@ -22,6 +22,7 @@ export interface PlayerInfo {
   is_active: boolean;
   seat_number: number | null;
   buy_in: number | null;
+  current_chips: number | null;
   rebuy_count: number;
   total_rebuys: number;
 }
@@ -87,6 +88,8 @@ export interface HandResponse {
   source_upload_id: number | null;
   sb_player_name: string | null;
   bb_player_name: string | null;
+  pot: number;
+  side_pots: unknown[];
   created_at: string;
   player_hands: PlayerHandResponse[];
 }
@@ -199,6 +202,9 @@ export interface PlayerStatusEntry {
   result: string | null;
   outcome_street: string | null;
   is_current_turn: boolean;
+  last_action: string | null;
+  current_chips: number | null;
+  pot_contribution: number;
 }
 
 export interface HandStatusResponse {
@@ -208,6 +214,8 @@ export interface HandStatusResponse {
   current_player_name: string | null;
   legal_actions: string[];
   amount_to_call: number;
+  minimum_bet?: number | null;
+  minimum_raise?: number | null;
   pot: number;
   side_pots: unknown[];
   street_complete: boolean;
@@ -218,6 +226,7 @@ export interface HandStatusResponse {
 
 export interface SeatAssignmentRequest {
   seat_number: number;
+  swap?: boolean;
 }
 
 // --- Rebuy ---
@@ -260,6 +269,22 @@ export interface CSVCommitSummary {
   hands_created: number;
   players_created: number;
   players_matched: number;
+}
+
+export interface ZipValidationResponse {
+  valid: boolean;
+  files_found: number;
+  files: string[];
+  errors: string[];
+}
+
+export interface ZipCommitSummary {
+  games_created: number;
+  hands_created: number;
+  players_created: number;
+  players_matched: number;
+  actions_created: number;
+  rebuys_created: number;
 }
 
 export interface CsvSchemaResponse {
@@ -346,11 +371,20 @@ export interface PlayerActionCreate {
   street: StreetEnum;
   action: ActionEnum;
   amount?: number | null;
+  is_all_in?: boolean;
 }
 
 export interface PlayerActionResponse {
   action_id: number;
   player_hand_id: number;
+  street: string;
+  action: string;
+  amount: number | null;
+  created_at: string;
+}
+
+export interface HandActionResponse {
+  player_name: string;
   street: string;
   action: string;
   amount: number | null;

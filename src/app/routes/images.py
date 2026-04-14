@@ -12,19 +12,16 @@ from sqlalchemy.orm import Session
 from app.database.models import (
     CardDetection,
     DetectionCorrection,
-    GameSession,
     Hand,
     ImageUpload,
     Player,
     PlayerHand,
 )
+from app.database.queries import get_game_or_404
 from app.database.session import get_db
 from app.services.card_detector import CardDetector, MockCardDetector, YoloCardDetector
-from pydantic_models.app_models import (
-    ConfirmDetectionRequest,
-    HandResponse,
-    PlayerHandResponse,
-)
+from pydantic_models.detection_schemas import ConfirmDetectionRequest
+from pydantic_models.hand_schemas import HandResponse, PlayerHandResponse
 from pydantic_models.card_validator import validate_no_duplicate_cards
 
 router = APIRouter(prefix='/games', tags=['images'])
@@ -64,9 +61,7 @@ async def upload_image(
     db: Annotated[Session, Depends(get_db)],
 ):
     """Accept a JPEG/PNG image upload, store it, and create an ImageUpload record."""
-    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
-    if game is None:
-        raise HTTPException(status_code=404, detail='Game session not found')
+    get_game_or_404(db, game_id)
 
     if file.content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(
@@ -232,9 +227,7 @@ def confirm_detection(
     db: Annotated[Session, Depends(get_db)],
 ):
     """Confirm detected cards and create a Hand + PlayerHand records."""
-    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
-    if game is None:
-        raise HTTPException(status_code=404, detail='Game session not found')
+    game = get_game_or_404(db, game_id)
 
     upload = (
         db.query(ImageUpload)

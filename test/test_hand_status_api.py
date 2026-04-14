@@ -8,6 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from app.database.models import Base
 from app.database.session import get_db
 from app.main import app
+from conftest import activate_hand
 
 DATABASE_URL = 'sqlite:///:memory:'
 engine = create_engine(
@@ -198,3 +199,62 @@ class TestHandStatusCommunityRecorded:
         resp = client.get(f'/games/{game_id}/hands/{hand_number}/status')
         data = resp.json()
         assert data['community_recorded'] is False
+
+
+class TestHandStatusLastAction:
+    """Each player entry includes last_action showing their most recent betting decision."""
+
+    def test_last_action_null_when_no_actions(self, client, empty_hand):
+        game_id, hand_number = empty_hand
+        client.post(
+            f'/games/{game_id}/hands/{hand_number}/players',
+            json={
+                'player_name': 'Alice',
+                'card_1': {'rank': 'A', 'suit': 'S'},
+                'card_2': {'rank': 'K', 'suit': 'H'},
+            },
+        )
+        resp = client.get(f'/games/{game_id}/hands/{hand_number}/status')
+        data = resp.json()
+        alice = next(p for p in data['players'] if p['name'] == 'Alice')
+        assert alice['last_action'] is None
+
+    def test_last_action_reflects_most_recent_action(self, client, game_with_players):
+        # Use start endpoint for proper betting state
+        resp = client.post(f'/games/{game_with_players}/hands/start')
+        assert resp.status_code == 201
+        hand_json = resp.json()
+        hand_number = hand_json['hand_number']
+
+        # Activate hand (players capture cards to move from awaiting_cards to preflop)
+        activate_hand(client, game_with_players, hand_json)
+
+        # Get status to find current player
+        status = client.get(
+            f'/games/{game_with_players}/hands/{hand_number}/status'
+        ).json()
+        current = status['current_player_name']
+        assert current is not None
+
+        # Get phase for action street
+        phase = status['phase']
+
+        # Record a call action for the current player
+        client.post(
+            f'/games/{game_with_players}/hands/{hand_number}/players/{current}/actions',
+            json={'street': phase, 'action': 'call', 'amount': 0.20},
+        )
+
+        # Check status again
+        status2 = client.get(
+            f'/games/{game_with_players}/hands/{hand_number}/status'
+        ).json()
+        player_entry = next(p for p in status2['players'] if p['name'] == current)
+        assert player_entry['last_action'] == 'call'
+
+    def test_idle_players_have_null_last_action(self, client, empty_hand):
+        game_id, hand_number = empty_hand
+        resp = client.get(f'/games/{game_id}/hands/{hand_number}/status')
+        data = resp.json()
+        for p in data['players']:
+            assert p['last_action'] is None

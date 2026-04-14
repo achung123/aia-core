@@ -91,7 +91,7 @@ class TestExportCsv:
         header = lines[0].strip()
         assert (
             header
-            == 'game_date,hand_number,player_name,hole_card_1,hole_card_2,flop_1,flop_2,flop_3,turn,river,result,profit_loss'
+            == 'game_date,hand_number,player_name,hole_card_1,hole_card_2,flop_1,flop_2,flop_3,turn,river,result,profit_loss,outcome_street,is_all_in'
         )
 
     def test_export_csv_has_correct_data_rows(self, client, game_with_hand):

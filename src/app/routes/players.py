@@ -8,8 +8,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database.models import Player
+from app.database.queries import get_player_by_name_or_404
 from app.database.session import get_db
-from pydantic_models.app_models import PlayerCreate, PlayerResponse
+from pydantic_models.player_schemas import PlayerCreate, PlayerResponse
 
 router = APIRouter(prefix='/players', tags=['players'])
 
@@ -47,11 +48,5 @@ def get_player_by_name(
     player_name: str,
     db: Annotated[Session, Depends(get_db)],
 ):
-    player = (
-        db.query(Player)
-        .filter(func.lower(Player.name) == func.lower(player_name))
-        .first()
-    )
-    if player is None:
-        raise HTTPException(status_code=404, detail='Player not found')
+    player = get_player_by_name_or_404(db, player_name)
     return player

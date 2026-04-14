@@ -44,13 +44,24 @@ def _status(client, game_id, hand_number=1):
     return client.get(f'/games/{game_id}/hands/{hand_number}/status').json()
 
 
-def _act(client, game_id, player_name, action, amount=None, hand_number=1, street=None):
+def _act(
+    client,
+    game_id,
+    player_name,
+    action,
+    amount=None,
+    hand_number=1,
+    street=None,
+    is_all_in=False,
+):
     """Record an action for the given player. Auto-detects street from state if not given."""
     if street is None:
         street = _state(client, game_id, hand_number)['phase']
     payload = {'street': street, 'action': action}
     if amount is not None:
         payload['amount'] = amount
+    if is_all_in:
+        payload['is_all_in'] = True
     return client.post(
         f'/games/{game_id}/hands/{hand_number}/players/{player_name}/actions',
         json=payload,
@@ -144,6 +155,8 @@ class TestHandStatusBettingFields:
         assert 'current_player_name' in status
         assert 'legal_actions' in status
         assert 'amount_to_call' in status
+        assert 'minimum_bet' in status
+        assert 'minimum_raise' in status
         assert 'pot' in status
         assert 'side_pots' in status
 
@@ -162,6 +175,8 @@ class TestHandStatusBettingFields:
         assert 'call' in status['legal_actions']
         assert 'fold' in status['legal_actions']
         assert status['amount_to_call'] == pytest.approx(0.20)
+        assert status['minimum_bet'] is None
+        assert status['minimum_raise'] == pytest.approx(0.40)
 
     def test_status_legal_actions_bb_option(self, client):
         """When everyone calls, BB can check (amount_to_call == 0)."""
@@ -182,6 +197,8 @@ class TestHandStatusBettingFields:
         assert 'check' in status['legal_actions']
         assert 'raise' in status['legal_actions']
         assert status['amount_to_call'] == 0
+        assert status['minimum_bet'] is None
+        assert status['minimum_raise'] == pytest.approx(0.20)
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -207,7 +224,7 @@ class TestTurnOrderEnforcement:
 
         resp = client.post(
             f'/games/{game_id}/hands/1/players/{wrong}/actions?force=true',
-            json={'street': 'preflop', 'action': 'call', 'amount': 0.20},
+            json={'street': 'preflop', 'action': 'fold'},
         )
         assert resp.status_code == 201
 
@@ -359,7 +376,14 @@ class TestSidePots:
         # UTG raises to 1.00
         _act(client, game_id, _current(client, game_id), 'raise', amount=1.00)
         # SB calls 0.50 (all-in-for-less: needs 0.90 but only puts in 0.50)
-        _act(client, game_id, _current(client, game_id), 'call', amount=0.50)
+        _act(
+            client,
+            game_id,
+            _current(client, game_id),
+            'call',
+            amount=0.50,
+            is_all_in=True,
+        )
         # BB calls 0.80 (full call)
         _act(client, game_id, _current(client, game_id), 'call', amount=0.80)
 
@@ -381,9 +405,23 @@ class TestSidePots:
         # UTG raises to 2.00
         _act(client, game_id, _current(client, game_id), 'raise', amount=2.00)
         # SB calls 0.50 (all-in, total = 0.60)
-        _act(client, game_id, _current(client, game_id), 'call', amount=0.50)
+        _act(
+            client,
+            game_id,
+            _current(client, game_id),
+            'call',
+            amount=0.50,
+            is_all_in=True,
+        )
         # BB calls 0.80 (all-in, total = 1.00)
-        _act(client, game_id, _current(client, game_id), 'call', amount=0.80)
+        _act(
+            client,
+            game_id,
+            _current(client, game_id),
+            'call',
+            amount=0.80,
+            is_all_in=True,
+        )
 
         hand = client.get(f'/games/{game_id}/hands/1').json()
         # Total = 0.10 + 0.20 + 2.00 + 0.50 + 0.80 = 3.60
@@ -428,6 +466,8 @@ class TestLegalActionCalculator:
         assert 'check' in result['legal_actions']
         assert 'bet' in result['legal_actions']
         assert result['amount_to_call'] == 0
+        assert result['minimum_bet'] == pytest.approx(0.20)
+        assert result['minimum_raise'] is None
 
     def test_facing_bet_allows_call_raise(self):
         from app.services.betting import get_legal_actions
@@ -443,6 +483,8 @@ class TestLegalActionCalculator:
         assert 'call' in result['legal_actions']
         assert 'raise' in result['legal_actions']
         assert result['amount_to_call'] == pytest.approx(0.50)
+        assert result['minimum_bet'] is None
+        assert result['minimum_raise'] == pytest.approx(1.00)
 
     def test_preflop_utg_faces_bb(self):
         from app.services.betting import get_legal_actions
@@ -458,6 +500,8 @@ class TestLegalActionCalculator:
         )
         assert 'call' in result['legal_actions']
         assert result['amount_to_call'] == pytest.approx(0.20)
+        assert result['minimum_bet'] is None
+        assert result['minimum_raise'] == pytest.approx(0.40)
 
 
 # ────────────────────────────────────────────────────────────────────

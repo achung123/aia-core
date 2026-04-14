@@ -170,13 +170,14 @@ export function MobilePlaybackView() {
   const [sessions, setSessions] = useState<GameSessionListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [drawerOpen, setDrawerOpen] = useState(true);
   const [activeGameId, setActiveGameId] = useState<number | null>(null);
+  const [activeGameStatus, setActiveGameStatus] = useState<string | null>(null);
   const [hands, setHands] = useState<HandResponse[]>([]);
   const [handIndex, setHandIndex] = useState(0);
   const [currentStreet, setCurrentStreet] = useState('Pre-Flop');
   const [equityMap, setEquityMap] = useState<Record<string, number> | null>(null);
   const [equityLoading, setEquityLoading] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   /* Fetch sessions on mount */
   useEffect(() => {
@@ -189,7 +190,8 @@ export function MobilePlaybackView() {
       .finally(() => setLoading(false));
   }, []);
 
-  /* Three.js scene lifecycle */
+  /* Three.js scene lifecycle — re-runs when activeGameId changes so the
+     canvas (only rendered for the playback screen) is in the DOM. */
   useEffect(() => {
     const canvas = canvasRef.current;
     const wrapper = wrapperRef.current;
@@ -200,37 +202,34 @@ export function MobilePlaybackView() {
 
     function init(): void {
       if (cancelled) return;
-      if (canvas!.clientWidth > 0 && canvas!.clientHeight > 0) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const scene: any = createPokerScene(canvas, {
-          width: canvas!.clientWidth,
-          height: canvas!.clientHeight,
-        });
-        sceneRef.current = scene;
-        scene.camera.position.set(0, 18, 6);
-        scene.camera.lookAt(0, 0, 0);
-        scene.camera.updateProjectionMatrix();
-        if (scene.controls) {
-          scene.controls.saveState();
-        }
 
-        // ResizeObserver to re-bound canvas when container changes
-        const canvasArea = canvas!.parentElement;
-        if (canvasArea) {
-          ro = new ResizeObserver((entries) => {
-            for (const entry of entries) {
-              const { width, height } = entry.contentRect;
-              if (width > 0 && height > 0) {
-                scene.renderer.setSize(width, height);
-                scene.camera.aspect = width / height;
-                scene.camera.updateProjectionMatrix();
-              }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const scene: any = createPokerScene(canvas, {
+        width: canvas!.clientWidth || canvas!.parentElement?.clientWidth || 800,
+        height: canvas!.clientHeight || canvas!.parentElement?.clientHeight || 600,
+      });
+      sceneRef.current = scene;
+      scene.camera.position.set(0, 18, 6);
+      scene.camera.lookAt(0, 0, 0);
+      scene.camera.updateProjectionMatrix();
+      if (scene.controls) {
+        scene.controls.saveState();
+      }
+
+      // ResizeObserver to re-bound canvas when container changes
+      const canvasArea = canvas!.parentElement;
+      if (canvasArea) {
+        ro = new ResizeObserver((entries) => {
+          for (const entry of entries) {
+            const { width, height } = entry.contentRect;
+            if (width > 0 && height > 0) {
+              scene.renderer.setSize(width, height);
+              scene.camera.aspect = width / height;
+              scene.camera.updateProjectionMatrix();
             }
-          });
-          ro.observe(canvasArea);
-        }
-      } else {
-        requestAnimationFrame(init);
+          }
+        });
+        ro.observe(canvasArea);
       }
     }
     init();
@@ -245,7 +244,7 @@ export function MobilePlaybackView() {
         sceneRef.current = null;
       }
     };
-  }, []);
+  }, [activeGameId]);
 
   /* Label position updates */
   function updateLabelPositions(): void {
@@ -373,8 +372,9 @@ export function MobilePlaybackView() {
   }
 
   async function selectGame(gameId: number): Promise<void> {
+    const session = sessions.find(s => s.game_id === gameId);
     setActiveGameId(gameId);
-    setDrawerOpen(false);
+    setActiveGameStatus(session?.status ?? null);
 
     try {
       const fetchedHands = await fetchHands(gameId);
@@ -383,21 +383,46 @@ export function MobilePlaybackView() {
       if (fetchedHands.length) {
         showHand(0, fetchedHands);
       }
+
+      // Start polling if game is active
+      if (session?.status === 'active') {
+        pollRef.current = setInterval(async () => {
+          try {
+            const updated = await fetchHands(gameId);
+            setHands(updated);
+          } catch {
+            // Silently ignore poll errors
+          }
+        }, 10_000);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
   }
 
   function handleBack(): void {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
     setActiveGameId(null);
+    setActiveGameStatus(null);
     setHands([]);
     setHandIndex(0);
     setCurrentStreet('Pre-Flop');
     setEquityMap(null);
-    setDrawerOpen(true);
     labelsRef.current.forEach(el => el.remove());
     labelsRef.current = [];
   }
+
+  /* Clean up polling on unmount */
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+      }
+    };
+  }, []);
 
   function handleSessionChange(newHandNumber: number): void {
     setHandIndex(newHandNumber - 1);
@@ -444,6 +469,56 @@ export function MobilePlaybackView() {
     }
   }, [activeGameId, handIndex, hands, currentStreet]);
 
+  /* ── Game selector screen ─────────────────────────────────────── */
+  if (!activeGameId) {
+    return (
+      <div data-testid="playback-game-selector" style={selectorStyles.container}>
+        <h2 style={selectorStyles.heading}>Playback</h2>
+
+        {loading && <p style={selectorStyles.loading}>Loading games…</p>}
+        {error && <p style={selectorStyles.error}>{error}</p>}
+
+        {!loading && !error && sessions.length === 0 && (
+          <p style={selectorStyles.empty}>No games available.</p>
+        )}
+
+        <div style={selectorStyles.list}>
+          {sessions.map(s => {
+            const isActive = s.status === 'active';
+            return (
+              <button
+                key={s.game_id}
+                data-testid="game-card"
+                style={{
+                  ...selectorStyles.card,
+                  ...(isActive ? selectorStyles.cardActive : selectorStyles.cardComplete),
+                }}
+                onClick={() => selectGame(s.game_id)}
+              >
+                <div style={selectorStyles.cardDate}>
+                  {s.game_date} <span style={selectorStyles.gameId}>#{s.game_id}</span>
+                </div>
+                <div style={selectorStyles.cardDetails}>
+                  <span style={{ fontWeight: 600 }}>
+                    {isActive ? '● Active' : 'Complete'}
+                  </span>
+                  <span>{s.player_count} players</span>
+                  <span>{s.hand_count} hands</span>
+                </div>
+                {s.winners && s.winners.length > 0 && (
+                  <div style={selectorStyles.winnersRow}>
+                    🏆 {s.winners.join(', ')}
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Playback screen ────────────────────────────────────────── */
   return (
     <div
       ref={wrapperRef}
@@ -451,15 +526,13 @@ export function MobilePlaybackView() {
       style={mobileStyles.wrapper}
     >
       {/* Back button (overlay on canvas) */}
-      {activeGameId && (
-        <button
-          data-testid="back-button"
-          onClick={handleBack}
-          style={mobileStyles.backButton}
-        >
-          ← Back
-        </button>
-      )}
+      <button
+        data-testid="back-button"
+        onClick={handleBack}
+        style={mobileStyles.backButton}
+      >
+        ← Back
+      </button>
 
       {/* Canvas area — flex:1 fills space between HUD */}
       <div data-testid="canvas-area" style={mobileStyles.canvasArea}>
@@ -488,65 +561,88 @@ export function MobilePlaybackView() {
           </div>
         )}
       </div>
-
-      {/* Bottom drawer */}
-      <div data-testid="bottom-drawer" style={mobileStyles.drawer}>
-        <button
-          data-testid="drawer-toggle"
-          onClick={() => setDrawerOpen(o => !o)}
-          style={mobileStyles.drawerToggle}
-        >
-          <span style={{ display: 'block', width: 40, height: 4, background: '#6366f1', borderRadius: 2, margin: '0 auto 6px' }} />
-          {drawerOpen ? '▼ Sessions' : '▲ Sessions'}
-        </button>
-
-        <div
-          data-testid="drawer-content"
-          style={{
-            display: drawerOpen ? 'block' : 'none',
-            overflowY: 'auto',
-            maxHeight: 'calc(60vh - 40px)',
-            padding: 8,
-          }}
-        >
-          {loading && <p style={{ color: '#aaa', textAlign: 'center' }}>Loading games…</p>}
-          {error && <p style={{ color: '#f55', textAlign: 'center' }}>{error}</p>}
-
-          {!loading && !error && sessions.length === 0 && (
-            <p style={{ color: '#aaa', textAlign: 'center' }}>No sessions found.</p>
-          )}
-
-          {sessions.map(s => (
-            <button
-              key={s.game_id}
-              data-testid="game-card"
-              onClick={() => selectGame(s.game_id)}
-              style={{
-                display: 'block',
-                width: '100%',
-                padding: 12,
-                marginBottom: 6,
-                background: s.game_id === activeGameId ? '#2a2a4e' : '#111',
-                color: '#ddd',
-                border: '1px solid #333',
-                borderRadius: 8,
-                cursor: 'pointer',
-                textAlign: 'left',
-              }}
-            >
-              <div style={{ fontWeight: 600 }}>{s.game_date}</div>
-              <div style={{ fontSize: 11, color: '#999' }}>
-                {s.hand_count ?? '?'} hands · {s.player_count ?? '?'} players
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
 
 /* ── Styles ───────────────────────────────────────────────────── */
+
+const selectorStyles: Record<string, CSSProperties> = {
+  container: {
+    maxWidth: 480,
+    margin: '0 auto',
+    padding: '1rem',
+  },
+  heading: {
+    fontSize: '1.4rem',
+    marginBottom: '0.75rem',
+    color: '#e2e8f0',
+  },
+  loading: {
+    textAlign: 'center',
+    color: '#6b7280',
+    padding: '2rem 0',
+  },
+  error: {
+    textAlign: 'center',
+    color: '#dc2626',
+    padding: '1rem 0',
+  },
+  empty: {
+    textAlign: 'center',
+    color: '#9ca3af',
+    padding: '2rem 0',
+  },
+  list: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.75rem',
+  },
+  card: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.4rem',
+    padding: '1rem',
+    borderRadius: 12,
+    border: '2px solid',
+    cursor: 'pointer',
+    textAlign: 'left',
+    background: 'none',
+    width: '100%',
+    fontSize: '1rem',
+    WebkitTapHighlightColor: 'transparent',
+  },
+  cardActive: {
+    borderColor: '#6366f1',
+    background: 'rgba(99, 102, 241, 0.12)',
+    color: '#c7d2fe',
+  },
+  cardComplete: {
+    borderColor: '#2e303a',
+    background: '#1e1f2b',
+    color: '#94a3b8',
+  },
+  cardDate: {
+    fontWeight: 'bold',
+    fontSize: '1.1rem',
+  },
+  gameId: {
+    fontWeight: 'normal',
+    fontSize: '0.85rem',
+    color: '#6b7280',
+  },
+  cardDetails: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '1rem',
+    fontSize: '0.9rem',
+  },
+  winnersRow: {
+    fontSize: '0.85rem',
+    fontWeight: 600,
+    color: '#4ade80',
+  },
+};
 
 const mobileStyles: Record<string, CSSProperties> = {
   wrapper: { display: 'flex', flexDirection: 'column', position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' },
@@ -569,28 +665,4 @@ const mobileStyles: Record<string, CSSProperties> = {
     fontFamily: 'system-ui, sans-serif',
   },
   scrubberMount: { zIndex: 5, flexShrink: 0 },
-  drawer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    background: '#1a1a2e',
-    borderTop: '2px solid #6366f1',
-    borderRadius: '14px 14px 0 0',
-    zIndex: 10,
-    maxHeight: '60vh',
-  },
-  drawerToggle: {
-    width: '100%',
-    padding: '12px 16px',
-    minHeight: 48,
-    background: 'linear-gradient(180deg, #252250, #1a1a2e)',
-    color: '#c7d2fe',
-    border: 'none',
-    borderRadius: '14px 14px 0 0',
-    cursor: 'pointer',
-    fontSize: 15,
-    fontWeight: 600,
-    letterSpacing: '0.02em',
-  },
 };

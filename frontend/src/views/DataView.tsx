@@ -7,9 +7,12 @@ import {
   createHand,
   uploadCsvValidate,
   uploadCsvCommit,
+  uploadZipValidate,
+  uploadZipCommit,
   updateCommunityCards,
   updateHolecards,
   exportGameCsvUrl,
+  exportGameZipUrl,
   deleteGame,
   deleteHand,
 } from '../api/client.ts';
@@ -223,6 +226,92 @@ function CsvUploadModal({ onClose, onDone }: CsvUploadModalProps) {
         </p>
         <label>CSV File</label>
         <input type="file" accept=".csv" style={{ width: '100%' }} onChange={handleFileChange} />
+        {status && <div className="status-msg" style={{ color: statusColor, whiteSpace: 'pre-wrap' }}>{status}</div>}
+        <div className="btn-row">
+          <button type="button" className="dv-btn" onClick={onClose}>Cancel</button>
+          <button type="button" className="dv-btn" disabled={!file || validating} onClick={handleValidate}>Validate</button>
+          <button type="button" className="dv-btn dv-btn-success" disabled={!validated || committing} onClick={handleCommit}>Commit</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── ZIP Upload Modal ─────────────────────────────────── */
+
+interface ZipUploadModalProps {
+  onClose: () => void;
+  onDone: () => void;
+}
+
+function ZipUploadModal({ onClose, onDone }: ZipUploadModalProps) {
+  const [file, setFile] = useState<File | null>(null);
+  const [status, setStatus] = useState('');
+  const [statusColor, setStatusColor] = useState('#94a3b8');
+  const [validated, setValidated] = useState(false);
+  const [validating, setValidating] = useState(false);
+  const [committing, setCommitting] = useState(false);
+
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    setFile(e.target.files?.[0] || null);
+    setValidated(false);
+    setStatus('');
+  };
+
+  const handleValidate = async () => {
+    if (!file) return;
+    setValidating(true);
+    setStatus('Validating…');
+    setStatusColor('#94a3b8');
+    try {
+      const result = await uploadZipValidate(file);
+      if (result.valid) {
+        setStatus(`✓ Valid — ${result.files_found} files: ${result.files.join(', ')}`);
+        setStatusColor('#34d399');
+        setValidated(true);
+      } else {
+        setStatus(`✗ Errors:\n${result.errors.join('\n')}`);
+        setStatusColor('#f87171');
+      }
+    } catch (e: unknown) {
+      setStatus(`Error: ${e instanceof Error ? e.message : String(e)}`);
+      setStatusColor('#f87171');
+    } finally { setValidating(false); }
+  };
+
+  const handleCommit = async () => {
+    if (!file) return;
+    setCommitting(true);
+    setStatus('Committing…');
+    setStatusColor('#94a3b8');
+    try {
+      const result = await uploadZipCommit(file);
+      setStatus(
+        `✓ Committed — ${result.games_created} games, ${result.hands_created} hands, ` +
+        `${result.players_created} new players, ${result.actions_created} actions, ${result.rebuys_created} rebuys`
+      );
+      setStatusColor('#34d399');
+      setTimeout(() => onDone(), 1500);
+    } catch (e: unknown) {
+      setStatus(`Error: ${e instanceof Error ? e.message : String(e)}`);
+      setStatusColor('#f87171');
+      setCommitting(false);
+    }
+  };
+
+  const handleOverlayClick = (e: MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) onClose();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={handleOverlayClick}>
+      <div className="modal">
+        <h2>Import Game from ZIP</h2>
+        <p className="helper-text">
+          ZIP containing: game_info.csv, hands.csv, and optionally players.csv, actions.csv, rebuys.csv
+        </p>
+        <label>ZIP File</label>
+        <input type="file" accept=".zip" style={{ width: '100%' }} onChange={handleFileChange} />
         {status && <div className="status-msg" style={{ color: statusColor, whiteSpace: 'pre-wrap' }}>{status}</div>}
         <div className="btn-row">
           <button type="button" className="dv-btn" onClick={onClose}>Cancel</button>
@@ -537,6 +626,15 @@ function HandDetails({ session, onRefresh }: HandDetailsProps) {
     a.remove();
   };
 
+  const handleExportZip = () => {
+    const a = document.createElement('a');
+    a.href = exportGameZipUrl(session.game_id);
+    a.download = '';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+
   if (error) return <td colSpan={COLUMNS.length} style={{ color: 'red' }}>{`Error: ${error}`}</td>;
   if (hands === null) return <td colSpan={COLUMNS.length}>Loading hands…</td>;
 
@@ -546,6 +644,7 @@ function HandDetails({ session, onRefresh }: HandDetailsProps) {
         <button type="button" className="dv-btn dv-btn-sm" onClick={() => setShowAddHand(true)}>+ Add Hand</button>
         <button type="button" className="dv-btn dv-btn-sm dv-btn-success" onClick={handleLoadViz}>▶ Load in Visualizer</button>
         <button type="button" className="dv-btn dv-btn-sm" onClick={handleExportCsv}>📥 Export CSV</button>
+        <button type="button" className="dv-btn dv-btn-sm" onClick={handleExportZip}>📦 Export ZIP</button>
         <button type="button" className="dv-btn dv-btn-sm dv-btn-danger" onClick={handleDeleteGame}>🗑 Delete Game</button>
       </div>
       {hands.length === 0 ? (
@@ -643,6 +742,7 @@ export function DataView() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [showCreateGame, setShowCreateGame] = useState(false);
   const [showCsvUpload, setShowCsvUpload] = useState(false);
+  const [showZipUpload, setShowZipUpload] = useState(false);
 
   const loadSessions = useCallback(() => {
     fetchSessions()
@@ -673,6 +773,7 @@ export function DataView() {
       <div className="toolbar">
         <button type="button" className="dv-btn dv-btn-primary" onClick={() => setShowCreateGame(true)}>+ New Game</button>
         <button type="button" className="dv-btn" onClick={() => setShowCsvUpload(true)}>Import CSV</button>
+        <button type="button" className="dv-btn" onClick={() => setShowZipUpload(true)}>Import ZIP</button>
       </div>
       {loading && <p className="loading">Loading sessions…</p>}
       {error && <p className="loading" style={{ color: 'red' }}>{`Error: ${error}`}</p>}
@@ -700,6 +801,9 @@ export function DataView() {
       )}
       {showCsvUpload && (
         <CsvUploadModal onClose={() => setShowCsvUpload(false)} onDone={() => { setShowCsvUpload(false); loadSessions(); }} />
+      )}
+      {showZipUpload && (
+        <ZipUploadModal onClose={() => setShowZipUpload(false)} onDone={() => { setShowZipUpload(false); loadSessions(); }} />
       )}
     </div>
   );

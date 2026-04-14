@@ -3,14 +3,11 @@
 import pytest
 from pydantic import ValidationError
 
-from pydantic_models.app_models import (
-    Card,
-    CardRank,
-    CardSuit,
+from pydantic_models.common import Card, CardRank, CardSuit, ResultEnum
+from pydantic_models.hand_schemas import (
     HandResultUpdate,
     PlayerHandEntry,
     PlayerResultEntry,
-    ResultEnum,
 )
 
 

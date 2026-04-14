@@ -22,17 +22,25 @@ class TestGetHandActionsOrdering:
     def test_returns_actions_ordered_by_created_at(self, client):
         game_id, hand_number = _seed_game_with_hand(client)
 
-        # Record several actions (use force=true to bypass turn order)
+        # Deal flop cards first so phase can advance after preflop completes
+        client.patch(
+            f'/games/{game_id}/hands/{hand_number}/flop',
+            json={'flop_1': '9H', 'flop_2': 'JD', 'flop_3': 'QS'},
+        )
+
+        # Record preflop actions in correct NLHE order
+        # Heads-up: Alice=SB, Bob=BB. SB acts first preflop.
         client.post(
-            f'/games/{game_id}/hands/{hand_number}/players/Alice/actions?force=true',
-            json={'street': 'preflop', 'action': 'call', 'amount': 0.20},
+            f'/games/{game_id}/hands/{hand_number}/players/Alice/actions',
+            json={'street': 'preflop', 'action': 'call', 'amount': 0.10},
         )
         client.post(
-            f'/games/{game_id}/hands/{hand_number}/players/Bob/actions?force=true',
+            f'/games/{game_id}/hands/{hand_number}/players/Bob/actions',
             json={'street': 'preflop', 'action': 'check'},
         )
+        # Post-flop: SB (Alice) acts first
         client.post(
-            f'/games/{game_id}/hands/{hand_number}/players/Alice/actions?force=true',
+            f'/games/{game_id}/hands/{hand_number}/players/Alice/actions',
             json={'street': 'flop', 'action': 'bet', 'amount': 1.00},
         )
 
@@ -50,9 +58,10 @@ class TestGetHandActionsOrdering:
     def test_actions_contain_player_name(self, client):
         game_id, hand_number = _seed_game_with_hand(client)
 
+        # Heads-up: Alice=SB, Bob=BB. SB calls 0.10 preflop.
         client.post(
             f'/games/{game_id}/hands/{hand_number}/players/Alice/actions',
-            json={'street': 'preflop', 'action': 'call', 'amount': 0.20},
+            json={'street': 'preflop', 'action': 'call', 'amount': 0.10},
         )
         client.post(
             f'/games/{game_id}/hands/{hand_number}/players/Bob/actions',
@@ -62,8 +71,9 @@ class TestGetHandActionsOrdering:
         resp = client.get(f'/games/{game_id}/hands/{hand_number}/actions')
         actions = resp.json()
 
-        assert actions[0]['player_name'] == 'Alice'
-        assert actions[1]['player_name'] == 'Bob'
+        # Check that blind + voluntary actions all have player_name
+        assert actions[0]['player_name'] == 'Alice'  # SB blind
+        assert actions[1]['player_name'] == 'Bob'  # BB blind
 
     def test_action_fields_are_correct(self, client):
         game_id, hand_number = _seed_game_with_hand(client)

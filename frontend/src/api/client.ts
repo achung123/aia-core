@@ -13,6 +13,8 @@ import type {
   CsvSchemaResponse,
   CsvValidationResponse,
   CSVCommitSummary,
+  ZipValidationResponse,
+  ZipCommitSummary,
   ImageUploadResponse,
   DetectionResultsResponse,
   EquityResponse,
@@ -31,6 +33,7 @@ import type {
   PlayerStatusResponse,
   PlayerActionCreate,
   PlayerActionResponse,
+  HandActionResponse,
   PlayerInfo,
   SeatAssignmentRequest,
   RebuyCreate,
@@ -66,6 +69,10 @@ export function fetchHands(sessionId: number, { signal }: { signal?: AbortSignal
 
 export function fetchHand(gameId: number, handNumber: number): Promise<HandResponse> {
   return request<HandResponse>(`/games/${gameId}/hands/${handNumber}`);
+}
+
+export function fetchLatestHand(gameId: number, { signal }: { signal?: AbortSignal } = {}): Promise<HandResponse | null> {
+  return request<HandResponse | null>(`/games/${gameId}/hands/latest`, { signal });
 }
 
 export function fetchPlayerStats(playerName: string): Promise<PlayerStatsResponse> {
@@ -267,6 +274,31 @@ export function exportGameCsvUrl(gameId: number): string {
   return `${BASE_URL}/games/${gameId}/export/csv`;
 }
 
+export function exportGameZipUrl(gameId: number): string {
+  return `${BASE_URL}/games/${gameId}/export/zip`;
+}
+
+export async function uploadZipValidate(file: File): Promise<ZipValidationResponse> {
+  const form = new FormData();
+  form.append('file', file);
+  const r = await fetch(`${BASE_URL}/upload/zip`, { method: 'POST', body: form });
+  const body = await r.json();
+  if (!r.ok) throw new Error(body.detail || `HTTP ${r.status}`);
+  return body as ZipValidationResponse;
+}
+
+export async function uploadZipCommit(file: File): Promise<ZipCommitSummary> {
+  const form = new FormData();
+  form.append('file', file);
+  const r = await fetch(`${BASE_URL}/upload/zip/commit`, { method: 'POST', body: form });
+  const body = await r.json();
+  if (!r.ok) {
+    const detail = typeof body.detail === 'object' ? JSON.stringify(body.detail) : (body.detail || `HTTP ${r.status}`);
+    throw new Error(detail);
+  }
+  return body as ZipCommitSummary;
+}
+
 export async function deleteGame(gameId: number): Promise<void> {
   const response = await fetch(`${BASE_URL}/games/${gameId}`, { method: 'DELETE' });
   if (!response.ok) {
@@ -313,6 +345,10 @@ export function recordPlayerAction(gameId: number, handNumber: number, playerNam
   });
 }
 
+export function fetchHandActions(gameId: number, handNumber: number): Promise<HandActionResponse[]> {
+  return request<HandActionResponse[]>(`/games/${gameId}/hands/${handNumber}/actions`);
+}
+
 export function fetchBlinds(gameId: number): Promise<BlindsResponse> {
   return request<BlindsResponse>(`/games/${gameId}/blinds`);
 }
@@ -325,11 +361,12 @@ export function updateBlinds(gameId: number, data: BlindsUpdate): Promise<Blinds
   });
 }
 
-export function assignPlayerSeat(gameId: number, playerName: string, data: SeatAssignmentRequest): Promise<PlayerInfo> {
-  return request<PlayerInfo>(`/games/${gameId}/players/${encodeURIComponent(playerName)}/seat`, {
+export function assignPlayerSeat(gameId: number, playerName: string, data: SeatAssignmentRequest, swap?: boolean): Promise<PlayerInfo> {
+  const qs = swap ? '?force=true' : '';
+  return request<PlayerInfo>(`/games/${gameId}/players/${encodeURIComponent(playerName)}/seat${qs}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+    body: JSON.stringify({ ...data, swap: !!swap }),
   });
 }
 

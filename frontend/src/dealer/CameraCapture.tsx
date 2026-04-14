@@ -95,7 +95,8 @@ export function CameraCapture({ gameId, targetName, onDetectionResult, onCancel 
         ref={inputRef}
         type="file"
         accept="image/*"
-        style={{ display: 'none' }}
+        capture="environment"
+        style={{ position: 'absolute', width: 1, height: 1, opacity: 0, overflow: 'hidden', pointerEvents: 'none' }}
         onChange={handleFileChange}
       />
 

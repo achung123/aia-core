@@ -18,7 +18,7 @@ export type DealerAction =
   | { type: 'LOAD_HAND'; payload: LoadHandPayload }
   | { type: 'FINISH_HAND' }
   | { type: 'SET_STEP'; payload: string }
-  | { type: 'UPDATE_PARTICIPATION'; payload: { players: { name: string; participation_status: string }[] } }
+  | { type: 'UPDATE_PARTICIPATION'; payload: { players: { name: string; participation_status: string; outcome_street?: string | null; last_action?: string | null }[] } }
   | { type: 'RESTORE_STATE'; payload: Partial<DealerState> };
 
 export interface LoadHandPayload {
@@ -60,7 +60,7 @@ export const initialState: DealerState = {
 // --- Utility ---
 
 function initPlayer(name: string): Player {
-  return { name, card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null };
+  return { name, card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null, lastAction: null };
 }
 
 export function validateOutcomeStreets(players: Player[]): string | null {
@@ -210,6 +210,7 @@ export function reducer(state: DealerState, action: DealerAction): DealerState {
             recorded: true,
             status: ph.result || 'playing',
             outcomeStreet: ph.outcome_street || null,
+            lastAction: null,
           };
         }),
       };
@@ -230,18 +231,20 @@ export function reducer(state: DealerState, action: DealerAction): DealerState {
 
     case 'UPDATE_PARTICIPATION': {
       const statusMap = new Map(
-        action.payload.players.map((p) => [p.name, p.participation_status]),
+        action.payload.players.map((p) => [p.name, p]),
       );
       return {
         ...state,
         players: state.players.map((p) => {
-          const ps = statusMap.get(p.name);
-          if (ps == null) return p;
+          const entry = statusMap.get(p.name);
+          if (entry == null) return p;
+          const ps = entry.participation_status;
           // Don't let a stale poll reset a manually-recorded player to idle/playing
           if (p.recorded && (ps === 'idle' || ps === 'playing')) return p;
           // Don't let poll revert a locally-set sit-out (not_playing) status
           if (p.status === 'not_playing' && (ps === 'idle' || ps === 'playing')) return p;
-          return { ...p, status: ps };
+          const newOutcomeStreet = entry.outcome_street ?? p.outcomeStreet;
+          return { ...p, status: ps, outcomeStreet: newOutcomeStreet };
         }),
       };
     }

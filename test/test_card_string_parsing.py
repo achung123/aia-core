@@ -3,7 +3,8 @@
 import pytest
 from pydantic import ValidationError
 
-from pydantic_models.app_models import Card, HoleCardsUpdate, PlayerHandEntry
+from pydantic_models.common import Card
+from pydantic_models.hand_schemas import HoleCardsUpdate, PlayerHandEntry
 
 
 class TestCardFromString:

@@ -2,19 +2,20 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy import case, func
 from sqlalchemy.orm import Session, joinedload
 
-from app.database.models import GameSession, Hand, Player, PlayerHand
+from app.database.models import Hand, Player, PlayerHand
+from app.database.queries import get_game_or_404, get_player_by_name_or_404
 from app.database.session import get_db
-from pydantic_models.app_models import (
+from pydantic_models.common import ResultEnum
+from pydantic_models.stats_schemas import (
     GameStatsPlayerEntry,
     GameStatsResponse,
     LeaderboardEntry,
     LeaderboardMetric,
     PlayerStatsResponse,
-    ResultEnum,
 )
 
 router = APIRouter(prefix='/stats', tags=['stats'])
@@ -25,13 +26,7 @@ def get_player_stats(
     player_name: str,
     db: Annotated[Session, Depends(get_db)],
 ):
-    player = (
-        db.query(Player)
-        .filter(func.lower(Player.name) == func.lower(player_name))
-        .first()
-    )
-    if player is None:
-        raise HTTPException(status_code=404, detail='Player not found')
+    player = get_player_by_name_or_404(db, player_name)
 
     player_hands = (
         db.query(PlayerHand)
@@ -150,9 +145,7 @@ def get_game_stats(
     game_id: int,
     db: Annotated[Session, Depends(get_db)],
 ):
-    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
-    if game is None:
-        raise HTTPException(status_code=404, detail='Game not found')
+    game = get_game_or_404(db, game_id)
 
     total_hands = (
         db.query(func.count(Hand.hand_id)).filter(Hand.game_id == game_id).scalar()

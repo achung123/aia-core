@@ -301,16 +301,17 @@ describe('PlayerActionButtons — data-driven rendering', () => {
     expect(info.textContent).toContain('$0.50 to call');
   });
 
-  it('shows pot odds when amount to call is positive', () => {
-    render(<PlayerActionButtons {...defaultProps} legalActions={['fold', 'call']} pot={2.50} amountToCall={0.50} />);
-    const odds = screen.getByTestId('pot-odds');
-    // pot odds = (pot / amountToCall) + 1 = (2.50 / 0.50) + 1 = 6.0:1
-    expect(odds.textContent).toBe('Odds: 6.0:1');
-  });
-
-  it('hides pot odds when amount to call is zero', () => {
-    render(<PlayerActionButtons {...defaultProps} legalActions={['fold', 'check']} pot={1.00} amountToCall={0} />);
-    expect(screen.queryByTestId('pot-odds')).toBeNull();
+  it('shows minimum bet and raise guidance when provided', () => {
+    render(
+      <PlayerActionButtons
+        {...defaultProps}
+        legalActions={['fold', 'bet', 'raise']}
+        minimumBet={0.20}
+        minimumRaise={0.80}
+      />,
+    );
+    expect(screen.getByTestId('minimum-bet').textContent).toContain('$0.20');
+    expect(screen.getByTestId('minimum-raise').textContent).toContain('$0.80');
   });
 
   it('hides amount-to-call when zero', () => {
@@ -349,5 +350,103 @@ describe('PlayerActionButtons — data-driven rendering', () => {
     expect(screen.getByTestId('action-call')).toBeDefined();
     expect(screen.getByTestId('action-bet')).toBeDefined();
     expect(screen.getByTestId('action-raise')).toBeDefined();
+  });
+
+  it('blocks raises below the frontend minimum before calling the API', async () => {
+    render(
+      <PlayerActionButtons
+        {...defaultProps}
+        legalActions={['fold', 'call', 'raise']}
+        amountToCall={0.50}
+        minimumRaise={1.00}
+      />,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('action-raise'));
+    });
+    fireEvent.click(screen.getByTestId('chip-0.30'));
+    fireEvent.click(screen.getByTestId('chip-0.40'));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('chip-confirm'));
+    });
+    expect(mockRecordPlayerAction).not.toHaveBeenCalled();
+    expect(screen.getByTestId('action-error').textContent).toContain('Minimum raise is $1.00');
+  });
+});
+
+describe('PlayerActionButtons — onActionConfirmed callback', () => {
+  it('calls onActionConfirmed after a successful action', async () => {
+    const onConfirmed = vi.fn();
+    render(<PlayerActionButtons {...defaultProps} onActionConfirmed={onConfirmed} />);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('action-check'));
+    });
+    expect(onConfirmed).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not call onActionConfirmed when action fails', async () => {
+    mockRecordPlayerAction.mockRejectedValue(new Error('fail'));
+    const onConfirmed = vi.fn();
+    render(<PlayerActionButtons {...defaultProps} onActionConfirmed={onConfirmed} />);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('action-fold'));
+    });
+    expect(onConfirmed).not.toHaveBeenCalled();
+  });
+
+  it('calls onActionConfirmed after Bet via ChipPicker', async () => {
+    const onConfirmed = vi.fn();
+    render(<PlayerActionButtons {...defaultProps} onActionConfirmed={onConfirmed} />);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('action-bet'));
+    });
+    fireEvent.click(screen.getByTestId('chip-0.50'));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('chip-confirm'));
+    });
+    expect(onConfirmed).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('PlayerActionButtons — All In via ChipPicker', () => {
+  it('All In button appears in ChipPicker when Bet is clicked', async () => {
+    render(<PlayerActionButtons {...defaultProps} />);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('action-bet'));
+    });
+    expect(screen.getByTestId('chip-all-in')).toBeDefined();
+    expect(screen.getByTestId('chip-all-in').textContent).toBe('All In');
+  });
+
+  it('All In sends bet action with is_all_in flag', async () => {
+    render(<PlayerActionButtons {...defaultProps} />);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('action-bet'));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('chip-all-in'));
+    });
+    expect(mockRecordPlayerAction).toHaveBeenCalledWith(1, 2, 'Alice', {
+      street: 'preflop',
+      action: 'bet',
+      amount: null,
+      is_all_in: true,
+    });
+  });
+
+  it('All In sends raise action with is_all_in flag', async () => {
+    render(<PlayerActionButtons {...defaultProps} />);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('action-raise'));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('chip-all-in'));
+    });
+    expect(mockRecordPlayerAction).toHaveBeenCalledWith(1, 2, 'Alice', {
+      street: 'preflop',
+      action: 'raise',
+      amount: null,
+      is_all_in: true,
+    });
   });
 });

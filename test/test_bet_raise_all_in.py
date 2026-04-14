@@ -18,10 +18,11 @@ def client():
     app.dependency_overrides.clear()
 
 
-def _create_game(client, names):
-    resp = client.post(
-        '/games', json={'game_date': '2026-04-12', 'player_names': names}
-    )
+def _create_game(client, names, default_buy_in=None):
+    body = {'game_date': '2026-04-12', 'player_names': names}
+    if default_buy_in is not None:
+        body['default_buy_in'] = default_buy_in
+    resp = client.post('/games', json=body)
     assert resp.status_code == 201
     return resp.json()['game_id']
 
@@ -66,6 +67,17 @@ def _act(
     )
 
 
+def _deal_flop(client, game_id, hand_number=1):
+    client.patch(
+        f'/games/{game_id}/hands/{hand_number}/flop',
+        json={
+            'flop_1': {'rank': 'Q', 'suit': 'D'},
+            'flop_2': {'rank': 'J', 'suit': 'C'},
+            'flop_3': {'rank': '9', 'suit': 'H'},
+        },
+    )
+
+
 class TestBetAllIn:
     """A player bets all-in — is_all_in should be set and side pots computed."""
 
@@ -73,21 +85,21 @@ class TestBetAllIn:
         game_id = _create_game(client, ['Alice', 'Bob', 'Charlie'])
         _start_hand(client, game_id)
 
-        # UTG bets all-in for 5.00
+        # UTG raises all-in for 5.00 (preflop has blinds, so it's a raise not bet)
         resp = _act(
             client,
             game_id,
             _current(client, game_id),
-            'bet',
+            'raise',
             amount=5.00,
             is_all_in=True,
         )
         assert resp.status_code == 201
 
-        # SB calls for the full amount
+        # SB calls for the full amount (SB posted 0.10, needs 4.90 more)
         _act(client, game_id, _current(client, game_id), 'call', amount=4.90)
 
-        # BB calls for the full amount
+        # BB calls for the full amount (BB posted 0.20, needs 4.80 more)
         _act(client, game_id, _current(client, game_id), 'call', amount=4.80)
 
         hand = client.get(f'/games/{game_id}/hands/1').json()
@@ -98,12 +110,12 @@ class TestBetAllIn:
         game_id = _create_game(client, ['Alice', 'Bob', 'Charlie'])
         _start_hand(client, game_id)
 
-        # UTG bets all-in for 5.00
+        # UTG raises all-in for 5.00
         _act(
             client,
             game_id,
             _current(client, game_id),
-            'bet',
+            'raise',
             amount=5.00,
             is_all_in=True,
         )
@@ -164,6 +176,50 @@ class TestRaiseAllIn:
         # Should not fail validation
         assert resp.status_code == 201
 
+    def test_raise_all_in_without_amount_uses_player_stack(self, client):
+        """Frontend all-in omits amount and relies on backend stack inference."""
+        game_id = _create_game(
+            client, ['Alice', 'Bob', 'Charlie'], default_buy_in=20.00
+        )
+        _start_hand(client, game_id)
+
+        resp = _act(
+            client,
+            game_id,
+            _current(client, game_id),
+            'raise',
+            is_all_in=True,
+        )
+
+        assert resp.status_code == 201
+        assert resp.json()['amount'] == pytest.approx(20.00)
+
+
+class TestBetAllInWithoutAmount:
+    def test_bet_all_in_without_amount_uses_remaining_stack_postflop(self, client):
+        game_id = _create_game(client, ['Alice', 'Bob'], default_buy_in=20.00)
+        _start_hand(client, game_id)
+        _deal_flop(client, game_id)
+
+        # Complete preflop so the next street allows a bet.
+        _act(client, game_id, _current(client, game_id), 'call', amount=0.10)
+        _act(client, game_id, _current(client, game_id), 'check')
+
+        state = _state(client, game_id)
+        assert state['phase'] == 'flop'
+
+        resp = _act(
+            client,
+            game_id,
+            _current(client, game_id),
+            'bet',
+            is_all_in=True,
+        )
+
+        assert resp.status_code == 201
+        # Small blind posted 0.10 preflop, then called 0.10, leaving 19.80.
+        assert resp.json()['amount'] == pytest.approx(19.80)
+
 
 class TestCallAllInFallback:
     """Existing auto-detection for call all-in-for-less still works."""
@@ -174,8 +230,15 @@ class TestCallAllInFallback:
 
         # UTG raises to 5.00
         _act(client, game_id, _current(client, game_id), 'raise', amount=5.00)
-        # SB calls for less (0.50) — auto-detected as all-in
-        _act(client, game_id, _current(client, game_id), 'call', amount=0.50)
+        # SB calls for less (0.50) — marked as all-in
+        _act(
+            client,
+            game_id,
+            _current(client, game_id),
+            'call',
+            amount=0.50,
+            is_all_in=True,
+        )
         # BB calls full
         _act(client, game_id, _current(client, game_id), 'call', amount=4.80)
 

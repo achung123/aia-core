@@ -47,10 +47,12 @@ export function DealerApp() {
   const [currentPlayerName, setCurrentPlayerName] = useState<string | null>(null);
   const [legalActions, setLegalActions] = useState<string[]>([]);
   const [amountToCall, setAmountToCall] = useState(0);
+  const [minimumBet, setMinimumBet] = useState<number | null>(null);
+  const [minimumRaise, setMinimumRaise] = useState<number | null>(null);
   const [pot, setPot] = useState(0);
   const [streetComplete, setStreetComplete] = useState(true);
   const [handPhase, setHandPhase] = useState<string>('preflop');
-  const [pollTick, setPollTick] = useState(0);
+  const [potContributions, setPotContributions] = useState<Record<string, number>>({});
 
   // Guard: reset to gameSelector if persisted state is inconsistent
   useLayoutEffect(() => {
@@ -68,7 +70,7 @@ export function DealerApp() {
   }, []);
 
   // Polling for participation mode
-  const { isReconnecting: dealerReconnecting } = usePolling({
+  const { isReconnecting: dealerReconnecting, triggerNow: triggerDealerPoll } = usePolling({
     intervalMs: 3000,
     enabled: currentStep === 'activeHand' && !!gameId && !!currentHandId,
     fetchFn: (signal) =>
@@ -81,9 +83,20 @@ export function DealerApp() {
           setCurrentPlayerName(data.current_player_name ?? null);
           setLegalActions(data.legal_actions ?? []);
           setAmountToCall(data.amount_to_call ?? 0);
+          setMinimumBet(data.minimum_bet ?? null);
+          setMinimumRaise(data.minimum_raise ?? null);
           setPot(data.pot ?? 0);
           setStreetComplete(data.street_complete ?? false);
           setHandPhase(data.phase ?? 'preflop');
+
+          // Extract per-player pot contributions
+          const contribs: Record<string, number> = {};
+          for (const p of data.players || []) {
+            if (p.pot_contribution > 0) {
+              contribs[p.name] = p.pot_contribution;
+            }
+          }
+          setPotContributions(contribs);
 
           const joinedPlayers = (data.players || []).filter(
             (p) => p.participation_status === 'joined' || p.participation_status === 'handed_back',
@@ -391,10 +404,13 @@ export function DealerApp() {
               currentPlayerName={currentPlayerName}
               legalActions={legalActions}
               amountToCall={amountToCall}
+              minimumBet={minimumBet}
+              minimumRaise={minimumRaise}
               pot={pot}
               streetComplete={streetComplete}
               handPhase={handPhase}
-              onActionConfirmed={() => setPollTick((t) => t + 1)}
+              onActionConfirmed={() => triggerDealerPoll()}
+              potContributions={potContributions}
             />
           )}
 

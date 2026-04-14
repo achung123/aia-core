@@ -7,9 +7,13 @@ vi.mock('../api/client.ts', () => ({
   fetchHands: vi.fn(),
   startHand: vi.fn(),
   completeGame: vi.fn(),
-  fetchGame: vi.fn(),
-  fetchGameStats: vi.fn(),
-  createRebuy: vi.fn(),
+  fetchGame: vi.fn().mockResolvedValue({
+    players: [
+      { name: 'Alice', is_active: true, seat_number: 1, buy_in: null, current_chips: null, rebuy_count: 0, total_rebuys: 0 },
+      { name: 'Bob', is_active: true, seat_number: 2, buy_in: null, current_chips: null, rebuy_count: 0, total_rebuys: 0 },
+    ],
+  }),
+  assignPlayerSeat: vi.fn(),
 }));
 
 vi.mock('./QRCodeDisplay.tsx', () => ({
@@ -22,15 +26,17 @@ vi.mock('./GamePlayerManagement.tsx', () => ({
     <div data-testid="game-player-management">Players:{gameId}</div>,
 }));
 
-import { fetchHands, startHand, completeGame, fetchGame, fetchGameStats, createRebuy } from '../api/client.ts';
+vi.mock('../components/SeatPicker.tsx', () => ({
+  SeatPicker: () => <div data-testid="seat-picker">SeatPicker</div>,
+}));
+
+import { fetchHands, startHand, completeGame, fetchGame } from '../api/client.ts';
 
 
 const mockedFetchHands = fetchHands as ReturnType<typeof vi.fn>;
 const mockedStartHand = startHand as ReturnType<typeof vi.fn>;
 const mockedCompleteGame = completeGame as ReturnType<typeof vi.fn>;
 const mockedFetchGame = fetchGame as ReturnType<typeof vi.fn>;
-const mockedFetchGameStats = fetchGameStats as ReturnType<typeof vi.fn>;
-const mockedCreateRebuy = createRebuy as ReturnType<typeof vi.fn>;
 
 const HANDS = [
   {
@@ -61,7 +67,7 @@ const HANDS = [
     source_upload_id: null,
     created_at: '2026-04-08T10:30:00Z',
     player_hands: [
-      { player_hand_id: 3, hand_id: 2, player_id: 1, player_name: 'Alice', card_1: 'Qh', card_2: '9d', result: null, profit_loss: null, outcome_street: null, winning_hand_description: null },
+      { player_hand_id: 3, hand_id: 2, player_id: 1, player_name: 'Alice', card_1: 'Qh', card_2: '9d', result: 'won', profit_loss: 10.0, outcome_street: 'river', winning_hand_description: null },
     ],
   },
 ];
@@ -69,8 +75,6 @@ const HANDS = [
 describe('HandDashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockedFetchGame.mockResolvedValue({ players: [] });
-    mockedFetchGameStats.mockResolvedValue({ player_stats: [] });
   });
 
   afterEach(() => {
@@ -440,213 +444,118 @@ describe('HandDashboard', () => {
     expect(screen.queryByTestId('view-toggle-btn')).toBeNull();
     expect(screen.queryByTestId('table-view-3d')).toBeNull();
   });
-});
 
-const GAME_RESPONSE = {
-  game_id: 42,
-  game_date: '2026-04-08',
-  status: 'active',
-  created_at: '2026-04-08T10:00:00Z',
-  player_names: ['Alice', 'Bob'],
-  players: [
-    { name: 'Alice', is_active: true, seat_number: null, buy_in: 100, rebuy_count: 0, total_rebuys: 0 },
-    { name: 'Bob', is_active: true, seat_number: null, buy_in: 100, rebuy_count: 0, total_rebuys: 0 },
-  ],
-  hand_count: 2,
-  winners: [],
-  default_buy_in: 100,
-};
+  describe('Start Hand guard rails', () => {
+    const COMPLETE_HANDS = [
+      {
+        hand_id: 1, game_id: 42, hand_number: 1,
+        flop_1: 'Ah', flop_2: 'Kd', flop_3: '5h', turn: null, river: null,
+        source_upload_id: null, created_at: '2026-04-08T10:00:00Z', pot: 0, side_pots: [],
+        sb_player_name: null, bb_player_name: null,
+        player_hands: [
+          { player_hand_id: 1, hand_id: 1, player_id: 1, player_name: 'Alice', card_1: 'Ah', card_2: 'Kd', result: 'won', profit_loss: 50.0, outcome_street: 'river', winning_hand_description: null },
+          { player_hand_id: 2, hand_id: 1, player_id: 2, player_name: 'Bob', card_1: 'Jc', card_2: 'Ts', result: 'lost', profit_loss: -25.0, outcome_street: 'turn', winning_hand_description: null },
+        ],
+      },
+    ];
 
-const GAME_STATS = {
-  game_id: 42,
-  game_date: '2026-04-08',
-  total_hands: 2,
-  player_stats: [
-    { player_name: 'Alice', hands_played: 2, hands_won: 1, hands_lost: 1, hands_folded: 0, win_rate: 50, profit_loss: 50 },
-    { player_name: 'Bob', hands_played: 2, hands_won: 1, hands_lost: 1, hands_folded: 0, win_rate: 50, profit_loss: -50 },
-  ],
-};
+    const INCOMPLETE_HANDS = [
+      ...COMPLETE_HANDS,
+      {
+        hand_id: 2, game_id: 42, hand_number: 2,
+        flop_1: null, flop_2: null, flop_3: null, turn: null, river: null,
+        source_upload_id: null, created_at: '2026-04-08T10:30:00Z', pot: 0, side_pots: [],
+        sb_player_name: null, bb_player_name: null,
+        player_hands: [
+          { player_hand_id: 3, hand_id: 2, player_id: 1, player_name: 'Alice', card_1: 'Qh', card_2: '9d', result: null, profit_loss: null, outcome_street: null, winning_hand_description: null },
+        ],
+      },
+    ];
 
-describe('HandDashboard — Player Totals', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockedFetchHands.mockResolvedValue(HANDS);
-    mockedFetchGame.mockResolvedValue(GAME_RESPONSE);
-    mockedFetchGameStats.mockResolvedValue(GAME_STATS);
-  });
-
-  afterEach(() => {
-    cleanup();
-  });
-
-  it('fetches game and stats on mount', async () => {
-    render(<HandDashboard gameId={42} players={['Alice', 'Bob']} onSelectHand={() => {}} onBack={() => {}} />);
-    await waitFor(() => {
-      expect(mockedFetchGame).toHaveBeenCalledWith(42);
-      expect(mockedFetchGameStats).toHaveBeenCalledWith(42);
-    });
-  });
-
-  it('shows Player Totals section with computed totals', async () => {
-    render(<HandDashboard gameId={42} players={['Alice', 'Bob']} onSelectHand={() => {}} onBack={() => {}} />);
-    await waitFor(() => {
-      const section = screen.getByTestId('player-totals');
-      expect(section).toBeTruthy();
-      // Alice: 100 + 0 + 50 = 150
-      expect(section.textContent).toContain('Alice');
-      expect(section.textContent).toContain('$150.00');
-      // Bob: 100 + 0 + (-50) = 50
-      expect(section.textContent).toContain('Bob');
-      expect(section.textContent).toContain('$50.00');
-    });
-  });
-
-  it('shows rebuy button disabled when total > 0', async () => {
-    render(<HandDashboard gameId={42} players={['Alice', 'Bob']} onSelectHand={() => {}} onBack={() => {}} />);
-    await waitFor(() => {
-      const aliceRebuy = screen.getByTestId('rebuy-btn-Alice');
-      expect(aliceRebuy.hasAttribute('disabled')).toBe(true);
-    });
-  });
-
-  it('shows rebuy button enabled when total <= 0', async () => {
-    mockedFetchGameStats.mockResolvedValue({
-      ...GAME_STATS,
-      player_stats: [
-        { player_name: 'Alice', hands_played: 2, hands_won: 0, hands_lost: 2, hands_folded: 0, win_rate: 0, profit_loss: -100 },
-        { player_name: 'Bob', hands_played: 2, hands_won: 2, hands_lost: 0, hands_folded: 0, win_rate: 100, profit_loss: 100 },
-      ],
-    });
-    render(<HandDashboard gameId={42} players={['Alice', 'Bob']} onSelectHand={() => {}} onBack={() => {}} />);
-    await waitFor(() => {
-      // Alice: 100 + 0 + (-100) = 0 → enabled
-      const aliceRebuy = screen.getByTestId('rebuy-btn-Alice');
-      expect(aliceRebuy.hasAttribute('disabled')).toBe(false);
-      // Bob: 100 + 0 + 100 = 200 → disabled
-      const bobRebuy = screen.getByTestId('rebuy-btn-Bob');
-      expect(bobRebuy.hasAttribute('disabled')).toBe(true);
-    });
-  });
-
-  it('rebuy button calls createRebuy and refreshes totals', async () => {
-    mockedFetchGameStats.mockResolvedValue({
-      ...GAME_STATS,
-      player_stats: [
-        { player_name: 'Alice', hands_played: 2, hands_won: 0, hands_lost: 2, hands_folded: 0, win_rate: 0, profit_loss: -100 },
-        { player_name: 'Bob', hands_played: 2, hands_won: 2, hands_lost: 0, hands_folded: 0, win_rate: 100, profit_loss: 100 },
-      ],
-    });
-    mockedCreateRebuy.mockResolvedValue({ rebuy_id: 1, game_id: 42, player_name: 'Alice', amount: 100, created_at: '2026-04-08T12:00:00Z' });
-
-    render(<HandDashboard gameId={42} players={['Alice', 'Bob']} onSelectHand={() => {}} onBack={() => {}} />);
-    await waitFor(() => {
-      expect(screen.getByTestId('rebuy-btn-Alice')).toBeTruthy();
-    });
-
-    screen.getByTestId('rebuy-btn-Alice').click();
-
-    await waitFor(() => {
-      expect(mockedCreateRebuy).toHaveBeenCalledWith(42, 'Alice', { amount: 100 });
-      // Should re-fetch game and stats after rebuy
-      expect(mockedFetchGame.mock.calls.length).toBeGreaterThanOrEqual(2);
-      expect(mockedFetchGameStats.mock.calls.length).toBeGreaterThanOrEqual(2);
-    });
-  });
-
-  it('rebuy button is disabled when buy_in is null', async () => {
-    mockedFetchGame.mockResolvedValue({
-      ...GAME_RESPONSE,
+    const TWO_ACTIVE_PLAYERS = {
       players: [
-        { name: 'Alice', is_active: true, seat_number: null, buy_in: null, rebuy_count: 0, total_rebuys: 0 },
+        { name: 'Alice', is_active: true, seat_number: 1, buy_in: null, current_chips: null, rebuy_count: 0, total_rebuys: 0 },
+        { name: 'Bob', is_active: true, seat_number: 2, buy_in: null, current_chips: null, rebuy_count: 0, total_rebuys: 0 },
       ],
-    });
-    mockedFetchGameStats.mockResolvedValue({
-      ...GAME_STATS,
-      player_stats: [
-        { player_name: 'Alice', hands_played: 2, hands_won: 0, hands_lost: 2, hands_folded: 0, win_rate: 0, profit_loss: -100 },
-      ],
-    });
-    render(<HandDashboard gameId={42} players={['Alice']} onSelectHand={() => {}} onBack={() => {}} />);
-    await waitFor(() => {
-      const btn = screen.getByTestId('rebuy-btn-Alice');
-      // buy_in is null so total = 0 + 0 + (-100) = -100 → canRebuy is true by total alone
-      // but button should still be disabled because buy_in is null (no valid amount to rebuy)
-      expect(btn.hasAttribute('disabled')).toBe(true);
-    });
-  });
+    };
 
-  it('rebuy button is disabled when buy_in is 0', async () => {
-    mockedFetchGame.mockResolvedValue({
-      ...GAME_RESPONSE,
+    const ONE_ACTIVE_PLAYER = {
       players: [
-        { name: 'Alice', is_active: true, seat_number: null, buy_in: 0, rebuy_count: 0, total_rebuys: 0 },
+        { name: 'Alice', is_active: true, seat_number: 1, buy_in: null, current_chips: null, rebuy_count: 0, total_rebuys: 0 },
+        { name: 'Bob', is_active: false, seat_number: 2, buy_in: null, current_chips: null, rebuy_count: 0, total_rebuys: 0 },
       ],
-    });
-    mockedFetchGameStats.mockResolvedValue({
-      ...GAME_STATS,
-      player_stats: [
-        { player_name: 'Alice', hands_played: 2, hands_won: 0, hands_lost: 2, hands_folded: 0, win_rate: 0, profit_loss: -100 },
-      ],
-    });
-    render(<HandDashboard gameId={42} players={['Alice']} onSelectHand={() => {}} onBack={() => {}} />);
-    await waitFor(() => {
-      const btn = screen.getByTestId('rebuy-btn-Alice');
-      expect(btn.hasAttribute('disabled')).toBe(true);
-    });
-  });
+    };
 
-  it('shows error message when rebuy API fails', async () => {
-    mockedFetchGameStats.mockResolvedValue({
-      ...GAME_STATS,
-      player_stats: [
-        { player_name: 'Alice', hands_played: 2, hands_won: 0, hands_lost: 2, hands_folded: 0, win_rate: 0, profit_loss: -100 },
-        { player_name: 'Bob', hands_played: 2, hands_won: 2, hands_lost: 0, hands_folded: 0, win_rate: 100, profit_loss: 100 },
-      ],
-    });
-    mockedCreateRebuy.mockRejectedValue(new Error('Rebuy amount must be greater than 0'));
-
-    render(<HandDashboard gameId={42} players={['Alice', 'Bob']} onSelectHand={() => {}} onBack={() => {}} />);
-    await waitFor(() => {
-      expect(screen.getByTestId('rebuy-btn-Alice')).toBeTruthy();
+    it('disables Start Hand when the most recent hand is incomplete', async () => {
+      mockedFetchHands.mockResolvedValue(INCOMPLETE_HANDS);
+      mockedFetchGame.mockResolvedValue(TWO_ACTIVE_PLAYERS);
+      render(<HandDashboard gameId={42} onSelectHand={() => {}} onBack={() => {}} />);
+      await waitFor(() => {
+        expect(screen.getByTestId('start-hand-btn').hasAttribute('disabled')).toBe(true);
+      });
     });
 
-    screen.getByTestId('rebuy-btn-Alice').click();
-
-    await waitFor(() => {
-      const errEl = screen.getByTestId('rebuy-error');
-      expect(errEl).toBeTruthy();
-      expect(errEl.textContent).toContain('Rebuy amount must be greater than 0');
-    });
-  });
-
-  it('clears rebuy error on successful rebuy', async () => {
-    mockedFetchGameStats.mockResolvedValue({
-      ...GAME_STATS,
-      player_stats: [
-        { player_name: 'Alice', hands_played: 2, hands_won: 0, hands_lost: 2, hands_folded: 0, win_rate: 0, profit_loss: -100 },
-        { player_name: 'Bob', hands_played: 2, hands_won: 2, hands_lost: 0, hands_folded: 0, win_rate: 100, profit_loss: 100 },
-      ],
-    });
-    // First call fails, second succeeds
-    mockedCreateRebuy
-      .mockRejectedValueOnce(new Error('Server error'))
-      .mockResolvedValueOnce({ rebuy_id: 1, game_id: 42, player_name: 'Alice', amount: 100, created_at: '2026-04-08T12:00:00Z' });
-
-    render(<HandDashboard gameId={42} players={['Alice', 'Bob']} onSelectHand={() => {}} onBack={() => {}} />);
-    await waitFor(() => {
-      expect(screen.getByTestId('rebuy-btn-Alice')).toBeTruthy();
+    it('shows warning when the most recent hand is incomplete', async () => {
+      mockedFetchHands.mockResolvedValue(INCOMPLETE_HANDS);
+      mockedFetchGame.mockResolvedValue(TWO_ACTIVE_PLAYERS);
+      render(<HandDashboard gameId={42} onSelectHand={() => {}} onBack={() => {}} />);
+      await waitFor(() => {
+        const warning = screen.getByTestId('start-hand-warning');
+        expect(warning).toBeTruthy();
+        expect(warning.textContent).toContain('Complete the current hand');
+      });
     });
 
-    // First click → error appears
-    screen.getByTestId('rebuy-btn-Alice').click();
-    await waitFor(() => {
-      expect(screen.getByTestId('rebuy-error')).toBeTruthy();
+    it('disables Start Hand when only one active player', async () => {
+      mockedFetchHands.mockResolvedValue(COMPLETE_HANDS);
+      mockedFetchGame.mockResolvedValue(ONE_ACTIVE_PLAYER);
+      render(<HandDashboard gameId={42} onSelectHand={() => {}} onBack={() => {}} />);
+      await waitFor(() => {
+        expect(screen.getByTestId('start-hand-btn').hasAttribute('disabled')).toBe(true);
+      });
     });
 
-    // Second click → error clears on success
-    screen.getByTestId('rebuy-btn-Alice').click();
-    await waitFor(() => {
-      expect(screen.queryByTestId('rebuy-error')).toBeNull();
+    it('shows warning when only one active player', async () => {
+      mockedFetchHands.mockResolvedValue(COMPLETE_HANDS);
+      mockedFetchGame.mockResolvedValue(ONE_ACTIVE_PLAYER);
+      render(<HandDashboard gameId={42} onSelectHand={() => {}} onBack={() => {}} />);
+      await waitFor(() => {
+        const warning = screen.getByTestId('start-hand-warning');
+        expect(warning).toBeTruthy();
+        expect(warning.textContent).toContain('Need at least 2 active players');
+      });
+    });
+
+    it('enables Start Hand when last hand is complete and 2+ active players', async () => {
+      mockedFetchHands.mockResolvedValue(COMPLETE_HANDS);
+      mockedFetchGame.mockResolvedValue(TWO_ACTIVE_PLAYERS);
+      render(<HandDashboard gameId={42} onSelectHand={() => {}} onBack={() => {}} />);
+      await waitFor(() => {
+        expect(screen.getByTestId('start-hand-btn').hasAttribute('disabled')).toBe(false);
+      });
+      expect(screen.queryByTestId('start-hand-warning')).toBeNull();
+    });
+
+    it('enables Start Hand when no hands exist and 2+ active players', async () => {
+      mockedFetchHands.mockResolvedValue([]);
+      mockedFetchGame.mockResolvedValue(TWO_ACTIVE_PLAYERS);
+      render(<HandDashboard gameId={42} onSelectHand={() => {}} onBack={() => {}} />);
+      await waitFor(() => {
+        expect(screen.getByTestId('start-hand-btn').hasAttribute('disabled')).toBe(false);
+      });
+      expect(screen.queryByTestId('start-hand-warning')).toBeNull();
+    });
+
+    it('shows both warnings when hand is incomplete and only one active player', async () => {
+      mockedFetchHands.mockResolvedValue(INCOMPLETE_HANDS);
+      mockedFetchGame.mockResolvedValue(ONE_ACTIVE_PLAYER);
+      render(<HandDashboard gameId={42} onSelectHand={() => {}} onBack={() => {}} />);
+      await waitFor(() => {
+        expect(screen.getByTestId('start-hand-btn').hasAttribute('disabled')).toBe(true);
+        const warning = screen.getByTestId('start-hand-warning');
+        expect(warning.textContent).toContain('Complete the current hand');
+        expect(warning.textContent).toContain('Need at least 2 active players');
+      });
     });
   });
 });

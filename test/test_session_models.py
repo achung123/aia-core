@@ -5,19 +5,16 @@ from datetime import date, datetime
 import pytest
 from pydantic import ValidationError
 
-from pydantic_models.app_models import (
-    Card,
-    CardRank,
-    CardSuit,
-    GameSessionCreate,
-    GameSessionResponse,
+from pydantic_models.common import Card, CardRank, CardSuit
+from pydantic_models.game_schemas import GameSessionCreate, GameSessionResponse
+from pydantic_models.hand_schemas import (
     HandCreate,
     HandResponse,
     HandResultUpdate,
     PlayerHandEntry,
     PlayerHandResponse,
-    PlayerResponse,
 )
+from pydantic_models.player_schemas import PlayerResponse
 
 
 # === GameSessionCreate ===

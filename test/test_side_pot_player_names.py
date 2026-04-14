@@ -43,12 +43,23 @@ def _current(client, game_id, hand_number=1):
     return _state(client, game_id, hand_number)['current_player_name']
 
 
-def _act(client, game_id, player_name, action, amount=None, hand_number=1, street=None):
+def _act(
+    client,
+    game_id,
+    player_name,
+    action,
+    amount=None,
+    hand_number=1,
+    street=None,
+    is_all_in=False,
+):
     if street is None:
         street = _state(client, game_id, hand_number)['phase']
     payload = {'street': street, 'action': action}
     if amount is not None:
         payload['amount'] = amount
+    if is_all_in:
+        payload['is_all_in'] = True
     return client.post(
         f'/games/{game_id}/hands/{hand_number}/players/{player_name}/actions',
         json=payload,
@@ -66,9 +77,23 @@ class TestSidePotPlayerNames:
         # UTG raises to 2.00
         _act(client, game_id, _current(client, game_id), 'raise', amount=2.00)
         # SB calls 0.50 (all-in-for-less)
-        _act(client, game_id, _current(client, game_id), 'call', amount=0.50)
+        _act(
+            client,
+            game_id,
+            _current(client, game_id),
+            'call',
+            amount=0.50,
+            is_all_in=True,
+        )
         # BB calls 0.80 (all-in)
-        _act(client, game_id, _current(client, game_id), 'call', amount=0.80)
+        _act(
+            client,
+            game_id,
+            _current(client, game_id),
+            'call',
+            amount=0.80,
+            is_all_in=True,
+        )
 
         hand = client.get(f'/games/{game_id}/hands/1').json()
         assert len(hand['side_pots']) >= 1
@@ -90,8 +115,22 @@ class TestSidePotPlayerNames:
         _start_hand(client, game_id)
 
         _act(client, game_id, _current(client, game_id), 'raise', amount=2.00)
-        _act(client, game_id, _current(client, game_id), 'call', amount=0.50)
-        _act(client, game_id, _current(client, game_id), 'call', amount=0.80)
+        _act(
+            client,
+            game_id,
+            _current(client, game_id),
+            'call',
+            amount=0.50,
+            is_all_in=True,
+        )
+        _act(
+            client,
+            game_id,
+            _current(client, game_id),
+            'call',
+            amount=0.80,
+            is_all_in=True,
+        )
 
         status = client.get(f'/games/{game_id}/hands/1/status').json()
         for sp in status['side_pots']:

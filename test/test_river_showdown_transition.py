@@ -66,7 +66,7 @@ class TestRiverShowdownTransition:
         _act(client, game_id, p, 'check', hand_number=hn)
 
         state = _state(client, game_id, hn)
-        assert state['phase'] == 'flop', f"Expected flop, got {state['phase']}"
+        assert state['phase'] == 'flop', f'Expected flop, got {state["phase"]}'
 
         # Deal turn so flop→turn can advance
         resp = client.patch(
@@ -82,7 +82,7 @@ class TestRiverShowdownTransition:
         _act(client, game_id, p, 'check', hand_number=hn)
 
         state = _state(client, game_id, hn)
-        assert state['phase'] == 'turn', f"Expected turn, got {state['phase']}"
+        assert state['phase'] == 'turn', f'Expected turn, got {state["phase"]}'
 
         # Deal river so turn→river can advance
         resp = client.patch(
@@ -98,7 +98,7 @@ class TestRiverShowdownTransition:
         _act(client, game_id, p, 'check', hand_number=hn)
 
         state = _state(client, game_id, hn)
-        assert state['phase'] == 'river', f"Expected river, got {state['phase']}"
+        assert state['phase'] == 'river', f'Expected river, got {state["phase"]}'
 
         # --- River: both check ---
         p = _current(client, game_id, hn)

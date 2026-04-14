@@ -28,8 +28,8 @@ describe('reducer', () => {
       expect(state.gameDate).toBe('2026-04-08');
       expect(state.currentStep).toBe('dashboard');
       expect(state.players).toEqual([
-        { name: 'Alice', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null },
-        { name: 'Bob', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null },
+        { name: 'Alice', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null, lastAction: null },
+        { name: 'Bob', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null, lastAction: null },
       ]);
       expect(state.community).toEqual({
         flop1: null, flop2: null, flop3: null, flopRecorded: false, turn: null, turnRecorded: false, river: null, riverRecorded: false,
@@ -50,11 +50,11 @@ describe('reducer', () => {
       });
 
       expect(state.players[0]).toEqual({
-        name: 'Alice', card1: 'Ah', card2: 'Kd', recorded: true, status: 'playing', outcomeStreet: null,
+        name: 'Alice', card1: 'Ah', card2: 'Kd', recorded: true, status: 'playing', outcomeStreet: null, lastAction: null,
       });
       // Bob is untouched
       expect(state.players[1]).toEqual({
-        name: 'Bob', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null,
+        name: 'Bob', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null, lastAction: null,
       });
     });
 
@@ -112,8 +112,8 @@ describe('reducer', () => {
       expect(reset.gameId).toBe(7);
       expect(reset.gameDate).toBe('2026-04-08');
       expect(reset.players).toEqual([
-        { name: 'Alice', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null },
-        { name: 'Bob', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null },
+        { name: 'Alice', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null, lastAction: null },
+        { name: 'Bob', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null, lastAction: null },
       ]);
       expect(reset.community).toEqual({
         flop1: null, flop2: null, flop3: null, flopRecorded: false, turn: null, turnRecorded: false, river: null, riverRecorded: false,
@@ -285,8 +285,8 @@ describe('reducer', () => {
       expect(finished.currentHandId).toBeNull();
       expect(finished.currentStep).toBe('dashboard');
       expect(finished.players).toEqual([
-        { name: 'Alice', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null },
-        { name: 'Bob', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null },
+        { name: 'Alice', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null, lastAction: null },
+        { name: 'Bob', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null, lastAction: null },
       ]);
       expect(finished.community).toEqual({
         flop1: null, flop2: null, flop3: null, flopRecorded: false, turn: null, turnRecorded: false, river: null, riverRecorded: false,
@@ -364,14 +364,14 @@ describe('reducer', () => {
       });
       // Alice and Bob have their recorded data
       expect(state.players[0]).toEqual({
-        name: 'Alice', card1: 'AH', card2: 'KD', recorded: true, status: 'won', outcomeStreet: 'river',
+        name: 'Alice', card1: 'AH', card2: 'KD', recorded: true, status: 'won', outcomeStreet: 'river', lastAction: null,
       });
       expect(state.players[1]).toEqual({
-        name: 'Bob', card1: '9S', card2: 'TC', recorded: true, status: 'lost', outcomeStreet: 'turn',
+        name: 'Bob', card1: '9S', card2: 'TC', recorded: true, status: 'lost', outcomeStreet: 'turn', lastAction: null,
       });
       // Charlie was not in the hand — stays fresh
       expect(state.players[2]).toEqual({
-        name: 'Charlie', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null,
+        name: 'Charlie', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null, lastAction: null,
       });
     });
 
@@ -412,7 +412,7 @@ describe('reducer', () => {
       state = reducer(state, { type: 'LOAD_HAND' as const, payload: handData });
 
       expect(state.players[0]).toEqual({
-        name: 'Alice', card1: null, card2: null, recorded: true, status: 'folded', outcomeStreet: null,
+        name: 'Alice', card1: null, card2: null, recorded: true, status: 'folded', outcomeStreet: null, lastAction: null,
       });
     });
   });

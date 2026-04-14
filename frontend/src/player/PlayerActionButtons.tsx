@@ -11,7 +11,14 @@ export interface PlayerActionButtonsProps {
   communityCardCount: number;
   legalActions?: string[];
   amountToCall?: number;
+  minimumBet?: number | null;
+  minimumRaise?: number | null;
   pot?: number;
+  onActionConfirmed?: () => void;
+}
+
+function formatCurrency(amount: number): string {
+  return `$${amount.toFixed(2)}`;
 }
 
 export function getStreet(communityCardCount: number): StreetEnum {
@@ -25,7 +32,8 @@ export function getStreet(communityCardCount: number): StreetEnum {
 
 export function PlayerActionButtons({
   gameId, handNumber, playerName, communityCardCount,
-  legalActions = [], amountToCall = 0, pot = 0,
+  legalActions = [], amountToCall = 0, minimumBet = null, minimumRaise = null, pot = 0,
+  onActionConfirmed,
 }: PlayerActionButtonsProps) {
   const [actedOnCount, setActedOnCount] = useState(-1);
   const hasActed = actedOnCount === communityCardCount;
@@ -35,16 +43,40 @@ export function PlayerActionButtons({
   const street = getStreet(communityCardCount);
   const actions = legalActions.length > 0 ? legalActions : ['fold', 'check', 'call', 'bet', 'raise'];
 
-  async function handleAction(action: ActionEnum, amount?: number) {
+  async function handleAction(action: ActionEnum, amount?: number, isAllIn?: boolean) {
     setError(null);
+    if (
+      !isAllIn
+      && action === 'bet'
+      && minimumBet !== null
+      && amount !== undefined
+      && amount < minimumBet
+    ) {
+      setError(`Minimum bet is ${formatCurrency(minimumBet)}`);
+      setChipAction(null);
+      return;
+    }
+    if (
+      !isAllIn
+      && action === 'raise'
+      && minimumRaise !== null
+      && amount !== undefined
+      && amount < minimumRaise
+    ) {
+      setError(`Minimum raise is ${formatCurrency(minimumRaise)}`);
+      setChipAction(null);
+      return;
+    }
     try {
       await recordPlayerAction(gameId, handNumber, playerName, {
         street,
         action,
         amount: amount ?? null,
+        ...(isAllIn ? { is_all_in: true } : {}),
       });
       setActedOnCount(communityCardCount);
       setChipAction(null);
+      onActionConfirmed?.();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Action failed';
       setError(message);
@@ -58,6 +90,7 @@ export function PlayerActionButtons({
         <ChipPicker
           onConfirm={(amount) => handleAction(chipAction, amount)}
           onCancel={() => setChipAction(null)}
+          onAllIn={() => handleAction(chipAction, undefined, true)}
         />
       </div>
     );
@@ -71,9 +104,14 @@ export function PlayerActionButtons({
         {amountToCall > 0 && (
           <span style={styles.callLabel}>${amountToCall.toFixed(2)} to call</span>
         )}
-        {amountToCall > 0 && (
-          <span data-testid="pot-odds" style={styles.oddsLabel}>
-            Odds: {((pot / amountToCall) + 1).toFixed(1)}:1
+        {actions.includes('bet') && minimumBet !== null && (
+          <span data-testid="minimum-bet" style={styles.minimumLabel}>
+            Min bet {formatCurrency(minimumBet)}
+          </span>
+        )}
+        {actions.includes('raise') && minimumRaise !== null && (
+          <span data-testid="minimum-raise" style={styles.minimumLabel}>
+            Min raise {formatCurrency(minimumRaise)}
           </span>
         )}
       </div>
@@ -150,9 +188,9 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 'bold',
     color: '#fbbf24',
   },
-  oddsLabel: {
+  minimumLabel: {
     fontWeight: 'bold',
-    color: '#60a5fa',
+    color: '#93c5fd',
   },
   buttonRow: {
     display: 'flex',

@@ -26,7 +26,7 @@ class TestPostRebuy:
         )
         assert resp.status_code == 201
         data = resp.json()
-        assert data['player_name'] == 'Alice'
+        assert 'player_id' in data
         assert data['amount'] == 50.0
         assert data['game_id'] == game_id
         assert 'rebuy_id' in data

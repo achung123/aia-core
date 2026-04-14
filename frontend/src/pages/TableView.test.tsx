@@ -7,7 +7,6 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 vi.mock('../api/client.ts', () => ({
   fetchHands: vi.fn(),
   fetchHandStatus: vi.fn(),
-  fetchPlayerEquity: vi.fn(() => Promise.resolve({ equities: [] })),
 }));
 
 // Mock seatCamera — track animation calls
@@ -58,7 +57,7 @@ vi.mock('../scenes/pokerScene.ts', () => ({
   })),
 }));
 
-import { fetchHands, fetchHandStatus, fetchPlayerEquity } from '../api/client.ts';
+import { fetchHands, fetchHandStatus } from '../api/client.ts';
 import type { HandResponse } from '../api/types.ts';
 
 // Lazy import so mocks are in place
@@ -194,6 +193,29 @@ describe('TableView', () => {
     const { container } = renderTableView();
     const canvas = container.querySelector('canvas');
     expect(canvas).toBeTruthy();
+  });
+
+  it('uses flex column layout so canvas does not extend behind HUD', () => {
+    const { container } = renderTableView();
+    const viewport = container.firstElementChild as HTMLElement;
+    expect(viewport.style.display).toBe('flex');
+    expect(viewport.style.flexDirection).toBe('column');
+  });
+
+  it('canvas area has overflow hidden and flex:1', () => {
+    renderTableView();
+    const canvasArea = screen.getByTestId('canvas-area');
+    expect(canvasArea).toBeTruthy();
+    expect(canvasArea.style.overflow).toBe('hidden');
+    expect(canvasArea.style.flex).toContain('1');
+  });
+
+  it('HUD bar is in normal flow (not absolute/fixed)', () => {
+    renderTableView();
+    const hudBar = screen.getByTestId('hud-bar');
+    expect(hudBar).toBeTruthy();
+    expect(hudBar.style.position).not.toBe('absolute');
+    expect(hudBar.style.position).not.toBe('fixed');
   });
 
   it('shows a Back to Hand button', () => {
@@ -475,129 +497,6 @@ describe('TableView', () => {
     const styleTag = screen.getByTestId('session-scrubber').querySelector('style');
     expect(styleTag).toBeTruthy();
     expect(styleTag!.textContent).toContain('48px');
-  });
-
-  /* ── Adjusted equity display (T-033) ──────────────────────── */
-
-  it('calls fetchPlayerEquity with game, hand, and player name (AC1)', async () => {
-    vi.mocked(fetchHands).mockResolvedValue(HANDS);
-    vi.mocked(fetchPlayerEquity).mockResolvedValue({
-      equities: [{ player_name: 'Alice', equity: 0.72 }],
-    });
-    renderTableView('?game=5&player=Alice');
-    await waitFor(() => {
-      expect(vi.mocked(fetchPlayerEquity)).toHaveBeenCalledWith(5, 1, 'Alice');
-    });
-  });
-
-  it('displays equity percentage near player cards (AC2)', async () => {
-    vi.mocked(fetchHands).mockResolvedValue(HANDS);
-    vi.mocked(fetchPlayerEquity).mockResolvedValue({
-      equities: [{ player_name: 'Alice', equity: 0.72 }],
-    });
-    renderTableView('?game=5&player=Alice');
-    await waitFor(() => {
-      expect(screen.getByTestId('equity-overlay')).toBeTruthy();
-    });
-    expect(screen.getByTestId('equity-overlay').textContent).toContain('72%');
-  });
-
-  it('recalculates equity when hand changes via scrubber (AC3)', async () => {
-    vi.mocked(fetchHands).mockResolvedValue(MULTI_HANDS);
-    vi.mocked(fetchPlayerEquity).mockResolvedValue({
-      equities: [{ player_name: 'Alice', equity: 0.65 }],
-    });
-    renderTableView('?game=5&player=Alice');
-    await waitFor(() => {
-      expect(vi.mocked(fetchPlayerEquity)).toHaveBeenCalled();
-    });
-
-    vi.mocked(fetchPlayerEquity).mockClear();
-    vi.mocked(fetchPlayerEquity).mockResolvedValue({
-      equities: [{ player_name: 'Alice', equity: 0.50 }],
-    });
-
-    // Change scrubber to hand 1
-    const slider = screen.getByTestId('session-slider');
-    fireEvent.change(slider, { target: { value: '1' } });
-
-    await waitFor(() => {
-      expect(vi.mocked(fetchPlayerEquity)).toHaveBeenCalledWith(5, 1, 'Alice');
-    });
-  });
-
-  it('has a toggle button to show/hide equity (AC4)', async () => {
-    vi.mocked(fetchHands).mockResolvedValue(HANDS);
-    vi.mocked(fetchPlayerEquity).mockResolvedValue({
-      equities: [{ player_name: 'Alice', equity: 0.72 }],
-    });
-    renderTableView('?game=5&player=Alice');
-    await waitFor(() => {
-      expect(screen.getByTestId('equity-overlay')).toBeTruthy();
-    });
-
-    // Toggle button exists
-    const toggleBtn = screen.getByTestId('equity-toggle-btn');
-    expect(toggleBtn).toBeTruthy();
-
-    // Click to hide
-    fireEvent.click(toggleBtn);
-    expect(screen.queryByTestId('equity-overlay')).toBeNull();
-
-    // Click to show again
-    fireEvent.click(toggleBtn);
-    await waitFor(() => {
-      expect(screen.getByTestId('equity-overlay')).toBeTruthy();
-    });
-  });
-
-  it('shows preflop equity when no community cards (AC5)', async () => {
-    const preflopHand: HandResponse[] = [{
-      ...HANDS[0],
-      flop_1: null,
-      flop_2: null,
-      flop_3: null,
-      turn: null,
-      river: null,
-      player_hands: [
-        { player_hand_id: 1, hand_id: 1, player_id: 1, player_name: 'Alice', card_1: 'Ah', card_2: 'As', result: null, profit_loss: 0, outcome_street: null, winning_hand_description: null },
-        { player_hand_id: 2, hand_id: 1, player_id: 2, player_name: 'Bob', card_1: null, card_2: null, result: null, profit_loss: 0, outcome_street: null, winning_hand_description: null },
-      ],
-    }];
-    vi.mocked(fetchHands).mockResolvedValue(preflopHand);
-    vi.mocked(fetchPlayerEquity).mockResolvedValue({
-      equities: [{ player_name: 'Alice', equity: 0.85 }],
-    });
-    renderTableView('?game=5&player=Alice');
-    await waitFor(() => {
-      expect(screen.getByTestId('equity-overlay')).toBeTruthy();
-    });
-    // Should show preflop equity
-    expect(screen.getByTestId('equity-overlay').textContent).toContain('85%');
-  });
-
-  it('does not show equity overlay when no equity data returned', async () => {
-    vi.mocked(fetchHands).mockResolvedValue(HANDS);
-    vi.mocked(fetchPlayerEquity).mockResolvedValue({ equities: [] });
-    renderTableView('?game=5&player=Alice');
-    await waitFor(() => {
-      expect(mockSceneUpdate).toHaveBeenCalled();
-    });
-    // Give time for equity fetch to complete
-    await new Promise(r => setTimeout(r, 50));
-    expect(screen.queryByTestId('equity-overlay')).toBeNull();
-  });
-
-  it('handles equity fetch errors gracefully', async () => {
-    vi.mocked(fetchHands).mockResolvedValue(HANDS);
-    vi.mocked(fetchPlayerEquity).mockRejectedValue(new Error('Network error'));
-    renderTableView('?game=5&player=Alice');
-    await waitFor(() => {
-      expect(mockSceneUpdate).toHaveBeenCalled();
-    });
-    // Should not crash — no equity overlay shown
-    await new Promise(r => setTimeout(r, 50));
-    expect(screen.queryByTestId('equity-overlay')).toBeNull();
   });
 
   /* ── Live hand polling (T-038) ────────────────────────────── */

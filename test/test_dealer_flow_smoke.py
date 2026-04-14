@@ -164,11 +164,12 @@ class TestDealerFlowSmoke:
         assert equity_resp.status_code == 200
         equity_data = equity_resp.json()
         assert 'equities' in equity_data
-        # Only players with non-null cards get equity (Alice, Bob, Charlie)
+        # Only non-folded players with non-null cards get equity (Alice, Bob)
+        # Charlie folded so should NOT appear in equity
         equity_names = {e['player_name'] for e in equity_data['equities']}
         assert 'Alice' in equity_names
         assert 'Bob' in equity_names
-        assert 'Charlie' in equity_names
+        assert 'Charlie' not in equity_names
         # Dave (eliminated, null cards) should NOT appear in equity
         assert 'Dave' not in equity_names
         for entry in equity_data['equities']:

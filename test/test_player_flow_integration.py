@@ -113,21 +113,39 @@ class TestPlayerFlowIntegration:
         assert charlie_cards_resp.json()['card_1'] == '7D'
         assert charlie_cards_resp.json()['card_2'] == '2C'
 
-        # === AC2 cont: Record player actions via POST (bet, check, fold) ===
-        # Preflop: Alice bets
-        alice_bet_resp = client.post(
-            f'/games/{game_id}/hands/{hand_number}/players/Alice/actions?force=true',
-            json={'street': 'preflop', 'action': 'bet', 'amount': 20.0},
+        # === AC2 cont: Record player actions via POST (raise, call, fold) ===
+        # Deal community cards early so phase transitions work
+        client.patch(
+            f'/games/{game_id}/hands/{hand_number}/flop',
+            json={
+                'flop_1': {'rank': '10', 'suit': 'H'},
+                'flop_2': {'rank': '9', 'suit': 'H'},
+                'flop_3': {'rank': '2', 'suit': 'S'},
+            },
         )
-        assert alice_bet_resp.status_code == 201
-        assert alice_bet_resp.json()['action'] == 'bet'
-        assert alice_bet_resp.json()['amount'] == 20.0
-        assert alice_bet_resp.json()['street'] == 'preflop'
+        client.patch(
+            f'/games/{game_id}/hands/{hand_number}/turn',
+            json={'turn': {'rank': '8', 'suit': 'H'}},
+        )
+        client.patch(
+            f'/games/{game_id}/hands/{hand_number}/river',
+            json={'river': {'rank': '3', 'suit': 'D'}},
+        )
 
-        # Preflop: Bob calls
+        # Preflop: Alice(SB) raises (with force=true to bypass turn order)
+        alice_raise_resp = client.post(
+            f'/games/{game_id}/hands/{hand_number}/players/Alice/actions?force=true',
+            json={'street': 'preflop', 'action': 'raise', 'amount': 20.0},
+        )
+        assert alice_raise_resp.status_code == 201
+        assert alice_raise_resp.json()['action'] == 'raise'
+        assert alice_raise_resp.json()['amount'] == 20.0
+        assert alice_raise_resp.json()['street'] == 'preflop'
+
+        # Preflop: Bob(BB) calls (BB posted 0.20, Alice total = 20.10, to call = 19.90)
         bob_call_resp = client.post(
             f'/games/{game_id}/hands/{hand_number}/players/Bob/actions?force=true',
-            json={'street': 'preflop', 'action': 'call', 'amount': 20.0},
+            json={'street': 'preflop', 'action': 'call', 'amount': 19.90},
         )
         assert bob_call_resp.status_code == 201
         assert bob_call_resp.json()['action'] == 'call'
@@ -139,16 +157,6 @@ class TestPlayerFlowIntegration:
         )
         assert charlie_fold_resp.status_code == 201
         assert charlie_fold_resp.json()['action'] == 'fold'
-
-        # Record community cards (flop, turn, river) so hand can be finalized
-        client.patch(
-            f'/games/{game_id}/hands/{hand_number}/flop',
-            json={
-                'flop_1': {'rank': '10', 'suit': 'H'},
-                'flop_2': {'rank': '9', 'suit': 'H'},
-                'flop_3': {'rank': '2', 'suit': 'S'},
-            },
-        )
 
         # Flop: Alice checks
         alice_check_resp = client.post(
@@ -171,16 +179,6 @@ class TestPlayerFlowIntegration:
             json={'street': 'flop', 'action': 'call', 'amount': 30.0},
         )
         assert alice_call_resp.status_code == 201
-
-        # Turn and river
-        client.patch(
-            f'/games/{game_id}/hands/{hand_number}/turn',
-            json={'turn': {'rank': '8', 'suit': 'H'}},
-        )
-        client.patch(
-            f'/games/{game_id}/hands/{hand_number}/river',
-            json={'river': {'rank': '3', 'suit': 'D'}},
-        )
 
         # River: Alice checks, Bob checks
         client.post(
@@ -256,7 +254,7 @@ class TestPlayerFlowIntegration:
         actions = actions_resp.json()
 
         # We recorded 8 manual actions + 2 auto-posted blind actions = 10 total:
-        # preflop: SB blind, BB blind, Alice bet, Bob call, Charlie fold
+        # preflop: SB blind, BB blind, Alice raise, Bob call, Charlie fold
         # flop: Alice check, Bob bet, Alice call
         # river: Alice check, Bob check
         assert len(actions) == 10
@@ -265,7 +263,7 @@ class TestPlayerFlowIntegration:
         manual = [a for a in actions if a['action'] != 'blind']
         assert manual[0]['player_name'] == 'Alice'
         assert manual[0]['street'] == 'preflop'
-        assert manual[0]['action'] == 'bet'
+        assert manual[0]['action'] == 'raise'
         assert manual[0]['amount'] == 20.0
 
         assert manual[1]['player_name'] == 'Bob'

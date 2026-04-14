@@ -96,10 +96,10 @@ describe('PlayerGrid', () => {
     expect(flopTile.textContent).not.toContain('✅');
   });
 
-  it('shows ✅ on player tile when recorded', () => {
+  it('does not show ✅ on player tile when recorded', () => {
     render(<PlayerGrid {...defaultProps} />);
     const bobRow = screen.getByTestId('player-row-Bob');
-    expect(bobRow.textContent).toContain('✅');
+    expect(bobRow.textContent).not.toContain('✅');
   });
 
   it('renders a back button that calls onBack', () => {

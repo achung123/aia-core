@@ -10,6 +10,7 @@ export interface SeatPickerProps {
   currentPlayerSeat: number | null;
   onSelect: (seatNumber: number) => void;
   onSkip: () => void;
+  allowSwap?: boolean;
 }
 
 /**
@@ -28,7 +29,7 @@ function seatPosition(index: number, total: number): { left: string; top: string
   };
 }
 
-export function SeatPicker({ seats, currentPlayerSeat, onSelect, onSkip }: SeatPickerProps) {
+export function SeatPicker({ seats, currentPlayerSeat, onSelect, onSkip, allowSwap }: SeatPickerProps) {
   // Build a full 10-seat array, filling in provided seats
   const seatMap = new Map(seats.map((s) => [s.seatNumber, s]));
   const allSeats: SeatData[] = [];
@@ -44,28 +45,32 @@ export function SeatPicker({ seats, currentPlayerSeat, onSelect, onSkip }: SeatP
           const pos = seatPosition(i, 10);
           const isOccupied = seat.playerName !== null;
           const isCurrent = seat.seatNumber === currentPlayerSeat;
+          const isSwappable = allowSwap && isOccupied && !isCurrent;
+          const isDisabled = isOccupied && !isSwappable;
           return (
             <button
               key={seat.seatNumber}
               data-testid={`seat-${seat.seatNumber}`}
-              disabled={isOccupied}
+              disabled={isDisabled}
               onClick={() => onSelect(seat.seatNumber)}
               style={{
                 ...styles.seat,
                 left: pos.left,
                 top: pos.top,
-                ...(isOccupied ? styles.seatOccupied : styles.seatOpen),
+                ...(isSwappable ? styles.seatSwappable : isOccupied ? styles.seatOccupied : styles.seatOpen),
                 ...(isCurrent ? styles.seatCurrent : {}),
               }}
               aria-label={
-                isOccupied
-                  ? `Seat ${seat.seatNumber}: ${seat.playerName}`
-                  : `Seat ${seat.seatNumber}: Open`
+                isSwappable
+                  ? `Seat ${seat.seatNumber}: Swap with ${seat.playerName}`
+                  : isOccupied
+                    ? `Seat ${seat.seatNumber}: ${seat.playerName}`
+                    : `Seat ${seat.seatNumber}: Open`
               }
             >
               <span style={styles.seatNumber}>{seat.seatNumber}</span>
               <span style={styles.seatLabel}>
-                {isOccupied ? seat.playerName : 'Open'}
+                {isSwappable ? `⇄ ${seat.playerName}` : isOccupied ? seat.playerName : 'Open'}
               </span>
             </button>
           );
@@ -128,6 +133,12 @@ const styles: Record<string, CSSProperties> = {
     color: '#6b7280',
     cursor: 'not-allowed',
     opacity: 0.8,
+  },
+  seatSwappable: {
+    background: '#fef3c7',
+    color: '#92400e',
+    cursor: 'pointer',
+    border: '2px solid #f59e0b',
   },
   seatCurrent: {
     border: '3px solid #4f46e5',

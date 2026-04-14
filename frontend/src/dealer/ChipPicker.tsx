@@ -4,6 +4,7 @@ import type React from 'react';
 export interface ChipPickerProps {
   onConfirm: (amount: number) => void;
   onCancel?: () => void;
+  onAllIn?: () => void;
 }
 
 interface ChipDef {
@@ -19,9 +20,12 @@ const CHIPS: ChipDef[] = [
   { value: 0.30, label: '$0.30', bg: '#16a34a', color: '#ffffff' },
   { value: 0.40, label: '$0.40', bg: '#2563eb', color: '#ffffff' },
   { value: 0.50, label: '$0.50', bg: '#1a1a2e', color: '#ffffff' },
+  { value: 1.00, label: '$1.00', bg: '#f97316', color: '#ffffff' },
+  { value: 2.00, label: '$2.00', bg: '#38bdf8', color: '#111827' },
+  { value: 3.00, label: '$3.00', bg: '#facc15', color: '#111827' },
 ];
 
-export function ChipPicker({ onConfirm, onCancel }: ChipPickerProps) {
+export function ChipPicker({ onConfirm, onCancel, onAllIn }: ChipPickerProps) {
   const [total, setTotal] = useState(0);
 
   function handleChipTap(value: number): void {
@@ -72,8 +76,17 @@ export function ChipPicker({ onConfirm, onCancel }: ChipPickerProps) {
           style={styles.confirmButton}
           onClick={handleConfirm}
         >
-          Confirm
+          Bet
         </button>
+        {onAllIn && (
+          <button
+            data-testid="chip-all-in"
+            style={styles.allInButton}
+            onClick={onAllIn}
+          >
+            All In
+          </button>
+        )}
       </div>
 
       {onCancel && (
@@ -145,6 +158,17 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '1rem',
     fontWeight: 'bold',
     background: '#16a34a',
+    border: 'none',
+    borderRadius: '12px',
+    cursor: 'pointer',
+    color: '#ffffff',
+    minHeight: '48px',
+  },
+  allInButton: {
+    padding: '0.75rem 1.5rem',
+    fontSize: '1rem',
+    fontWeight: 'bold',
+    background: '#dc2626',
     border: 'none',
     borderRadius: '12px',
     cursor: 'pointer',

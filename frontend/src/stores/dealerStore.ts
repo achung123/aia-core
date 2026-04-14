@@ -21,6 +21,7 @@ export interface Player {
   recorded: boolean;
   status: string;
   outcomeStreet: string | null;
+  lastAction: string | null;
 }
 
 export interface DealerState {
@@ -50,7 +51,7 @@ export interface DealerActions {
   restoreState: (payload: Partial<DealerState>) => void;
   setStep: (step: string) => void;
   loadHand: (hand: LoadHandPayload) => void;
-  updateParticipation: (payload: { players: { name: string; participation_status: string }[] }) => void;
+  updateParticipation: (payload: { players: { name: string; participation_status: string; outcome_street?: string | null; last_action?: string | null }[] }) => void;
 }
 
 export interface LoadHandPayload {
@@ -96,7 +97,7 @@ const initialState: DealerState = {
 // --- Utility ---
 
 function initPlayer(name: string): Player {
-  return { name, card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null };
+  return { name, card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null, lastAction: null };
 }
 
 export function validateOutcomeStreets(players: Player[]): string | null {
@@ -239,7 +240,12 @@ export const useDealerStore = create<DealerState & DealerActions>()(
             },
             players: state.players.map((p) => {
               const ph = phMap.get(p.name);
-              if (!ph) return initPlayer(p.name);
+              // If hand has player_hands but this player isn't in them, they're inactive
+              if (!ph) {
+                return hand.player_hands.length > 0
+                  ? { ...initPlayer(p.name), status: 'not_playing' }
+                  : initPlayer(p.name);
+              }
               return {
                 name: p.name,
                 card1: ph.card_1 || null,
@@ -247,6 +253,7 @@ export const useDealerStore = create<DealerState & DealerActions>()(
                 recorded: true,
                 status: ph.result || 'playing',
                 outcomeStreet: ph.outcome_street || null,
+                lastAction: null,
               };
             }),
           };
@@ -255,15 +262,21 @@ export const useDealerStore = create<DealerState & DealerActions>()(
       updateParticipation: ({ players: participationPlayers }) =>
         set((state) => {
           const statusMap = new Map(
-            participationPlayers.map((p) => [p.name, p.participation_status]),
+            participationPlayers.map((p) => [p.name, p]),
           );
           return {
             players: state.players.map((p) => {
-              const ps = statusMap.get(p.name);
-              if (ps == null) return p;
-              if (p.recorded && (ps === 'idle' || ps === 'playing')) return p;
-              if (p.status === 'not_playing' && (ps === 'idle' || ps === 'playing')) return p;
-              return { ...p, status: ps };
+              const entry = statusMap.get(p.name);
+              if (entry == null) return p;
+              const ps = entry.participation_status;
+              if (p.recorded && (ps === 'idle' || ps === 'playing')) {
+                return { ...p, lastAction: entry.last_action ?? p.lastAction };
+              }
+              if (p.status === 'not_playing' && (ps === 'idle' || ps === 'playing')) {
+                return { ...p, lastAction: entry.last_action ?? p.lastAction };
+              }
+              const newOutcomeStreet = entry.outcome_street ?? p.outcomeStreet;
+              return { ...p, status: ps, outcomeStreet: newOutcomeStreet, lastAction: entry.last_action ?? p.lastAction };
             }),
           };
         }),

@@ -38,6 +38,16 @@ def client():
     app.dependency_overrides.clear()
 
 
+@pytest.fixture
+def db_session():
+    """Provides a raw SQLAlchemy session bound to the same in-memory engine."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
 # Default card pool for activating hands (must be unique per player)
 _DEFAULT_CARDS = [
     ('Ah', 'Kd'),

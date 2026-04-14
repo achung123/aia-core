@@ -8,7 +8,7 @@ from collections import defaultdict
 
 from pydantic_models.app_models import CardRank, CardSuit, ResultEnum
 
-CSV_COLUMNS = [
+CSV_COLUMNS_LEGACY = [
     'game_date',
     'hand_number',
     'player_name',
@@ -21,6 +21,11 @@ CSV_COLUMNS = [
     'river',
     'result',
     'profit_loss',
+]
+
+CSV_COLUMNS = CSV_COLUMNS_LEGACY + [
+    'outcome_street',
+    'is_all_in',
 ]
 
 CSV_COLUMN_FORMATS = {
@@ -198,8 +203,11 @@ def parse_csv(csv_text: str) -> dict[tuple[str, str], list[dict[str, str]]]:
         return {}
 
     headers = [h.strip() for h in headers]
-    if headers != CSV_COLUMNS:
-        raise ValueError(f'Invalid CSV header. Expected {CSV_COLUMNS}, got {headers}')
+    if headers != CSV_COLUMNS and headers != CSV_COLUMNS_LEGACY:
+        raise ValueError(
+            f'Invalid CSV header. Expected {CSV_COLUMNS_LEGACY} '
+            f'or {CSV_COLUMNS}, got {headers}'
+        )
 
     grouped: dict[tuple[str, str], list[dict[str, str]]] = defaultdict(list)
 

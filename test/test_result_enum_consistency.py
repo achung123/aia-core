@@ -5,10 +5,7 @@ import io
 import pytest
 from pydantic import ValidationError
 
-from pydantic_models.app_models import (
-    PlayerHandResponse,
-    PlayerStatusEntry,
-)
+from pydantic_models.hand_schemas import PlayerHandResponse, PlayerStatusEntry
 
 
 class TestB002PlayerHandResponseResultEnum:

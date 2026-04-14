@@ -118,7 +118,7 @@ export function TableView3D({ hands }: TableView3DProps) {
     <div
       ref={containerRef}
       data-testid="table-view-3d"
-      style={{ width: '100%', height: '400px', position: 'relative' }}
+      style={{ width: '100%', height: 'min(400px, 50vh)', position: 'relative' }}
     >
       <canvas
         ref={canvasRef}

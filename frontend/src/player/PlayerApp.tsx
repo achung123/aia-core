@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, type CSSProperties } from 're
 import {
   fetchSessions,
   fetchGame,
-  fetchHands,
+  fetchLatestHand,
   fetchHandStatusConditional,
   fetchGameStats,
   updateHolecards,
@@ -124,6 +124,8 @@ export function PlayerApp() {
   const [isMyTurn, setIsMyTurn] = useState(false);
   const [legalActions, setLegalActions] = useState<string[]>([]);
   const [amountToCall, setAmountToCall] = useState(0);
+  const [minimumBet, setMinimumBet] = useState<number | null>(null);
+  const [minimumRaise, setMinimumRaise] = useState<number | null>(null);
   const [pot, setPot] = useState(0);
   const [runningTotal, setRunningTotal] = useState<number | null>(null);
 
@@ -255,24 +257,22 @@ export function PlayerApp() {
     setReviewData(null);
   }
 
-  async function handleReviewConfirm(_targetName: string, cardValues: string[]) {
+  function handleReviewConfirm(_targetName: string, cardValues: string[]) {
     if (reviewData?.imageUrl) URL.revokeObjectURL(reviewData.imageUrl);
     const card1 = cardValues[0] || null;
     const card2 = cardValues[1] || null;
-    try {
-      await updateHolecards(gameId!, handNumber!, playerName!, {
-        card_1: card1,
-        card_2: card2,
-      });
-      setCaptureStep(null);
-      setReviewData(null);
-      setCaptureError(null);
-    } catch (err: unknown) {
-      setCaptureStep(null);
-      setReviewData(null);
+    // Optimistically transition out of capture UI immediately
+    setCaptureStep(null);
+    setReviewData(null);
+    setCaptureError(null);
+    // Fire API call in the background — surface errors if it fails
+    updateHolecards(gameId!, handNumber!, playerName!, {
+      card_1: card1,
+      card_2: card2,
+    }).catch((err: unknown) => {
       const message = err instanceof Error ? err.message : 'Failed to submit cards';
       setCaptureError(message);
-    }
+    });
   }
 
   function handleReviewRetake() {
@@ -290,7 +290,8 @@ export function PlayerApp() {
         const player = (gameData.players || []).find((p: PlayerInfo) => p.name === playerName);
         const stat = (statsData.player_stats || []).find((s: GameStatsPlayerEntry) => s.player_name === playerName);
         if (player) {
-          const total = (player.buy_in ?? 0) + (player.total_rebuys ?? 0) + (stat?.profit_loss ?? 0);
+          // Prefer live current_chips from the backend; fall back to static formula
+          const total = player.current_chips ?? ((player.buy_in ?? 0) + (player.total_rebuys ?? 0) + (stat?.profit_loss ?? 0));
           setRunningTotal(total);
         }
       })
@@ -303,14 +304,14 @@ export function PlayerApp() {
     }
   }, [step, gameId, playerName]);
 
-  const { isReconnecting: playerReconnecting } = usePolling({
+  const { isReconnecting: playerReconnecting, triggerNow: triggerPlayerPoll } = usePolling({
     intervalMs: 5000,
     enabled: step === 'playing' && !!gameId && !!playerName,
     fetchFn: (signal) =>
-      fetchHands(gameId!, { signal })
-        .then(hands => {
+      fetchLatestHand(gameId!, { signal })
+        .then(latest => {
           if (signal.aborted) return;
-          if (!hands || hands.length === 0) {
+          if (!latest) {
             setNoActiveHand(true);
             setHandNumber(null);
             handNumberRef.current = null;
@@ -319,8 +320,6 @@ export function PlayerApp() {
             return;
           }
           setNoActiveHand(false);
-          const latest = hands.reduce((max, h) =>
-            h.hand_number > max.hand_number ? h : max, hands[0]);
           if (latest.hand_number !== handNumberRef.current) {
             setHandNumber(latest.hand_number);
             handNumberRef.current = latest.hand_number;
@@ -339,6 +338,8 @@ export function PlayerApp() {
               setCommunityRecorded(result.data.community_recorded);
               setLegalActions(result.data.legal_actions ?? []);
               setAmountToCall(result.data.amount_to_call ?? 0);
+              setMinimumBet(result.data.minimum_bet ?? null);
+              setMinimumRaise(result.data.minimum_raise ?? null);
               setPot(result.data.pot ?? 0);
               const me = result.data.players.find(p => p.name === playerName);
               if (me) {
@@ -409,7 +410,13 @@ export function PlayerApp() {
                 communityCardCount={communityCardCount}
                 legalActions={legalActions}
                 amountToCall={amountToCall}
+                minimumBet={minimumBet}
+                minimumRaise={minimumRaise}
                 pot={pot}
+                onActionConfirmed={() => {
+                  etagRef.current = null;
+                  triggerPlayerPoll();
+                }}
               />
             )}
             {playerStatus === 'joined' && handNumber && !isMyTurn && (

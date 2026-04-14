@@ -37,6 +37,8 @@ class TestCSVSchema:
             'river',
             'result',
             'profit_loss',
+            'outcome_street',
+            'is_all_in',
         ]
         assert CSV_COLUMNS == expected
 

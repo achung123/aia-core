@@ -8,6 +8,7 @@ vi.mock('../api/client.ts', () => ({
   fetchSessions: vi.fn(),
   fetchGame: vi.fn(),
   fetchHands: vi.fn(),
+  fetchLatestHand: vi.fn(),
   fetchHandStatus: vi.fn(),
   fetchHandStatusConditional: vi.fn(),
   fetchGameStats: vi.fn(),
@@ -15,12 +16,14 @@ vi.mock('../api/client.ts', () => ({
   getDetectionResults: vi.fn(),
   updateHolecards: vi.fn(),
   patchPlayerResult: vi.fn(),
+  recordPlayerAction: vi.fn(),
 }));
 
 import {
   fetchSessions,
   fetchGame,
   fetchHands,
+  fetchLatestHand,
   fetchHandStatusConditional,
   fetchGameStats,
   uploadImage,
@@ -31,6 +34,7 @@ import {
 const mockFetchSessions = fetchSessions as ReturnType<typeof vi.fn>;
 const mockFetchGame = fetchGame as ReturnType<typeof vi.fn>;
 const mockFetchHands = fetchHands as ReturnType<typeof vi.fn>;
+const mockFetchLatestHand = fetchLatestHand as ReturnType<typeof vi.fn>;
 const mockFetchHandStatusConditional = fetchHandStatusConditional as ReturnType<typeof vi.fn>;
 const mockFetchGameStats = fetchGameStats as ReturnType<typeof vi.fn>;
 const mockUploadImage = uploadImage as ReturnType<typeof vi.fn>;
@@ -195,6 +199,7 @@ describe('PlayerApp — name picker', () => {
     window.location.hash = '';
     // Default mocks so polling in 'playing' step doesn't crash
     mockFetchHands.mockResolvedValue([{ hand_number: 1 }]);
+    mockFetchLatestHand.mockResolvedValue({ hand_number: 1 });
     mockFetchHandStatusConditional.mockResolvedValue(wrapConditional({
       hand_number: 1,
       community_recorded: false,
@@ -260,6 +265,7 @@ describe('PlayerApp — name picker', () => {
     mockFetchSessions.mockResolvedValue(SESSIONS);
     mockFetchGame.mockResolvedValue(GAME_DETAIL);
     mockFetchHands.mockResolvedValue([{ hand_number: 1 }]);
+    mockFetchLatestHand.mockResolvedValue({ hand_number: 1 });
     mockFetchHandStatusConditional.mockResolvedValue(wrapConditional({
       hand_number: 1,
       community_recorded: false,
@@ -289,6 +295,7 @@ describe('PlayerApp — name picker', () => {
     mockFetchSessions.mockResolvedValue(SESSIONS);
     mockFetchGame.mockResolvedValue(GAME_DETAIL);
     mockFetchHands.mockResolvedValue([{ hand_number: 1 }]);
+    mockFetchLatestHand.mockResolvedValue({ hand_number: 1 });
     mockFetchHandStatusConditional.mockResolvedValue(wrapConditional({
       hand_number: 1,
       community_recorded: false,
@@ -341,6 +348,7 @@ describe('PlayerApp — name picker', () => {
     window.location.hash = '#/player?game=2&player=Bob';
     mockFetchSessions.mockResolvedValue(SESSIONS);
     mockFetchHands.mockResolvedValue([{ hand_number: 1 }]);
+    mockFetchLatestHand.mockResolvedValue({ hand_number: 1 });
     mockFetchHandStatusConditional.mockResolvedValue(wrapConditional({
       hand_number: 1,
       community_recorded: false,
@@ -370,6 +378,7 @@ describe('PlayerApp — seat picker step removed', () => {
     originalHash = window.location.hash;
     window.location.hash = '';
     mockFetchHands.mockResolvedValue([{ hand_number: 1 }]);
+    mockFetchLatestHand.mockResolvedValue({ hand_number: 1 });
     mockFetchHandStatusConditional.mockResolvedValue(wrapConditional({
       hand_number: 1,
       community_recorded: false,
@@ -407,6 +416,8 @@ async function goToPlaying(playerIndex = 1, { hands, handStatus }: { hands?: { h
   mockFetchSessions.mockResolvedValue(SESSIONS);
   mockFetchGame.mockResolvedValue(GAME_DETAIL);
   mockFetchHands.mockResolvedValue(hands || [{ hand_number: 1 }]);
+  const handList = hands || [{ hand_number: 1 }];
+  mockFetchLatestHand.mockResolvedValue(handList[handList.length - 1]);
   if (handStatus) {
     mockFetchHandStatusConditional.mockResolvedValue(wrapConditional(handStatus));
   } else if (!mockFetchHandStatusConditional.getMockImplementation()) {
@@ -495,7 +506,7 @@ describe('PlayerApp — polling and status', () => {
     await goToPlaying();
 
     await vi.waitFor(() => {
-      expect(mockFetchHands).toHaveBeenCalledWith(3, expect.objectContaining({ signal: expect.any(AbortSignal) }));
+      expect(mockFetchLatestHand).toHaveBeenCalledWith(3, expect.objectContaining({ signal: expect.any(AbortSignal) }));
     });
 
     await vi.waitFor(() => {
@@ -1000,6 +1011,7 @@ describe('PlayerApp — polling edge cases', () => {
 
     // Next poll cycle: a hand now exists
     mockFetchHands.mockResolvedValue([{ hand_number: 1 }]);
+    mockFetchLatestHand.mockResolvedValue({ hand_number: 1 });
     mockFetchHandStatusConditional.mockResolvedValue(wrapConditional(makeStatus('Bob', 'pending')));
     act(() => { vi.advanceTimersByTime(5000); });
 
@@ -1018,6 +1030,7 @@ describe('PlayerApp — polling edge cases', () => {
 
     // New hand starts — hand_number changes from 1 to 2
     mockFetchHands.mockResolvedValue([{ hand_number: 1 }, { hand_number: 2 }]);
+    mockFetchLatestHand.mockResolvedValue({ hand_number: 2 });
     mockFetchHandStatusConditional.mockResolvedValue(wrapConditional({
       hand_number: 2,
       community_recorded: false,
@@ -1037,15 +1050,15 @@ describe('PlayerApp — polling edge cases', () => {
     });
   });
 
-  it('handles network error on fetchHands without crashing', async () => {
+  it('handles network error on fetchLatestHand without crashing', async () => {
     const container = await goToPlaying(1);
 
     await vi.waitFor(() => {
       expect(mockFetchHandStatusConditional).toHaveBeenCalled();
     });
 
-    // Next poll: fetchHands network error
-    mockFetchHands.mockRejectedValue(new Error('Network error'));
+    // Next poll: fetchLatestHand network error
+    mockFetchLatestHand.mockRejectedValue(new Error('Network error'));
     act(() => { vi.advanceTimersByTime(5000); });
 
     // Should show reconnection indicator but not crash
@@ -1075,6 +1088,7 @@ describe('PlayerApp — polling edge cases', () => {
 
     // Should recover on next successful poll
     mockFetchHands.mockResolvedValue([{ hand_number: 1 }]);
+    mockFetchLatestHand.mockResolvedValue({ hand_number: 1 });
     mockFetchHandStatusConditional.mockResolvedValue(wrapConditional(makeStatus('Bob', 'pending')));
     act(() => { vi.advanceTimersByTime(5000); });
 
@@ -1092,7 +1106,7 @@ describe('PlayerApp — polling edge cases', () => {
     });
 
     // Error poll
-    mockFetchHands.mockRejectedValue(new Error('Timeout'));
+    mockFetchLatestHand.mockRejectedValue(new Error('Timeout'));
     act(() => { vi.advanceTimersByTime(5000); });
 
     await vi.waitFor(() => {
@@ -1100,7 +1114,7 @@ describe('PlayerApp — polling edge cases', () => {
     });
 
     // Recovery poll
-    mockFetchHands.mockResolvedValue([{ hand_number: 1 }]);
+    mockFetchLatestHand.mockResolvedValue({ hand_number: 1 });
     mockFetchHandStatusConditional.mockResolvedValue(wrapConditional(HAND_STATUS_IDLE));
     act(() => { vi.advanceTimersByTime(5000); });
 
@@ -1192,6 +1206,7 @@ describe('PlayerApp — session pinning (sessionStorage)', () => {
     window.location.hash = '';
     sessionStorage.clear();
     mockFetchHands.mockResolvedValue([{ hand_number: 1 }]);
+    mockFetchLatestHand.mockResolvedValue({ hand_number: 1 });
     mockFetchHandStatusConditional.mockResolvedValue(wrapConditional({
       hand_number: 1,
       community_recorded: false,
@@ -1389,6 +1404,7 @@ describe('PlayerApp — running total', () => {
     mockFetchGame.mockResolvedValue(GAME_DETAIL_WITH_BUYIN);
     mockFetchGameStats.mockResolvedValue(GAME_STATS_FOR_PLAYER);
     mockFetchHands.mockResolvedValue([{ hand_number: 1 }]);
+    mockFetchLatestHand.mockResolvedValue({ hand_number: 1 });
     mockFetchHandStatusConditional.mockResolvedValue(wrapConditional({
       hand_number: 1,
       community_recorded: false,
@@ -1425,6 +1441,7 @@ describe('PlayerApp — running total', () => {
     mockFetchGame.mockResolvedValue(GAME_DETAIL_WITH_BUYIN);
     mockFetchGameStats.mockResolvedValue(GAME_STATS_FOR_PLAYER);
     mockFetchHands.mockResolvedValue([{ hand_number: 1 }]);
+    mockFetchLatestHand.mockResolvedValue({ hand_number: 1 });
     mockFetchHandStatusConditional.mockResolvedValue(wrapConditional({
       hand_number: 1,
       community_recorded: false,
@@ -1475,6 +1492,7 @@ describe('PlayerApp — running total', () => {
       ],
     });
     mockFetchHands.mockResolvedValue([{ hand_number: 1 }]);
+    mockFetchLatestHand.mockResolvedValue({ hand_number: 1 });
     mockFetchHandStatusConditional.mockResolvedValue(wrapConditional({
       hand_number: 1,
       community_recorded: false,

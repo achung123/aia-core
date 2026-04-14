@@ -3,6 +3,7 @@
 import csv
 import io
 import json
+import zipfile
 from datetime import date, datetime, timedelta, timezone
 from typing import Annotated
 
@@ -16,22 +17,22 @@ from app.database.models import (
     GamePlayer,
     GameSession,
     Hand,
-    HandState,
     Player,
-    PlayerHand,
-    PlayerHandAction,
     Rebuy,
 )
+from app.database.queries import get_game_or_404
 from app.database.session import get_db
-from pydantic_models.app_models import (
-    AddPlayerToGameRequest,
-    AddPlayerToGameResponse,
+from pydantic_models.game_schemas import (
     BlindsResponse,
     BlindsUpdate,
     CompleteGameRequest,
     GameSessionCreate,
     GameSessionListItem,
     GameSessionResponse,
+)
+from pydantic_models.player_schemas import (
+    AddPlayerToGameRequest,
+    AddPlayerToGameResponse,
     PlayerInfo,
     PlayerStatusResponse,
     PlayerStatusUpdate,
@@ -51,7 +52,12 @@ def _build_players(db: Session, game_id: int) -> list[PlayerInfo]:
     """Return PlayerInfo list from GamePlayer join Player for a game."""
     rows = (
         db.query(
-            Player.name, GamePlayer.is_active, GamePlayer.seat_number, GamePlayer.buy_in
+            Player.player_id,
+            Player.name,
+            GamePlayer.is_active,
+            GamePlayer.seat_number,
+            GamePlayer.buy_in,
+            GamePlayer.current_chips,
         )
         .join(GamePlayer, GamePlayer.player_id == Player.player_id)
         .filter(GamePlayer.game_id == game_id)
@@ -59,18 +65,18 @@ def _build_players(db: Session, game_id: int) -> list[PlayerInfo]:
         .all()
     )
 
-    # Compute rebuy stats per player name
+    # Compute rebuy stats per player id
     rebuy_rows = (
         db.query(
-            Rebuy.player_name,
+            Rebuy.player_id,
             func.count(Rebuy.rebuy_id).label('rebuy_count'),
             func.coalesce(func.sum(Rebuy.amount), 0.0).label('total_rebuys'),
         )
         .filter(Rebuy.game_id == game_id)
-        .group_by(Rebuy.player_name)
+        .group_by(Rebuy.player_id)
         .all()
     )
-    rebuy_map = {r.player_name: (r.rebuy_count, r.total_rebuys) for r in rebuy_rows}
+    rebuy_map = {r.player_id: (r.rebuy_count, r.total_rebuys) for r in rebuy_rows}
 
     return [
         PlayerInfo(
@@ -78,8 +84,9 @@ def _build_players(db: Session, game_id: int) -> list[PlayerInfo]:
             is_active=r.is_active,
             seat_number=r.seat_number,
             buy_in=r.buy_in,
-            rebuy_count=rebuy_map.get(r.name, (0, 0.0))[0],
-            total_rebuys=rebuy_map.get(r.name, (0, 0.0))[1],
+            current_chips=r.current_chips,
+            rebuy_count=rebuy_map.get(r.player_id, (0, 0.0))[0],
+            total_rebuys=rebuy_map.get(r.player_id, (0, 0.0))[1],
         )
         for r in rows
     ]
@@ -150,12 +157,14 @@ def create_game_session(
             continue
         seen_player_ids.add(player.player_id)
         seat = len(seen_player_ids)
+        player_buy_in = buy_ins.get(name, payload.default_buy_in)
         db.add(
             GamePlayer(
                 game_id=game.game_id,
                 player_id=player.player_id,
                 seat_number=seat,
-                buy_in=buy_ins.get(name, payload.default_buy_in),
+                buy_in=player_buy_in,
+                current_chips=player_buy_in,
             )
         )
 
@@ -180,9 +189,7 @@ def get_game_session(
     game_id: int,
     db: Annotated[Session, Depends(get_db)],
 ):
-    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
-    if game is None:
-        raise HTTPException(status_code=404, detail='Game session not found')
+    game = get_game_or_404(db, game_id)
     return GameSessionResponse(
         game_id=game.game_id,
         game_date=game.game_date,
@@ -202,9 +209,7 @@ def complete_game_session(
     db: Annotated[Session, Depends(get_db)],
     payload: CompleteGameRequest | None = None,
 ):
-    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
-    if game is None:
-        raise HTTPException(status_code=404, detail='Game session not found')
+    game = get_game_or_404(db, game_id)
     if game.status == 'completed':
         raise HTTPException(status_code=400, detail='Game session already completed')
     winners = payload.winners if payload else []
@@ -230,9 +235,7 @@ def reactivate_game_session(
     game_id: int,
     db: Annotated[Session, Depends(get_db)],
 ):
-    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
-    if game is None:
-        raise HTTPException(status_code=404, detail='Game session not found')
+    game = get_game_or_404(db, game_id)
     if game.status == 'active':
         raise HTTPException(status_code=400, detail='Game session is already active')
     game.status = 'active'
@@ -257,9 +260,7 @@ def get_blinds(
     game_id: int,
     db: Annotated[Session, Depends(get_db)],
 ):
-    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
-    if game is None:
-        raise HTTPException(status_code=404, detail='Game session not found')
+    game = get_game_or_404(db, game_id)
     return BlindsResponse(
         small_blind=game.small_blind,
         big_blind=game.big_blind,
@@ -276,9 +277,7 @@ def update_blinds(
     payload: BlindsUpdate,
     db: Annotated[Session, Depends(get_db)],
 ):
-    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
-    if game is None:
-        raise HTTPException(status_code=404, detail='Game session not found')
+    game = get_game_or_404(db, game_id)
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     blinds_changed = False
@@ -342,9 +341,7 @@ def export_game_csv(
     game_id: int,
     db: Annotated[Session, Depends(get_db)],
 ):
-    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
-    if game is None:
-        raise HTTPException(status_code=404, detail='Game session not found')
+    game = get_game_or_404(db, game_id)
 
     hands = (
         db.query(Hand).filter(Hand.game_id == game_id).order_by(Hand.hand_number).all()
@@ -366,6 +363,8 @@ def export_game_csv(
             'river',
             'result',
             'profit_loss',
+            'outcome_street',
+            'is_all_in',
         ]
     )
 
@@ -388,6 +387,8 @@ def export_game_csv(
                     hand.river or '',
                     ph.result or '',
                     ph.profit_loss if ph.profit_loss is not None else '',
+                    ph.outcome_street or '',
+                    'true' if ph.is_all_in else 'false',
                 ]
             )
 
@@ -400,30 +401,197 @@ def export_game_csv(
     )
 
 
+@router.get('/{game_id}/export/zip')
+def export_game_zip(
+    game_id: int,
+    db: Annotated[Session, Depends(get_db)],
+):
+    game = get_game_or_404(db, game_id)
+    game_date_str = game.game_date.strftime('%m-%d-%Y') if game.game_date else ''
+
+    hands = (
+        db.query(Hand).filter(Hand.game_id == game_id).order_by(Hand.hand_number).all()
+    )
+    game_players = (
+        db.query(GamePlayer, Player)
+        .join(Player, GamePlayer.player_id == Player.player_id)
+        .filter(GamePlayer.game_id == game_id)
+        .order_by(GamePlayer.seat_number)
+        .all()
+    )
+    rebuys = db.query(Rebuy).filter(Rebuy.game_id == game_id).all()
+
+    # Parse winners JSON
+    winners_str = ''
+    if game.winners:
+        try:
+            winners_str = ','.join(json.loads(game.winners))
+        except (json.JSONDecodeError, TypeError):
+            winners_str = str(game.winners)
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        # game_info.csv
+        gi = io.StringIO()
+        gi_w = csv.writer(gi)
+        gi_w.writerow(
+            [
+                'game_date',
+                'status',
+                'small_blind',
+                'big_blind',
+                'blind_timer_minutes',
+                'default_buy_in',
+                'winners',
+            ]
+        )
+        gi_w.writerow(
+            [
+                game_date_str,
+                game.status or '',
+                game.small_blind if game.small_blind is not None else '',
+                game.big_blind if game.big_blind is not None else '',
+                game.blind_timer_minutes
+                if game.blind_timer_minutes is not None
+                else '',
+                game.default_buy_in if game.default_buy_in is not None else '',
+                winners_str,
+            ]
+        )
+        zf.writestr('game_info.csv', gi.getvalue())
+
+        # players.csv
+        pl = io.StringIO()
+        pl_w = csv.writer(pl)
+        pl_w.writerow(
+            [
+                'player_name',
+                'seat_number',
+                'buy_in',
+                'current_chips',
+                'is_active',
+            ]
+        )
+        for gp, player in game_players:
+            pl_w.writerow(
+                [
+                    player.name,
+                    gp.seat_number if gp.seat_number is not None else '',
+                    gp.buy_in if gp.buy_in is not None else '',
+                    gp.current_chips if gp.current_chips is not None else '',
+                    'true' if gp.is_active else 'false',
+                ]
+            )
+        zf.writestr('players.csv', pl.getvalue())
+
+        # hands.csv (enhanced)
+        hd = io.StringIO()
+        hd_w = csv.writer(hd)
+        hd_w.writerow(
+            [
+                'game_date',
+                'hand_number',
+                'player_name',
+                'hole_card_1',
+                'hole_card_2',
+                'flop_1',
+                'flop_2',
+                'flop_3',
+                'turn',
+                'river',
+                'result',
+                'profit_loss',
+                'outcome_street',
+                'is_all_in',
+            ]
+        )
+        for hand in hands:
+            for ph in hand.player_hands:
+                player = (
+                    db.query(Player).filter(Player.player_id == ph.player_id).first()
+                )
+                hd_w.writerow(
+                    [
+                        game_date_str,
+                        hand.hand_number,
+                        player.name if player else '',
+                        ph.card_1 or '',
+                        ph.card_2 or '',
+                        hand.flop_1 or '',
+                        hand.flop_2 or '',
+                        hand.flop_3 or '',
+                        hand.turn or '',
+                        hand.river or '',
+                        ph.result or '',
+                        ph.profit_loss if ph.profit_loss is not None else '',
+                        ph.outcome_street or '',
+                        'true' if ph.is_all_in else 'false',
+                    ]
+                )
+        zf.writestr('hands.csv', hd.getvalue())
+
+        # actions.csv
+        ac = io.StringIO()
+        ac_w = csv.writer(ac)
+        ac_w.writerow(
+            [
+                'hand_number',
+                'player_name',
+                'street',
+                'action',
+                'amount',
+            ]
+        )
+        for hand in hands:
+            for ph in hand.player_hands:
+                player = (
+                    db.query(Player).filter(Player.player_id == ph.player_id).first()
+                )
+                for action in ph.actions:
+                    ac_w.writerow(
+                        [
+                            hand.hand_number,
+                            player.name if player else '',
+                            action.street,
+                            action.action,
+                            action.amount if action.amount is not None else '',
+                        ]
+                    )
+        zf.writestr('actions.csv', ac.getvalue())
+
+        # rebuys.csv
+        rb = io.StringIO()
+        rb_w = csv.writer(rb)
+        rb_w.writerow(['player_name', 'amount'])
+        for rebuy in rebuys:
+            player = (
+                db.query(Player).filter(Player.player_id == rebuy.player_id).first()
+            )
+            rb_w.writerow(
+                [
+                    player.name if player else '',
+                    rebuy.amount,
+                ]
+            )
+        zf.writestr('rebuys.csv', rb.getvalue())
+
+    buf.seek(0)
+    filename = f'game_{game_id}_{game_date_str}.zip'
+    return StreamingResponse(
+        buf,
+        media_type='application/zip',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+    )
+
+
 @router.delete('/{game_id}', status_code=204)
 def delete_game(
     game_id: int,
     db: Annotated[Session, Depends(get_db)],
 ):
-    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
-    if game is None:
-        raise HTTPException(status_code=404, detail='Game session not found')
+    game = get_game_or_404(db, game_id)
 
-    # Delete child records: actions → player_hands → hand_states → hands → game_players → game
-    for hand in game.hands:
-        player_hand_ids = [
-            ph.player_hand_id
-            for ph in db.query(PlayerHand)
-            .filter(PlayerHand.hand_id == hand.hand_id)
-            .all()
-        ]
-        if player_hand_ids:
-            db.query(PlayerHandAction).filter(
-                PlayerHandAction.player_hand_id.in_(player_hand_ids)
-            ).delete(synchronize_session=False)
-        db.query(PlayerHand).filter(PlayerHand.hand_id == hand.hand_id).delete()
-        db.query(HandState).filter(HandState.hand_id == hand.hand_id).delete()
-        db.delete(hand)
+    # Cascade deletes hands → player_hands → actions, hand_states via ORM cascade
     db.query(Rebuy).filter(Rebuy.game_id == game_id).delete()
     db.query(GamePlayer).filter(GamePlayer.game_id == game_id).delete()
     db.delete(game)
@@ -438,9 +606,7 @@ def add_player_to_game(
     payload: AddPlayerToGameRequest,
     db: Annotated[Session, Depends(get_db)],
 ):
-    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
-    if game is None:
-        raise HTTPException(status_code=404, detail='Game session not found')
+    get_game_or_404(db, game_id)
 
     # Case-insensitive player lookup
     player = (
@@ -524,6 +690,7 @@ def add_player_to_game(
         is_active=True,
         seat_number=seat,
         buy_in=payload.buy_in,
+        current_chips=payload.buy_in,
     )
     db.add(gp)
     db.commit()
@@ -547,9 +714,7 @@ def assign_player_seat(
     db: Annotated[Session, Depends(get_db)],
     force: bool = Query(default=False),
 ):
-    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
-    if game is None:
-        raise HTTPException(status_code=404, detail='Game session not found')
+    get_game_or_404(db, game_id)
 
     # After hands have started, only dealer (force=true) can reassign seats
     if not force:
@@ -593,15 +758,19 @@ def assign_player_seat(
         .first()
     )
     if occupant is not None:
-        occupant_name = (
-            db.query(Player.name)
-            .filter(Player.player_id == occupant.player_id)
-            .scalar()
-        )
-        raise HTTPException(
-            status_code=409,
-            detail=f'Seat {payload.seat_number} is already occupied by {occupant_name!r}',
-        )
+        if payload.swap:
+            # Swap: move occupant to the requesting player's old seat
+            occupant.seat_number = gp.seat_number
+        else:
+            occupant_name = (
+                db.query(Player.name)
+                .filter(Player.player_id == occupant.player_id)
+                .scalar()
+            )
+            raise HTTPException(
+                status_code=409,
+                detail=f'Seat {payload.seat_number} is already occupied by {occupant_name!r}',
+            )
 
     gp.seat_number = payload.seat_number
     db.commit()
@@ -632,9 +801,7 @@ def toggle_player_status(
     payload: PlayerStatusUpdate,
     db: Annotated[Session, Depends(get_db)],
 ):
-    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
-    if game is None:
-        raise HTTPException(status_code=404, detail='Game session not found')
+    get_game_or_404(db, game_id)
 
     player = (
         db.query(Player).filter(func.lower(Player.name) == player_name.lower()).first()
@@ -669,9 +836,7 @@ def toggle_player_status(
 
 def _get_game_player(db: Session, game_id: int, player_name: str):
     """Look up game, player and game_player; raise 404 on miss."""
-    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
-    if game is None:
-        raise HTTPException(status_code=404, detail='Game session not found')
+    game = get_game_or_404(db, game_id)
 
     player = (
         db.query(Player).filter(func.lower(Player.name) == player_name.lower()).first()
@@ -711,13 +876,19 @@ def create_rebuy(
 
     rebuy = Rebuy(
         game_id=game_id,
-        player_name=player.name,
+        player_id=player.player_id,
         amount=payload.amount,
     )
     db.add(rebuy)
 
     if not gp.is_active:
         gp.is_active = True
+
+    # Add rebuy amount to player's chip stack
+    if gp.current_chips is not None:
+        gp.current_chips = round(gp.current_chips + payload.amount, 2)
+    else:
+        gp.current_chips = payload.amount
 
     db.commit()
     db.refresh(rebuy)
@@ -737,7 +908,7 @@ def list_rebuys(
 
     rebuys = (
         db.query(Rebuy)
-        .filter(Rebuy.game_id == game_id, Rebuy.player_name == player.name)
+        .filter(Rebuy.game_id == game_id, Rebuy.player_id == player.player_id)
         .order_by(Rebuy.created_at)
         .all()
     )

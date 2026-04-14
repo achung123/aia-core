@@ -24,7 +24,8 @@ vi.mock('../api/client.ts', () => ({
   fetchHands: vi.fn(() => Promise.resolve([])),
   fetchEquity: vi.fn(() => Promise.resolve({ equities: [] })),
   fetchGame: vi.fn(() => Promise.resolve({ players: [] })),
-  fetchHand: vi.fn(),
+  fetchHand: vi.fn(() => Promise.resolve({ pot: 0, player_hands: [] })),
+  fetchHandActions: vi.fn(() => Promise.resolve([])),
   fetchGameStats: vi.fn(() => Promise.resolve({ player_stats: [] })),
   createRebuy: vi.fn(),
   fetchHandStatus: vi.fn(() => Promise.resolve({ hand_number: 1, community_recorded: false, players: [], street_complete: true, current_player_name: null, legal_actions: [], amount_to_call: 0, pot: 0, phase: 'preflop' })),
@@ -1360,11 +1361,9 @@ describe('DealerApp hand status polling', () => {
         expect(container.querySelector('[data-testid="player-list"]')).not.toBeNull();
       });
 
-      // Alice is now not_playing. The grid should reflect that.
+      // Alice is now not_playing and should be hidden from the player list
       const aliceRow = container.querySelector('[data-testid="player-row-Alice"]') as HTMLElement;
-      expect(aliceRow).not.toBeNull();
-      // Alice should have the not_playing background (#e5e7eb)
-      expect(aliceRow.style.backgroundColor).toBe('#e5e7eb');
+      expect(aliceRow).toBeNull();
     }
   });
 
@@ -1386,11 +1385,10 @@ describe('DealerApp hand status polling', () => {
       (sitOutBtn as HTMLButtonElement).click();
     });
 
-    // Alice should now show "not playing"
+    // Alice should now be hidden from the player list (not_playing players filtered out)
     await vi.waitFor(() => {
       const aliceRow = container.querySelector('[data-testid="player-row-Alice"]') as HTMLElement;
-      expect(aliceRow.textContent).toContain('not playing');
-      expect(aliceRow.style.backgroundColor).toBe('#e5e7eb');
+      expect(aliceRow).toBeNull();
     });
 
     // Should NOT have made an API call for this

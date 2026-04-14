@@ -120,7 +120,7 @@ class TestStreetCompleteFlag:
         """After all players act (UTG calls, SB calls, BB checks), preflop is complete."""
         game = _create_game(client)
         game_id = game['game_id']
-        hand = _start_hand(client, game_id)
+        _start_hand(client, game_id)
 
         # UTG calls
         utg = _current(client, game_id)
@@ -199,7 +199,7 @@ class TestWinningHandDescription:
         """The PlayerHandResponse schema includes winning_hand_description."""
         game = _create_game(client)
         game_id = game['game_id']
-        hand = _start_hand(client, game_id)
+        _start_hand(client, game_id)
 
         # Set hole cards for a player
         client.patch(

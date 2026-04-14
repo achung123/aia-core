@@ -143,4 +143,15 @@ describe('TableView3D', () => {
     const opts = (createPokerScene as ReturnType<typeof vi.fn>).mock.calls[0][1];
     expect(opts.externalResize).toBe(true);
   });
+
+  it('uses responsive height instead of fixed', () => {
+    // TableView3D uses min(400px, 50vh) for responsive sizing.
+    // happy-dom doesn't support CSS min() so we verify the container
+    // renders with position:relative and the style attribute is set.
+    render(<TableView3D {...BASE_PROPS} />);
+    const container = screen.getByTestId('table-view-3d');
+    expect(container).toBeTruthy();
+    expect(container.style.position).toBe('relative');
+    expect(container.style.width).toBe('100%');
+  });
 });

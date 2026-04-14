@@ -1,9 +1,19 @@
 import { useState, useEffect } from 'react';
 import type { CommunityCards, Player } from '../stores/dealerStore.ts';
-import { recordPlayerAction, fetchHands } from '../api/client.ts';
+import { recordPlayerAction, fetchHands, fetchEquity } from '../api/client.ts';
 import { TableView3D } from './TableView3D.tsx';
 import { BlindTimer } from './BlindTimer.tsx';
-import type { ActionEnum, StreetEnum, HandResponse } from '../api/types.ts';
+import { StreetScrubber } from '../mobile/StreetScrubber.tsx';
+import type { ActionEnum, StreetEnum, HandResponse, PlayerEquityEntry } from '../api/types.ts';
+
+const PHASE_ORDER: Record<string, number> = { preflop: 0, flop: 1, turn: 2, river: 3, showdown: 4 };
+
+function isStreetPast(street: 'flop' | 'turn' | 'river', handPhase: string | undefined): boolean {
+  if (!handPhase) return false;
+  const phaseIdx = PHASE_ORDER[handPhase] ?? 0;
+  const streetIdx = PHASE_ORDER[street] ?? 0;
+  return phaseIdx > streetIdx;
+}
 
 const statusColors: Record<string, string> = {
   playing: '#ffffff',
@@ -42,10 +52,13 @@ export interface ActiveHandDashboardProps {
   currentPlayerName?: string | null;
   legalActions?: string[];
   amountToCall?: number;
+  minimumBet?: number | null;
+  minimumRaise?: number | null;
   pot?: number;
   streetComplete?: boolean;
   handPhase?: string;
   onActionConfirmed?: () => void;
+  potContributions?: Record<string, number>;
 }
 
 export function ActiveHandDashboard({
@@ -64,11 +77,14 @@ export function ActiveHandDashboard({
   patchError,
   currentPlayerName,
   legalActions,
-  amountToCall,
+  amountToCall = 0,
+  minimumBet = null,
+  minimumRaise = null,
   pot,
   streetComplete,
   handPhase,
   onActionConfirmed,
+  potContributions,
 }: ActiveHandDashboardProps) {
   const [isWide, setIsWide] = useState(() =>
     typeof window !== 'undefined' && window.matchMedia('(min-width: 600px)').matches,
@@ -76,10 +92,13 @@ export function ActiveHandDashboard({
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [overrideAction, setOverrideAction] = useState<ActionEnum>('call');
   const [overrideAmount, setOverrideAmount] = useState('');
+  const [overrideIsAllIn, setOverrideIsAllIn] = useState(false);
   const [betVerifyError, setBetVerifyError] = useState<string | null>(null);
   const [betVerifyLoading, setBetVerifyLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'tile' | '3d'>('tile');
   const [hands3D, setHands3D] = useState<HandResponse[]>([]);
+  const [streetScrub3D, setStreetScrub3D] = useState<string>('Pre-Flop');
+  const [equityEntries, setEquityEntries] = useState<PlayerEquityEntry[]>([]);
 
   useEffect(() => {
     const mql = window.matchMedia('(min-width: 600px)');
@@ -88,6 +107,17 @@ export function ActiveHandDashboard({
     return () => mql.removeEventListener('change', handler);
   }, []);
 
+  // Fetch equity when in 3D view mode and we have a hand
+  useEffect(() => {
+    if (viewMode !== '3d' || !gameId || !handNumber) {
+      setEquityEntries([]);
+      return;
+    }
+    fetchEquity(gameId, handNumber)
+      .then((res) => setEquityEntries(res.equities))
+      .catch(() => setEquityEntries([]));
+  }, [viewMode, gameId, handNumber, community]);
+
   const boardCards = [
     community.flop1,
     community.flop2,
@@ -95,6 +125,29 @@ export function ActiveHandDashboard({
     community.turn,
     community.river,
   ];
+  const availableActions = legalActions ?? [];
+
+  function formatAmount(amount: number | null | undefined): string {
+    return amount == null ? '' : amount.toFixed(2);
+  }
+
+  function defaultAmountForAction(action: ActionEnum, isAllIn: boolean): string {
+    if (action === 'call') {
+      return isAllIn ? '' : formatAmount(amountToCall);
+    }
+    if (action === 'bet') {
+      return formatAmount(minimumBet);
+    }
+    if (action === 'raise') {
+      return formatAmount(minimumRaise);
+    }
+    return '';
+  }
+
+  function setOverrideFormAction(action: ActionEnum, isAllIn = overrideIsAllIn) {
+    setOverrideAction(action);
+    setOverrideAmount(defaultAmountForAction(action, isAllIn));
+  }
 
   function deriveStreet(): StreetEnum {
     if (community.riverRecorded) return 'river';
@@ -108,14 +161,52 @@ export function ActiveHandDashboard({
     setBetVerifyLoading(true);
     setBetVerifyError(null);
     const parsedAmount = overrideAmount ? parseFloat(overrideAmount) : null;
+    const effectiveAmount = overrideAction === 'fold' || overrideAction === 'check'
+      ? null
+      : overrideAction === 'call' && !overrideIsAllIn
+        ? amountToCall ?? 0
+        : parsedAmount;
+
+    if (
+      !overrideIsAllIn
+      && overrideAction === 'bet'
+      && minimumBet !== null
+      && (effectiveAmount === null || effectiveAmount < minimumBet)
+    ) {
+      setBetVerifyError(`Minimum bet is $${minimumBet.toFixed(2)}`);
+      setBetVerifyLoading(false);
+      return;
+    }
+
+    if (
+      !overrideIsAllIn
+      && overrideAction === 'raise'
+      && minimumRaise !== null
+      && (effectiveAmount === null || effectiveAmount < minimumRaise)
+    ) {
+      setBetVerifyError(`Minimum raise is $${minimumRaise.toFixed(2)}`);
+      setBetVerifyLoading(false);
+      return;
+    }
+
+    if ((overrideAction === 'call' && overrideIsAllIn) || overrideAction === 'bet' || overrideAction === 'raise') {
+      if (effectiveAmount === null || Number.isNaN(effectiveAmount) || effectiveAmount <= 0) {
+        setBetVerifyError('Enter a valid amount');
+        setBetVerifyLoading(false);
+        return;
+      }
+    }
+
     try {
       await recordPlayerAction(gameId, handNumber, currentPlayerName, {
         street: deriveStreet(),
         action: overrideAction,
-        amount: parsedAmount,
+        amount: effectiveAmount,
+        ...(overrideIsAllIn ? { is_all_in: true } : {}),
       });
       setOverrideOpen(false);
       setOverrideAmount('');
+      setOverrideIsAllIn(false);
       onActionConfirmed?.();
     } catch (err) {
       setBetVerifyError(err instanceof Error ? err.message : String(err));
@@ -126,25 +217,47 @@ export function ActiveHandDashboard({
 
   return (
     <div style={isWide ? styles.containerWide : styles.container}>
-      {/* 3D View Toggle */}
-      <button
-        data-testid="view-toggle-btn"
-        onClick={() => {
-          setViewMode((v) => {
-            const next = v === 'tile' ? '3d' : 'tile';
-            if (next === '3d') {
-              fetchHands(gameId).then(setHands3D).catch(() => {});
-            }
-            return next;
-          });
-        }}
-        style={styles.viewToggleButton}
-      >
-        {viewMode === 'tile' ? '3D View' : 'Tile View'}
-      </button>
-
       {viewMode === '3d' ? (
-        <TableView3D hands={hands3D} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <TableView3D hands={hands3D} />
+          {hands3D.length > 0 && (
+            <StreetScrubber
+              currentStreet={streetScrub3D}
+              handData={{
+                flop: [hands3D[hands3D.length - 1].flop_1, hands3D[hands3D.length - 1].flop_2, hands3D[hands3D.length - 1].flop_3].filter(Boolean),
+                turn: hands3D[hands3D.length - 1].turn,
+                river: hands3D[hands3D.length - 1].river,
+              }}
+              onStreetChange={setStreetScrub3D}
+            />
+          )}
+          {equityEntries.length > 0 && (
+            <div data-testid="dealer-equity-row" style={{ display: 'flex', gap: 6, padding: '8px 12px', background: '#1a1a2e', borderRadius: '8px', overflowX: 'auto' }}>
+              {equityEntries.map((e) => (
+                <div key={e.player_name} style={{ minWidth: 70, padding: '6px 10px', borderRadius: 8, background: '#1e1b4b', border: '1px solid #312e81', textAlign: 'center', flexShrink: 0 }}>
+                  <div style={{ color: '#c7d2fe', fontSize: 11, fontWeight: 600, marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.player_name}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: e.equity >= 0.5 ? '#4ade80' : e.equity >= 0.25 ? '#facc15' : '#f87171' }}>
+                    {(e.equity * 100).toFixed(1)}%
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+            <button
+              data-testid="view-toggle-btn"
+              onClick={() => setViewMode('tile')}
+              style={{ ...styles.viewToggleButton, flex: 1 }}
+            >
+              Tile View
+            </button>
+            {onBack && (
+              <button data-testid="back-btn" onClick={onBack} style={{ ...styles.backButton, flex: 1, marginBottom: 0 }}>
+                Back to Hands
+              </button>
+            )}
+          </div>
+        </div>
       ) : (
       <>
       {/* Blind Info Bar */}
@@ -173,21 +286,15 @@ export function ActiveHandDashboard({
           </div>
 
           {/* Street Buttons */}
-          {onBack && (
-            <button data-testid="back-btn" onClick={onBack} style={styles.backButton}>
-              Back to Hands
-            </button>
-          )}
-
           <div data-testid="street-buttons" style={styles.streetRow}>
             <button
               data-testid="flop-tile"
               style={{
                 ...styles.streetTile,
-                ...(streetComplete === false && !community.flopRecorded ? styles.streetTileDisabled : {}),
+                ...((streetComplete === false && !community.flopRecorded) || isStreetPast('flop', handPhase) ? styles.streetTileDisabled : {}),
               }}
-              onClick={() => (streetComplete !== false || community.flopRecorded) && onTileSelect('flop')}
-              disabled={streetComplete === false && !community.flopRecorded}
+              onClick={() => !isStreetPast('flop', handPhase) && (streetComplete !== false || community.flopRecorded) && onTileSelect('flop')}
+              disabled={(streetComplete === false && !community.flopRecorded) || isStreetPast('flop', handPhase)}
             >
               <span style={styles.tileName}>Flop</span>
               {community.flopRecorded && <span style={styles.check}>✅</span>}
@@ -196,10 +303,10 @@ export function ActiveHandDashboard({
               data-testid="turn-tile"
               style={{
                 ...styles.streetTile,
-                ...(community.flopRecorded && streetComplete !== false ? {} : styles.streetTileDisabled),
+                ...((!community.flopRecorded || streetComplete === false || isStreetPast('turn', handPhase)) ? styles.streetTileDisabled : {}),
               }}
-              onClick={() => community.flopRecorded && streetComplete !== false && onTileSelect('turn')}
-              disabled={!community.flopRecorded || streetComplete === false}
+              onClick={() => community.flopRecorded && streetComplete !== false && !isStreetPast('turn', handPhase) && onTileSelect('turn')}
+              disabled={!community.flopRecorded || streetComplete === false || isStreetPast('turn', handPhase)}
             >
               <span style={styles.tileName}>Turn</span>
               {community.turnRecorded && <span style={styles.check}>✅</span>}
@@ -208,10 +315,10 @@ export function ActiveHandDashboard({
               data-testid="river-tile"
               style={{
                 ...styles.streetTile,
-                ...(community.turnRecorded && streetComplete !== false ? {} : styles.streetTileDisabled),
+                ...((!community.turnRecorded || streetComplete === false || isStreetPast('river', handPhase)) ? styles.streetTileDisabled : {}),
               }}
-              onClick={() => community.turnRecorded && streetComplete !== false && onTileSelect('river')}
-              disabled={!community.turnRecorded || streetComplete === false}
+              onClick={() => community.turnRecorded && streetComplete !== false && !isStreetPast('river', handPhase) && onTileSelect('river')}
+              disabled={!community.turnRecorded || streetComplete === false || isStreetPast('river', handPhase)}
             >
               <span style={styles.tileName}>River</span>
               {community.riverRecorded && <span style={styles.check}>✅</span>}
@@ -239,12 +346,23 @@ export function ActiveHandDashboard({
                 <span data-testid="legal-actions-display" style={styles.legalActionsText}>
                   Legal: {legalActions.join(', ')}
                   {amountToCall ? ` ($${amountToCall.toFixed(2)} to call)` : ''}
+                  {minimumBet !== null ? ` (min bet $${minimumBet.toFixed(2)})` : ''}
+                  {minimumRaise !== null ? ` (min raise $${minimumRaise.toFixed(2)})` : ''}
                 </span>
                 <div style={styles.betVerifyBtnRow}>
                   <button
                     data-testid="record-action-btn"
                     style={styles.overrideBtn}
-                    onClick={() => setOverrideOpen(!overrideOpen)}
+                    onClick={() => {
+                      if (overrideOpen) {
+                        setOverrideOpen(false);
+                        return;
+                      }
+                      const initialAction = (availableActions[0] ?? 'fold') as ActionEnum;
+                      setOverrideIsAllIn(false);
+                      setOverrideOpen(true);
+                      setOverrideFormAction(initialAction, false);
+                    }}
                     disabled={betVerifyLoading}
                   >
                     Record Action
@@ -257,25 +375,47 @@ export function ActiveHandDashboard({
                 <select
                   data-testid="override-action-select"
                   value={overrideAction}
-                  onChange={(e) => setOverrideAction(e.target.value as ActionEnum)}
+                  onChange={(e) => setOverrideFormAction(e.target.value as ActionEnum)}
                   style={styles.overrideSelect}
                 >
-                  <option value="fold">Fold</option>
-                  <option value="check">Check</option>
-                  <option value="call">Call</option>
-                  <option value="bet">Bet</option>
-                  <option value="raise">Raise</option>
+                  {availableActions.map((action) => (
+                    <option key={action} value={action}>
+                      {action[0].toUpperCase()}{action.slice(1)}
+                    </option>
+                  ))}
                 </select>
                 <input
                   data-testid="override-amount-input"
                   type="number"
-                  placeholder="Amount"
-                  value={overrideAmount}
+                  placeholder={
+                    overrideAction === 'raise'
+                      ? `Min ${formatAmount(minimumRaise)}`
+                      : overrideAction === 'bet'
+                        ? `Min ${formatAmount(minimumBet)}`
+                        : 'Amount'
+                  }
+                  value={overrideAction === 'call' && !overrideIsAllIn ? formatAmount(amountToCall) : overrideAmount}
                   onChange={(e) => setOverrideAmount(e.target.value)}
                   style={styles.overrideInput}
                   step="0.01"
                   min="0"
+                  disabled={overrideAction === 'fold' || overrideAction === 'check' || (overrideAction === 'call' && !overrideIsAllIn)}
                 />
+                {(overrideAction === 'call' || overrideAction === 'bet' || overrideAction === 'raise') && (
+                  <label style={styles.allInToggleLabel}>
+                    <input
+                      data-testid="override-all-in-toggle"
+                      type="checkbox"
+                      checked={overrideIsAllIn}
+                      onChange={(e) => {
+                        const nextIsAllIn = e.target.checked;
+                        setOverrideIsAllIn(nextIsAllIn);
+                        setOverrideAmount(defaultAmountForAction(overrideAction, nextIsAllIn));
+                      }}
+                    />
+                    All in
+                  </label>
+                )}
                 <button
                   data-testid="override-submit-btn"
                   style={styles.confirmBtn}
@@ -295,7 +435,7 @@ export function ActiveHandDashboard({
         {/* Player Panel — player tiles + finish button */}
         <div data-testid="player-panel" style={isWide ? styles.panelScroll : styles.panelStack}>
           <div data-testid="player-list" style={styles.playerList}>
-            {players.map((p) => {
+            {players.filter((p) => p.status !== 'not_playing').map((p) => {
               const needsAction = p.status === 'handed_back';
               const showOutcomeBtn = onDirectOutcome && needsAction;
               const showSitOutBtn = onMarkNotPlaying && (p.status === 'playing' || p.status === 'idle');
@@ -315,8 +455,12 @@ export function ActiveHandDashboard({
                     onClick={() => onTileSelect(p.name)}
                   >
                     <span style={styles.tileName}>{p.name}</span>
-                    {p.recorded && <span style={styles.inlineCheck}>✅</span>}
                   </button>
+                  {potContributions && (potContributions[p.name] ?? 0) > 0 && (
+                    <span data-testid={`pot-contrib-${p.name}`} style={styles.potContribBadge}>
+                      ${potContributions[p.name].toFixed(2)}
+                    </span>
+                  )}
                   <div style={styles.statusCol}>
                     <span style={styles.statusText}>
                       {needsAction ? '⚠️ Decide outcome' : formatStatus(p.status, p.outcomeStreet)}
@@ -356,6 +500,23 @@ export function ActiveHandDashboard({
         </div>
       </div>
 
+      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+        <button
+          data-testid="view-toggle-btn"
+          onClick={() => {
+            setViewMode('3d');
+            fetchHands(gameId).then(setHands3D).catch(() => {});
+          }}
+          style={{ ...styles.viewToggleButton, flex: 1 }}
+        >
+          3D View
+        </button>
+        {onBack && (
+          <button data-testid="back-btn" onClick={onBack} style={{ ...styles.backButton, flex: 1, marginBottom: 0 }}>
+            Back to Hands
+          </button>
+        )}
+      </div>
       {patchError && (
         <div style={styles.toast}>{patchError}</div>
       )}
@@ -380,17 +541,17 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '1rem',
   },
   viewToggleButton: {
-    width: '100%',
-    padding: '0.5rem',
-    minHeight: '40px',
-    fontSize: '0.95rem',
+    alignSelf: 'flex-end',
+    padding: '0.35rem 0.75rem',
+    minHeight: '34px',
+    fontSize: '0.85rem',
     fontWeight: 600,
     border: '1px solid #4f46e5',
     borderRadius: '8px',
     background: '#eef2ff',
     color: '#4f46e5',
     cursor: 'pointer',
-    marginBottom: '0.75rem',
+    marginBottom: '0.5rem',
   },
   blindBarSticky: {
     display: 'flex',
@@ -539,6 +700,25 @@ const styles: Record<string, React.CSSProperties> = {
   inlineCheck: {
     fontSize: '1rem',
   },
+  actionChip: {
+    fontSize: '0.75rem',
+    fontWeight: 600,
+    padding: '2px 8px',
+    borderRadius: '10px',
+    background: '#e0e7ff',
+    color: '#3730a3',
+    textTransform: 'uppercase',
+    whiteSpace: 'nowrap',
+  },
+  potContribBadge: {
+    fontSize: '0.75rem',
+    fontWeight: 700,
+    padding: '2px 8px',
+    borderRadius: '10px',
+    background: '#dcfce7',
+    color: '#166534',
+    whiteSpace: 'nowrap',
+  },
   check: {
     position: 'absolute',
     top: '4px',
@@ -665,5 +845,12 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px solid #d1d5db',
     width: '80px',
     minHeight: '36px',
+  },
+  allInToggleLabel: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.35rem',
+    color: '#475569',
+    fontSize: '0.85rem',
   },
 };

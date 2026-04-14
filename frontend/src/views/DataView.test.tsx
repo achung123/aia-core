@@ -12,9 +12,12 @@ vi.mock('../api/client.ts', () => ({
   createHand: vi.fn(),
   uploadCsvValidate: vi.fn(),
   uploadCsvCommit: vi.fn(),
+  uploadZipValidate: vi.fn(),
+  uploadZipCommit: vi.fn(),
   updateCommunityCards: vi.fn(),
   updateHolecards: vi.fn(),
   exportGameCsvUrl: vi.fn((id: number) => `/games/${id}/export/csv`),
+  exportGameZipUrl: vi.fn((id: number) => `/games/${id}/export/zip`),
   deleteGame: vi.fn(),
   deleteHand: vi.fn(),
 }));
@@ -91,6 +94,7 @@ describe('DataView', () => {
     render(<DataView />);
     expect(screen.getByText('+ New Game')).toBeTruthy();
     expect(screen.getByText('Import CSV')).toBeTruthy();
+    expect(screen.getByText('Import ZIP')).toBeTruthy();
   });
 
   it('displays hand count and player count', async () => {
@@ -154,6 +158,23 @@ describe('DataView', () => {
     await waitFor(() => screen.getByText('2026-04-01'));
     fireEvent.click(screen.getByText('Import CSV'));
     expect(screen.getByText('Import Game from CSV')).toBeTruthy();
+  });
+
+  it('opens ZIP upload modal on Import ZIP click', async () => {
+    render(<DataView />);
+    await waitFor(() => screen.getByText('2026-04-01'));
+    fireEvent.click(screen.getByText('Import ZIP'));
+    expect(screen.getByText('Import Game from ZIP')).toBeTruthy();
+  });
+
+  it('shows Export ZIP button in expanded game details', async () => {
+    render(<DataView />);
+    await waitFor(() => screen.getByText('2026-04-01'));
+    fireEvent.click(screen.getByText('2026-04-01'));
+    await waitFor(() => {
+      expect(screen.getByText('📦 Export ZIP')).toBeTruthy();
+      expect(screen.getByText('📥 Export CSV')).toBeTruthy();
+    });
   });
 
   it('displays status badges', async () => {

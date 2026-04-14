@@ -186,4 +186,46 @@ describe('usePolling', () => {
 
     expect(fetchFn).toHaveBeenCalledTimes(2);
   });
+
+  it('returns a triggerNow function', () => {
+    const fetchFn = vi.fn().mockResolvedValue('ok');
+    const { result } = renderHook(() => usePolling({ intervalMs: 3000, fetchFn }));
+    expect(typeof result.current.triggerNow).toBe('function');
+  });
+
+  it('triggerNow calls fetchFn immediately without waiting for interval', async () => {
+    const fetchFn = vi.fn().mockResolvedValue('ok');
+    const { result } = renderHook(() => usePolling({ intervalMs: 10000, fetchFn }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // Initial call
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+
+    // Trigger immediate poll — should not wait for 10s interval
+    await act(async () => {
+      result.current.triggerNow();
+      await Promise.resolve();
+    });
+
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+  });
+
+  it('triggerNow does nothing when polling is disabled', async () => {
+    const fetchFn = vi.fn().mockResolvedValue('ok');
+    const { result } = renderHook(() => usePolling({ intervalMs: 3000, fetchFn, enabled: false }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(fetchFn).not.toHaveBeenCalled();
+
+    await act(async () => {
+      result.current.triggerNow();
+      await Promise.resolve();
+    });
+
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
 });

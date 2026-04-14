@@ -48,17 +48,24 @@ class GameSession(Base):
 
     players = relationship('Player', secondary='game_players', back_populates='games')
 
-    hands = relationship('Hand', back_populates='game_session')
+    hands = relationship(
+        'Hand', back_populates='game_session', cascade='all, delete-orphan'
+    )
 
 
 class GamePlayer(Base):
     __tablename__ = 'game_players'
 
-    game_id = Column(Integer, ForeignKey('game_sessions.game_id'), primary_key=True)
-    player_id = Column(Integer, ForeignKey('players.player_id'), primary_key=True)
+    game_id = Column(
+        Integer, ForeignKey('game_sessions.game_id'), primary_key=True, index=True
+    )
+    player_id = Column(
+        Integer, ForeignKey('players.player_id'), primary_key=True, index=True
+    )
     is_active = Column(Boolean, default=True, nullable=False)
     seat_number = Column(Integer, nullable=True)
     buy_in = Column(Float, nullable=True)
+    current_chips = Column(Float, nullable=True)
 
 
 class Hand(Base):
@@ -68,7 +75,9 @@ class Hand(Base):
     )
 
     hand_id = Column(Integer, primary_key=True, autoincrement=True)
-    game_id = Column(Integer, ForeignKey('game_sessions.game_id'), nullable=False)
+    game_id = Column(
+        Integer, ForeignKey('game_sessions.game_id'), nullable=False, index=True
+    )
     hand_number = Column(Integer, nullable=False)
     flop_1 = Column(String, nullable=True)
     flop_2 = Column(String, nullable=True)
@@ -85,8 +94,12 @@ class Hand(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     game_session = relationship('GameSession', back_populates='hands')
-    player_hands = relationship('PlayerHand', back_populates='hand')
-    state = relationship('HandState', back_populates='hand', uselist=False)
+    player_hands = relationship(
+        'PlayerHand', back_populates='hand', cascade='all, delete-orphan'
+    )
+    state = relationship(
+        'HandState', back_populates='hand', uselist=False, cascade='all, delete-orphan'
+    )
 
 
 class PlayerHand(Base):
@@ -94,8 +107,10 @@ class PlayerHand(Base):
     __table_args__ = (UniqueConstraint('hand_id', 'player_id', name='uq_player_hand'),)
 
     player_hand_id = Column(Integer, primary_key=True, autoincrement=True)
-    hand_id = Column(Integer, ForeignKey('hands.hand_id'), nullable=False)
-    player_id = Column(Integer, ForeignKey('players.player_id'), nullable=False)
+    hand_id = Column(Integer, ForeignKey('hands.hand_id'), nullable=False, index=True)
+    player_id = Column(
+        Integer, ForeignKey('players.player_id'), nullable=False, index=True
+    )
     card_1 = Column(String, nullable=True)
     card_2 = Column(String, nullable=True)
     result = Column(String, nullable=True)
@@ -106,7 +121,9 @@ class PlayerHand(Base):
 
     hand = relationship('Hand', back_populates='player_hands')
     player = relationship('Player', back_populates='hands_played')
-    actions = relationship('PlayerHandAction', back_populates='player_hand')
+    actions = relationship(
+        'PlayerHandAction', back_populates='player_hand', cascade='all, delete-orphan'
+    )
 
 
 class PlayerHandAction(Base):
@@ -114,7 +131,7 @@ class PlayerHandAction(Base):
 
     action_id = Column(Integer, primary_key=True, autoincrement=True)
     player_hand_id = Column(
-        Integer, ForeignKey('player_hands.player_hand_id'), nullable=False
+        Integer, ForeignKey('player_hands.player_hand_id'), nullable=False, index=True
     )
     street = Column(String, nullable=False)
     action = Column(String, nullable=False)
@@ -132,7 +149,9 @@ class ImageUpload(Base):
     __tablename__ = 'image_uploads'
 
     upload_id = Column(Integer, primary_key=True, autoincrement=True)
-    game_id = Column(Integer, ForeignKey('game_sessions.game_id'), nullable=False)
+    game_id = Column(
+        Integer, ForeignKey('game_sessions.game_id'), nullable=False, index=True
+    )
     file_path = Column(String, nullable=False)
     status = Column(String, nullable=False, default='processing')
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
@@ -149,7 +168,9 @@ class CardDetection(Base):
     )
 
     detection_id = Column(Integer, primary_key=True, autoincrement=True)
-    upload_id = Column(Integer, ForeignKey('image_uploads.upload_id'), nullable=False)
+    upload_id = Column(
+        Integer, ForeignKey('image_uploads.upload_id'), nullable=False, index=True
+    )
     card_position = Column(String, nullable=False)
     detected_value = Column(String, nullable=False)
     confidence = Column(Float, nullable=False)
@@ -179,11 +200,17 @@ class HandState(Base):
     __tablename__ = 'hand_states'
 
     hand_state_id = Column(Integer, primary_key=True, autoincrement=True)
-    hand_id = Column(Integer, ForeignKey('hands.hand_id'), unique=True, nullable=False)
+    hand_id = Column(
+        Integer, ForeignKey('hands.hand_id'), unique=True, nullable=False, index=True
+    )
     phase = Column(String, nullable=False, default='preflop')
     current_seat = Column(Integer, nullable=True)
     action_index = Column(Integer, default=0)
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
 
     hand = relationship('Hand', back_populates='state')
 
@@ -192,7 +219,13 @@ class Rebuy(Base):
     __tablename__ = 'rebuys'
 
     rebuy_id = Column(Integer, primary_key=True, autoincrement=True)
-    game_id = Column(Integer, ForeignKey('game_sessions.game_id'), nullable=False)
-    player_name = Column(String, nullable=False)
+    game_id = Column(
+        Integer, ForeignKey('game_sessions.game_id'), nullable=False, index=True
+    )
+    player_id = Column(
+        Integer, ForeignKey('players.player_id'), nullable=False, index=True
+    )
     amount = Column(Float, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    player = relationship('Player')

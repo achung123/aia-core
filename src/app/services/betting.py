@@ -24,8 +24,10 @@ def get_legal_actions(
 
     Returns
     -------
-    dict with keys 'legal_actions' (list[str]) and 'amount_to_call' (float).
+    dict with keys 'legal_actions' (list[str]), 'amount_to_call' (float),
+    'minimum_bet' (float | None), and 'minimum_raise' (float | None).
     """
+    big_blind = blind_amounts[1]
     contributions: dict[int, float] = {}
     for a in actions_this_street:
         pid = a['player_id']
@@ -47,10 +49,124 @@ def get_legal_actions(
         )
         legal = ['fold', 'check', 'raise'] if has_wager else ['fold', 'check', 'bet']
 
+    minimum_bet = round(big_blind, 2) if 'bet' in legal else None
+    minimum_raise = (
+        round(amount_to_call + _last_raise_increment(actions_this_street, big_blind), 2)
+        if 'raise' in legal
+        else None
+    )
+
     return {
         'legal_actions': legal,
         'amount_to_call': amount_to_call,
+        'minimum_bet': minimum_bet,
+        'minimum_raise': minimum_raise,
     }
+
+
+def _last_raise_increment(actions_this_street: list[dict], big_blind: float) -> float:
+    """Return the current minimum raise increment for the street."""
+    last_raise_increment = big_blind
+    for a in actions_this_street:
+        amt = a.get('amount') or 0
+        if a['action'] in ('bet', 'raise'):
+            prev_contribs: dict[int, float] = {}
+            for prev in actions_this_street:
+                if prev is a:
+                    break
+                ppid = prev['player_id']
+                if prev['action'] in ('blind', 'call', 'bet', 'raise'):
+                    prev_contribs[ppid] = prev_contribs.get(ppid, 0) + (
+                        prev.get('amount') or 0
+                    )
+            max_before = max(prev_contribs.values()) if prev_contribs else 0.0
+            raiser_before = prev_contribs.get(a['player_id'], 0.0)
+            call_needed = max_before - raiser_before
+            increment = amt - call_needed
+            if increment > 0:
+                last_raise_increment = increment
+    return round(last_raise_increment, 2)
+
+
+def validate_action(
+    action: str,
+    amount: float | None,
+    legal_actions: list[str],
+    amount_to_call: float,
+    actions_this_street: list[dict],
+    big_blind: float,
+    is_all_in: bool = False,
+) -> str | None:
+    """Validate a player action against NLHE rules.
+
+    Returns None if the action is legal, or an error message string if illegal.
+    """
+    if action not in legal_actions:
+        return (
+            f"Action '{action}' is not legal here. "
+            f'Legal actions: {", ".join(legal_actions)}'
+        )
+
+    if action == 'check':
+        # Check is only legal when amount_to_call == 0 (enforced by legal_actions)
+        # but double-check as a safety net
+        if amount_to_call > 0:
+            return 'Cannot check when facing a bet — must call, raise, or fold'
+        return None
+
+    if action == 'fold':
+        return None
+
+    if action == 'call':
+        if amount_to_call <= 0:
+            return 'Nothing to call — use check instead'
+        if amount is None:
+            return 'Call requires an amount'
+        # Call must match amount_to_call exactly (or less if all-in)
+        if is_all_in:
+            if amount > round(amount_to_call, 2):
+                return (
+                    f'Call amount {amount} exceeds amount to call {amount_to_call:.2f}'
+                )
+        else:
+            if round(amount, 2) != round(amount_to_call, 2):
+                return (
+                    f'Call amount must be exactly {amount_to_call:.2f}, '
+                    f'got {amount:.2f}'
+                )
+        return None
+
+    if action == 'bet':
+        if amount is None or amount <= 0:
+            return 'Bet requires a positive amount'
+        # Min bet = big blind (unless all-in for less)
+        if not is_all_in and amount < big_blind:
+            return f'Minimum bet is {big_blind:.2f} (the big blind)'
+        return None
+
+    if action == 'raise':
+        if amount is None or amount <= 0:
+            return 'Raise requires a positive amount'
+        # Raise amount is the new money the player puts in this action.
+        # It must at least cover the call AND add a raise increment.
+        if round(amount, 2) <= round(amount_to_call, 2):
+            return (
+                f'Raise amount ({amount:.2f}) must exceed the call amount '
+                f'({amount_to_call:.2f})'
+            )
+        min_raise_total = round(
+            amount_to_call + _last_raise_increment(actions_this_street, big_blind), 2
+        )
+        if not is_all_in and round(amount, 2) < min_raise_total:
+            return (
+                f'Minimum raise is {min_raise_total:.2f} '
+                f'({amount_to_call:.2f} to call + '
+                f'{_last_raise_increment(actions_this_street, big_blind):.2f} min raise). '
+                f'Got {amount:.2f}'
+            )
+        return None
+
+    return None
 
 
 def compute_side_pots(

@@ -389,6 +389,7 @@ describe('ActiveHandDashboard — bet verification', () => {
     currentPlayerName: 'Alice',
     legalActions: ['call', 'raise', 'fold'],
     amountToCall: 0.50,
+    minimumRaise: 1.00,
     pot: 1.50,
     onActionConfirmed: vi.fn(),
   };
@@ -416,6 +417,7 @@ describe('ActiveHandDashboard — bet verification', () => {
     const display = screen.getByTestId('legal-actions-display');
     expect(display.textContent).toContain('call, raise, fold');
     expect(display.textContent).toContain('$0.50 to call');
+    expect(display.textContent).toContain('min raise $1.00');
   });
 
   // AC5: shows record action button
@@ -432,6 +434,19 @@ describe('ActiveHandDashboard — bet verification', () => {
     expect(screen.getByTestId('override-action-select')).toBeTruthy();
     expect(screen.getByTestId('override-amount-input')).toBeTruthy();
     expect(screen.getByTestId('override-submit-btn')).toBeTruthy();
+  });
+
+  it('shows only legal actions in the override select', () => {
+    render(<ActiveHandDashboard {...betProps} />);
+    fireEvent.click(screen.getByTestId('record-action-btn'));
+    const options = Array.from(screen.getByTestId('override-action-select').querySelectorAll('option')).map((option) => option.getAttribute('value'));
+    expect(options).toEqual(['call', 'raise', 'fold']);
+  });
+
+  it('prefills a standard call amount from amountToCall', () => {
+    render(<ActiveHandDashboard {...betProps} />);
+    fireEvent.click(screen.getByTestId('record-action-btn'));
+    expect((screen.getByTestId('override-amount-input') as HTMLInputElement).value).toBe('0.50');
   });
 
   // AC6: submission advances turn
@@ -470,6 +485,42 @@ describe('ActiveHandDashboard — bet verification', () => {
     });
   });
 
+  it('blocks a too-small raise before calling the API', async () => {
+    render(<ActiveHandDashboard {...betProps} />);
+    fireEvent.click(screen.getByTestId('record-action-btn'));
+    fireEvent.change(screen.getByTestId('override-action-select'), { target: { value: 'raise' } });
+    fireEvent.change(screen.getByTestId('override-amount-input'), { target: { value: '0.90' } });
+    fireEvent.click(screen.getByTestId('override-submit-btn'));
+    await waitFor(() => {
+      expect(screen.getByTestId('bet-verify-error').textContent).toContain('Minimum raise is $1.00');
+    });
+    expect(mockedRecordPlayerAction).not.toHaveBeenCalled();
+  });
+
+  it('allows an all-in short call from the dealer override form', async () => {
+    mockedRecordPlayerAction.mockResolvedValue({
+      action_id: 4,
+      player_hand_id: 1,
+      street: 'preflop',
+      action: 'call',
+      amount: 0.30,
+      created_at: '2026-04-13T00:00:00Z',
+    });
+    render(<ActiveHandDashboard {...betProps} />);
+    fireEvent.click(screen.getByTestId('record-action-btn'));
+    fireEvent.click(screen.getByTestId('override-all-in-toggle'));
+    fireEvent.change(screen.getByTestId('override-amount-input'), { target: { value: '0.30' } });
+    fireEvent.click(screen.getByTestId('override-submit-btn'));
+    await waitFor(() => {
+      expect(mockedRecordPlayerAction).toHaveBeenCalledWith(42, 1, 'Alice', {
+        street: 'preflop',
+        action: 'call',
+        amount: 0.30,
+        is_all_in: true,
+      });
+    });
+  });
+
   it('does not show bet verify panel when no handNumber', () => {
     render(<ActiveHandDashboard {...defaultProps} />);
     expect(screen.queryByTestId('bet-verify-panel')).toBeNull();
@@ -492,5 +543,151 @@ describe('ActiveHandDashboard — bet verification', () => {
     await waitFor(() => {
       expect(screen.queryByTestId('override-form')).toBeNull();
     });
+  });
+});
+
+describe('ActiveHandDashboard — disable completed streets', () => {
+  const flopRecorded: CommunityCards = {
+    ...emptyCommunity,
+    flop1: 'Ah', flop2: 'Kd', flop3: '5c', flopRecorded: true,
+  };
+
+  it('disables flop button when flop is recorded and handPhase is turn or later', () => {
+    render(
+      <ActiveHandDashboard
+        {...defaultProps}
+        community={flopRecorded}
+        handPhase="turn"
+        handNumber={1}
+      />,
+    );
+    const flopBtn = screen.getByTestId('flop-tile') as HTMLButtonElement;
+    expect(flopBtn.disabled).toBe(true);
+  });
+
+  it('keeps flop enabled when phase is still preflop', () => {
+    render(
+      <ActiveHandDashboard
+        {...defaultProps}
+        community={emptyCommunity}
+        handPhase="preflop"
+        handNumber={1}
+      />,
+    );
+    const flopBtn = screen.getByTestId('flop-tile') as HTMLButtonElement;
+    expect(flopBtn.disabled).toBe(false);
+  });
+
+  it('disables turn button when turn is recorded and handPhase is river', () => {
+    const turnRecorded: CommunityCards = {
+      ...flopRecorded,
+      turn: 'Qh', turnRecorded: true,
+    };
+    render(
+      <ActiveHandDashboard
+        {...defaultProps}
+        community={turnRecorded}
+        handPhase="river"
+        handNumber={1}
+      />,
+    );
+    const turnBtn = screen.getByTestId('turn-tile') as HTMLButtonElement;
+    expect(turnBtn.disabled).toBe(true);
+  });
+
+  it('disables all street buttons at showdown', () => {
+    const allRecorded: CommunityCards = {
+      flop1: 'Ah', flop2: 'Kd', flop3: '5c', flopRecorded: true,
+      turn: 'Qh', turnRecorded: true,
+      river: '9s', riverRecorded: true,
+    };
+    render(
+      <ActiveHandDashboard
+        {...defaultProps}
+        community={allRecorded}
+        handPhase="showdown"
+        handNumber={1}
+      />,
+    );
+    expect((screen.getByTestId('flop-tile') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId('turn-tile') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId('river-tile') as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+describe('ActiveHandDashboard — 3D view has street scrubber', () => {
+  const mockedFetchHands = fetchHands as ReturnType<typeof vi.fn>;
+  const handData = [{
+    hand_id: 1, hand_number: 1, game_id: 42,
+    flop_1: 'Ah', flop_2: 'Kd', flop_3: '5c', turn: 'Qh', river: null,
+    created_at: '2026-04-13T00:00:00Z', player_hands: [],
+    sb_player_name: null, bb_player_name: null, source_upload_id: null,
+  }];
+
+  it('shows street scrubber when in 3D view mode', async () => {
+    mockedFetchHands.mockResolvedValue(handData);
+    render(<ActiveHandDashboard {...defaultProps} />);
+    fireEvent.click(screen.getByTestId('view-toggle-btn'));
+    await waitFor(() => {
+      expect(screen.getByTestId('table-view-3d')).toBeTruthy();
+    });
+    expect(screen.getByTestId('street-scrubber')).toBeTruthy();
+  });
+});
+
+describe('ActiveHandDashboard — player last action display removed', () => {
+  it('does not display last action next to player name', () => {
+    const playersWithActions: Player[] = [
+      { name: 'Alice', card1: 'Ah', card2: 'Kd', recorded: true, status: 'playing', outcomeStreet: null, lastAction: 'raise' },
+      { name: 'Bob', card1: '7s', card2: '8s', recorded: true, status: 'folded', outcomeStreet: 'preflop', lastAction: 'fold' },
+      { name: 'Carol', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null, lastAction: 'check' },
+    ];
+    render(
+      <ActiveHandDashboard
+        {...defaultProps}
+        players={playersWithActions}
+      />,
+    );
+    expect(screen.queryByTestId('last-action-Alice')).toBeNull();
+    expect(screen.queryByTestId('last-action-Bob')).toBeNull();
+    expect(screen.queryByTestId('last-action-Carol')).toBeNull();
+  });
+
+  it('does not show checkmark emoji on player tiles', () => {
+    render(<ActiveHandDashboard {...defaultProps} />);
+    const carolRow = screen.getByTestId('player-row-Carol');
+    expect(carolRow.textContent).not.toContain('✅');
+  });
+});
+
+describe('ActiveHandDashboard — pot contribution display', () => {
+  it('shows pot contribution on player tiles when provided', () => {
+    render(
+      <ActiveHandDashboard
+        {...defaultProps}
+        potContributions={{ Alice: 0.10, Bob: 0.20 }}
+      />,
+    );
+    const aliceRow = screen.getByTestId('player-row-Alice');
+    expect(aliceRow.textContent).toContain('$0.10');
+    const bobRow = screen.getByTestId('player-row-Bob');
+    expect(bobRow.textContent).toContain('$0.20');
+  });
+
+  it('does not show pot contribution badge when value is zero', () => {
+    render(
+      <ActiveHandDashboard
+        {...defaultProps}
+        potContributions={{ Alice: 0, Bob: 0 }}
+      />,
+    );
+    const aliceRow = screen.getByTestId('player-row-Alice');
+    expect(aliceRow.querySelector('[data-testid="pot-contrib-Alice"]')).toBeNull();
+  });
+
+  it('does not show pot contribution badge when potContributions is not provided', () => {
+    render(<ActiveHandDashboard {...defaultProps} />);
+    const aliceRow = screen.getByTestId('player-row-Alice');
+    expect(aliceRow.querySelector('[data-testid="pot-contrib-Alice"]')).toBeNull();
   });
 });

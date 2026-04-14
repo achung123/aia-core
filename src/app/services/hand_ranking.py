@@ -2,25 +2,7 @@
 
 from __future__ import annotations
 
-from itertools import combinations
-
-RANK_VAL = {
-    '2': 0,
-    '3': 1,
-    '4': 2,
-    '5': 3,
-    '6': 4,
-    '7': 5,
-    '8': 6,
-    '9': 7,
-    '10': 8,
-    'T': 8,
-    'J': 9,
-    'Q': 10,
-    'K': 11,
-    'A': 12,
-}
-SUIT_VAL = {'h': 0, 'd': 1, 'c': 2, 's': 3, 'H': 0, 'D': 1, 'C': 2, 'S': 3}
+from app.services.evaluator import RANK_VAL, SUIT_VAL, best_hand as _best_hand
 
 RANK_NAMES = {
     0: '2',
@@ -66,75 +48,6 @@ def _parse_card(card_str: str) -> tuple[int, int] | None:
     if r is None or s is None:
         return None
     return (r, s)
-
-
-def _classify5(cards: list[tuple[int, int]]) -> tuple[int, list[int]]:
-    """Classify exactly 5 cards → (category, sorted_group_ranks).
-
-    Categories: 0=high card, 1=pair, 2=two pair, 3=trips, 4=straight,
-    5=flush, 6=full house, 7=quads, 8=straight flush
-    """
-    ranks = sorted((c[0] for c in cards), reverse=True)
-    is_flush = len({c[1] for c in cards}) == 1
-
-    # Straight detection
-    unique = sorted(set(ranks), reverse=True)
-    is_straight = False
-    straight_hi = -1
-    if len(unique) == 5:
-        if unique[0] - unique[4] == 4:
-            is_straight = True
-            straight_hi = unique[0]
-        elif unique[0] == 12 and unique[1] == 3:  # wheel A-2-3-4-5
-            is_straight = True
-            straight_hi = 3
-
-    # Frequency groups sorted by (count desc, rank desc)
-    freq: dict[int, int] = {}
-    for r in ranks:
-        freq[r] = freq.get(r, 0) + 1
-    groups = sorted(freq.items(), key=lambda x: (x[1], x[0]), reverse=True)
-    group_ranks = [r for r, _ in groups]
-
-    if is_flush and is_straight:
-        return (8, [straight_hi])
-    if groups[0][1] == 4:
-        return (7, group_ranks)
-    if groups[0][1] == 3 and groups[1][1] == 2:
-        return (6, group_ranks)
-    if is_flush:
-        return (5, ranks)
-    if is_straight:
-        return (4, [straight_hi])
-    if groups[0][1] == 3:
-        return (3, group_ranks)
-    if groups[0][1] == 2 and len(groups) >= 2 and groups[1][1] == 2:
-        return (2, group_ranks)
-    if groups[0][1] == 2:
-        return (1, group_ranks)
-    return (0, ranks)
-
-
-def _score(cat: int, kickers: list[int]) -> int:
-    """Numeric score for comparison — higher is better."""
-    B = 14
-    s = cat
-    for i in range(5):
-        s = s * B + (kickers[i] if i < len(kickers) else 0)
-    return s
-
-
-def _best_hand(cards: list[tuple[int, int]]) -> tuple[int, list[int]]:
-    """Find the best 5-card hand from 5-7 cards → (category, group_ranks)."""
-    best_score = -1
-    best_result = (0, [0])
-    for combo in combinations(cards, 5):
-        cat, ranks = _classify5(list(combo))
-        sc = _score(cat, ranks)
-        if sc > best_score:
-            best_score = sc
-            best_result = (cat, ranks)
-    return best_result
 
 
 CATEGORY_NAMES = {

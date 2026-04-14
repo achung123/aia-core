@@ -196,7 +196,7 @@ describe('GameCreateForm', () => {
     });
   });
 
-  it('omits default_buy_in when buy-in input is empty', async () => {
+  it('omits default_buy_in when buy-in input is cleared', async () => {
     mockedCreateSession.mockResolvedValue({
       game_id: 42,
       player_names: ['Alice', 'Bob'],
@@ -207,6 +207,9 @@ describe('GameCreateForm', () => {
       expect(screen.getByText('Alice')).toBeTruthy();
     });
 
+    // Clear the default buy-in value
+    fireEvent.change(screen.getByTestId('buy-in-input'), { target: { value: '' } });
+
     fireEvent.click(screen.getByText('Alice'));
     fireEvent.click(screen.getByText('Bob'));
     fireEvent.submit(document.querySelector('form')!);
@@ -215,5 +218,11 @@ describe('GameCreateForm', () => {
       const call = mockedCreateSession.mock.calls[0][0];
       expect(call.default_buy_in).toBeUndefined();
     });
+  });
+
+  it('defaults buy-in input to 25', () => {
+    render(<GameCreateForm onGameCreated={() => {}} />);
+    const input = screen.getByTestId('buy-in-input') as HTMLInputElement;
+    expect(input.value).toBe('25');
   });
 });

@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import type React from 'react';
 import { CardPicker } from './CardPicker.tsx';
-import { patchPlayerResult, updateCommunityCards, updateHolecards, fetchEquity } from '../api/client.ts';
+import { patchPlayerResult, updateCommunityCards, updateHolecards, fetchEquity, fetchHand, fetchHandActions } from '../api/client.ts';
 import type { Player, CommunityCards } from '../stores/dealerStore.ts';
-import type { ResultEnum, StreetEnum, PlayerEquityEntry } from '../api/types.ts';
+import type { ResultEnum, StreetEnum, PlayerEquityEntry, HandActionResponse } from '../api/types.ts';
+import { inferOutcomeStreet, mapEquityToOutcomes } from './showdownHelpers.ts';
+import { PlayingCard } from '../components/PlayingCard.tsx';
 
 type CommunityField = 'flop1' | 'flop2' | 'flop3' | 'turn' | 'river';
 
@@ -96,10 +98,52 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
   const [error, setError] = useState<string | null>(null);
   const [showFinishConfirm, setShowFinishConfirm] = useState(false);
   const [equityData, setEquityData] = useState<PlayerEquityEntry[]>([]);
+  const [handPot, setHandPot] = useState<number>(0);
+  const [playerContributions, setPlayerContributions] = useState<Record<string, number>>({});
+  const [handDescriptions, setHandDescriptions] = useState<Record<string, string>>({});
+
+  // Fetch hand data for pot, hand descriptions, and actions for contributions
+  useEffect(() => {
+    fetchHand(gameId, handId).then((hand) => {
+      setHandPot(hand.pot ?? 0);
+      // Store hand descriptions from the hand response (includes folded players)
+      const descs: Record<string, string> = {};
+      for (const ph of hand.player_hands) {
+        if (ph.winning_hand_description) {
+          descs[ph.player_name] = ph.winning_hand_description;
+        }
+      }
+      setHandDescriptions(descs);
+    }).catch(() => {});
+
+    fetchHandActions(gameId, handId).then((actions: HandActionResponse[]) => {
+      const contribs: Record<string, number> = {};
+      for (const a of actions) {
+        if (a.action in { call: 1, bet: 1, raise: 1, blind: 1 } && a.amount) {
+          contribs[a.player_name] = (contribs[a.player_name] ?? 0) + a.amount;
+        }
+      }
+      setPlayerContributions(contribs);
+    }).catch(() => {});
+  }, [gameId, handId]);
 
   useEffect(() => {
     fetchEquity(gameId, handId)
-      .then((res) => setEquityData(res.equities))
+      .then((res) => {
+        setEquityData(res.equities);
+        // Auto-propose outcomes for non-folded players without terminal results
+        const proposed = mapEquityToOutcomes(res.equities, players, community);
+        if (proposed && proposed.length > 0) {
+          setEditPlayers((prev) =>
+            prev.map((ep) => {
+              if (TERMINAL_RESULTS.includes(ep.result)) return ep; // already decided
+              const prop = proposed.find((r) => r.name === ep.name);
+              if (!prop) return ep;
+              return { ...ep, result: prop.status, outcomeStreet: prop.outcomeStreet };
+            }),
+          );
+        }
+      })
       .catch(() => { /* graceful degradation — no hand descriptions */ });
   }, [gameId, handId]);
 
@@ -164,6 +208,27 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
     setSaving(true);
     setError(null);
 
+    // Compute profit_loss for each player based on pot and contributions
+    const winners = editPlayers.filter((p) => p.result === 'won');
+    const numWinners = winners.length || 1;
+    const pot = handPot;
+
+    function computeProfitLoss(p: EditablePlayer): number | null {
+      if (pot <= 0) return null; // no pot tracked — skip P&L
+      const contribution = playerContributions[p.name] ?? 0;
+      if (p.result === 'won') {
+        return round2(pot / numWinners - contribution);
+      }
+      if (p.result === 'lost' || p.result === 'folded') {
+        return round2(-contribution);
+      }
+      return null;
+    }
+
+    function round2(n: number): number {
+      return Math.round(n * 100) / 100;
+    }
+
     interface LabeledMutation {
       label: string;
       promise: Promise<unknown>;
@@ -175,12 +240,14 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
 
     // Patch only dirty player results not already saved
     for (const p of editPlayers) {
-      const isDirty = p.result !== p.origResult || p.outcomeStreet !== p.origOutcomeStreet;
+      const pl = computeProfitLoss(p);
+      const isDirty = p.result !== p.origResult || p.outcomeStreet !== p.origOutcomeStreet || pl !== null;
       if (isDirty && !savedResults.has(p.name)) {
         mutations.push({
           label: `${p.name} result`,
           promise: patchPlayerResult(gameId, handId, p.name, {
             result: p.result as ResultEnum,
+            profit_loss: pl,
             outcome_street: (p.outcomeStreet || null) as StreetEnum | null,
           }),
           type: 'result',
@@ -274,14 +341,12 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
         <h3 style={styles.sectionTitle}>Community Cards</h3>
         <div style={styles.cardRow}>
           {(['flop1', 'flop2', 'flop3', 'turn', 'river'] as CommunityField[]).map((field) => (
-            <button
+            <PlayingCard
               key={field}
-              data-testid={`review-community-${field}`}
-              style={styles.cardButton}
+              testId={`review-community-${field}`}
+              code={editCommunity[field]}
               onClick={() => handleCommunityCardClick(field)}
-            >
-              {editCommunity[field] || '—'}
-            </button>
+            />
           ))}
         </div>
       </div>
@@ -300,20 +365,16 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
             {/* Hole Cards */}
             <div style={styles.playerRow}>
               <span style={styles.label}>Cards:</span>
-              <button
-                data-testid={`review-player-${player.name}-card1`}
-                style={styles.cardButton}
+              <PlayingCard
+                testId={`review-player-${player.name}-card1`}
+                code={player.card1}
                 onClick={() => handlePlayerCardClick(player.name, 'card1')}
-              >
-                {player.card1 || '—'}
-              </button>
-              <button
-                data-testid={`review-player-${player.name}-card2`}
-                style={styles.cardButton}
+              />
+              <PlayingCard
+                testId={`review-player-${player.name}-card2`}
+                code={player.card2}
                 onClick={() => handlePlayerCardClick(player.name, 'card2')}
-              >
-                {player.card2 || '—'}
-              </button>
+              />
             </div>
 
             {/* Result Buttons */}
@@ -340,14 +401,19 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
             {/* Winning Hand Description */}
             {player.card1 && player.card2 && (() => {
               const entry = equityData.find((e) => e.player_name === player.name);
-              if (!entry?.winning_hand_description) return null;
+              const desc = entry?.winning_hand_description || handDescriptions[player.name];
+              if (!desc) return null;
               const isWinner = player.result === 'won';
+              const isFolded = player.result === 'folded';
               return (
                 <div
                   data-testid={`review-player-${player.name}-hand-desc`}
-                  style={styles.handDescBadge}
+                  style={{
+                    ...styles.handDescBadge,
+                    ...(isFolded ? { opacity: 0.7, fontStyle: 'italic' } : {}),
+                  }}
                 >
-                  {isWinner ? `🏆 ${entry.winning_hand_description}` : entry.winning_hand_description}
+                  {isWinner ? `🏆 ${desc}` : isFolded ? `(Would have: ${desc})` : desc}
                 </div>
               );
             })()}
@@ -450,19 +516,6 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     gap: '0.5rem',
     flexWrap: 'wrap',
-  },
-  cardButton: {
-    minWidth: '48px',
-    minHeight: '44px',
-    padding: '0.4rem 0.6rem',
-    fontSize: '1rem',
-    fontWeight: 'bold',
-    border: '1px solid #4b5563',
-    borderRadius: '6px',
-    background: '#1e1f2b',
-    color: '#e2e8f0',
-    cursor: 'pointer',
-    textAlign: 'center',
   },
   playerCard: {
     padding: '0.75rem',

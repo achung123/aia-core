@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from pydantic_models.app_models import (
+from pydantic_models.common import (
     Card,
     CardRank,
     CardSuit,

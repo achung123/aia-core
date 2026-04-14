@@ -65,7 +65,7 @@ export function GamePlayerManagement({ gameId }: GamePlayerManagementProps) {
       const result = await addPlayerToGame(gameId, trimmed);
       setPlayers((prev) => [
         ...prev,
-        { name: result.player_name, is_active: result.is_active, seat_number: result.seat_number, buy_in: null },
+        { name: result.player_name, is_active: result.is_active, seat_number: result.seat_number, buy_in: null, current_chips: null },
       ]);
       setNameInput('');
     } catch (err) {
@@ -78,11 +78,24 @@ export function GamePlayerManagement({ gameId }: GamePlayerManagementProps) {
   async function handleReassignSeat(seatNumber: number) {
     if (!reassigningPlayer) return;
     setActionError(null);
+    // Detect if this is a swap (target seat is occupied by another player)
+    const occupant = players.find((p) => p.seat_number === seatNumber && p.name !== reassigningPlayer);
+    const isSwap = !!occupant;
     try {
-      const result = await assignPlayerSeat(gameId, reassigningPlayer, { seat_number: seatNumber });
-      setPlayers((prev) =>
-        prev.map((p) => (p.name === result.name ? { ...p, seat_number: result.seat_number } : p)),
-      );
+      const result = await assignPlayerSeat(gameId, reassigningPlayer, { seat_number: seatNumber }, isSwap);
+      setPlayers((prev) => {
+        let updated = prev.map((p) =>
+          p.name === result.name ? { ...p, seat_number: result.seat_number } : p,
+        );
+        // If swap, move occupant to the requesting player's old seat
+        if (isSwap && occupant) {
+          const oldSeat = prev.find((p) => p.name === reassigningPlayer)?.seat_number ?? null;
+          updated = updated.map((p) =>
+            p.name === occupant.name ? { ...p, seat_number: oldSeat } : p,
+          );
+        }
+        return updated;
+      });
       setReassigningPlayer(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -133,15 +146,22 @@ export function GamePlayerManagement({ gameId }: GamePlayerManagementProps) {
 
       <div data-testid="player-list" style={styles.list}>
         {players.map((player) => (
-          <div key={player.name} data-testid={`player-row-${player.name}`} style={styles.row}>
+          <div key={player.name} data-testid={`player-row-${player.name}`} style={{
+            ...styles.row,
+            ...(player.is_active ? {} : styles.rowInactive),
+          }}>
             <span style={player.is_active ? styles.nameActive : styles.nameInactive}>
               {player.name}
             </span>
-            {player.buy_in != null && (
+            {player.current_chips != null ? (
+              <span data-testid={`buy-in-${player.name}`} style={styles.buyInBadge}>
+                ${player.current_chips.toFixed(2)}
+              </span>
+            ) : player.buy_in != null ? (
               <span data-testid={`buy-in-${player.name}`} style={styles.buyInBadge}>
                 ${player.buy_in.toFixed(2)}
               </span>
-            )}
+            ) : null}
             <span data-testid={`seat-number-${player.name}`} style={styles.seatBadge}>
               {player.seat_number !== null ? `Seat ${player.seat_number}` : '–'}
             </span>
@@ -150,14 +170,7 @@ export function GamePlayerManagement({ gameId }: GamePlayerManagementProps) {
               style={styles.reassignBtn}
               onClick={() => setRebuyPlayer(rebuyPlayer === player.name ? null : player.name)}
             >
-              Rebuy
-            </button>
-            <button
-              data-testid={`reassign-btn-${player.name}`}
-              style={styles.reassignBtn}
-              onClick={() => setReassigningPlayer(reassigningPlayer === player.name ? null : player.name)}
-            >
-              Reassign Seat
+              Buy Back
             </button>
             <label style={styles.toggleLabel}>
               <input
@@ -175,7 +188,7 @@ export function GamePlayerManagement({ gameId }: GamePlayerManagementProps) {
 
       {rebuyPlayer && (
         <div data-testid="rebuy-panel" style={styles.reassignPanel}>
-          <p style={styles.reassignLabel}>Rebuy for {rebuyPlayer}</p>
+          <p style={styles.reassignLabel}>Buy Back for {rebuyPlayer}</p>
           <div style={styles.addRow}>
             <input
               type="number"
@@ -193,7 +206,7 @@ export function GamePlayerManagement({ gameId }: GamePlayerManagementProps) {
               disabled={rebuyLoading}
               style={styles.addButton}
             >
-              {rebuyLoading ? 'Processing…' : 'Confirm Rebuy'}
+              {rebuyLoading ? 'Processing…' : 'Confirm Buy Back'}
             </button>
           </div>
         </div>
@@ -201,12 +214,13 @@ export function GamePlayerManagement({ gameId }: GamePlayerManagementProps) {
 
       {reassigningPlayer && (
         <div data-testid="seat-reassign-panel" style={styles.reassignPanel}>
-          <p style={styles.reassignLabel}>Reassign seat for {reassigningPlayer}</p>
+          <p style={styles.reassignLabel}>Assign seat for {reassigningPlayer}</p>
           <SeatPicker
             seats={seatDataFromPlayers()}
             currentPlayerSeat={players.find((p) => p.name === reassigningPlayer)?.seat_number ?? null}
             onSelect={handleReassignSeat}
             onSkip={() => setReassigningPlayer(null)}
+            allowSwap
           />
         </div>
       )}
@@ -259,6 +273,10 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '0.5rem 0.75rem',
     borderRadius: '8px',
     border: '1px solid #e5e7eb',
+  },
+  rowInactive: {
+    opacity: 0.45,
+    background: '#f3f4f6',
   },
   nameActive: {
     fontWeight: 600,
