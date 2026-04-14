@@ -3,7 +3,7 @@ import { fetchHands, startHand, completeGame, fetchGame, assignPlayerSeat } from
 import { QRCodeDisplay } from './QRCodeDisplay.tsx';
 import { GamePlayerManagement } from './GamePlayerManagement.tsx';
 import { SeatPicker } from '../components/SeatPicker.tsx';
-import type { HandResponse, PlayerHandResponse, PlayerInfo } from '../api/types.ts';
+import type { HandResponse, PlayerHandResponse, PlayerInfo } from '../api/types';
 
 const resultColors: Record<string, string> = {
   won: '#16a34a',

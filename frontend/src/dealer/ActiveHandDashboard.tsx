@@ -4,7 +4,7 @@ import { recordPlayerAction, fetchHands, fetchEquity } from '../api/client.ts';
 import { TableView3D } from './TableView3D.tsx';
 import { BlindTimer } from './BlindTimer.tsx';
 import { StreetScrubber } from '../mobile/StreetScrubber.tsx';
-import type { ActionEnum, StreetEnum, HandResponse, PlayerEquityEntry } from '../api/types.ts';
+import type { ActionEnum, StreetEnum, HandResponse, PlayerEquityEntry } from '../api/types';
 
 const PHASE_ORDER: Record<string, number> = { preflop: 0, flop: 1, turn: 2, river: 3, showdown: 4 };
 

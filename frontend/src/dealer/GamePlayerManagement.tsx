@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { fetchGame, togglePlayerStatus, addPlayerToGame, assignPlayerSeat, createRebuy } from '../api/client.ts';
-import type { PlayerInfo } from '../api/types.ts';
+import type { PlayerInfo } from '../api/types';
 import { SeatPicker } from '../components/SeatPicker.tsx';
 import type { SeatData } from '../components/SeatPicker.tsx';
 

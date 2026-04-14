@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { CardPicker } from './CardPicker.tsx';
-import type { CardDetectionEntry } from '../api/types.ts';
+import type { CardDetectionEntry } from '../api/types';
 
 const SUIT_MAP: Record<string, string> = { h: '♥', s: '♠', d: '♦', c: '♣' };
 const SUIT_COLORS: Record<string, string> = { '♥': '#dc2626', '♠': '#1e293b', '♦': '#dc2626', '♣': '#1e293b' };

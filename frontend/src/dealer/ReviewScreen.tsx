@@ -3,7 +3,7 @@ import type React from 'react';
 import { CardPicker } from './CardPicker.tsx';
 import { patchPlayerResult, updateCommunityCards, updateHolecards, fetchEquity, fetchHand, fetchHandActions } from '../api/client.ts';
 import type { Player, CommunityCards } from '../stores/dealerStore.ts';
-import type { ResultEnum, StreetEnum, PlayerEquityEntry, HandActionResponse } from '../api/types.ts';
+import type { ResultEnum, StreetEnum, PlayerEquityEntry, HandActionResponse } from '../api/types';
 import { inferOutcomeStreet, mapEquityToOutcomes } from './showdownHelpers.ts';
 import { PlayingCard } from '../components/PlayingCard.tsx';
 

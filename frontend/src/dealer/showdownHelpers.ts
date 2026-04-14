@@ -1,4 +1,4 @@
-import type { PlayerEquityEntry } from '../api/types.ts';
+import type { PlayerEquityEntry } from '../api/types';
 import type { Player, CommunityCards } from '../stores/dealerStore.ts';
 
 export interface ProposedResult {

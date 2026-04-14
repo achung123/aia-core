@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { fetchPlayers, createSession } from '../api/client.ts';
-import type { GameSessionResponse, PlayerResponse } from '../api/types.ts';
+import type { GameSessionResponse, PlayerResponse } from '../api/types';
 
 export interface SessionFormProps {
   onSessionCreated: (session: GameSessionResponse) => void;

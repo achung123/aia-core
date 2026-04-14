@@ -12,7 +12,7 @@ import type {
   CardDetectionEntry,
   PlayerInfo,
   GameStatsPlayerEntry,
-} from '../api/types.ts';
+} from '../api/types';
 import { CameraCapture } from '../dealer/CameraCapture.tsx';
 import { DetectionReview } from '../dealer/DetectionReview.tsx';
 import { PlayerActionButtons } from './PlayerActionButtons.tsx';

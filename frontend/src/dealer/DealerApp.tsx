@@ -1,6 +1,6 @@
 import { useState, useEffect, useLayoutEffect } from 'react';
 import { useDealerStore, validateOutcomeStreets } from '../stores/dealerStore.ts';
-import type { CardDetectionEntry, ResultEnum, StreetEnum } from '../api/types.ts';
+import type { CardDetectionEntry, ResultEnum, StreetEnum } from '../api/types';
 import type { OutcomeResult, OutcomeStreet } from './OutcomeButtons.tsx';
 import type { DetectionMode } from './DetectionReview.tsx';
 import { GameSelector } from './GameSelector.tsx';

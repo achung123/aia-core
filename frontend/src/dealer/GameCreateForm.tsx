@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { fetchPlayers, createPlayer, createSession } from '../api/client.ts';
-import type { PlayerResponse } from '../api/types.ts';
+import type { PlayerResponse } from '../api/types';
 
 export interface GameCreateFormProps {
   onGameCreated: (gameId: number, playerNames: string[], gameDate: string) => void;

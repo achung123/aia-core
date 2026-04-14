@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { fetchPlayers, createPlayer } from '../api/client.ts';
-import type { PlayerResponse } from '../api/types.ts';
+import type { PlayerResponse } from '../api/types';
 
 export function PlayerManagement() {
   const [players, setPlayers] = useState<PlayerResponse[]>([]);

@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from 'react';
 import { uploadImage, getDetectionResults } from '../api/client.ts';
-import type { CardDetectionEntry } from '../api/types.ts';
+import type { CardDetectionEntry } from '../api/types';
 
 export interface CameraCaptureProps {
   gameId: number;

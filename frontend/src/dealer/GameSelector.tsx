@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { fetchSessions } from '../api/client.ts';
-import type { GameSessionListItem } from '../api/types.ts';
+import type { GameSessionListItem } from '../api/types';
 
 export interface GameSelectorProps {
   onSelectGame: (gameId: number) => void;

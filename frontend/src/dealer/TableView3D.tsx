@@ -1,6 +1,6 @@
 import { useRef, useEffect } from 'react';
 import { createPokerScene } from '../scenes/pokerScene.ts';
-import type { HandResponse } from '../api/types.ts';
+import type { HandResponse } from '../api/types';
 
 /* ── Card-parsing helpers ─────────────────────────────────────── */
 

@@ -22,7 +22,7 @@ import type {
   PlayerResponse,
   PlayerHandResponse,
   ResultEnum,
-} from '../api/types.ts';
+} from '../api/types';
 
 /* ── Card formatting helpers ──────────────────────────── */
 

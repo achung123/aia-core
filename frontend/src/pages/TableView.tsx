@@ -1,14 +1,14 @@
 import { useState, useEffect, useRef, useCallback, type CSSProperties } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
-import type { HandResponse } from '../api/types.ts';
+import type { HandResponse } from '../api/types';
 import { useHandPolling } from '../hooks/useHandPolling.ts';
 import { createPokerScene } from '../scenes/pokerScene.ts';
 import { isShowdown } from '../scenes/showdown.ts';
 import { computeSeatCameraPosition, animateCameraToSeat, getDefaultCameraPosition } from '../scenes/seatCamera.ts';
 import { SessionScrubber } from '../components/SessionScrubber.tsx';
 
-/* ── Card-parsing helpers (same as MobilePlaybackView) ──────── */
+/* ── Card-parsing helpers (same as PlaybackView) ──────── */
 
 const SUIT_SYMBOL: Record<string, string> = {
   h: '♥', d: '♦', c: '♣', s: '♠',

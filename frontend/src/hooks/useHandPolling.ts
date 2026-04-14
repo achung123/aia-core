@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { usePolling } from './usePolling.ts';
 import { fetchHands } from '../api/client.ts';
-import type { HandResponse } from '../api/types.ts';
+import type { HandResponse } from '../api/types';
 
 export interface UseHandPollingOptions {
   gameId: number | null;

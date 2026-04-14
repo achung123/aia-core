@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type React from 'react';
 import { recordPlayerAction } from '../api/client.ts';
 import { ChipPicker } from '../dealer/ChipPicker.tsx';
-import type { StreetEnum, ActionEnum } from '../api/types.ts';
+import type { StreetEnum, ActionEnum } from '../api/types';
 
 export interface PlayerActionButtonsProps {
   gameId: number;

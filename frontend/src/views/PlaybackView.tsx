@@ -1,13 +1,11 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import type { CSSProperties } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { fetchSessions, fetchHands } from '../api/client.ts';
-import type { GameSessionListItem, HandResponse } from '../api/types.ts';
+import type { GameSessionListItem, HandResponse } from '../api/types';
 import { createPokerScene } from '../scenes/pokerScene.ts';
-import { createSeatLabels, loadSession as updateLabelsForSession, updateSeatLabelPositions } from '../scenes/tableGeometry.ts';
 import { calculateEquity } from '../poker/evaluator.ts';
 import { SessionScrubber } from '../components/SessionScrubber.tsx';
 import { StreetScrubber } from '../components/StreetScrubber.tsx';
-import { EquityOverlay, type ScreenPosition } from '../components/EquityOverlay.tsx';
+import { gameSelectorStyles as selectorStyles, playbackLayoutStyles as mobileStyles, equityRowStyles as eqStyles } from '../styles/playbackStyles';
 
 /* ── Card-parsing helpers ─────────────────────────────────────── */
 
@@ -75,40 +73,48 @@ function communityForStreet(cardData: CardData, streetName: string): ParsedCard[
   return cards;
 }
 
-/* ── Utility helpers ──────────────────────────────────────────── */
+/* ── Inline EquityRow component ───────────────────────────────── */
 
-function extractPlayerNames(handsList: HandResponse[]): string[] {
-  const seen = new Set<string>();
-  const names: string[] = [];
-  for (const h of handsList) {
-    for (const ph of h.player_hands || []) {
-      if (ph.player_name && !seen.has(ph.player_name)) {
-        seen.add(ph.player_name);
-        names.push(ph.player_name);
-      }
-    }
+interface EquityRowProps {
+  equityMap: Record<string, number> | null;
+  loading: boolean;
+}
+
+function equityColor(eq: number): string {
+  if (eq >= 0.5) return '#4ade80';
+  if (eq >= 0.25) return '#facc15';
+  return '#f87171';
+}
+
+function EquityRow({ equityMap, loading }: EquityRowProps) {
+  if (loading) {
+    return (
+      <div data-testid="equity-row" style={eqStyles.row}>
+        <div
+          data-testid="equity-loading"
+          style={{ color: '#aaa', padding: 8, textAlign: 'center', width: '100%', fontSize: 14 }}
+        >
+          Loading equity…
+        </div>
+      </div>
+    );
   }
-  return names;
+  if (!equityMap) return null;
+  return (
+    <div data-testid="equity-row" style={eqStyles.row}>
+      {Object.entries(equityMap).map(([name, eq]) => (
+        <div key={name} data-testid="equity-card" style={eqStyles.card}>
+          <div style={eqStyles.name}>{name}</div>
+          <div style={{ ...eqStyles.equity, color: equityColor(eq) }}>
+            {(eq * 100).toFixed(1)}%
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
-function buildSeatPlayerMap(playerNames: string[]): Record<number, string> {
-  const map: Record<number, string> = {};
-  playerNames.forEach((name, i) => {
-    map[i] = name;
-  });
-  return map;
-}
-
-function computeCumulativePL(hands: HandResponse[], handIndex: number): Record<string, number> {
-  const plMap: Record<string, number> = {};
-  for (let i = 0; i <= handIndex; i++) {
-    for (const ph of hands[i].player_hands || []) {
-      const pl = ph.profit_loss ?? 0;
-      plMap[ph.player_name] = (plMap[ph.player_name] || 0) + pl;
-    }
-  }
-  return plMap;
-}
+/* ── Street index map ─────────────────────────────────────────── */
 
 const STREET_INDEX: Record<string, number> = {
   'Pre-Flop': 0,
@@ -118,361 +124,409 @@ const STREET_INDEX: Record<string, number> = {
   Showdown: 4,
 };
 
-const SEAT_COUNT = 10;
-
-/* ── Component ────────────────────────────────────────────────── */
+/* ── Main component ───────────────────────────────────────────── */
 
 export function PlaybackView() {
-  /* Refs */
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const canvasAreaRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sceneRef = useRef<any>(null);
   const labelsRef = useRef<HTMLDivElement[]>([]);
 
-  /* State */
   const [sessions, setSessions] = useState<GameSessionListItem[]>([]);
-  const [sessionsLoading, setSessionsLoading] = useState(true);
-  const [sessionsError, setSessionsError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [activeGameId, setActiveGameId] = useState<number | null>(null);
+  const [activeGameStatus, setActiveGameStatus] = useState<string | null>(null);
   const [hands, setHands] = useState<HandResponse[]>([]);
-  const [playerNames, setPlayerNames] = useState<string[]>([]);
-  const [currentHand, setCurrentHand] = useState(1); // 1-based
+  const [handIndex, setHandIndex] = useState(0);
   const [currentStreet, setCurrentStreet] = useState('Pre-Flop');
-  const [sessionLoading, setSessionLoading] = useState(false);
-  const [sessionError, setSessionError] = useState<string | null>(null);
-  const [equityMap, setEquityMap] = useState<Record<string, number>>({});
-  const [seatPlayerMap, setSeatPlayerMap] = useState<Record<number, string>>({});
-  const [seatScreenPositions, setSeatScreenPositions] = useState<ScreenPosition[]>([]);
+  const [equityMap, setEquityMap] = useState<Record<string, number> | null>(null);
+  const [equityLoading, setEquityLoading] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  /* Fetch session list on mount */
+  /* Fetch sessions on mount */
   useEffect(() => {
     fetchSessions()
-      .then(setSessions)
-      .catch((err: Error) => setSessionsError(err.message))
-      .finally(() => setSessionsLoading(false));
+      .then(data => {
+        const sorted = [...data].sort((a, b) => b.game_date.localeCompare(a.game_date));
+        setSessions(sorted);
+      })
+      .catch((err: Error) => setError(err.message))
+      .finally(() => setLoading(false));
   }, []);
 
-  /* Three.js scene setup / teardown */
+  /* Three.js scene lifecycle — re-runs when activeGameId changes so the
+     canvas (only rendered for the playback screen) is in the DOM. */
   useEffect(() => {
     const canvas = canvasRef.current;
-    const area = canvasAreaRef.current;
-    if (!canvas || !area) return;
+    const wrapper = wrapperRef.current;
+    if (!canvas || !wrapper) return;
 
     let cancelled = false;
-    let teardown: (() => void) | null = null;
+    let ro: ResizeObserver | null = null;
 
-    function initScene(tries = 30): void {
+    function init(): void {
       if (cancelled) return;
-      if (tries > 0 && canvas!.clientWidth === 0 && canvas!.clientHeight === 0) {
-        requestAnimationFrame(() => initScene(tries - 1));
-        return;
-      }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const pokerScene: any = createPokerScene(canvas);
-      if (cancelled) {
-        pokerScene.dispose();
-        return;
+      const scene: any = createPokerScene(canvas, {
+        width: canvas!.clientWidth || canvas!.parentElement?.clientWidth || 800,
+        height: canvas!.clientHeight || canvas!.parentElement?.clientHeight || 600,
+      });
+      sceneRef.current = scene;
+      scene.camera.position.set(0, 18, 6);
+      scene.camera.lookAt(0, 0, 0);
+      scene.camera.updateProjectionMatrix();
+      if (scene.controls) {
+        scene.controls.saveState();
       }
-      sceneRef.current = pokerScene;
-
-      const { camera, renderer, controls, seatPositions } = pokerScene;
-      const labelEls: HTMLDivElement[] = createSeatLabels(area);
-      labelsRef.current = labelEls;
-      updateSeatLabelPositions(labelEls, seatPositions, camera, renderer);
-
-      function syncPositions(): void {
-        updateSeatLabelPositions(labelsRef.current, seatPositions, camera, renderer);
-        const domEl: HTMLCanvasElement = renderer.domElement;
-        const cw = domEl.clientWidth || 1;
-        const ch = domEl.clientHeight || 1;
-        setSeatScreenPositions(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          seatPositions.map((pos: any) => {
-            const p = pos.clone().project(camera);
-            return {
-              x: (p.x * 0.5 + 0.5) * cw,
-              y: (1 - (p.y * 0.5 + 0.5)) * ch,
-            };
-          }),
-        );
-      }
-
-      window.addEventListener('resize', syncPositions);
-      controls.addEventListener('change', syncPositions);
 
       // ResizeObserver to re-bound canvas when container changes
-      const ro = new ResizeObserver((entries) => {
-        for (const entry of entries) {
-          const { width, height } = entry.contentRect;
-          if (width > 0 && height > 0) {
-            renderer.setSize(width, height);
-            camera.aspect = width / height;
-            camera.updateProjectionMatrix();
-            syncPositions();
+      const canvasArea = canvas!.parentElement;
+      if (canvasArea) {
+        ro = new ResizeObserver((entries) => {
+          for (const entry of entries) {
+            const { width, height } = entry.contentRect;
+            if (width > 0 && height > 0) {
+              scene.renderer.setSize(width, height);
+              scene.camera.aspect = width / height;
+              scene.camera.updateProjectionMatrix();
+            }
           }
-        }
-      });
-      ro.observe(area!);
-
-      syncPositions();
-
-      teardown = () => {
-        ro.disconnect();
-        window.removeEventListener('resize', syncPositions);
-        controls.removeEventListener('change', syncPositions);
-        labelsRef.current.forEach((el: HTMLDivElement) => el.remove());
-        labelsRef.current = [];
-        pokerScene.dispose();
-      };
+        });
+        ro.observe(canvasArea);
+      }
     }
-
-    initScene();
+    init();
 
     return () => {
       cancelled = true;
-      if (teardown) teardown();
-      sceneRef.current = null;
+      if (ro) ro.disconnect();
+      labelsRef.current.forEach(el => el.remove());
+      labelsRef.current = [];
+      if (sceneRef.current) {
+        sceneRef.current.dispose();
+        sceneRef.current = null;
+      }
     };
-  }, []);
+  }, [activeGameId]);
 
-  /* Load a session */
-  const loadSessionById = useCallback(async (session: GameSessionListItem) => {
-    setSessionLoading(true);
-    setSessionError(null);
-
-    try {
-      const fetchedHands = await fetchHands(session.game_id);
-      const names = extractPlayerNames(fetchedHands);
-      const spm = buildSeatPlayerMap(names);
-
-      setHands(fetchedHands);
-      setPlayerNames(names);
-      setSeatPlayerMap(spm);
-      setCurrentHand(1);
-      setCurrentStreet('Pre-Flop');
-
-      // Update imperative seat labels
-      if (labelsRef.current.length) {
-        updateLabelsForSession(labelsRef.current, names);
-        if (sceneRef.current) {
-          updateSeatLabelPositions(
-            labelsRef.current,
-            sceneRef.current.seatPositions,
-            sceneRef.current.camera,
-            sceneRef.current.renderer,
-          );
+  /* Label position updates */
+  function updateLabelPositions(): void {
+    if (!sceneRef.current) return;
+    const { seatPositions, camera, renderer } = sceneRef.current;
+    const domEl = renderer.domElement as HTMLCanvasElement | undefined;
+    if (!domEl || !seatPositions) return;
+    const cw = domEl.clientWidth || 1;
+    const ch = domEl.clientHeight || 1;
+    labelsRef.current.forEach((label, i: number) => {
+      if (seatPositions[i] && seatPositions[i].clone) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const p = (seatPositions[i] as any).clone().project(camera);
+        if (p.z > 1) {
+          label.style.display = 'none';
+          return;
         }
+        label.style.display = '';
+        const x = (p.x * 0.5 + 0.5) * cw;
+        const y = (1 - (p.y * 0.5 + 0.5)) * ch;
+        label.style.left = `${x}px`;
+        label.style.top = `${y}px`;
+        label.style.transform = 'translate(-50%, -50%)';
       }
+    });
+  }
 
-      // Show first hand in scene
-      if (fetchedHands.length && sceneRef.current) {
-        const cardData = handToCardData(fetchedHands[0]);
-        sceneRef.current.update({
-          cardData,
-          seatPlayerMap: spm,
-          plMap: computeCumulativePL(fetchedHands, 0),
-          streetIndex: 0,
-        });
-      }
-    } catch (err) {
-      setSessionError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSessionLoading(false);
+  function createSeatLabelsForPlayers(playerNames: string[]): void {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+
+    labelsRef.current.forEach(el => el.remove());
+    labelsRef.current = [];
+
+    if (sceneRef.current?.controls) {
+      sceneRef.current.controls.removeEventListener('change', updateLabelPositions);
     }
-  }, []);
 
-  /* Hand navigation */
-  const handleHandChange = useCallback(
-    (handNumber: number) => {
-      setCurrentHand(handNumber);
-      setCurrentStreet('Pre-Flop');
+    const labels: HTMLDivElement[] = [];
+    playerNames.forEach((name, i) => {
+      const div = document.createElement('div');
+      div.className = 'seat-label';
+      div.setAttribute('data-testid', `seat-label-${i}`);
+      div.style.cssText =
+        'position:absolute;pointer-events:none;color:#fff;font-size:12px;font-weight:600;white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,0.8);z-index:4;';
+      div.textContent = name;
+      wrapper.appendChild(div);
+      labels.push(div);
+    });
+    labelsRef.current = labels;
 
+    if (sceneRef.current?.controls) {
+      sceneRef.current.controls.addEventListener('change', updateLabelPositions);
+    }
+
+    updateLabelPositions();
+  }
+
+  function showHand(index: number, handsList?: HandResponse[]): void {
+    const list = handsList ?? hands;
+    if (!list.length) return;
+    const cardData = handToCardData(list[index]);
+    const seatPlayerMap: Record<number, string> = {};
+    const seen = new Set<string>();
+    const playerNames: string[] = [];
+    list.forEach(h => {
+      (h.player_hands || []).forEach(ph => {
+        if (ph.player_name && !seen.has(ph.player_name)) {
+          seen.add(ph.player_name);
+          playerNames.push(ph.player_name);
+        }
+      });
+    });
+    playerNames.forEach((name, i) => {
+      seatPlayerMap[i] = name;
+    });
+
+    setCurrentStreet('Pre-Flop');
+    createSeatLabelsForPlayers(playerNames);
+
+    if (sceneRef.current) {
       const scene = sceneRef.current;
-      if (!scene || !hands.length) return;
-
-      const idx = handNumber - 1;
-      const cardData = handToCardData(hands[idx]);
       requestAnimationFrame(() => {
         scene.update({
           cardData,
           seatPlayerMap,
-          plMap: computeCumulativePL(hands, idx),
-          streetIndex: 0,
+          plMap: {},
+          streetIndex: STREET_INDEX['Pre-Flop'],
         });
       });
-    },
-    [hands, seatPlayerMap],
-  );
+    }
+  }
 
-  /* Street navigation */
-  const handleStreetChange = useCallback(
-    (streetName: string) => {
-      setCurrentStreet(streetName);
+  function handleStreetChange(streetName: string): void {
+    setCurrentStreet(streetName);
+    if (!hands.length) return;
+    const cardData = handToCardData(hands[handIndex]);
+
+    if (sceneRef.current) {
+      const seatPlayerMap: Record<number, string> = {};
+      const seen = new Set<string>();
+      const playerNames: string[] = [];
+      hands.forEach(h => {
+        (h.player_hands || []).forEach(ph => {
+          if (ph.player_name && !seen.has(ph.player_name)) {
+            seen.add(ph.player_name);
+            playerNames.push(ph.player_name);
+          }
+        });
+      });
+      playerNames.forEach((name, i) => {
+        seatPlayerMap[i] = name;
+      });
 
       const scene = sceneRef.current;
-      if (!scene || !hands.length) return;
-
-      const idx = currentHand - 1;
-      const cardData = handToCardData(hands[idx]);
       requestAnimationFrame(() => {
         scene.update({
           cardData,
           seatPlayerMap,
-          plMap: computeCumulativePL(hands, idx),
+          plMap: {},
           streetIndex: STREET_INDEX[streetName] ?? 0,
         });
       });
-    },
-    [hands, currentHand, seatPlayerMap],
-  );
+    }
+  }
+
+  async function selectGame(gameId: number): Promise<void> {
+    const session = sessions.find(s => s.game_id === gameId);
+    setActiveGameId(gameId);
+    setActiveGameStatus(session?.status ?? null);
+
+    try {
+      const fetchedHands = await fetchHands(gameId);
+      setHands(fetchedHands);
+      setHandIndex(0);
+      if (fetchedHands.length) {
+        showHand(0, fetchedHands);
+      }
+
+      // Start polling if game is active
+      if (session?.status === 'active') {
+        pollRef.current = setInterval(async () => {
+          try {
+            const updated = await fetchHands(gameId);
+            setHands(updated);
+          } catch {
+            // Silently ignore poll errors
+          }
+        }, 10_000);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  function handleBack(): void {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+    setActiveGameId(null);
+    setActiveGameStatus(null);
+    setHands([]);
+    setHandIndex(0);
+    setCurrentStreet('Pre-Flop');
+    setEquityMap(null);
+    labelsRef.current.forEach(el => el.remove());
+    labelsRef.current = [];
+  }
+
+  /* Clean up polling on unmount */
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+      }
+    };
+  }, []);
+
+  function handleSessionChange(newHandNumber: number): void {
+    setHandIndex(newHandNumber - 1);
+    showHand(newHandNumber - 1);
+  }
 
   /* Equity computation */
   useEffect(() => {
-    if (!hands.length) {
-      setEquityMap({});
+    if (!activeGameId || !hands.length) {
+      setEquityMap(null);
       return;
     }
-
-    const hand = hands[currentHand - 1];
+    const hand = hands[handIndex];
     if (!hand) {
-      setEquityMap({});
+      setEquityMap(null);
       return;
     }
 
     const cardData = handToCardData(hand);
-    const active = cardData.player_hands.filter(
-      ph => ph.hole_cards && ph.hole_cards[0] && ph.hole_cards[1],
+    const playersWithCards = (cardData.player_hands || []).filter(
+      ph => ph.hole_cards && ph.hole_cards.length === 2 && ph.hole_cards[0] && ph.hole_cards[1],
     );
 
-    if (active.length < 2) {
-      setEquityMap({});
+    if (playersWithCards.length < 2) {
+      setEquityMap(null);
       return;
     }
 
-    const community = communityForStreet(cardData, currentStreet);
-    const holeCards = active.map(ph => ph.hole_cards!);
+    const communityCards = communityForStreet(cardData, currentStreet);
+    const holeCards = playersWithCards.map(ph => ph.hole_cards!);
 
     try {
-      const results = calculateEquity(holeCards, community);
+      setEquityLoading(true);
+      const results = calculateEquity(holeCards, communityCards);
       const eqMap: Record<string, number> = {};
-      active.forEach((ph, i) => {
+      playersWithCards.forEach((ph, i) => {
         eqMap[ph.player_name] = results[i].equity;
       });
-      setEquityMap(eqMap);
+      setEquityMap(Object.keys(eqMap).length > 0 ? eqMap : null);
     } catch {
-      setEquityMap({});
+      setEquityMap(null);
+    } finally {
+      setEquityLoading(false);
     }
-  }, [hands, currentHand, currentStreet]);
+  }, [activeGameId, handIndex, hands, currentStreet]);
 
-  /* ── Render ── */
+  /* ── Game selector screen ─────────────────────────────────────── */
+  if (!activeGameId) {
+    return (
+      <div data-testid="playback-game-selector" style={selectorStyles.container}>
+        <h2 style={selectorStyles.heading}>Playback</h2>
 
-  const hasEquity = Object.keys(equityMap).length > 0;
-  const currentHandData = hands.length ? hands[currentHand - 1] : null;
-  // playerNames is used to update imperative seat labels
-  void playerNames;
+        {loading && <p style={selectorStyles.loading}>Loading games…</p>}
+        {error && <p style={selectorStyles.error}>{error}</p>}
 
-  return (
-    <div data-testid="playback-layout" style={styles.layout}>
-      {/* Session sidebar */}
-      <div data-testid="session-panel" style={styles.sidebar}>
-        <h2 style={styles.sidebarTitle}>Sessions</h2>
-        <div data-testid="session-list">
-          {sessionsLoading && <p style={styles.muted}>Loading…</p>}
-          {sessionsError && <p style={styles.error}>{sessionsError}</p>}
-          {!sessionsLoading && !sessionsError && sessions.length === 0 && (
-            <p style={styles.muted}>No sessions found.</p>
-          )}
-          {sessions.map(s => (
-            <div
-              key={s.game_id}
-              data-testid="session-row"
-              style={styles.sessionRow}
-              onClick={() => loadSessionById(s)}
-            >
-              <div style={styles.sessionDate}>{s.game_date}</div>
-              <div style={styles.sessionInfo}>
-                {s.hand_count ?? '?'} hands · {s.player_count ?? '?'} players
-              </div>
-            </div>
-          ))}
+        {!loading && !error && sessions.length === 0 && (
+          <p style={selectorStyles.empty}>No games available.</p>
+        )}
+
+        <div style={selectorStyles.list}>
+          {sessions.map(s => {
+            const isActive = s.status === 'active';
+            return (
+              <button
+                key={s.game_id}
+                data-testid="game-card"
+                style={{
+                  ...selectorStyles.card,
+                  ...(isActive ? selectorStyles.cardActive : selectorStyles.cardComplete),
+                }}
+                onClick={() => selectGame(s.game_id)}
+              >
+                <div style={selectorStyles.cardDate}>
+                  {s.game_date} <span style={selectorStyles.gameId}>#{s.game_id}</span>
+                </div>
+                <div style={selectorStyles.cardDetails}>
+                  <span style={{ fontWeight: 600 }}>
+                    {isActive ? '● Active' : 'Complete'}
+                  </span>
+                  <span>{s.player_count} players</span>
+                  <span>{s.hand_count} hands</span>
+                </div>
+                {s.winners && s.winners.length > 0 && (
+                  <div style={selectorStyles.winnersRow}>
+                    🏆 {s.winners.join(', ')}
+                  </div>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
+    );
+  }
 
-      {/* Main area */}
-      <div style={styles.main}>
-        <div ref={canvasAreaRef} data-testid="canvas-area" style={styles.canvasArea}>
-          <canvas ref={canvasRef} data-testid="three-canvas" style={styles.canvas} />
-          {sessionLoading && (
-            <div data-testid="spinner" style={styles.spinner}>
-              Loading…
-            </div>
-          )}
-          {sessionError && (
-            <div data-testid="error-banner" style={styles.errorBanner}>
-              Failed to load session: {sessionError}
-            </div>
-          )}
-          {hasEquity && (
-            <EquityOverlay
-              seatCount={SEAT_COUNT}
-              equityMap={equityMap}
-              seatPlayerMap={seatPlayerMap}
-              seatPositions={seatScreenPositions}
+  /* ── Playback screen ────────────────────────────────────────── */
+  return (
+    <div
+      ref={wrapperRef}
+      data-testid="mobile-canvas"
+      style={mobileStyles.wrapper}
+    >
+      {/* Back button (overlay on canvas) */}
+      <button
+        data-testid="back-button"
+        onClick={handleBack}
+        style={mobileStyles.backButton}
+      >
+        ← Back
+      </button>
+
+      {/* Canvas area — flex:1 fills space between HUD */}
+      <div data-testid="canvas-area" style={mobileStyles.canvasArea}>
+        <canvas ref={canvasRef} style={mobileStyles.canvas} />
+      </div>
+
+      {/* Scrubber controls — below the canvas, not overlaid */}
+      <div data-testid="scrubber-mount" style={mobileStyles.scrubberMount}>
+        {hands.length > 0 && (
+          <div>
+            <SessionScrubber
+              handCount={hands.length}
+              currentHand={handIndex + 1}
+              onChange={handleSessionChange}
             />
-          )}
-        </div>
-
-        {/* Scrubbers */}
-        <div data-testid="scrubber-container">
-          {hands.length > 0 && currentHandData && (
-            <>
-              <SessionScrubber
-                handCount={hands.length}
-                currentHand={currentHand}
-                onChange={handleHandChange}
-              />
+            {hands[handIndex] && (
               <StreetScrubber
                 currentStreet={currentStreet}
-                handData={{ turn: currentHandData.turn, river: currentHandData.river }}
+                handData={{ turn: hands[handIndex].turn, river: hands[handIndex].river }}
                 onStreetChange={handleStreetChange}
               />
-            </>
-          )}
-        </div>
+            )}
+            {(equityLoading || equityMap) && (
+              <EquityRow equityMap={equityMap} loading={equityLoading} />
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
 }
-
-/* ── Styles ───────────────────────────────────────────────────── */
-
-const styles: Record<string, CSSProperties> = {
-  layout: { display: 'flex', height: '100vh' },
-  sidebar: { width: 240, overflowY: 'auto', background: '#111', padding: 10 },
-  sidebarTitle: { color: '#fff', fontSize: 14, margin: '0 0 8px' },
-  muted: { color: '#aaa' },
-  error: { color: '#f55' },
-  sessionRow: { padding: 8, cursor: 'pointer', color: '#ddd', borderBottom: '1px solid #333' },
-  sessionDate: { fontWeight: 600 },
-  sessionInfo: { fontSize: 11, color: '#999' },
-  main: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' },
-  canvasArea: { flex: 1, position: 'relative', overflow: 'hidden' },
-  canvas: { display: 'block', width: '100%', height: '100%' },
-  spinner: {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    transform: 'translate(-50%,-50%)',
-    color: '#fff',
-  },
-  errorBanner: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    background: '#c00',
-    color: '#fff',
-    padding: 8,
-  },
-};

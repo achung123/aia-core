@@ -1,4 +1,14 @@
 import type React from 'react';
+import {
+  resultOverlayStyle as overlayStyle,
+  resultHeaderStyle as headerStyle,
+  resultTitleStyle as titleStyle,
+  resultDismissButtonStyle as dismissStyle,
+  resultTableStyle as tableStyle,
+  resultHeadRowStyle as headRowStyle,
+  resultHeaderCellStyle as thStyle,
+  resultDataCellStyle as tdStyle,
+} from '../styles/resultOverlayStyles';
 
 const SUIT_SYMBOLS: Record<string, string> = { H: '♥', D: '♦', C: '♣', S: '♠' };
 
@@ -23,63 +33,6 @@ export interface ResultOverlayProps {
   visible: boolean;
   onDismiss: () => void;
 }
-
-const overlayStyle: React.CSSProperties = {
-  position: 'absolute',
-  top: '50%',
-  left: '50%',
-  transform: 'translate(-50%,-50%)',
-  background: 'rgba(0,0,0,0.85)',
-  color: '#fff',
-  borderRadius: '8px',
-  padding: '20px',
-  minWidth: '320px',
-  zIndex: 100,
-};
-
-const headerStyle: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  marginBottom: '14px',
-};
-
-const titleStyle: React.CSSProperties = {
-  fontSize: '1.1em',
-  fontWeight: 'bold',
-  letterSpacing: '0.04em',
-};
-
-const dismissStyle: React.CSSProperties = {
-  background: 'none',
-  border: '1px solid #888',
-  color: '#ccc',
-  padding: '3px 10px',
-  cursor: 'pointer',
-  borderRadius: '4px',
-  fontSize: '0.9em',
-};
-
-const tableStyle: React.CSSProperties = {
-  width: '100%',
-  borderCollapse: 'collapse',
-};
-
-const headRowStyle: React.CSSProperties = {
-  borderBottom: '1px solid #555',
-  color: '#aaa',
-  fontSize: '0.85em',
-};
-
-const thStyle: React.CSSProperties = {
-  padding: '4px 10px',
-  textAlign: 'left',
-  fontWeight: 'normal',
-};
-
-const tdStyle: React.CSSProperties = {
-  padding: '6px 10px',
-};
 
 function formatCard(card: Card): string {
   const symbol = SUIT_SYMBOLS[card.suit] || card.suit;

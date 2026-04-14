@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { updateCommunityCards, updateHolecards } from '../api/client.ts';
-import type { HandResponse } from '../api/types.ts';
+import type { HandResponse } from '../api/types';
 import { isValidCard, normalizeCard, findDuplicateCards } from './cardUtils.ts';
 
 export interface HandEditFormProps {

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { fetchBlinds, updateBlinds } from '../api/client.ts';
-import type { BlindsResponse } from '../api/types.ts';
+import type { BlindsResponse } from '../api/types';
 
 export interface BlindTimerProps {
   gameId: number;
