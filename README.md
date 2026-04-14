@@ -149,7 +149,7 @@ This builds a CUDA-enabled backend image (~6GB) and passes the GPU through to th
 
 ### Database Persistence
 
-The SQLite database is bind-mounted from the host at `./poker.db`. Data survives `docker compose down`.
+The SQLite database is bind-mounted from the host at `./backend/poker.db`. Data survives `docker compose down`.
 
 When `SEED_DATA=0` (the default in docker-compose.yml), the database is preserved between restarts. To wipe and re-seed on every container start, set `SEED_DATA=1`:
 
@@ -172,12 +172,13 @@ The backend CORS config includes a regex that auto-allows private IP ranges (192
 
 ```bash
 # Backend
+cd backend
 uv run pytest test/           # full suite
 uv run pytest test/ -v        # verbose
 uv run pytest test/test_foo.py  # single file
 
 # Frontend
-cd frontend
+cd ../frontend
 npx vitest run                # full suite
 npx vitest run src/views/     # specific directory
 ```
@@ -185,6 +186,7 @@ npx vitest run src/views/     # specific directory
 ## Linting & Formatting
 
 ```bash
+cd backend
 uv run ruff check src/ test/   # lint
 uv run ruff format src/ test/  # auto-format
 ```

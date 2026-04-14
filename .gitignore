@@ -7,18 +7,23 @@ __pycache__/
 *.db
 
 # Training data (large, not tracked in git)
-/data/
+data/
+backend/data/
 
 # Uploaded images (runtime artifacts)
 uploads/
+backend/uploads/
 
 # YOLO training run outputs
 runs/
+backend/runs/
 
 # Model weights — track only curated models, not raw training outputs
-# (add specific model files with: git add -f models/best_closeup.pt)
+# (add specific model files with: git add -f backend/models/best_closeup.pt)
 models/*
 !models/.gitkeep
+backend/models/*
+!backend/models/.gitkeep
 
 # Scratch files
 yolo26n.pt

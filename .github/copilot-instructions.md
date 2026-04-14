@@ -44,20 +44,33 @@ These instructions apply to every agent and every Copilot interaction in this wo
 ## Project Layout
 
 ```
-src/
-  app/                  # FastAPI application (importable as `app`)
-    main.py             # App entry point, router registration
-    database/           # SQLAlchemy models, engine, queries
-    routes/             # One file per endpoint group
-  pydantic_models/      # Pydantic request/response schemas
-test/                   # All pytest tests (mirrors src/ structure)
-specs/                  # Jean's planning artifacts (spec, plan, tasks)
-alembic/                # Alembic migration environment
-  versions/             # Migration scripts
+backend/
+  src/
+    app/                  # FastAPI application (importable as `app`)
+      main.py             # App entry point, router registration
+      database/           # SQLAlchemy models, engine, queries
+      routes/             # One file per endpoint group
+    pydantic_models/      # Pydantic request/response schemas
+  test/                   # All pytest tests (mirrors src/ structure)
+  alembic/                # Alembic migration environment
+    versions/             # Migration scripts
+  alembic.ini
+  pyproject.toml
+  ruff.toml
+  uv.lock
+  Dockerfile              # CPU backend image
+  Dockerfile.gpu          # GPU backend image
+frontend/
+  src/                    # React/TypeScript source
+  test/                   # Vitest tests
+scripts/
+  docker/                 # docker-entrypoint.sh, share.sh, unshare.sh
+  seed_demo_game.py
+specs/                    # Jean's planning artifacts (spec, plan, tasks)
 .github/
-  agents/               # Agent .agent.md files
-  prompts/              # Task-specific .prompt.md files
-  prompts/templates/    # Output templates for structured agent output
+  agents/                 # Agent .agent.md files
+  prompts/                # Task-specific .prompt.md files
+  prompts/templates/      # Output templates for structured agent output
 ```
 
 Both `src/app` and `src/pydantic_models` are installed as editable packages by uv — imports like `from app.database.database_models import Base` work without any PYTHONPATH manipulation.
@@ -68,11 +81,12 @@ Both `src/app` and `src/pydantic_models` are installed as editable packages by u
 
 ### Running Tests
 ```bash
+cd backend
 uv run pytest test/          # full suite
 uv run pytest test/foo.py    # single file
 uv run pytest test/ -v       # verbose
 ```
-Never use bare `python -m pytest` or `PYTHONPATH=src/`. Always use `uv run`.
+Never use bare `python -m pytest` or `PYTHONPATH=src/`. Always use `uv run` from the `backend/` directory.
 
 ### Code Style
 - Ruff is enforced via pre-commit hooks — all code must pass `uv run ruff check` before committing
@@ -100,7 +114,7 @@ Never use bare `python -m pytest` or `PYTHONPATH=src/`. Always use `uv run`.
 - Pre-commit hooks run ruff check, ruff format, and yaml/whitespace fixers — all must pass
 
 ### TDD (Hank's domain, but universal awareness)
-- Tests live in `test/` and mirror the structure of `src/`
+- Tests live in `backend/test/` and mirror the structure of `backend/src/`
 - Every new behavior gets a test — no production code without coverage
 - Test files are named `test_<module>.py`
 - The `conftest.py` provides an in-memory DB fixture and a FastAPI `TestClient`
@@ -119,7 +133,7 @@ When writing code that uses third-party libraries (FastAPI, SQLAlchemy, Pydantic
 - **Use Context7 for library docs** — look up current API signatures and patterns via Context7 MCP instead of guessing from training data
 - **Scope changes tightly** — one task = one focused unit of work; no drive-by refactors
 - **Match existing patterns** — naming, imports, error handling, and structure should be consistent with the existing codebase
-- **Run tests after changes** — `uv run pytest test/` must pass before any task is closed or PR is created
+- **Run tests after changes** — `cd backend && uv run pytest test/` must pass before any task is closed or PR is created
 - **Ask rather than assume** — if requirements or acceptance criteria are ambiguous, surface the gap
 
 ## What Agents Should Never Do

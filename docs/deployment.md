@@ -5,7 +5,7 @@
 | **Title** | All In Analytics — Docker Compose & WSL Network Sharing |
 | **Date** | 2026-04-14 |
 | **Author** | Kurt (Nightcrawler) |
-| **Scope** | `docker-compose.yml`, `Dockerfile`, `Dockerfile.gpu`, `frontend/Dockerfile`, `docker-entrypoint.sh`, `scripts/share.sh`, `scripts/unshare.sh` |
+| **Scope** | `docker-compose.yml`, `backend/Dockerfile`, `backend/Dockerfile.gpu`, `frontend/Dockerfile`, `scripts/docker/docker-entrypoint.sh`, `scripts/docker/share.sh`, `scripts/docker/unshare.sh` |
 | **Status** | Current |
 
 ---
@@ -86,8 +86,8 @@ Defined in [docker-compose.yml](../docker-compose.yml). Three services, two prof
 
 | Service | Profile | Base Image | Port | Purpose |
 |---|---|---|---|---|
-| `backend` | `cpu` | `python:3.12` ([Dockerfile](../Dockerfile)) | 8000 | FastAPI backend with CPU-only PyTorch |
-| `backend-gpu` | `gpu` | `nvidia/cuda:12.1.0-runtime-ubuntu22.04` ([Dockerfile.gpu](../Dockerfile.gpu)) | 8000 | FastAPI backend with CUDA 12.1 PyTorch |
+| `backend` | `cpu` | `python:3.12` ([Dockerfile](../backend/Dockerfile)) | 8000 | FastAPI backend with CPU-only PyTorch |
+| `backend-gpu` | `gpu` | `nvidia/cuda:12.1.0-runtime-ubuntu22.04` ([Dockerfile.gpu](../backend/Dockerfile.gpu)) | 8000 | FastAPI backend with CUDA 12.1 PyTorch |
 | `frontend` | *(default)* | `node:22-alpine` ([frontend/Dockerfile](../frontend/Dockerfile)) | 5173 | Vite dev server |
 
 The `backend` and `backend-gpu` services share the same volume mounts (via YAML anchor `&backend-volumes`) and environment variables (via `&backend-env`). They never run simultaneously — use one profile or the other.
@@ -100,7 +100,7 @@ The `frontend` service has no profile — it starts with either `cpu` or `gpu`.
 
 ## Dockerfiles
 
-### Backend CPU — [Dockerfile](../Dockerfile)
+### Backend CPU — [Dockerfile](../backend/Dockerfile)
 
 | Stage | What happens |
 |---|---|
@@ -110,9 +110,9 @@ The `frontend` service has no profile — it starts with either `cpu` or `gpu`.
 | Dependency cache | `pyproject.toml` + `uv.lock` copied early; `uv sync --frozen --group test` runs on stubs |
 | PyTorch | CPU-only wheels from `download.pytorch.org/whl/cpu` |
 | ultralytics | Installed into the project venv |
-| Entrypoint | [docker-entrypoint.sh](../docker-entrypoint.sh) |
+| Entrypoint | [docker-entrypoint.sh](../scripts/docker/docker-entrypoint.sh) |
 
-### Backend GPU — [Dockerfile.gpu](../Dockerfile.gpu)
+### Backend GPU — [Dockerfile.gpu](../backend/Dockerfile.gpu)
 
 | Stage | What happens |
 |---|---|
@@ -121,7 +121,7 @@ The `frontend` service has no profile — it starts with either `cpu` or `gpu`.
 | System deps | Same as CPU + `curl`, `python3.12-dev` |
 | PyTorch | CUDA 12.1 wheels from `download.pytorch.org/whl/cu121` |
 | NVIDIA env | `NVIDIA_VISIBLE_DEVICES=all`, `NVIDIA_DRIVER_CAPABILITIES=compute,utility` |
-| Entrypoint | Same [docker-entrypoint.sh](../docker-entrypoint.sh) |
+| Entrypoint | Same [docker-entrypoint.sh](../scripts/docker/docker-entrypoint.sh) |
 
 ### Frontend — [frontend/Dockerfile](../frontend/Dockerfile)
 
@@ -136,7 +136,7 @@ The `frontend` service has no profile — it starts with either `cpu` or `gpu`.
 
 ## Entrypoint Script
 
-Defined in [docker-entrypoint.sh](../docker-entrypoint.sh). Runs on every backend container start.
+Defined in [docker-entrypoint.sh](../scripts/docker/docker-entrypoint.sh). Runs on every backend container start.
 
 ```
 1. mkdir -p /app/uploads
@@ -182,16 +182,16 @@ All backend volume mounts use bind mounts for live-reload during development.
 
 | Host Path | Container Path | Purpose |
 |---|---|---|
-| `./src` | `/app/src` | Application source code (live-reload) |
-| `./alembic` | `/app/alembic` | Migration scripts |
-| `./alembic.ini` | `/app/alembic.ini` | Alembic configuration |
-| `./pyproject.toml` | `/app/pyproject.toml` | Project metadata and dependencies |
-| `./uv.lock` | `/app/uv.lock` | Locked dependency versions |
-| `./docker-entrypoint.sh` | `/app/docker-entrypoint.sh` | Entrypoint script |
+| `./backend/src` | `/app/src` | Application source code (live-reload) |
+| `./backend/alembic` | `/app/alembic` | Migration scripts |
+| `./backend/alembic.ini` | `/app/alembic.ini` | Alembic configuration |
+| `./backend/pyproject.toml` | `/app/pyproject.toml` | Project metadata and dependencies |
+| `./backend/uv.lock` | `/app/uv.lock` | Locked dependency versions |
+| `./scripts/docker/docker-entrypoint.sh` | `/app/docker-entrypoint.sh` | Entrypoint script |
 | `./scripts` | `/app/scripts` | Utility scripts (seed, etc.) |
-| `./models` | `/app/models` | YOLO model weights |
-| `./poker.db` | `/app/poker.db` | SQLite database file |
-| `./uploads` | `/app/uploads` | Uploaded images for card detection |
+| `./backend/models` | `/app/models` | YOLO model weights |
+| `./backend/poker.db` | `/app/poker.db` | SQLite database file |
+| `./backend/uploads` | `/app/uploads` | Uploaded images for card detection |
 
 ### Frontend Volumes
 
@@ -249,10 +249,10 @@ WSL2 runs in a Hyper-V VM with its own virtual network adapter. Other devices on
 
 ### share.sh
 
-Defined in [scripts/share.sh](../scripts/share.sh). Run from within WSL:
+Defined in [scripts/docker/share.sh](../scripts/docker/share.sh). Run from within WSL:
 
 ```bash
-./scripts/share.sh
+./scripts/docker/share.sh
 ```
 
 What it does:
@@ -269,10 +269,10 @@ Players on the same Wi-Fi can then open that URL on their phones to access the d
 
 ### unshare.sh
 
-Defined in [scripts/unshare.sh](../scripts/unshare.sh). Tears down the port forwarding:
+Defined in [scripts/docker/unshare.sh](../scripts/docker/unshare.sh). Tears down the port forwarding:
 
 ```bash
-./scripts/unshare.sh
+./scripts/docker/unshare.sh
 ```
 
 Runs `netsh interface portproxy reset` via PowerShell to remove all forwarding rules.
@@ -325,6 +325,6 @@ flowchart LR
 |---|---|---|
 | Phone can't reach the URL | Windows Firewall blocking ports | Add inbound rules for 5173 and 8000 |
 | `netsh` command fails | WSL terminal not elevated | Restart terminal as Administrator |
-| Wrong LAN IP printed | Multiple network adapters | Script filters for `Wi-Fi` interface; if yours is named differently (e.g. `Ethernet`), edit the `InterfaceAlias` filter in `share.sh` |
-| Connection works briefly then breaks | WSL IP changed after reboot | Re-run `./scripts/share.sh` — WSL2 gets a new IP on each boot |
+| Wrong LAN IP printed | Multiple network adapters | Script filters for `Wi-Fi` interface; if yours is named differently (e.g. `Ethernet`), edit the `InterfaceAlias` filter in `scripts/docker/share.sh` |
+| Connection works briefly then breaks | WSL IP changed after reboot | Re-run `./scripts/docker/share.sh` — WSL2 gets a new IP on each boot |
 | CORS error in browser | Frontend URL doesn't match `ALLOWED_ORIGINS` | The `main.py` regex already allows private IPs; if using a custom domain, add it to `ALLOWED_ORIGINS` |
