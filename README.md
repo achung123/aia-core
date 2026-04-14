@@ -7,7 +7,7 @@ The project is split into two pieces that run side-by-side during development:
 | Component | Stack | Default URL |
 |-----------|-------|-------------|
 | **Backend** (this repo root) | Python 3.12 · FastAPI · SQLAlchemy · SQLite · Alembic | `http://localhost:8000` |
-| **Frontend** (`frontend/`) | Vite · Preact · Three.js | `http://localhost:5173` |
+| **Frontend** (`frontend/`) | Vite · React 19 · Three.js · Zustand | `http://localhost:5173` |
 
 ## What It Does
 
@@ -27,24 +27,32 @@ The project is split into two pieces that run side-by-side during development:
 src/
   app/                  # FastAPI application
     main.py             # Entry point, router registration, CORS
+    middleware.py        # Custom middleware (request ID)
     database/           # SQLAlchemy models, engine, queries
     routes/             # One file per endpoint group
+    services/           # Business logic (betting, card detection, equity, hand state)
   pydantic_models/      # Pydantic request/response schemas
 frontend/
   src/
-    api/                # API client (fetch wrapper)
+    api/                # API client (fetch wrapper) and shared types
     components/         # UI components (scrubbers, forms, overlays)
     dealer/             # Dealer interface (hand management, camera capture)
+    hooks/              # Custom hooks (polling, hand updates)
     mobile/             # Mobile components (session/street scrubbers, equity)
+    pages/              # Full-page views (3D table)
     player/             # Player interface (join game, capture cards)
     poker/              # Equity calculator / hand evaluator
     scenes/             # Three.js scene objects (table, cards, chips)
+    stores/             # Zustand state stores (dealer state)
+    types/              # TypeScript type declarations
     views/              # Page-level views (playback, data, landing)
 test/                   # pytest test suite (mirrors src/ structure)
 alembic/                # Database migration environment
   versions/             # Migration scripts
 scripts/                # Utility scripts (seeding, setup)
 models/                 # YOLO model weights for card detection
+specs/                  # Planning artifacts (spec, plan, tasks)
+docs/                   # Generated documentation
 ```
 
 ## Prerequisites
@@ -107,7 +115,8 @@ The frontend is now live at **http://localhost:5173**. It proxies API calls to t
 | `#/` | Landing page with navigation cards |
 | `#/dealer` | Dealer interface — manage hands, capture cards |
 | `#/player` | Player interface — join game, capture hole cards |
-| `#/playback` | 3D table playback with hand/street scrubbers |
+| `#/player/table` | 3D table view from player perspective |
+| `#/playback` | Mobile-friendly playback with hand/street scrubbers |
 | `#/data` | Data management — create/edit games, import CSV |
 
 ## Docker
@@ -137,30 +146,27 @@ This builds a CUDA-enabled backend image (~6GB) and passes the GPU through to th
 | `backend` | http://localhost:8000 | FastAPI backend (CPU, hot-reload) |
 | `backend-gpu` | http://localhost:8000 | FastAPI backend (GPU, hot-reload) |
 | `frontend` | http://localhost:5173 | Vite dev server (hot-reload) |
-| `tunnel` | Random `*.trycloudflare.com` URL | Cloudflare tunnel for remote access |
 
 ### Database Persistence
 
 The SQLite database is bind-mounted from the host at `./poker.db`. Data survives `docker compose down`.
 
-When `SEED_DATA=1` (the default in docker-compose.yml), the database is wiped and re-seeded on every container start. To preserve data between restarts, set `SEED_DATA=0`:
+When `SEED_DATA=0` (the default in docker-compose.yml), the database is preserved between restarts. To wipe and re-seed on every container start, set `SEED_DATA=1`:
 
 ```yaml
 environment:
-  - SEED_DATA=0
+  - SEED_DATA=1
 ```
 
-### Cloudflare Tunnel
+### Local Network Play
 
-The tunnel service uses `--protocol http2` (TCP) instead of the default QUIC (UDP) for stability. It has `restart: unless-stopped` so Docker auto-restarts it on crashes.
-
-For local network play (recommended), skip the tunnel and connect devices directly:
+Connect devices directly to the host:
 
 ```
 http://<host-ip>:5173
 ```
 
-Add your machine's IP to `ALLOWED_ORIGINS` if needed, or rely on the built-in private IP regex in CORS config.
+The backend CORS config includes a regex that auto-allows private IP ranges (192.168.x.x, 10.x.x.x, 172.16-31.x.x) and `*.trycloudflare.com`, so no `ALLOWED_ORIGINS` change is needed for LAN play.
 
 ## Running Tests
 
@@ -193,35 +199,56 @@ Pre-commit hooks enforce both automatically on `git commit`.
 | GET | `/games` | List all game sessions |
 | POST | `/games` | Create a new game session |
 | GET | `/games/{id}` | Get a game session |
+| DELETE | `/games/{id}` | Delete a game session |
 | PATCH | `/games/{id}/complete` | Mark game as complete |
 | PATCH | `/games/{id}/reactivate` | Reactivate a completed game |
+| GET | `/games/{id}/blinds` | Get game blind levels |
+| PATCH | `/games/{id}/blinds` | Update blind levels |
 | GET | `/games/{id}/export/csv` | Export game to CSV |
+| GET | `/games/{id}/export/zip` | Export game as ZIP archive |
+| **Game Players** | | |
+| POST | `/games/{id}/players` | Add player to a game |
+| PATCH | `/games/{id}/players/{name}/seat` | Assign player seat |
+| PATCH | `/games/{id}/players/{name}/status` | Toggle player active status |
+| POST | `/games/{id}/players/{name}/rebuys` | Record a rebuy |
+| GET | `/games/{id}/players/{name}/rebuys` | List player rebuys |
 | **Hands** | | |
 | GET | `/games/{id}/hands` | List hands for a session |
-| POST | `/games/{id}/hands` | Record a new hand |
+| POST | `/games/{id}/hands` | Record a new hand (full payload) |
+| POST | `/games/{id}/hands/start` | Start a new hand (dealer flow) |
+| GET | `/games/{id}/hands/latest` | Get the latest hand |
 | GET | `/games/{id}/hands/{num}` | Get a specific hand |
 | PATCH | `/games/{id}/hands/{num}` | Edit community cards |
+| DELETE | `/games/{id}/hands/{num}` | Delete a hand |
 | GET | `/games/{id}/hands/{num}/status` | Hand status (for polling) |
+| GET | `/games/{id}/hands/{num}/state` | Hand turn state (betting) |
 | GET | `/games/{id}/hands/{num}/equity` | Server-side equity calculation |
+| GET | `/games/{id}/hands/{num}/actions` | List actions for a hand |
+| PATCH | `/games/{id}/hands/{num}/flop` | Deal the flop |
+| PATCH | `/games/{id}/hands/{num}/turn` | Deal the turn |
+| PATCH | `/games/{id}/hands/{num}/river` | Deal the river |
 | PATCH | `/games/{id}/hands/{num}/results` | Record results for all players |
 | **Player Hands** | | |
 | POST | `/games/{id}/hands/{num}/players` | Add player to a hand |
 | DELETE | `/games/{id}/hands/{num}/players/{name}` | Remove player from a hand |
 | PATCH | `/games/{id}/hands/{num}/players/{name}` | Edit hole cards |
 | PATCH | `/games/{id}/hands/{num}/players/{name}/result` | Update player result |
+| POST | `/games/{id}/hands/{num}/players/{name}/actions` | Record a player action |
 | **Card Detection** | | |
 | POST | `/games/{id}/hands/image` | Upload image for card detection |
-| GET  | `/games/{id}/hands/image/{upload_id}` | Get detection results |
+| GET | `/games/{id}/hands/image/{upload_id}` | Get detection results |
 | POST | `/games/{id}/hands/image/{upload_id}/confirm` | Confirm detected cards |
 | GET | `/images/corrections` | List detection corrections |
 | **Players** | | |
 | GET | `/players` | List all players |
 | POST | `/players` | Create a player |
 | GET | `/players/{name}` | Get a player |
-| **CSV Import** | | |
+| **CSV / ZIP Import** | | |
 | GET | `/upload/csv/schema` | Get expected CSV schema |
 | POST | `/upload/csv` | Validate a CSV file |
 | POST | `/upload/csv/commit` | Import a validated CSV |
+| POST | `/upload/zip` | Validate a ZIP archive |
+| POST | `/upload/zip/commit` | Import a validated ZIP |
 | **Stats** | | |
 | GET | `/stats/leaderboard` | Player leaderboard |
 | GET | `/stats/players/{name}` | Per-player stats |
