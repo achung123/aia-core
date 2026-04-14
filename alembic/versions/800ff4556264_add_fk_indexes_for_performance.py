@@ -5,10 +5,10 @@ Revises: 8e1b3886b210
 Create Date: 2026-04-13 15:45:53.654097
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
-import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
@@ -22,7 +22,11 @@ _INDEXES = [
     ('ix_hands_game_id', 'hands', ['game_id']),
     ('ix_player_hands_hand_id', 'player_hands', ['hand_id']),
     ('ix_player_hands_player_id', 'player_hands', ['player_id']),
-    ('ix_player_hand_actions_player_hand_id', 'player_hand_actions', ['player_hand_id']),
+    (
+        'ix_player_hand_actions_player_hand_id',
+        'player_hand_actions',
+        ['player_hand_id'],
+    ),
     ('ix_hand_states_hand_id', 'hand_states', ['hand_id']),
     ('ix_game_players_game_id', 'game_players', ['game_id']),
     ('ix_game_players_player_id', 'game_players', ['player_id']),

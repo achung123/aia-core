@@ -32,9 +32,7 @@ def get_player_by_name_or_404(db: Session, player_name: str) -> Player:
         .first()
     )
     if player is None:
-        raise HTTPException(
-            status_code=404, detail=f'Player {player_name!r} not found'
-        )
+        raise HTTPException(status_code=404, detail=f'Player {player_name!r} not found')
     return player
 
 

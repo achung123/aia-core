@@ -50,6 +50,7 @@ class TestConstants:
 # classify5
 # ---------------------------------------------------------------------------
 
+
 # Helper: build 5 internal-rep cards from short strings
 def _c(rank_int: int, suit_int: int) -> tuple[int, int]:
     return (rank_int, suit_int)
@@ -108,9 +109,7 @@ class TestClassify5:
 
     def test_four_of_a_kind(self):
         # AAAA K
-        cat, kickers = classify5(
-            _c(12, 0), _c(12, 1), _c(12, 2), _c(12, 3), _c(11, 0)
-        )
+        cat, kickers = classify5(_c(12, 0), _c(12, 1), _c(12, 2), _c(12, 3), _c(11, 0))
         assert cat == 7
         assert kickers[0] == 12
 

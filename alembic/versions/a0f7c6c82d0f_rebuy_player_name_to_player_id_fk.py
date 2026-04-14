@@ -5,6 +5,7 @@ Revises: 800ff4556264
 Create Date: 2026-04-13 20:56:28.871837
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -36,7 +37,9 @@ def upgrade() -> None:
     # Step 3: Recreate table with player_id NOT NULL + FK, drop player_name
     with op.batch_alter_table('rebuys', schema=None) as batch_op:
         batch_op.alter_column('player_id', nullable=False)
-        batch_op.create_index(batch_op.f('ix_rebuys_player_id'), ['player_id'], unique=False)
+        batch_op.create_index(
+            batch_op.f('ix_rebuys_player_id'), ['player_id'], unique=False
+        )
         batch_op.create_foreign_key(
             'fk_rebuys_player_id', 'players', ['player_id'], ['player_id']
         )

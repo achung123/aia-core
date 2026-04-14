@@ -5,11 +5,8 @@ import io
 import zipfile
 from datetime import date
 
-import pytest
-from fastapi.testclient import TestClient
 
 from app.database.models import (
-    Base,
     GamePlayer,
     GameSession,
     Hand,
@@ -244,7 +241,10 @@ class TestZipExport:
     def test_export_zip_empty_game(self, client, db_session):
         """A game with no hands still exports correctly."""
         game = GameSession(
-            game_date=date(2026, 4, 10), status='active', small_blind=0.10, big_blind=0.20
+            game_date=date(2026, 4, 10),
+            status='active',
+            small_blind=0.10,
+            big_blind=0.20,
         )
         db_session.add(game)
         db_session.commit()
@@ -281,10 +281,18 @@ class TestEnhancedCsvExport:
         headers = next(reader)
         # First 12 must be the original columns
         expected_original = [
-            'game_date', 'hand_number', 'player_name',
-            'hole_card_1', 'hole_card_2',
-            'flop_1', 'flop_2', 'flop_3', 'turn', 'river',
-            'result', 'profit_loss',
+            'game_date',
+            'hand_number',
+            'player_name',
+            'hole_card_1',
+            'hole_card_2',
+            'flop_1',
+            'flop_2',
+            'flop_3',
+            'turn',
+            'river',
+            'result',
+            'profit_loss',
         ]
         assert headers[:12] == expected_original
         # New columns appended
@@ -388,17 +396,16 @@ class TestZipImport:
             '1,Bob,preflop,raise,0.60\n'
             '1,Alice,flop,check,\n'
         )
-        rebuys = (
-            'player_name,amount\n'
-            'Bob,20.0\n'
+        rebuys = 'player_name,amount\nBob,20.0\n'
+        return _build_zip(
+            {
+                'game_info.csv': game_info,
+                'players.csv': players,
+                'hands.csv': hands,
+                'actions.csv': actions,
+                'rebuys.csv': rebuys,
+            }
         )
-        return _build_zip({
-            'game_info.csv': game_info,
-            'players.csv': players,
-            'hands.csv': hands,
-            'actions.csv': actions,
-            'rebuys.csv': rebuys,
-        })
 
     def test_zip_import_validate(self, client):
         zip_bytes = self._make_full_zip()
@@ -463,7 +470,9 @@ class TestZipImport:
         hands = client.get(f'/games/{game_id}/hands').json()
         assert len(hands) == 1
         # Verify outcome_street is persisted
-        alice_ph = next(ph for ph in hands[0]['player_hands'] if ph['player_name'] == 'Alice')
+        alice_ph = next(
+            ph for ph in hands[0]['player_hands'] if ph['player_name'] == 'Alice'
+        )
         assert alice_ph['outcome_street'] == 'river'
 
     def test_zip_import_minimal_hands_only(self, client):
@@ -478,10 +487,12 @@ class TestZipImport:
             'outcome_street,is_all_in\n'
             '04-10-2026,1,Alice,AH,KD,QC,JS,TC,,,won,5.0,,false\n'
         )
-        zip_bytes = _build_zip({
-            'game_info.csv': game_info,
-            'hands.csv': hands,
-        })
+        zip_bytes = _build_zip(
+            {
+                'game_info.csv': game_info,
+                'hands.csv': hands,
+            }
+        )
         resp = client.post(
             '/upload/zip/commit',
             files={'file': ('game.zip', zip_bytes, 'application/zip')},

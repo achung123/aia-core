@@ -47,7 +47,7 @@ def _capture_cards(client, game_id, hand_number, player_name, card_1, card_2):
 
 def _capture_all(client, game_id, hand_number, names, cards):
     """Capture cards for all players. cards is list of (c1, c2) tuples."""
-    for name, (c1, c2) in zip(names, cards):
+    for name, (c1, c2) in zip(names, cards, strict=False):
         _capture_cards(client, game_id, hand_number, name, c1, c2)
 
 

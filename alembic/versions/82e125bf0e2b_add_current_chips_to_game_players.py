@@ -5,6 +5,7 @@ Revises: a0f7c6c82d0f
 Create Date: 2026-04-13 21:41:22.695348
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -24,7 +25,9 @@ def upgrade() -> None:
         batch_op.add_column(sa.Column('current_chips', sa.Float(), nullable=True))
 
     # Backfill: set current_chips = buy_in for all existing rows where buy_in is set
-    op.execute('UPDATE game_players SET current_chips = buy_in WHERE buy_in IS NOT NULL AND current_chips IS NULL')
+    op.execute(
+        'UPDATE game_players SET current_chips = buy_in WHERE buy_in IS NOT NULL AND current_chips IS NULL'
+    )
 
 
 def downgrade() -> None:

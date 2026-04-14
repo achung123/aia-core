@@ -1,5 +1,5 @@
 /** @vitest-environment happy-dom */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, waitFor, fireEvent, cleanup } from '@testing-library/react';
 
 // Mock modules before importing component
@@ -71,6 +71,10 @@ describe('PlaybackView', () => {
       { equity: 0.6 },
       { equity: 0.4 },
     ]);
+  });
+
+  afterEach(() => {
+    cleanup();
   });
 
   it('renders layout with sidebar and canvas', () => {

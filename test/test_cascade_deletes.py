@@ -115,9 +115,7 @@ class TestDeleteGameCascade:
             hand_ids = [h.hand_id for h in hands]
 
             player_hands = (
-                db.query(PlayerHand)
-                .filter(PlayerHand.hand_id.in_(hand_ids))
-                .all()
+                db.query(PlayerHand).filter(PlayerHand.hand_id.in_(hand_ids)).all()
             )
             ph_ids = [ph.player_hand_id for ph in player_hands]
 
@@ -131,16 +129,11 @@ class TestDeleteGameCascade:
             # Verify all children are gone
             assert db.query(Hand).filter_by(game_id=game_id).count() == 0
             assert (
-                db.query(PlayerHand)
-                .filter(PlayerHand.hand_id.in_(hand_ids))
-                .count()
+                db.query(PlayerHand).filter(PlayerHand.hand_id.in_(hand_ids)).count()
                 == 0
             )
             assert (
-                db.query(HandState)
-                .filter(HandState.hand_id.in_(hand_ids))
-                .count()
-                == 0
+                db.query(HandState).filter(HandState.hand_id.in_(hand_ids)).count() == 0
             )
             if ph_ids:
                 assert (
@@ -163,11 +156,7 @@ class TestDeleteHandCascade:
 
         db = _get_db()
         try:
-            hand1 = (
-                db.query(Hand)
-                .filter_by(game_id=game_id, hand_number=hn1)
-                .first()
-            )
+            hand1 = db.query(Hand).filter_by(game_id=game_id, hand_number=hn1).first()
             assert hand1 is not None
             hand1_id = hand1.hand_id
 
@@ -183,11 +172,7 @@ class TestDeleteHandCascade:
             assert db.query(HandState).filter_by(hand_id=hand1_id).count() == 0
 
             # Hand 2 still exists
-            hand2 = (
-                db.query(Hand)
-                .filter_by(game_id=game_id, hand_number=hn2)
-                .first()
-            )
+            hand2 = db.query(Hand).filter_by(game_id=game_id, hand_number=hn2).first()
             assert hand2 is not None
         finally:
             db.close()

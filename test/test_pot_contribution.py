@@ -31,7 +31,9 @@ class TestPotContributionInHandStatus:
         resp = client.get(f'/games/{game_id}/hands/{hn}/status')
         assert resp.status_code == 200
         for p in resp.json()['players']:
-            assert 'pot_contribution' in p, f"Player {p['name']} missing pot_contribution"
+            assert 'pot_contribution' in p, (
+                f'Player {p["name"]} missing pot_contribution'
+            )
 
     def test_pot_contribution_reflects_blinds(self, client):
         """After blinds are posted, SB and BB should show their blind amounts."""

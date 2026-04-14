@@ -1,7 +1,5 @@
 """Tests for Bug Fix: Equity calculation should exclude folded players."""
 
-from conftest import activate_hand
-
 
 def _create_three_player_game(client, buy_in=100.0):
     """Create a game with three players."""
@@ -82,7 +80,9 @@ class TestEquityExcludesFoldedPlayers:
         charlie_eq = [e for e in data['equities'] if e['player_name'] == 'Charlie']
         assert len(bob_eq) == 1
         assert len(charlie_eq) == 1
-        assert bob_eq[0]['equity'] == 1.0, 'Bob (KK) should be the winner vs Charlie (QQ)'
+        assert bob_eq[0]['equity'] == 1.0, (
+            'Bob (KK) should be the winner vs Charlie (QQ)'
+        )
         assert charlie_eq[0]['equity'] == 0.0
 
     def test_two_player_heads_up_after_fold_correct_winner(self, client):
@@ -134,7 +134,9 @@ class TestEquityExcludesFoldedPlayers:
         # Bob (pair of 8s) should beat Charlie (2-3 with no pair on this board)
         assert len(data['equities']) == 2
         bob_eq = next(e for e in data['equities'] if e['player_name'] == 'Bob')
-        assert bob_eq['equity'] == 1.0, f"Bob should win but got equity {bob_eq['equity']}"
+        assert bob_eq['equity'] == 1.0, (
+            f'Bob should win but got equity {bob_eq["equity"]}'
+        )
 
     def test_player_perspective_equity_excludes_folded(self, client):
         """Player-specific equity (via ?player=) should not count folded opponents."""

@@ -56,7 +56,9 @@ def _current(client, game_id, hn=1):
     return _state(client, game_id, hn)['current_player_name']
 
 
-def _act(client, game_id, name, action, amount=None, hn=1, street=None, is_all_in=False):
+def _act(
+    client, game_id, name, action, amount=None, hn=1, street=None, is_all_in=False
+):
     if street is None:
         street = _state(client, game_id, hn)['phase']
     payload = {'street': street, 'action': action}
@@ -397,7 +399,6 @@ class TestStreetCannotAdvanceWithUnequalBets:
 
         # force=true bypasses turn order, but check facing a bet should still fail
         names = ['Alice', 'Bob', 'Charlie']
-        hand = client.get(f'/games/{game_id}/hands/1').json()
         # Find a non-current player
         current = _current(client, game_id)
         other = next(n for n in names if n != current)

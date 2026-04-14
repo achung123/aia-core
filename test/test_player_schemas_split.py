@@ -16,21 +16,19 @@ class TestPlayerSchemasDirectImport:
     def test_import_player_create(self):
         from pydantic_models.player_schemas import PlayerCreate
 
-        p = PlayerCreate(name="Alice")
-        assert p.name == "Alice"
+        p = PlayerCreate(name='Alice')
+        assert p.name == 'Alice'
 
     def test_import_player_response(self):
         from pydantic_models.player_schemas import PlayerResponse
 
-        p = PlayerResponse(
-            player_id=1, name="Alice", created_at=datetime(2026, 1, 1)
-        )
+        p = PlayerResponse(player_id=1, name='Alice', created_at=datetime(2026, 1, 1))
         assert p.player_id == 1
 
     def test_import_player_info(self):
         from pydantic_models.player_schemas import PlayerInfo
 
-        p = PlayerInfo(name="Bob", is_active=True)
+        p = PlayerInfo(name='Bob', is_active=True)
         assert p.is_active is True
 
     def test_import_rebuy_create(self):
@@ -60,16 +58,14 @@ class TestPlayerSchemasDirectImport:
     def test_import_add_player_to_game_request(self):
         from pydantic_models.player_schemas import AddPlayerToGameRequest
 
-        req = AddPlayerToGameRequest(player_name="Alice")
-        assert req.player_name == "Alice"
+        req = AddPlayerToGameRequest(player_name='Alice')
+        assert req.player_name == 'Alice'
 
     def test_import_add_player_to_game_response(self):
         from pydantic_models.player_schemas import AddPlayerToGameResponse
 
-        resp = AddPlayerToGameResponse(
-            player_name="Alice", is_active=True
-        )
-        assert resp.player_name == "Alice"
+        resp = AddPlayerToGameResponse(player_name='Alice', is_active=True)
+        assert resp.player_name == 'Alice'
 
     def test_import_player_status_update(self):
         from pydantic_models.player_schemas import PlayerStatusUpdate
@@ -80,8 +76,8 @@ class TestPlayerSchemasDirectImport:
     def test_import_player_status_response(self):
         from pydantic_models.player_schemas import PlayerStatusResponse
 
-        r = PlayerStatusResponse(player_name="Alice", is_active=True)
-        assert r.player_name == "Alice"
+        r = PlayerStatusResponse(player_name='Alice', is_active=True)
+        assert r.player_name == 'Alice'
 
     def test_import_seat_assignment_request(self):
         from pydantic_models.player_schemas import SeatAssignmentRequest
@@ -96,7 +92,7 @@ class TestPlayerSchemasBackwardCompat:
     def test_backward_compat_player_create(self):
         from pydantic_models.app_models import PlayerCreate
 
-        assert PlayerCreate(name="X").name == "X"
+        assert PlayerCreate(name='X').name == 'X'
 
     def test_backward_compat_player_response(self):
         from pydantic_models.app_models import PlayerResponse
