@@ -38,6 +38,8 @@ export interface DealerState {
 
 export interface DealerActions {
   setGame: (payload: { gameId: number; players: string[]; gameDate: string }) => void;
+  addPlayer: (name: string) => void;
+  removePlayer: (name: string) => void;
   setPlayerCards: (payload: { name: string; card1: string; card2: string }) => void;
   setCommunityCards: (payload: { flop1: string; flop2: string; flop3: string; turn?: string; river?: string }) => void;
   setFlopCards: (payload: { flop1: string; flop2: string; flop3: string }) => void;
@@ -142,6 +144,17 @@ export const useDealerStore = create<DealerState & DealerActions>()(
           players: players.map(initPlayer),
           community: { ...emptyCommunity },
           currentStep: 'dashboard',
+        })),
+
+      addPlayer: (name) =>
+        set((state) => {
+          if (state.players.some((player) => player.name === name)) return state;
+          return { players: [...state.players, initPlayer(name)] };
+        }),
+
+      removePlayer: (name) =>
+        set((state) => ({
+          players: state.players.filter((player) => player.name !== name),
         })),
 
       setPlayerCards: ({ name, card1, card2 }) =>

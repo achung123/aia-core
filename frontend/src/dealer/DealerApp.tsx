@@ -149,12 +149,34 @@ export function DealerApp() {
     }
   }
 
+  function handleStreetCapture(street: string) {
+    setPatchError(null);
+    setCaptureTarget(street);
+  }
+
   async function handleTileSelect(name: string) {
     setPatchError(null);
 
-    // Street tiles: dealer captures per-street community cards
+    // Board card clicks: open manual card correction for recorded streets
     if (name === 'flop' || name === 'turn' || name === 'river') {
-      setCaptureTarget(name);
+      const mode = name as DetectionMode;
+      let fakeDetections: CardDetectionEntry[];
+      if (name === 'flop') {
+        fakeDetections = [
+          { card_position: '0', detected_value: community.flop1 || '', confidence: 1, alternatives: [] },
+          { card_position: '1', detected_value: community.flop2 || '', confidence: 1, alternatives: [] },
+          { card_position: '2', detected_value: community.flop3 || '', confidence: 1, alternatives: [] },
+        ];
+      } else if (name === 'turn') {
+        fakeDetections = [
+          { card_position: '0', detected_value: community.turn || '', confidence: 1, alternatives: [] },
+        ];
+      } else {
+        fakeDetections = [
+          { card_position: '0', detected_value: community.river || '', confidence: 1, alternatives: [] },
+        ];
+      }
+      setReviewData({ targetName: name, detections: fakeDetections, imageUrl: null, mode });
       return;
     }
 
@@ -287,7 +309,10 @@ export function DealerApp() {
     if (reviewData?.imageUrl) URL.revokeObjectURL(reviewData.imageUrl);
     const target = reviewData?.targetName ?? null;
     setReviewData(null);
-    setCaptureTarget(target);
+    // Only go back to camera if there was an actual camera capture (imageUrl present)
+    if (reviewData?.imageUrl) {
+      setCaptureTarget(target);
+    }
   }
 
   async function handleOutcomeSelect(result: OutcomeResult, outcomeStreet: OutcomeStreet | null) {
@@ -395,6 +420,7 @@ export function DealerApp() {
               sbPlayerName={sbPlayerName}
               bbPlayerName={bbPlayerName}
               onTileSelect={handleTileSelect}
+              onStreetCapture={handleStreetCapture}
               onDirectOutcome={handleDirectOutcome}
               onMarkNotPlaying={handleMarkNotPlaying}
               canFinish={canFinish}
@@ -409,7 +435,6 @@ export function DealerApp() {
               pot={pot}
               streetComplete={streetComplete}
               handPhase={handPhase}
-              onActionConfirmed={() => triggerDealerPoll()}
               potContributions={potContributions}
             />
           )}

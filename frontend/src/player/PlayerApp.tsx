@@ -109,7 +109,7 @@ export function PlayerApp() {
   const [sessions, setSessions] = useState<GameSessionListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [players, setPlayers] = useState<string[]>([]);
+  const [players, setPlayers] = useState<{ name: string; isActive: boolean }[]>([]);
   const [playersLoading, setPlayersLoading] = useState(false);
   const [playerName, setPlayerName] = useState<string | null>(null);
   const [playerStatus, setPlayerStatus] = useState<ParticipationStatus>('idle');
@@ -133,7 +133,11 @@ export function PlayerApp() {
     setPlayersLoading(true);
     fetchGame(id)
       .then(data => {
-        setPlayers(data.player_names || []);
+        const playerList = (data.players || []).map((p: PlayerInfo) => ({
+          name: p.name,
+          isActive: p.is_active,
+        }));
+        setPlayers(playerList.length > 0 ? playerList : (data.player_names || []).map((n: string) => ({ name: n, isActive: true })));
       })
       .catch(err => setError(err.message))
       .finally(() => setPlayersLoading(false));
@@ -413,6 +417,7 @@ export function PlayerApp() {
                 minimumBet={minimumBet}
                 minimumRaise={minimumRaise}
                 pot={pot}
+                currentStack={runningTotal}
                 onActionConfirmed={() => {
                   etagRef.current = null;
                   triggerPlayerPoll();
@@ -484,14 +489,18 @@ export function PlayerApp() {
         )}
 
         <div style={styles.list}>
-          {players.map(name => (
+          {players.map(({ name, isActive }) => (
             <button
               key={name}
               data-testid="player-name-btn"
-              style={styles.card}
-              onClick={() => handleSelectPlayer(name)}
+              disabled={!isActive}
+              style={{
+                ...styles.card,
+                ...(isActive ? {} : { opacity: 0.4, cursor: 'not-allowed', background: '#2a2b3d' }),
+              }}
+              onClick={() => isActive && handleSelectPlayer(name)}
             >
-              {name}
+              {name}{!isActive && ' (inactive)'}
             </button>
           ))}
         </div>

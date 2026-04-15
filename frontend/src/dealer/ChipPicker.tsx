@@ -5,6 +5,7 @@ export interface ChipPickerProps {
   onConfirm: (amount: number) => void;
   onCancel?: () => void;
   onAllIn?: () => void;
+  maxAmount?: number;
 }
 
 interface ChipDef {
@@ -25,11 +26,18 @@ const CHIPS: ChipDef[] = [
   { value: 3.00, label: '$3.00', bg: '#facc15', color: '#111827' },
 ];
 
-export function ChipPicker({ onConfirm, onCancel, onAllIn }: ChipPickerProps) {
+export function ChipPicker({ onConfirm, onCancel, onAllIn, maxAmount }: ChipPickerProps) {
   const [total, setTotal] = useState(0);
 
+  const hasMax = maxAmount != null && maxAmount > 0;
+  const atMax = hasMax && total >= maxAmount;
+
   function handleChipTap(value: number): void {
-    setTotal((prev) => Math.round((prev + value) * 100) / 100);
+    setTotal((prev) => {
+      const next = Math.round((prev + value) * 100) / 100;
+      if (hasMax && next > maxAmount) return Math.round(maxAmount * 100) / 100;
+      return next;
+    });
   }
 
   function handleClear(): void {
@@ -45,16 +53,23 @@ export function ChipPicker({ onConfirm, onCancel, onAllIn }: ChipPickerProps) {
       <div data-testid="chip-total" style={styles.total}>
         ${total.toFixed(2)}
       </div>
+      {hasMax && (
+        <div data-testid="chip-remaining" style={{ fontSize: '0.85rem', color: atMax ? '#f87171' : '#94a3b8', marginBottom: '0.5rem' }}>
+          {atMax ? 'Stack limit reached' : `$${(maxAmount - total).toFixed(2)} remaining`}
+        </div>
+      )}
 
       <div style={styles.chipRow}>
         {CHIPS.map((chip) => (
           <button
             key={chip.value}
             data-testid={`chip-${chip.value.toFixed(2)}`}
+            disabled={atMax}
             style={{
               ...styles.chip,
               backgroundColor: chip.bg,
               color: chip.color,
+              ...(atMax ? { opacity: 0.4, cursor: 'not-allowed' } : {}),
             }}
             onClick={() => handleChipTap(chip.value)}
           >

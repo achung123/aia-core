@@ -116,9 +116,9 @@ describe('ActiveHandDashboard', () => {
     expect(board).not.toBeNull();
     const slots = board.querySelectorAll('[data-testid^="board-slot-"]');
     expect(slots.length).toBe(5);
-    // All empty
+    // All empty — PlayingCard renders '—' for null cards
     for (const slot of slots) {
-      expect(slot.textContent).toBe('');
+      expect(slot.textContent).toBe('—');
     }
   });
 
@@ -133,11 +133,11 @@ describe('ActiveHandDashboard', () => {
     render(<ActiveHandDashboard {...defaultProps} community={withFlop} />);
     const board = screen.getByTestId('community-board');
     const slots = board.querySelectorAll('[data-testid^="board-slot-"]');
-    expect(slots[0].textContent).toBe('Ah');
-    expect(slots[1].textContent).toBe('Kd');
-    expect(slots[2].textContent).toBe('5c');
-    expect(slots[3].textContent).toBe(''); // turn empty
-    expect(slots[4].textContent).toBe(''); // river empty
+    expect(slots[0].textContent).toBe('A♥');
+    expect(slots[1].textContent).toBe('K♦');
+    expect(slots[2].textContent).toBe('5♣');
+    expect(slots[3].textContent).toBe('—'); // turn empty
+    expect(slots[4].textContent).toBe('—'); // river empty
   });
 
   it('fills turn and river slots when captured', () => {
@@ -154,11 +154,11 @@ describe('ActiveHandDashboard', () => {
     render(<ActiveHandDashboard {...defaultProps} community={full} />);
     const board = screen.getByTestId('community-board');
     const slots = board.querySelectorAll('[data-testid^="board-slot-"]');
-    expect(slots[0].textContent).toBe('Ah');
-    expect(slots[1].textContent).toBe('Kd');
-    expect(slots[2].textContent).toBe('5c');
-    expect(slots[3].textContent).toBe('Qh');
-    expect(slots[4].textContent).toBe('9s');
+    expect(slots[0].textContent).toBe('A♥');
+    expect(slots[1].textContent).toBe('K♦');
+    expect(slots[2].textContent).toBe('5♣');
+    expect(slots[3].textContent).toBe('Q♥');
+    expect(slots[4].textContent).toBe('9♠');
   });
 
   // AC4: Blind info bar shows BlindTimer component and SB/BB player names
@@ -380,9 +380,7 @@ describe('ActiveHandDashboard — 3D view toggle', () => {
   });
 });
 
-describe('ActiveHandDashboard — bet verification', () => {
-  const mockedRecordPlayerAction = recordPlayerAction as ReturnType<typeof vi.fn>;
-
+describe('ActiveHandDashboard — bet info display (no record action)', () => {
   const betProps: ActiveHandDashboardProps = {
     ...defaultProps,
     handNumber: 1,
@@ -391,10 +389,8 @@ describe('ActiveHandDashboard — bet verification', () => {
     amountToCall: 0.50,
     minimumRaise: 1.00,
     pot: 1.50,
-    onActionConfirmed: vi.fn(),
   };
 
-  // AC5: shows current player's action or "waiting"
   it('shows "Waiting for turn" when no current player', () => {
     render(<ActiveHandDashboard {...defaultProps} handNumber={1} currentPlayerName={null} />);
     const panel = screen.getByTestId('bet-verify-panel');
@@ -420,129 +416,22 @@ describe('ActiveHandDashboard — bet verification', () => {
     expect(display.textContent).toContain('min raise $1.00');
   });
 
-  // AC5: shows record action button
-  it('shows record action button', () => {
+  it('does NOT render a record action button', () => {
     render(<ActiveHandDashboard {...betProps} />);
-    expect(screen.getByTestId('record-action-btn')).toBeTruthy();
+    expect(screen.queryByTestId('record-action-btn')).toBeNull();
   });
 
-  // AC6: Record Action opens inline editor for action type and amount
-  it('opens action form when Record Action button is clicked', () => {
+  it('does NOT render an override form', () => {
     render(<ActiveHandDashboard {...betProps} />);
-    fireEvent.click(screen.getByTestId('record-action-btn'));
-    expect(screen.getByTestId('override-form')).toBeTruthy();
-    expect(screen.getByTestId('override-action-select')).toBeTruthy();
-    expect(screen.getByTestId('override-amount-input')).toBeTruthy();
-    expect(screen.getByTestId('override-submit-btn')).toBeTruthy();
-  });
-
-  it('shows only legal actions in the override select', () => {
-    render(<ActiveHandDashboard {...betProps} />);
-    fireEvent.click(screen.getByTestId('record-action-btn'));
-    const options = Array.from(screen.getByTestId('override-action-select').querySelectorAll('option')).map((option) => option.getAttribute('value'));
-    expect(options).toEqual(['call', 'raise', 'fold']);
-  });
-
-  it('prefills a standard call amount from amountToCall', () => {
-    render(<ActiveHandDashboard {...betProps} />);
-    fireEvent.click(screen.getByTestId('record-action-btn'));
-    expect((screen.getByTestId('override-amount-input') as HTMLInputElement).value).toBe('0.50');
-  });
-
-  // AC6: submission advances turn
-  it('submits action with custom type and amount', async () => {
-    mockedRecordPlayerAction.mockResolvedValue({
-      action_id: 2,
-      player_hand_id: 1,
-      street: 'preflop',
-      action: 'raise',
-      amount: 2.00,
-      created_at: '2026-04-13T00:00:00Z',
-    });
-    render(<ActiveHandDashboard {...betProps} />);
-    fireEvent.click(screen.getByTestId('record-action-btn'));
-    fireEvent.change(screen.getByTestId('override-action-select'), { target: { value: 'raise' } });
-    fireEvent.change(screen.getByTestId('override-amount-input'), { target: { value: '2.00' } });
-    fireEvent.click(screen.getByTestId('override-submit-btn'));
-    await waitFor(() => {
-      expect(mockedRecordPlayerAction).toHaveBeenCalledWith(42, 1, 'Alice', {
-        street: 'preflop',
-        action: 'raise',
-        amount: 2.00,
-      });
-    });
-    expect(betProps.onActionConfirmed).toHaveBeenCalled();
-  });
-
-  it('shows error when action fails', async () => {
-    mockedRecordPlayerAction.mockRejectedValue(new Error('HTTP 403: Not your turn'));
-    render(<ActiveHandDashboard {...betProps} />);
-    fireEvent.click(screen.getByTestId('record-action-btn'));
-    fireEvent.click(screen.getByTestId('override-submit-btn'));
-    await waitFor(() => {
-      expect(screen.getByTestId('bet-verify-error')).toBeTruthy();
-      expect(screen.getByTestId('bet-verify-error').textContent).toContain('Not your turn');
-    });
-  });
-
-  it('blocks a too-small raise before calling the API', async () => {
-    render(<ActiveHandDashboard {...betProps} />);
-    fireEvent.click(screen.getByTestId('record-action-btn'));
-    fireEvent.change(screen.getByTestId('override-action-select'), { target: { value: 'raise' } });
-    fireEvent.change(screen.getByTestId('override-amount-input'), { target: { value: '0.90' } });
-    fireEvent.click(screen.getByTestId('override-submit-btn'));
-    await waitFor(() => {
-      expect(screen.getByTestId('bet-verify-error').textContent).toContain('Minimum raise is $1.00');
-    });
-    expect(mockedRecordPlayerAction).not.toHaveBeenCalled();
-  });
-
-  it('allows an all-in short call from the dealer override form', async () => {
-    mockedRecordPlayerAction.mockResolvedValue({
-      action_id: 4,
-      player_hand_id: 1,
-      street: 'preflop',
-      action: 'call',
-      amount: 0.30,
-      created_at: '2026-04-13T00:00:00Z',
-    });
-    render(<ActiveHandDashboard {...betProps} />);
-    fireEvent.click(screen.getByTestId('record-action-btn'));
-    fireEvent.click(screen.getByTestId('override-all-in-toggle'));
-    fireEvent.change(screen.getByTestId('override-amount-input'), { target: { value: '0.30' } });
-    fireEvent.click(screen.getByTestId('override-submit-btn'));
-    await waitFor(() => {
-      expect(mockedRecordPlayerAction).toHaveBeenCalledWith(42, 1, 'Alice', {
-        street: 'preflop',
-        action: 'call',
-        amount: 0.30,
-        is_all_in: true,
-      });
-    });
+    expect(screen.queryByTestId('override-form')).toBeNull();
+    expect(screen.queryByTestId('override-action-select')).toBeNull();
+    expect(screen.queryByTestId('override-amount-input')).toBeNull();
+    expect(screen.queryByTestId('override-submit-btn')).toBeNull();
   });
 
   it('does not show bet verify panel when no handNumber', () => {
     render(<ActiveHandDashboard {...defaultProps} />);
     expect(screen.queryByTestId('bet-verify-panel')).toBeNull();
-  });
-
-  it('closes action form after successful submission', async () => {
-    mockedRecordPlayerAction.mockResolvedValue({
-      action_id: 3,
-      player_hand_id: 1,
-      street: 'preflop',
-      action: 'fold',
-      amount: null,
-      created_at: '2026-04-13T00:00:00Z',
-    });
-    render(<ActiveHandDashboard {...betProps} />);
-    fireEvent.click(screen.getByTestId('record-action-btn'));
-    expect(screen.getByTestId('override-form')).toBeTruthy();
-    fireEvent.change(screen.getByTestId('override-action-select'), { target: { value: 'fold' } });
-    fireEvent.click(screen.getByTestId('override-submit-btn'));
-    await waitFor(() => {
-      expect(screen.queryByTestId('override-form')).toBeNull();
-    });
   });
 });
 
@@ -552,7 +441,7 @@ describe('ActiveHandDashboard — disable completed streets', () => {
     flop1: 'Ah', flop2: 'Kd', flop3: '5c', flopRecorded: true,
   };
 
-  it('disables flop button when flop is recorded and handPhase is turn or later', () => {
+  it('keeps flop button enabled when flop is recorded and handPhase is turn (re-editing allowed)', () => {
     render(
       <ActiveHandDashboard
         {...defaultProps}
@@ -562,7 +451,7 @@ describe('ActiveHandDashboard — disable completed streets', () => {
       />,
     );
     const flopBtn = screen.getByTestId('flop-tile') as HTMLButtonElement;
-    expect(flopBtn.disabled).toBe(true);
+    expect(flopBtn.disabled).toBe(false);
   });
 
   it('keeps flop enabled when phase is still preflop', () => {
@@ -578,7 +467,7 @@ describe('ActiveHandDashboard — disable completed streets', () => {
     expect(flopBtn.disabled).toBe(false);
   });
 
-  it('disables turn button when turn is recorded and handPhase is river', () => {
+  it('keeps turn button enabled when turn is recorded and handPhase is river (re-editing allowed)', () => {
     const turnRecorded: CommunityCards = {
       ...flopRecorded,
       turn: 'Qh', turnRecorded: true,
@@ -592,10 +481,10 @@ describe('ActiveHandDashboard — disable completed streets', () => {
       />,
     );
     const turnBtn = screen.getByTestId('turn-tile') as HTMLButtonElement;
-    expect(turnBtn.disabled).toBe(true);
+    expect(turnBtn.disabled).toBe(false);
   });
 
-  it('disables all street buttons at showdown', () => {
+  it('keeps all street buttons enabled at showdown when all cards are recorded (re-editing allowed)', () => {
     const allRecorded: CommunityCards = {
       flop1: 'Ah', flop2: 'Kd', flop3: '5c', flopRecorded: true,
       turn: 'Qh', turnRecorded: true,
@@ -609,9 +498,9 @@ describe('ActiveHandDashboard — disable completed streets', () => {
         handNumber={1}
       />,
     );
-    expect((screen.getByTestId('flop-tile') as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByTestId('turn-tile') as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByTestId('river-tile') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId('flop-tile') as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByTestId('turn-tile') as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByTestId('river-tile') as HTMLButtonElement).disabled).toBe(false);
   });
 });
 
@@ -689,5 +578,96 @@ describe('ActiveHandDashboard — pot contribution display', () => {
     render(<ActiveHandDashboard {...defaultProps} />);
     const aliceRow = screen.getByTestId('player-row-Alice');
     expect(aliceRow.querySelector('[data-testid="pot-contrib-Alice"]')).toBeNull();
+  });
+});
+
+describe('ActiveHandDashboard — street buttons call onStreetCapture', () => {
+  it('calls onStreetCapture (not onTileSelect) when Flop button is clicked', () => {
+    const onTileSelect = vi.fn();
+    const onStreetCapture = vi.fn();
+    render(
+      <ActiveHandDashboard
+        {...defaultProps}
+        onTileSelect={onTileSelect}
+        onStreetCapture={onStreetCapture}
+      />,
+    );
+    screen.getByTestId('flop-tile').click();
+    expect(onStreetCapture).toHaveBeenCalledWith('flop');
+    expect(onTileSelect).not.toHaveBeenCalledWith('flop');
+  });
+
+  it('calls onStreetCapture for Turn button', () => {
+    const onTileSelect = vi.fn();
+    const onStreetCapture = vi.fn();
+    const withFlop: CommunityCards = {
+      ...emptyCommunity,
+      flop1: 'Ah', flop2: 'Kd', flop3: '5c', flopRecorded: true,
+    };
+    render(
+      <ActiveHandDashboard
+        {...defaultProps}
+        community={withFlop}
+        onTileSelect={onTileSelect}
+        onStreetCapture={onStreetCapture}
+      />,
+    );
+    screen.getByTestId('turn-tile').click();
+    expect(onStreetCapture).toHaveBeenCalledWith('turn');
+    expect(onTileSelect).not.toHaveBeenCalledWith('turn');
+  });
+
+  it('calls onStreetCapture for River button', () => {
+    const onTileSelect = vi.fn();
+    const onStreetCapture = vi.fn();
+    const withTurn: CommunityCards = {
+      ...emptyCommunity,
+      flop1: 'Ah', flop2: 'Kd', flop3: '5c', flopRecorded: true,
+      turn: 'Qh', turnRecorded: true,
+    };
+    render(
+      <ActiveHandDashboard
+        {...defaultProps}
+        community={withTurn}
+        onTileSelect={onTileSelect}
+        onStreetCapture={onStreetCapture}
+      />,
+    );
+    screen.getByTestId('river-tile').click();
+    expect(onStreetCapture).toHaveBeenCalledWith('river');
+    expect(onTileSelect).not.toHaveBeenCalledWith('river');
+  });
+
+  it('clicking a recorded board card calls onTileSelect (for correction)', () => {
+    const onTileSelect = vi.fn();
+    const onStreetCapture = vi.fn();
+    const withFlop: CommunityCards = {
+      ...emptyCommunity,
+      flop1: 'Ah', flop2: 'Kd', flop3: '5c', flopRecorded: true,
+    };
+    render(
+      <ActiveHandDashboard
+        {...defaultProps}
+        community={withFlop}
+        onTileSelect={onTileSelect}
+        onStreetCapture={onStreetCapture}
+      />,
+    );
+    // Click on the first board card (a recorded flop card)
+    screen.getByTestId('board-slot-0').click();
+    expect(onTileSelect).toHaveBeenCalledWith('flop');
+    expect(onStreetCapture).not.toHaveBeenCalled();
+  });
+
+  it('falls back to onTileSelect when onStreetCapture is not provided', () => {
+    const onTileSelect = vi.fn();
+    render(
+      <ActiveHandDashboard
+        {...defaultProps}
+        onTileSelect={onTileSelect}
+      />,
+    );
+    screen.getByTestId('flop-tile').click();
+    expect(onTileSelect).toHaveBeenCalledWith('flop');
   });
 });

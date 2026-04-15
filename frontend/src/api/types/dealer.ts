@@ -60,6 +60,7 @@ export interface AddPlayerToGameResponse {
   player_name: string;
   is_active: boolean;
   seat_number: number | null;
+  buy_in: number | null;
 }
 
 export interface PlayerStatusUpdate {

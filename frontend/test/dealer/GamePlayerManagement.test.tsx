@@ -146,7 +146,7 @@ describe('GamePlayerManagement', () => {
     fireEvent.click(screen.getByTestId('add-player-btn'));
 
     await waitFor(() => {
-      expect(mockedAddPlayerToGame).toHaveBeenCalledWith(42, 'Dave');
+      expect(mockedAddPlayerToGame).toHaveBeenCalledWith(42, 'Dave', null);
     });
     // New player should appear in the list
     await waitFor(() => {

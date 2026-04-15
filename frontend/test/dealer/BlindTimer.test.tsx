@@ -253,4 +253,93 @@ describe('BlindTimer', () => {
     });
     expect(screen.getByTestId('blind-countdown').textContent).toBe('15:00');
   });
+
+  // Start Timer button — shown when timer has not been started yet
+  it('shows Start Timer button when timer is not active', async () => {
+    mockFetchBlinds.mockResolvedValue(blindsData({
+      blind_timer_started_at: null,
+      blind_timer_remaining_seconds: null,
+    }));
+    render(<BlindTimer gameId={1} />);
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('blind-start-btn')).toBeDefined();
+    });
+    expect(screen.getByTestId('blind-start-btn').textContent).toContain('Start');
+  });
+
+  it('does not show Start Timer button when timer is already active', async () => {
+    mockFetchBlinds.mockResolvedValue(blindsData({ blind_timer_remaining_seconds: 600 }));
+    render(<BlindTimer gameId={1} />);
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('blind-pause-btn')).toBeDefined();
+    });
+    expect(screen.queryByTestId('blind-start-btn')).toBeNull();
+  });
+
+  it('calls updateBlinds with current blind values when Start Timer is clicked', async () => {
+    mockFetchBlinds.mockResolvedValue(blindsData({
+      blind_timer_started_at: null,
+      blind_timer_remaining_seconds: null,
+    }));
+    mockUpdateBlinds.mockResolvedValue(blindsData({ blind_timer_remaining_seconds: 900, blind_timer_paused: false }));
+    render(<BlindTimer gameId={1} />);
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('blind-start-btn')).toBeDefined();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('blind-start-btn'));
+    });
+    expect(mockUpdateBlinds).toHaveBeenCalledWith(1, { small_blind: 0.25, big_blind: 0.50 });
+  });
+
+  it('transitions to active timer after Start is clicked', async () => {
+    mockFetchBlinds.mockResolvedValue(blindsData({
+      blind_timer_started_at: null,
+      blind_timer_remaining_seconds: null,
+    }));
+    mockUpdateBlinds.mockResolvedValue(blindsData({ blind_timer_remaining_seconds: 900, blind_timer_paused: false }));
+    render(<BlindTimer gameId={1} />);
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('blind-start-btn')).toBeDefined();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('blind-start-btn'));
+    });
+    expect(screen.getByTestId('blind-countdown').textContent).toBe('15:00');
+    expect(screen.queryByTestId('blind-start-btn')).toBeNull();
+  });
+
+  // 60-second warning
+  it('shows warning style when remaining <= 60 seconds', async () => {
+    mockFetchBlinds.mockResolvedValue(blindsData({ blind_timer_remaining_seconds: 60 }));
+    render(<BlindTimer gameId={1} />);
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('blind-countdown').textContent).toBe('1:00');
+    });
+    const countdown = screen.getByTestId('blind-countdown');
+    expect(countdown.style.color).toBe('#f59e0b');
+  });
+
+  it('does not show warning style when remaining > 60 seconds', async () => {
+    mockFetchBlinds.mockResolvedValue(blindsData({ blind_timer_remaining_seconds: 61 }));
+    render(<BlindTimer gameId={1} />);
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('blind-countdown').textContent).toBe('1:01');
+    });
+    const countdown = screen.getByTestId('blind-countdown');
+    expect(countdown.style.color).not.toBe('#f59e0b');
+  });
+
+  it('transitions to warning style as countdown crosses 60s threshold', async () => {
+    mockFetchBlinds.mockResolvedValue(blindsData({ blind_timer_remaining_seconds: 62 }));
+    render(<BlindTimer gameId={1} />);
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('blind-countdown').textContent).toBe('1:02');
+    });
+    const countdown = screen.getByTestId('blind-countdown');
+    expect(countdown.style.color).not.toBe('#f59e0b');
+    act(() => { vi.advanceTimersByTime(2000); });
+    expect(screen.getByTestId('blind-countdown').textContent).toBe('1:00');
+    expect(countdown.style.color).toBe('#f59e0b');
+  });
 });

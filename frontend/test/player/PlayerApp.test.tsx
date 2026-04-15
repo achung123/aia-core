@@ -248,7 +248,7 @@ describe('PlayerApp — name picker', () => {
 
   it('shows message when game has no players', async () => {
     mockFetchSessions.mockResolvedValue(SESSIONS);
-    mockFetchGame.mockResolvedValue({ ...GAME_DETAIL, player_names: [] });
+    mockFetchGame.mockResolvedValue({ ...GAME_DETAIL, player_names: [], players: [] });
     const container = renderToContainer(<PlayerApp />);
     await vi.waitFor(() => {
       expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(2);
@@ -333,6 +333,10 @@ describe('PlayerApp — name picker', () => {
       ...GAME_DETAIL,
       game_id: 2,
       player_names: ['Dan', 'Eve'],
+      players: [
+        { name: 'Dan', is_active: true, seat_number: null, buy_in: null },
+        { name: 'Eve', is_active: true, seat_number: null, buy_in: null },
+      ],
     });
     const container = renderToContainer(<PlayerApp />);
 

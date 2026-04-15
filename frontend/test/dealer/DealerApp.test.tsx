@@ -630,7 +630,7 @@ describe('DealerApp community card PATCH wiring', () => {
     });
   }
 
-  it('tapping Flop tile opens camera capture for flop cards', async () => {
+  it('tapping Flop tile opens camera (not detection review directly)', async () => {
     const container = renderToContainer(<DealerApp />);
     await clickStartHand(container);
 
@@ -640,8 +640,8 @@ describe('DealerApp community card PATCH wiring', () => {
 
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="camera-capture"]')).not.toBeNull();
-      expect(container.querySelector('[data-testid="capture-target"]')!.textContent).toBe('flop');
     });
+    expect(container.querySelector('[data-testid="capture-target"]')!.textContent).toBe('flop');
   });
 
   it('after confirm, updateFlop is called with correct payload', async () => {
@@ -1510,7 +1510,7 @@ describe('DealerApp incremental community card capture', () => {
     expect(turnTile.disabled).toBe(false);
   });
 
-  it('clicking Turn tile opens camera capture with turn target', async () => {
+  it('clicking Turn tile opens camera with turn target', async () => {
     const container = renderToContainer(<DealerApp />);
     await clickStartHand(container);
     await captureFlop(container);
@@ -1521,8 +1521,8 @@ describe('DealerApp incremental community card capture', () => {
 
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="camera-capture"]')).not.toBeNull();
-      expect(container.querySelector('[data-testid="capture-target"]')!.textContent).toBe('turn');
     });
+    expect(container.querySelector('[data-testid="capture-target"]')!.textContent).toBe('turn');
   });
 
   it('after Turn confirm, updateTurn is called with correct payload', async () => {
@@ -1567,7 +1567,7 @@ describe('DealerApp incremental community card capture', () => {
     expect(riverTile.disabled).toBe(false);
   });
 
-  it('clicking River tile opens camera capture with river target', async () => {
+  it('clicking River tile opens camera with river target', async () => {
     const container = renderToContainer(<DealerApp />);
     await clickStartHand(container);
     await captureFlop(container);
@@ -1579,8 +1579,8 @@ describe('DealerApp incremental community card capture', () => {
 
     await vi.waitFor(() => {
       expect(container.querySelector('[data-testid="camera-capture"]')).not.toBeNull();
-      expect(container.querySelector('[data-testid="capture-target"]')!.textContent).toBe('river');
     });
+    expect(container.querySelector('[data-testid="capture-target"]')!.textContent).toBe('river');
   });
 
   it('after River confirm, updateRiver is called with correct payload', async () => {
@@ -1612,32 +1612,32 @@ describe('DealerApp incremental community card capture', () => {
     const container = renderToContainer(<DealerApp />);
     await clickStartHand(container);
 
-    // Before any capture — all slots empty
+    // Before any capture — all slots show ‘—’ (empty PlayingCard)
     for (let i = 0; i < 5; i++) {
-      expect(container.querySelector(`[data-testid="board-slot-${i}"]`)!.textContent).toBe('');
+      expect(container.querySelector(`[data-testid="board-slot-${i}"]`)!.textContent).toBe('—');
     }
 
     // After flop — slots 0-2 filled
     await captureFlop(container);
     await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="board-slot-0"]')!.textContent).toBe('Js');
-      expect(container.querySelector('[data-testid="board-slot-1"]')!.textContent).toBe('Tc');
-      expect(container.querySelector('[data-testid="board-slot-2"]')!.textContent).toBe('5h');
+      expect(container.querySelector('[data-testid="board-slot-0"]')!.textContent).toBe('J♠');
+      expect(container.querySelector('[data-testid="board-slot-1"]')!.textContent).toBe('T♣');
+      expect(container.querySelector('[data-testid="board-slot-2"]')!.textContent).toBe('5♥');
     });
-    expect(container.querySelector('[data-testid="board-slot-3"]')!.textContent).toBe('');
-    expect(container.querySelector('[data-testid="board-slot-4"]')!.textContent).toBe('');
+    expect(container.querySelector('[data-testid="board-slot-3"]')!.textContent).toBe('—');
+    expect(container.querySelector('[data-testid="board-slot-4"]')!.textContent).toBe('—');
 
     // After turn — slot 3 filled
     await captureTurn(container);
     await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="board-slot-3"]')!.textContent).toBe('Qd');
+      expect(container.querySelector('[data-testid="board-slot-3"]')!.textContent).toBe('Q♦');
     });
-    expect(container.querySelector('[data-testid="board-slot-4"]')!.textContent).toBe('');
+    expect(container.querySelector('[data-testid="board-slot-4"]')!.textContent).toBe('—');
 
     // After river — slot 4 filled
     await captureRiver(container);
     await vi.waitFor(() => {
-      expect(container.querySelector('[data-testid="board-slot-4"]')!.textContent).toBe('9c');
+      expect(container.querySelector('[data-testid="board-slot-4"]')!.textContent).toBe('9♣');
     });
   });
 

@@ -323,11 +323,11 @@ export function togglePlayerStatus(gameId: number, playerName: string, isActive:
   });
 }
 
-export function addPlayerToGame(gameId: number, playerName: string): Promise<AddPlayerToGameResponse> {
+export function addPlayerToGame(gameId: number, playerName: string, buyIn?: number | null): Promise<AddPlayerToGameResponse> {
   return request<AddPlayerToGameResponse>(`/games/${gameId}/players`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ player_name: playerName }),
+    body: JSON.stringify({ player_name: playerName, ...(buyIn != null ? { buy_in: buyIn } : {}) }),
   });
 }
 

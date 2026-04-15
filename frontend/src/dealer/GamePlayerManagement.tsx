@@ -3,6 +3,7 @@ import { fetchGame, togglePlayerStatus, addPlayerToGame, assignPlayerSeat, creat
 import type { PlayerInfo } from '../api/types';
 import { SeatPicker } from '../components/SeatPicker.tsx';
 import type { SeatData } from '../components/SeatPicker.tsx';
+import { useDealerStore } from '../stores/dealerStore.ts';
 
 export interface GamePlayerManagementProps {
   gameId: number;
@@ -44,6 +45,12 @@ export function GamePlayerManagement({ gameId }: GamePlayerManagementProps) {
     setActionError(null);
     try {
       await togglePlayerStatus(gameId, player.name, newActive);
+      // Sync dealer store: add player back when reactivated, remove when deactivated
+      if (newActive) {
+        useDealerStore.getState().addPlayer(player.name);
+      } else {
+        useDealerStore.getState().removePlayer(player.name);
+      }
     } catch (err) {
       // Revert on error
       setPlayers((prev) =>
@@ -62,11 +69,13 @@ export function GamePlayerManagement({ gameId }: GamePlayerManagementProps) {
     setActionError(null);
     setAdding(true);
     try {
-      const result = await addPlayerToGame(gameId, trimmed);
+      const result = await addPlayerToGame(gameId, trimmed, defaultBuyIn);
       setPlayers((prev) => [
         ...prev,
-        { name: result.player_name, is_active: result.is_active, seat_number: result.seat_number, buy_in: null, current_chips: null },
+        { name: result.player_name, is_active: result.is_active, seat_number: result.seat_number, buy_in: result.buy_in ?? defaultBuyIn, current_chips: result.buy_in ?? defaultBuyIn },
       ]);
+      // Sync dealer store so the new player appears in ActiveHandDashboard tiles
+      useDealerStore.getState().addPlayer(result.player_name);
       setNameInput('');
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err));

@@ -14,6 +14,7 @@ export interface PlayerActionButtonsProps {
   minimumBet?: number | null;
   minimumRaise?: number | null;
   pot?: number;
+  currentStack?: number | null;
   onActionConfirmed?: () => void;
 }
 
@@ -33,6 +34,7 @@ export function getStreet(communityCardCount: number): StreetEnum {
 export function PlayerActionButtons({
   gameId, handNumber, playerName, communityCardCount,
   legalActions = [], amountToCall = 0, minimumBet = null, minimumRaise = null, pot = 0,
+  currentStack = null,
   onActionConfirmed,
 }: PlayerActionButtonsProps) {
   const [actedOnCount, setActedOnCount] = useState(-1);
@@ -84,6 +86,8 @@ export function PlayerActionButtons({
     }
   }
 
+  const callIsAllIn = currentStack != null && currentStack > 0 && amountToCall > currentStack;
+
   if (chipAction) {
     return (
       <div data-testid="action-buttons">
@@ -91,6 +95,7 @@ export function PlayerActionButtons({
           onConfirm={(amount) => handleAction(chipAction, amount)}
           onCancel={() => setChipAction(null)}
           onAllIn={() => handleAction(chipAction, undefined, true)}
+          maxAmount={currentStack != null && currentStack > 0 ? currentStack : undefined}
         />
       </div>
     );
@@ -140,10 +145,16 @@ export function PlayerActionButtons({
           <button
             data-testid="action-call"
             disabled={hasActed}
-            onClick={() => handleAction('call', amountToCall || undefined)}
+            onClick={() => callIsAllIn
+              ? handleAction('call', currentStack!, true)
+              : handleAction('call', amountToCall || undefined)
+            }
             style={styles.button}
           >
-            Call{amountToCall > 0 ? ` $${amountToCall.toFixed(2)}` : ''}
+            {callIsAllIn
+              ? `Call All-In $${currentStack!.toFixed(2)}`
+              : `Call${amountToCall > 0 ? ` $${amountToCall.toFixed(2)}` : ''}`
+            }
           </button>
         )}
         {actions.includes('bet') && (

@@ -93,6 +93,9 @@ export function DetectionReview({ detections, imageUrl, mode, targetName, onConf
     onConfirm(targetName, cardValues);
   }
 
+  const allFilled = cards.length > 0 && cards.every((card, i) => !!(corrections[i] || card.detected_value));
+  const confirmDisabled = !allFilled;
+
   return (
     <div style={styles.container}>
       <h2 style={styles.heading}>Review Detection</h2>
@@ -160,11 +163,11 @@ export function DetectionReview({ detections, imageUrl, mode, targetName, onConf
       )}
 
       <div style={styles.buttonRow}>
-        <button style={styles.retakeButton} onClick={onRetake}>Retake</button>
+        <button style={styles.retakeButton} onClick={onRetake}>{imageUrl ? 'Retake' : 'Cancel'}</button>
         <button
-          style={cards.length === 0 ? { ...styles.confirmButton, opacity: 0.5 } : styles.confirmButton}
+          style={confirmDisabled ? { ...styles.confirmButton, opacity: 0.5 } : styles.confirmButton}
           onClick={handleConfirm}
-          disabled={cards.length === 0}
+          disabled={confirmDisabled}
         >
           Confirm
         </button>

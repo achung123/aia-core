@@ -46,10 +46,11 @@ describe('DetectionReview', () => {
     expect(onConfirm).toHaveBeenCalledWith('Alice', ['Ah', 'Kd']);
   });
 
-  it('calls onRetake when Retake button is clicked', () => {
+  it('calls onRetake when Retake/Cancel button is clicked', () => {
     const onRetake = vi.fn();
     render(<DetectionReview {...defaultProps} onRetake={onRetake} />);
-    fireEvent.click(screen.getByText('Retake'));
+    // imageUrl is null in defaultProps, so button label is 'Cancel'
+    fireEvent.click(screen.getByText('Cancel'));
     expect(onRetake).toHaveBeenCalled();
   });
 
