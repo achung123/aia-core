@@ -111,7 +111,12 @@ class TestHeadToHeadResponse:
 
     def test_with_street_breakdown(self):
         breakdown = [
-            {'street': 'preflop', 'hands_ended': 3, 'player1_wins': 2, 'player2_wins': 1},
+            {
+                'street': 'preflop',
+                'hands_ended': 3,
+                'player1_wins': 2,
+                'player2_wins': 1,
+            },
             {'street': 'flop', 'hands_ended': 5, 'player1_wins': 3, 'player2_wins': 2},
         ]
         resp = self._make_response(street_breakdown=breakdown)

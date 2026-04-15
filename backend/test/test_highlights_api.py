@@ -298,7 +298,9 @@ class TestHighlightsCap:
 
 
 class TestTenPlusHandsHighlightCount:
-    def test_game_with_10_plus_hands_returns_3_to_5_highlights(self, client, db_session):
+    def test_game_with_10_plus_hands_returns_3_to_5_highlights(
+        self, client, db_session
+    ):
         """AC-1: A game with 10+ hands should produce between 3 and 5 highlights."""
         game, players = _create_game_with_players(
             db_session,
@@ -396,7 +398,7 @@ class TestHighlightTypesValid:
         assert len(highlights) >= 1
         for h in highlights:
             assert h['highlight_type'] in valid_types, (
-                f"Unexpected highlight_type: {h['highlight_type']}"
+                f'Unexpected highlight_type: {h["highlight_type"]}'
             )
 
 

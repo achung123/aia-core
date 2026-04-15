@@ -18,10 +18,13 @@ function computeRemaining(data: BlindsResponse): number | null {
     return Math.max(0, data.blind_timer_remaining_seconds);
   }
   if (data.blind_timer_started_at != null && !data.blind_timer_paused) {
-    const startedAt = new Date(data.blind_timer_started_at).getTime();
+    const ts = data.blind_timer_started_at;
+    // Treat naive timestamps (no Z or offset) as UTC
+    const isoTs = ts.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(ts) ? ts : ts + 'Z';
+    const startedAt = new Date(isoTs).getTime();
     const elapsed = (Date.now() - startedAt) / 1000;
     const total = data.blind_timer_minutes * 60;
-    return Math.max(0, Math.floor(total - elapsed));
+    return Math.max(0, Math.ceil(total - elapsed));
   }
   return null;
 }
@@ -198,13 +201,6 @@ export function BlindTimer({ gameId, onAdvanceBlinds }: BlindTimerProps) {
       {expired && (
         <div data-testid="blind-advance-prompt" style={styles.advancePrompt}>
           <span>Time to advance blinds!</span>
-          <button
-            data-testid="blind-advance-btn"
-            style={styles.advanceBtn}
-            onClick={() => onAdvanceBlinds?.()}
-          >
-            Advance Blinds
-          </button>
         </div>
       )}
 
@@ -301,6 +297,8 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '10px',
   },
   startRow: {
+    display: 'flex',
+    justifyContent: 'center',
     marginTop: '0.4rem',
     width: '100%',
   },
@@ -398,6 +396,7 @@ const styles: Record<string, React.CSSProperties> = {
   advancePrompt: {
     display: 'flex',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: '0.5rem',
     color: '#fbbf24',
     fontWeight: 700,
