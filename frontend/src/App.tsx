@@ -6,6 +6,11 @@ import { DataView } from './views/DataView';
 import { DealerApp } from './dealer/DealerApp';
 import { PlayerApp } from './player/PlayerApp';
 import { TableView } from './pages/TableView';
+import { GameListPage } from './pages/GameListPage';
+import { GameRecapPage } from './pages/GameRecapPage';
+import { PlayerProfilePage } from './pages/PlayerProfilePage';
+import { HeadToHeadPage } from './pages/HeadToHeadPage';
+import { AwardsGridPage } from './pages/AwardsGridPage';
 
 export default function App() {
   return (
@@ -19,6 +24,11 @@ export default function App() {
           <Route path="/dealer" element={<DealerApp />} />
           <Route path="/player" element={<PlayerApp />} />
           <Route path="/player/table" element={<TableView />} />
+          <Route path="/games" element={<GameListPage />} />
+          <Route path="/games/:gameId/recap" element={<GameRecapPage />} />
+          <Route path="/players/:playerName" element={<PlayerProfilePage />} />
+          <Route path="/head-to-head" element={<HeadToHeadPage />} />
+          <Route path="/awards" element={<AwardsGridPage />} />
         </Routes>
       </div>
     </HashRouter>

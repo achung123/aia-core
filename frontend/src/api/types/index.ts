@@ -34,6 +34,11 @@ export type {
   LeaderboardEntry,
   PlayerEquityEntry,
   EquityResponse,
+  PlayerSessionTrend,
+  StreetBreakdown,
+  HeadToHeadResponse,
+  AwardEntry,
+  GameHighlight,
 } from './analytics';
 
 export type {

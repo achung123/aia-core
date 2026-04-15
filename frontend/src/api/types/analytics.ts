@@ -55,3 +55,56 @@ export interface PlayerEquityEntry {
 export interface EquityResponse {
   equities: PlayerEquityEntry[];
 }
+
+// --- Trends ---
+
+export interface PlayerSessionTrend {
+  game_id: number;
+  game_date: string;
+  hands_played: number;
+  hands_won: number;
+  win_rate: number;
+  profit_loss: number;
+}
+
+// --- Head-to-Head ---
+
+export interface StreetBreakdown {
+  street: string;
+  hands_ended: number;
+  player1_wins: number;
+  player2_wins: number;
+}
+
+export interface HeadToHeadResponse {
+  player1_name: string;
+  player2_name: string;
+  shared_hands_count: number;
+  showdown_count: number;
+  player1_showdown_wins: number;
+  player2_showdown_wins: number;
+  player1_fold_count: number;
+  player2_fold_count: number;
+  player1_fold_rate: number;
+  player2_fold_rate: number;
+  street_breakdown: StreetBreakdown[];
+}
+
+// --- Awards ---
+
+export interface AwardEntry {
+  award_name: string;
+  emoji: string;
+  description: string;
+  winner_name: string;
+  stat_value: number;
+  stat_label: string;
+}
+
+// --- Highlights ---
+
+export interface GameHighlight {
+  hand_number: number;
+  highlight_type: string;
+  description: string;
+}

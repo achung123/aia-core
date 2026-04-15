@@ -38,6 +38,10 @@ import type {
   SeatAssignmentRequest,
   RebuyCreate,
   RebuyResponse,
+  PlayerSessionTrend,
+  HeadToHeadResponse,
+  AwardEntry,
+  GameHighlight,
 } from './types';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -376,4 +380,23 @@ export function createRebuy(gameId: number, playerName: string, data: RebuyCreat
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
+}
+
+// ── Analytics endpoints ─────────────────────────────────────────────
+
+export function fetchPlayerTrends(playerName: string): Promise<PlayerSessionTrend[]> {
+  return request<PlayerSessionTrend[]>(`/stats/players/${encodeURIComponent(playerName)}/trends`);
+}
+
+export function fetchHeadToHead(player1: string, player2: string): Promise<HeadToHeadResponse> {
+  return request<HeadToHeadResponse>(`/stats/head-to-head?player1=${encodeURIComponent(player1)}&player2=${encodeURIComponent(player2)}`);
+}
+
+export function fetchAwards(gameId?: number): Promise<AwardEntry[]> {
+  const qs = gameId != null ? `?game_id=${gameId}` : '';
+  return request<AwardEntry[]>(`/stats/awards${qs}`);
+}
+
+export function fetchGameHighlights(gameId: number): Promise<GameHighlight[]> {
+  return request<GameHighlight[]>(`/stats/games/${gameId}/highlights`);
 }

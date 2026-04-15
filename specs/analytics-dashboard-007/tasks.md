@@ -517,3 +517,47 @@ Write Vitest + React Testing Library tests for the shared dashboard components.
 6. All tests pass with `npx vitest run`
 
 ---
+
+## Bugs / Findings
+
+Issues discovered during implementation review cycles. Each finding references the source task and cycle where it was identified.
+
+---
+
+### BF-001 — [HIGH] Partial error handling in GameRecapPage
+
+**Source:** aia-core-hvc (Cycle 15)
+
+Only `statsQuery.isError` is checked in `GameRecapPage`; errors from `handsQuery`, `awardsQuery`, and `highlightsQuery` are silently swallowed, causing the UI to show "No data" instead of proper error messages.
+
+**Fix:** Compose all query error states (e.g. derive a combined `isError` / `error` from all queries) and surface appropriate error messages for each failing query.
+
+---
+
+### BF-002 — [MEDIUM] Duplicated query logic in GameRecapPage
+
+**Source:** aia-core-hvc (Cycle 15)
+
+`GameRecapPage` manually constructs `useQuery` calls for game stats, awards, and highlights despite existing custom hooks (`useGameStats`, `useAwards`, `useGameHighlights`) already encapsulating that logic. Duplicated query keys risk diverging from the canonical hooks.
+
+**Fix:** Replace inline `useQuery` calls with the existing custom hooks from T-011.
+
+---
+
+### BF-003 — [LOW] Array index used as React key
+
+**Source:** aia-core-hvc (Cycle 15)
+
+Highlight and award lists in `GameRecapPage` use `key={i}` (array index) instead of stable identifiers. This can cause incorrect reconciliation if the list order changes.
+
+**Fix:** Use stable IDs when available (e.g. `award_name`, `hand_number`) as the key prop.
+
+---
+
+### BF-004 — [LOW] Inline styles throughout game pages
+
+**Source:** aia-core-hvc (Cycle 15)
+
+Both the game list page and recap page use `style={{}}` for layout and spacing instead of CSS modules or a shared styling approach.
+
+**Fix:** Migrate inline styles to CSS modules in a future cleanup pass to improve maintainability and consistency.
