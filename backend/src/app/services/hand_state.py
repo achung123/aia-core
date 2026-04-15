@@ -231,9 +231,7 @@ def try_advance_phase(
 
     # Street is complete — advance, cascading when no meaningful betting
     # can occur (0 or 1 non-all-in players).
-    no_contest = len(
-        get_active_seat_order(db, game_id, hand, exclude_all_in=True)
-    ) <= 1
+    no_contest = len(get_active_seat_order(db, game_id, hand, exclude_all_in=True)) <= 1
     modified = False
 
     while True:

@@ -1399,7 +1399,10 @@ def record_hand_results(
                         game_player.current_chips + credit, 2
                     )
                 # Auto-deactivate player if chips hit zero
-                if game_player.current_chips is not None and game_player.current_chips <= 0:
+                if (
+                    game_player.current_chips is not None
+                    and game_player.current_chips <= 0
+                ):
                     game_player.is_active = False
 
     db.commit()
