@@ -13,22 +13,15 @@ function formatTime(totalSeconds: number): string {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
-function parseUtcTimestamp(iso: string): number {
-  // Backend stores naive UTC datetimes (no Z suffix).
-  // Ensure JS treats them as UTC, not local time.
-  const s = iso.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(iso) ? iso : iso + 'Z';
-  return new Date(s).getTime();
-}
-
 function computeRemaining(data: BlindsResponse): number | null {
   if (data.blind_timer_remaining_seconds != null) {
     return Math.max(0, data.blind_timer_remaining_seconds);
   }
-  if (data.blind_timer_started_at != null) {
-    const started = parseUtcTimestamp(data.blind_timer_started_at);
-    const elapsed = Math.floor((Date.now() - started) / 1000);
+  if (data.blind_timer_started_at != null && !data.blind_timer_paused) {
+    const startedAt = new Date(data.blind_timer_started_at).getTime();
+    const elapsed = (Date.now() - startedAt) / 1000;
     const total = data.blind_timer_minutes * 60;
-    return Math.max(0, total - elapsed);
+    return Math.max(0, Math.floor(total - elapsed));
   }
   return null;
 }
@@ -91,6 +84,7 @@ export function BlindTimer({ gameId, onAdvanceBlinds }: BlindTimerProps) {
         small_blind: blinds.small_blind,
         big_blind: blinds.big_blind,
       });
+      setBlinds(updated);
       setPaused(updated.blind_timer_paused);
       setRemaining(computeRemaining(updated));
     } catch {
@@ -171,10 +165,10 @@ export function BlindTimer({ gameId, onAdvanceBlinds }: BlindTimerProps) {
       </button>
 
       {!timerActive && blinds && (
-        <div style={{ ...styles.timerControls, justifyContent: 'center' }}>
+        <div style={styles.startRow}>
           <button
             data-testid="blind-start-btn"
-            style={{ ...styles.controlBtn, width: '100%', textAlign: 'center' }}
+            style={styles.startBtn}
             onClick={handleStart}
           >
             ▶ Start Timer
@@ -203,7 +197,14 @@ export function BlindTimer({ gameId, onAdvanceBlinds }: BlindTimerProps) {
       )}
       {expired && (
         <div data-testid="blind-advance-prompt" style={styles.advancePrompt}>
-          <span>⏰ Time to advance blinds!</span>
+          <span>Time to advance blinds!</span>
+          <button
+            data-testid="blind-advance-btn"
+            style={styles.advanceBtn}
+            onClick={() => onAdvanceBlinds?.()}
+          >
+            Advance Blinds
+          </button>
         </div>
       )}
 
@@ -299,6 +300,22 @@ const styles: Record<string, React.CSSProperties> = {
     background: '#1e1b4b',
     borderRadius: '10px',
   },
+  startRow: {
+    marginTop: '0.4rem',
+    width: '100%',
+  },
+  startBtn: {
+    width: '100%',
+    padding: '0.5rem',
+    background: '#4f46e5',
+    color: '#e0e7ff',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '0.9rem',
+    fontWeight: 700,
+    letterSpacing: '0.03em',
+  },
   timerControls: {
     display: 'flex',
     gap: '0.5rem',
@@ -381,11 +398,9 @@ const styles: Record<string, React.CSSProperties> = {
   advancePrompt: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: '0.5rem',
     color: '#fbbf24',
     fontWeight: 700,
-    marginTop: '0.4rem',
   },
   advanceBtn: {
     background: '#f59e0b',
