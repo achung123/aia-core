@@ -787,6 +787,489 @@ class TestTryAdvancePhase:
         assert state.phase == 'preflop'
         assert state.current_seat is None
 
+    def test_all_in_advance_clears_current_seat(self, db: Session):
+        """When all players are all-in and community cards exist, phase advances
+        but current_seat must be None (no one can act)."""
+        game = _seed_game(db)
+        p1 = _add_player(db, 'A')
+        p2 = _add_player(db, 'B')
+        _seat_player(db, game.game_id, p1.player_id, 1)
+        _seat_player(db, game.game_id, p2.player_id, 2)
+        hand = _make_hand(
+            db,
+            game.game_id,
+            sb_player_id=p1.player_id,
+            bb_player_id=p2.player_id,
+            player_ids=[p1.player_id, p2.player_id],
+            flop_1='Ah',
+            flop_2='Kd',
+            flop_3='Qs',
+        )
+        # Mark both players as all-in
+        for ph in hand.player_hands:
+            ph.is_all_in = True
+        state = HandState(hand_id=hand.hand_id, phase='preflop', current_seat=1)
+        db.add(state)
+        db.flush()
+
+        # SB all-in raise, BB calls all-in
+        ph1 = (
+            db.query(PlayerHand)
+            .filter(
+                PlayerHand.hand_id == hand.hand_id,
+                PlayerHand.player_id == p1.player_id,
+            )
+            .first()
+        )
+        ph2 = (
+            db.query(PlayerHand)
+            .filter(
+                PlayerHand.hand_id == hand.hand_id,
+                PlayerHand.player_id == p2.player_id,
+            )
+            .first()
+        )
+        db.add(
+            PlayerHandAction(
+                player_hand_id=ph1.player_hand_id,
+                street='preflop',
+                action='blind',
+                amount=0.10,
+            )
+        )
+        db.add(
+            PlayerHandAction(
+                player_hand_id=ph2.player_hand_id,
+                street='preflop',
+                action='blind',
+                amount=0.20,
+            )
+        )
+        db.add(
+            PlayerHandAction(
+                player_hand_id=ph1.player_hand_id,
+                street='preflop',
+                action='raise',
+                amount=10.00,
+            )
+        )
+        db.add(
+            PlayerHandAction(
+                player_hand_id=ph2.player_hand_id,
+                street='preflop',
+                action='call',
+                amount=9.90,
+            )
+        )
+        db.flush()
+
+        actions_data = [
+            {'player_id': p1.player_id, 'action': 'blind', 'amount': 0.10},
+            {'player_id': p2.player_id, 'action': 'blind', 'amount': 0.20},
+            {'player_id': p1.player_id, 'action': 'raise', 'amount': 10.00},
+            {'player_id': p2.player_id, 'action': 'call', 'amount': 9.90},
+        ]
+        seats_data = [(1, p1.player_id), (2, p2.player_id)]
+
+        result = try_advance_phase(
+            db,
+            game.game_id,
+            hand,
+            state,
+            actions_cache=actions_data,
+            seats_cache=seats_data,
+        )
+        assert result is True
+        # Phase should advance to flop
+        assert state.phase == 'flop'
+        # But current_seat must be None — all players are all-in
+        assert state.current_seat is None
+
+    def test_all_in_cascades_through_dealt_phases(self, db: Session):
+        """When all players are all-in and all community cards dealt,
+        phase should cascade all the way to showdown in a single call."""
+        game = _seed_game(db)
+        p1 = _add_player(db, 'A')
+        p2 = _add_player(db, 'B')
+        _seat_player(db, game.game_id, p1.player_id, 1)
+        _seat_player(db, game.game_id, p2.player_id, 2)
+        hand = _make_hand(
+            db,
+            game.game_id,
+            sb_player_id=p1.player_id,
+            bb_player_id=p2.player_id,
+            player_ids=[p1.player_id, p2.player_id],
+            flop_1='Ah',
+            flop_2='Kd',
+            flop_3='Qs',
+            turn='Jc',
+            river='Th',
+        )
+        for ph in hand.player_hands:
+            ph.is_all_in = True
+        state = HandState(hand_id=hand.hand_id, phase='preflop', current_seat=1)
+        db.add(state)
+        db.flush()
+
+        ph1 = (
+            db.query(PlayerHand)
+            .filter(
+                PlayerHand.hand_id == hand.hand_id,
+                PlayerHand.player_id == p1.player_id,
+            )
+            .first()
+        )
+        ph2 = (
+            db.query(PlayerHand)
+            .filter(
+                PlayerHand.hand_id == hand.hand_id,
+                PlayerHand.player_id == p2.player_id,
+            )
+            .first()
+        )
+        db.add(
+            PlayerHandAction(
+                player_hand_id=ph1.player_hand_id,
+                street='preflop',
+                action='blind',
+                amount=0.10,
+            )
+        )
+        db.add(
+            PlayerHandAction(
+                player_hand_id=ph2.player_hand_id,
+                street='preflop',
+                action='blind',
+                amount=0.20,
+            )
+        )
+        db.add(
+            PlayerHandAction(
+                player_hand_id=ph1.player_hand_id,
+                street='preflop',
+                action='raise',
+                amount=10.00,
+            )
+        )
+        db.add(
+            PlayerHandAction(
+                player_hand_id=ph2.player_hand_id,
+                street='preflop',
+                action='call',
+                amount=9.90,
+            )
+        )
+        db.flush()
+
+        actions_data = [
+            {'player_id': p1.player_id, 'action': 'blind', 'amount': 0.10},
+            {'player_id': p2.player_id, 'action': 'blind', 'amount': 0.20},
+            {'player_id': p1.player_id, 'action': 'raise', 'amount': 10.00},
+            {'player_id': p2.player_id, 'action': 'call', 'amount': 9.90},
+        ]
+        seats_data = [(1, p1.player_id), (2, p2.player_id)]
+
+        result = try_advance_phase(
+            db,
+            game.game_id,
+            hand,
+            state,
+            actions_cache=actions_data,
+            seats_cache=seats_data,
+        )
+        assert result is True
+        # Should cascade all the way to showdown
+        assert state.phase == 'showdown'
+        assert state.current_seat is None
+
+    def test_all_in_stops_at_missing_cards(self, db: Session):
+        """When all players are all-in, cascade stops at the first phase
+        whose community cards haven't been dealt yet."""
+        game = _seed_game(db)
+        p1 = _add_player(db, 'A')
+        p2 = _add_player(db, 'B')
+        _seat_player(db, game.game_id, p1.player_id, 1)
+        _seat_player(db, game.game_id, p2.player_id, 2)
+        hand = _make_hand(
+            db,
+            game.game_id,
+            sb_player_id=p1.player_id,
+            bb_player_id=p2.player_id,
+            player_ids=[p1.player_id, p2.player_id],
+            flop_1='Ah',
+            flop_2='Kd',
+            flop_3='Qs',
+            # turn and river NOT dealt
+        )
+        for ph in hand.player_hands:
+            ph.is_all_in = True
+        state = HandState(hand_id=hand.hand_id, phase='preflop', current_seat=1)
+        db.add(state)
+        db.flush()
+
+        ph1 = (
+            db.query(PlayerHand)
+            .filter(
+                PlayerHand.hand_id == hand.hand_id,
+                PlayerHand.player_id == p1.player_id,
+            )
+            .first()
+        )
+        ph2 = (
+            db.query(PlayerHand)
+            .filter(
+                PlayerHand.hand_id == hand.hand_id,
+                PlayerHand.player_id == p2.player_id,
+            )
+            .first()
+        )
+        db.add(
+            PlayerHandAction(
+                player_hand_id=ph1.player_hand_id,
+                street='preflop',
+                action='blind',
+                amount=0.10,
+            )
+        )
+        db.add(
+            PlayerHandAction(
+                player_hand_id=ph2.player_hand_id,
+                street='preflop',
+                action='blind',
+                amount=0.20,
+            )
+        )
+        db.add(
+            PlayerHandAction(
+                player_hand_id=ph1.player_hand_id,
+                street='preflop',
+                action='raise',
+                amount=10.00,
+            )
+        )
+        db.add(
+            PlayerHandAction(
+                player_hand_id=ph2.player_hand_id,
+                street='preflop',
+                action='call',
+                amount=9.90,
+            )
+        )
+        db.flush()
+
+        actions_data = [
+            {'player_id': p1.player_id, 'action': 'blind', 'amount': 0.10},
+            {'player_id': p2.player_id, 'action': 'blind', 'amount': 0.20},
+            {'player_id': p1.player_id, 'action': 'raise', 'amount': 10.00},
+            {'player_id': p2.player_id, 'action': 'call', 'amount': 9.90},
+        ]
+        seats_data = [(1, p1.player_id), (2, p2.player_id)]
+
+        result = try_advance_phase(
+            db,
+            game.game_id,
+            hand,
+            state,
+            actions_cache=actions_data,
+            seats_cache=seats_data,
+        )
+        assert result is True
+        # Advances to flop (cards exist), but can't go to turn (no turn card)
+        assert state.phase == 'flop'
+        assert state.current_seat is None
+
+    def test_one_acting_player_covered_all_in_cascades(self, db: Session):
+        """One player covered the all-in (not all-in themselves).
+        That lone acting player has no opponent — cascades with current_seat=None."""
+        game = _seed_game(db)
+        p1 = _add_player(db, 'A')
+        p2 = _add_player(db, 'B')
+        _seat_player(db, game.game_id, p1.player_id, 1)
+        _seat_player(db, game.game_id, p2.player_id, 2)
+        hand = _make_hand(
+            db,
+            game.game_id,
+            sb_player_id=p1.player_id,
+            bb_player_id=p2.player_id,
+            player_ids=[p1.player_id, p2.player_id],
+            flop_1='Ah',
+            flop_2='Kd',
+            flop_3='Qs',
+            turn='Jc',
+            river='Th',
+        )
+        # Only p1 is all-in — p2 covered
+        ph1 = (
+            db.query(PlayerHand)
+            .filter(
+                PlayerHand.hand_id == hand.hand_id,
+                PlayerHand.player_id == p1.player_id,
+            )
+            .first()
+        )
+        ph1.is_all_in = True
+        ph2 = (
+            db.query(PlayerHand)
+            .filter(
+                PlayerHand.hand_id == hand.hand_id,
+                PlayerHand.player_id == p2.player_id,
+            )
+            .first()
+        )
+        state = HandState(hand_id=hand.hand_id, phase='preflop', current_seat=2)
+        db.add(state)
+        db.flush()
+
+        # Preflop: SB all-in, BB called
+        db.add(
+            PlayerHandAction(
+                player_hand_id=ph1.player_hand_id,
+                street='preflop',
+                action='blind',
+                amount=0.10,
+            )
+        )
+        db.add(
+            PlayerHandAction(
+                player_hand_id=ph2.player_hand_id,
+                street='preflop',
+                action='blind',
+                amount=0.20,
+            )
+        )
+        db.add(
+            PlayerHandAction(
+                player_hand_id=ph1.player_hand_id,
+                street='preflop',
+                action='raise',
+                amount=10.00,
+            )
+        )
+        db.add(
+            PlayerHandAction(
+                player_hand_id=ph2.player_hand_id,
+                street='preflop',
+                action='call',
+                amount=9.90,
+            )
+        )
+        db.flush()
+
+        actions_data = [
+            {'player_id': p1.player_id, 'action': 'blind', 'amount': 0.10},
+            {'player_id': p2.player_id, 'action': 'blind', 'amount': 0.20},
+            {'player_id': p1.player_id, 'action': 'raise', 'amount': 10.00},
+            {'player_id': p2.player_id, 'action': 'call', 'amount': 9.90},
+        ]
+        seats_data = [(1, p1.player_id), (2, p2.player_id)]
+
+        result = try_advance_phase(
+            db,
+            game.game_id,
+            hand,
+            state,
+            actions_cache=actions_data,
+            seats_cache=seats_data,
+        )
+        assert result is True
+        # Only 1 acting player — should cascade all the way to showdown
+        assert state.phase == 'showdown'
+        assert state.current_seat is None
+
+    def test_one_acting_player_stops_at_missing_cards(self, db: Session):
+        """One player covered the all-in, only flop dealt — stops at flop."""
+        game = _seed_game(db)
+        p1 = _add_player(db, 'A')
+        p2 = _add_player(db, 'B')
+        _seat_player(db, game.game_id, p1.player_id, 1)
+        _seat_player(db, game.game_id, p2.player_id, 2)
+        hand = _make_hand(
+            db,
+            game.game_id,
+            sb_player_id=p1.player_id,
+            bb_player_id=p2.player_id,
+            player_ids=[p1.player_id, p2.player_id],
+            flop_1='Ah',
+            flop_2='Kd',
+            flop_3='Qs',
+            # No turn or river
+        )
+        ph1 = (
+            db.query(PlayerHand)
+            .filter(
+                PlayerHand.hand_id == hand.hand_id,
+                PlayerHand.player_id == p1.player_id,
+            )
+            .first()
+        )
+        ph1.is_all_in = True
+        ph2 = (
+            db.query(PlayerHand)
+            .filter(
+                PlayerHand.hand_id == hand.hand_id,
+                PlayerHand.player_id == p2.player_id,
+            )
+            .first()
+        )
+        state = HandState(hand_id=hand.hand_id, phase='preflop', current_seat=2)
+        db.add(state)
+        db.flush()
+
+        db.add(
+            PlayerHandAction(
+                player_hand_id=ph1.player_hand_id,
+                street='preflop',
+                action='blind',
+                amount=0.10,
+            )
+        )
+        db.add(
+            PlayerHandAction(
+                player_hand_id=ph2.player_hand_id,
+                street='preflop',
+                action='blind',
+                amount=0.20,
+            )
+        )
+        db.add(
+            PlayerHandAction(
+                player_hand_id=ph1.player_hand_id,
+                street='preflop',
+                action='raise',
+                amount=10.00,
+            )
+        )
+        db.add(
+            PlayerHandAction(
+                player_hand_id=ph2.player_hand_id,
+                street='preflop',
+                action='call',
+                amount=9.90,
+            )
+        )
+        db.flush()
+
+        actions_data = [
+            {'player_id': p1.player_id, 'action': 'blind', 'amount': 0.10},
+            {'player_id': p2.player_id, 'action': 'blind', 'amount': 0.20},
+            {'player_id': p1.player_id, 'action': 'raise', 'amount': 10.00},
+            {'player_id': p2.player_id, 'action': 'call', 'amount': 9.90},
+        ]
+        seats_data = [(1, p1.player_id), (2, p2.player_id)]
+
+        result = try_advance_phase(
+            db,
+            game.game_id,
+            hand,
+            state,
+            actions_cache=actions_data,
+            seats_cache=seats_data,
+        )
+        assert result is True
+        # Flop cards exist, but no turn — stops at flop
+        assert state.phase == 'flop'
+        assert state.current_seat is None
+
 
 # ---------------------------------------------------------------------------
 # PHASE_ORDER constant

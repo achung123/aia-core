@@ -670,4 +670,50 @@ describe('ActiveHandDashboard — street buttons call onStreetCapture', () => {
     screen.getByTestId('flop-tile').click();
     expect(onTileSelect).toHaveBeenCalledWith('flop');
   });
+
+  // Bug fix: All-in message when no current player and street is complete
+  it('shows all-in message when no current player, street complete, and phase is active', () => {
+    render(
+      <ActiveHandDashboard
+        {...defaultProps}
+        handNumber={1}
+        currentPlayerName={null}
+        legalActions={[]}
+        streetComplete={true}
+        handPhase="flop"
+      />,
+    );
+    const panel = screen.getByTestId('bet-verify-panel');
+    expect(panel.textContent).toContain('All players all-in');
+  });
+
+  it('does not show all-in message during awaiting_cards phase', () => {
+    render(
+      <ActiveHandDashboard
+        {...defaultProps}
+        handNumber={1}
+        currentPlayerName={null}
+        legalActions={[]}
+        streetComplete={true}
+        handPhase="awaiting_cards"
+      />,
+    );
+    const panel = screen.getByTestId('bet-verify-panel');
+    expect(panel.textContent).not.toContain('All players all-in');
+  });
+
+  it('does not show all-in message when a player has a turn', () => {
+    render(
+      <ActiveHandDashboard
+        {...defaultProps}
+        handNumber={1}
+        currentPlayerName="Alice"
+        legalActions={['call', 'raise', 'fold']}
+        streetComplete={false}
+        handPhase="flop"
+      />,
+    );
+    const panel = screen.getByTestId('bet-verify-panel');
+    expect(panel.textContent).not.toContain('All players all-in');
+  });
 });

@@ -377,7 +377,7 @@ export function DealerApp() {
   const activePlayers = players.filter((player) => player.status !== 'folded' && player.status !== 'not_playing');
   const canFinish =
     (activePlayers.length <= 1 && players.some((player) => player.status === 'folded')) ||
-    (activePlayers.length > 1 && community.riverRecorded);
+    (activePlayers.length > 1 && community.riverRecorded && (streetComplete || handPhase === 'showdown'));
 
   const isActiveHandOverlay = !!(captureTarget || reviewData || outcomeTarget);
 

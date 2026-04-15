@@ -13,6 +13,26 @@ function formatTime(totalSeconds: number): string {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
+function parseUtcTimestamp(iso: string): number {
+  // Backend stores naive UTC datetimes (no Z suffix).
+  // Ensure JS treats them as UTC, not local time.
+  const s = iso.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(iso) ? iso : iso + 'Z';
+  return new Date(s).getTime();
+}
+
+function computeRemaining(data: BlindsResponse): number | null {
+  if (data.blind_timer_remaining_seconds != null) {
+    return Math.max(0, data.blind_timer_remaining_seconds);
+  }
+  if (data.blind_timer_started_at != null) {
+    const started = parseUtcTimestamp(data.blind_timer_started_at);
+    const elapsed = Math.floor((Date.now() - started) / 1000);
+    const total = data.blind_timer_minutes * 60;
+    return Math.max(0, total - elapsed);
+  }
+  return null;
+}
+
 export function BlindTimer({ gameId, onAdvanceBlinds }: BlindTimerProps) {
   const [blinds, setBlinds] = useState<BlindsResponse | null>(null);
   const [remaining, setRemaining] = useState<number | null>(null);
@@ -33,11 +53,7 @@ export function BlindTimer({ gameId, onAdvanceBlinds }: BlindTimerProps) {
         setEditSB(String(data.small_blind));
         setEditBB(String(data.big_blind));
         setEditMinutes(String(data.blind_timer_minutes));
-        if (data.blind_timer_remaining_seconds != null) {
-          setRemaining(Math.max(0, data.blind_timer_remaining_seconds));
-        } else {
-          setRemaining(null);
-        }
+        setRemaining(computeRemaining(data));
       })
       .catch(() => { /* ignore fetch errors */ });
   }, [gameId]);
@@ -62,9 +78,7 @@ export function BlindTimer({ gameId, onAdvanceBlinds }: BlindTimerProps) {
     try {
       const updated = await updateBlinds(gameId, { blind_timer_paused: newPaused });
       setPaused(updated.blind_timer_paused);
-      if (updated.blind_timer_remaining_seconds != null) {
-        setRemaining(Math.max(0, updated.blind_timer_remaining_seconds));
-      }
+      setRemaining(computeRemaining(updated));
     } catch {
       /* ignore errors */
     }
@@ -78,9 +92,7 @@ export function BlindTimer({ gameId, onAdvanceBlinds }: BlindTimerProps) {
         big_blind: blinds.big_blind,
       });
       setPaused(updated.blind_timer_paused);
-      if (updated.blind_timer_remaining_seconds != null) {
-        setRemaining(Math.max(0, updated.blind_timer_remaining_seconds));
-      }
+      setRemaining(computeRemaining(updated));
     } catch {
       /* ignore errors */
     }
@@ -95,9 +107,7 @@ export function BlindTimer({ gameId, onAdvanceBlinds }: BlindTimerProps) {
       });
       setBlinds(updated);
       setPaused(updated.blind_timer_paused);
-      if (updated.blind_timer_remaining_seconds != null) {
-        setRemaining(Math.max(0, updated.blind_timer_remaining_seconds));
-      }
+      setRemaining(computeRemaining(updated));
     } catch {
       /* ignore errors */
     }
@@ -126,9 +136,7 @@ export function BlindTimer({ gameId, onAdvanceBlinds }: BlindTimerProps) {
       const updated = await updateBlinds(gameId, { small_blind: sb, big_blind: bb, blind_timer_minutes: mins });
       setBlinds(updated);
       setPaused(updated.blind_timer_paused);
-      if (updated.blind_timer_remaining_seconds != null) {
-        setRemaining(Math.max(0, updated.blind_timer_remaining_seconds));
-      }
+      setRemaining(computeRemaining(updated));
       setShowSettings(false);
     } catch {
       setSettingsError('Failed to save blind settings');
@@ -163,10 +171,10 @@ export function BlindTimer({ gameId, onAdvanceBlinds }: BlindTimerProps) {
       </button>
 
       {!timerActive && blinds && (
-        <div style={styles.timerControls}>
+        <div style={{ ...styles.timerControls, justifyContent: 'center' }}>
           <button
             data-testid="blind-start-btn"
-            style={styles.controlBtn}
+            style={{ ...styles.controlBtn, width: '100%', textAlign: 'center' }}
             onClick={handleStart}
           >
             ▶ Start Timer
@@ -195,14 +203,7 @@ export function BlindTimer({ gameId, onAdvanceBlinds }: BlindTimerProps) {
       )}
       {expired && (
         <div data-testid="blind-advance-prompt" style={styles.advancePrompt}>
-          <span>Time to advance blinds!</span>
-          <button
-            data-testid="blind-advance-btn"
-            style={styles.advanceBtn}
-            onClick={() => onAdvanceBlinds?.()}
-          >
-            Advance Blinds
-          </button>
+          <span>⏰ Time to advance blinds!</span>
         </div>
       )}
 
@@ -380,9 +381,11 @@ const styles: Record<string, React.CSSProperties> = {
   advancePrompt: {
     display: 'flex',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: '0.5rem',
     color: '#fbbf24',
     fontWeight: 700,
+    marginTop: '0.4rem',
   },
   advanceBtn: {
     background: '#f59e0b',

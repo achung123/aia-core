@@ -236,6 +236,11 @@ def is_street_complete(
     if not acting_players:
         return True
 
+    # One acting player on a post-flop street has no opponent — auto-complete.
+    # On preflop they may still need to respond to blinds or an all-in raise.
+    if len(acting_players) == 1 and phase != 'preflop':
+        return True
+
     if not actions_this_street:
         return False
 

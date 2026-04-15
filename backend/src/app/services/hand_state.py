@@ -194,6 +194,9 @@ def try_advance_phase(
 ) -> bool:
     """If all non-folded players have acted with equalized bets, try to advance.
 
+    When all remaining players are all-in, cascades through phases until
+    community cards are missing or showdown is reached.
+
     Returns True if any state was modified, False otherwise.
     """
     seats = (
@@ -226,29 +229,46 @@ def try_advance_phase(
     ):
         return False
 
-    # All acted — try to advance
-    phase_idx = PHASE_ORDER.index(state.phase)
-    if phase_idx >= len(PHASE_ORDER) - 1:
-        return False  # Already at showdown
+    # Street is complete — advance, cascading when no meaningful betting
+    # can occur (0 or 1 non-all-in players).
+    no_contest = len(
+        get_active_seat_order(db, game_id, hand, exclude_all_in=True)
+    ) <= 1
+    modified = False
 
-    next_phase = PHASE_ORDER[phase_idx + 1]
+    while True:
+        phase_idx = PHASE_ORDER.index(state.phase)
+        if phase_idx >= len(PHASE_ORDER) - 1:
+            break  # Already at showdown
 
-    # Refresh hand to get latest community cards
-    db.refresh(hand)
-    if not can_advance_to_phase(hand, next_phase):
-        # Street is complete but community cards aren't dealt yet.
-        # Clear current_seat so no player is prompted to act.
-        state.current_seat = None
-        return True  # Can't advance yet — not enough community cards
+        next_phase = PHASE_ORDER[phase_idx + 1]
 
-    state.phase = next_phase
-    state.current_seat = first_to_act_seat(db, game_id, hand, next_phase)
+        # Refresh hand to get latest community cards
+        db.refresh(hand)
+        if not can_advance_to_phase(hand, next_phase):
+            # Street is complete but community cards aren't dealt yet.
+            # Clear current_seat so no player is prompted to act.
+            state.current_seat = None
+            modified = True
+            break
 
-    # Showdown is terminal — no player should act
-    if next_phase == 'showdown':
-        state.current_seat = None
+        state.phase = next_phase
+        modified = True
 
-    return True
+        # Showdown is terminal — no player should act
+        if next_phase == 'showdown':
+            state.current_seat = None
+            break
+
+        if no_contest:
+            # No one can act (or lone player has no opponent) — cascade
+            state.current_seat = None
+            continue
+        else:
+            state.current_seat = first_to_act_seat(db, game_id, hand, next_phase)
+            break
+
+    return modified
 
 
 def activate_preflop(db: Session, game_id: int, hand: Hand, state: HandState) -> None:

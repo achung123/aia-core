@@ -161,3 +161,105 @@ class TestChipStackInHandStatus:
         assert 'current_chips' in players_map[sb_name]
         assert players_map[sb_name]['current_chips'] == 99.90
         assert players_map[bb_name]['current_chips'] == 99.80
+
+
+class TestAutoDeactivateZeroChips:
+    def test_player_deactivated_when_chips_hit_zero(self, client):
+        """A player whose current_chips reach 0 after results should be auto-deactivated."""
+        game = _create_game_with_buy_ins(client, buy_in=10.0)
+        game_id = game['game_id']
+
+        resp = client.post(f'/games/{game_id}/hands/start')
+        assert resp.status_code == 201
+        hand = resp.json()
+        hn = hand['hand_number']
+        activate_hand(client, game_id, hand)
+
+        sb_name = hand['sb_player_name']
+        bb_name = hand['bb_player_name']
+
+        # Record results: loser loses all (profit_loss = -buy_in), winner wins
+        resp = client.patch(
+            f'/games/{game_id}/hands/{hn}/results',
+            json=[
+                {'player_name': sb_name, 'result': 'lost', 'profit_loss': -10.0},
+                {'player_name': bb_name, 'result': 'won', 'profit_loss': 10.0},
+            ],
+        )
+        assert resp.status_code == 200
+
+        # Verify loser is now inactive
+        resp = client.get(f'/games/{game_id}')
+        assert resp.status_code == 200
+        players_map = {p['name']: p for p in resp.json()['players']}
+        assert players_map[sb_name]['is_active'] is False
+        assert players_map[sb_name]['current_chips'] <= 0
+
+        # Winner should still be active
+        assert players_map[bb_name]['is_active'] is True
+
+    def test_player_stays_active_when_chips_above_zero(self, client):
+        """A player who still has chips after results should remain active."""
+        game = _create_game_with_buy_ins(client, buy_in=100.0)
+        game_id = game['game_id']
+
+        resp = client.post(f'/games/{game_id}/hands/start')
+        assert resp.status_code == 201
+        hand = resp.json()
+        hn = hand['hand_number']
+        activate_hand(client, game_id, hand)
+
+        sb_name = hand['sb_player_name']
+        bb_name = hand['bb_player_name']
+
+        resp = client.patch(
+            f'/games/{game_id}/hands/{hn}/results',
+            json=[
+                {'player_name': sb_name, 'result': 'lost', 'profit_loss': -5.0},
+                {'player_name': bb_name, 'result': 'won', 'profit_loss': 5.0},
+            ],
+        )
+        assert resp.status_code == 200
+
+        resp = client.get(f'/games/{game_id}')
+        players_map = {p['name']: p for p in resp.json()['players']}
+        assert players_map[sb_name]['is_active'] is True
+        assert players_map[bb_name]['is_active'] is True
+
+    def test_single_player_result_deactivates_when_chips_hit_zero(self, client):
+        """The single-player PATCH .../result endpoint should auto-deactivate when chips hit 0."""
+        game = _create_game_with_buy_ins(client, buy_in=10.0)
+        game_id = game['game_id']
+
+        resp = client.post(f'/games/{game_id}/hands/start')
+        assert resp.status_code == 201
+        hand = resp.json()
+        hn = hand['hand_number']
+        activate_hand(client, game_id, hand)
+
+        sb_name = hand['sb_player_name']
+        bb_name = hand['bb_player_name']
+
+        # Record single-player result: loser loses all
+        resp = client.patch(
+            f'/games/{game_id}/hands/{hn}/players/{sb_name}/result',
+            json={'result': 'lost', 'profit_loss': -10.0},
+        )
+        assert resp.status_code == 200
+
+        # Winner result
+        resp = client.patch(
+            f'/games/{game_id}/hands/{hn}/players/{bb_name}/result',
+            json={'result': 'won', 'profit_loss': 10.0},
+        )
+        assert resp.status_code == 200
+
+        # Verify loser is now inactive
+        resp = client.get(f'/games/{game_id}')
+        assert resp.status_code == 200
+        players_map = {p['name']: p for p in resp.json()['players']}
+        assert players_map[sb_name]['is_active'] is False
+        assert players_map[sb_name]['current_chips'] <= 0
+
+        # Winner should still be active
+        assert players_map[bb_name]['is_active'] is True

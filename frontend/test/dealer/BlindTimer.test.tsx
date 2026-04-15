@@ -159,8 +159,8 @@ describe('BlindTimer', () => {
     expect(screen.getByTestId('blind-countdown').textContent).toBe('5:00');
   });
 
-  // AC4: When timer hits 0, prompts dealer to advance blinds
-  it('shows advance prompt when timer reaches 0', async () => {
+  // AC4: When timer hits 0, shows notification text (no button)
+  it('shows time-up notification when timer reaches 0', async () => {
     mockFetchBlinds.mockResolvedValue(blindsData({ blind_timer_remaining_seconds: 1 }));
     render(<BlindTimer gameId={1} />);
     await vi.waitFor(() => {
@@ -168,18 +168,19 @@ describe('BlindTimer', () => {
     });
     act(() => { vi.advanceTimersByTime(1000); });
     expect(screen.getByTestId('blind-advance-prompt')).toBeDefined();
-    expect(screen.getByTestId('blind-advance-prompt').textContent).toContain('Advance');
+    expect(screen.getByTestId('blind-advance-prompt').textContent).toContain('advance');
+    // Should NOT have a button
+    expect(screen.queryByTestId('blind-advance-btn')).toBeNull();
   });
 
-  it('calls onAdvanceBlinds callback when advance button is clicked', async () => {
-    const onAdvance = vi.fn();
+  it('centers the time-up notification', async () => {
     mockFetchBlinds.mockResolvedValue(blindsData({ blind_timer_remaining_seconds: 0 }));
-    render(<BlindTimer gameId={1} onAdvanceBlinds={onAdvance} />);
+    render(<BlindTimer gameId={1} />);
     await vi.waitFor(() => {
       expect(screen.getByTestId('blind-advance-prompt')).toBeDefined();
     });
-    fireEvent.click(screen.getByTestId('blind-advance-btn'));
-    expect(onAdvance).toHaveBeenCalledTimes(1);
+    const prompt = screen.getByTestId('blind-advance-prompt');
+    expect(prompt.style.justifyContent).toBe('center');
   });
 
   // AC5: Timer stops ticking after unmount (no leaked intervals)
@@ -341,5 +342,84 @@ describe('BlindTimer', () => {
     act(() => { vi.advanceTimersByTime(2000); });
     expect(screen.getByTestId('blind-countdown').textContent).toBe('1:00');
     expect(countdown.style.color).toBe('#f59e0b');
+  });
+
+  // Bug fix: Start Timer with realistic backend response (remaining_seconds=null)
+  it('starts timer when backend returns null remaining_seconds but valid started_at', async () => {
+    mockFetchBlinds.mockResolvedValue(blindsData({
+      blind_timer_started_at: null,
+      blind_timer_remaining_seconds: null,
+    }));
+    const now = new Date().toISOString();
+    mockUpdateBlinds.mockResolvedValue(blindsData({
+      blind_timer_remaining_seconds: null,
+      blind_timer_started_at: now,
+      blind_timer_paused: false,
+    }));
+    render(<BlindTimer gameId={1} />);
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('blind-start-btn')).toBeDefined();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('blind-start-btn'));
+    });
+    // Timer should show 15:00 (computed from blind_timer_minutes * 60)
+    expect(screen.getByTestId('blind-countdown').textContent).toBe('15:00');
+    // Start button should disappear
+    expect(screen.queryByTestId('blind-start-btn')).toBeNull();
+  });
+
+  // Bug fix: Running timer shows correct remaining on page load
+  it('computes remaining from started_at when remaining_seconds is null', async () => {
+    // Timer started 5 minutes ago, 15-minute timer -> 10 min remaining
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    mockFetchBlinds.mockResolvedValue(blindsData({
+      blind_timer_started_at: fiveMinAgo,
+      blind_timer_remaining_seconds: null,
+      blind_timer_paused: false,
+    }));
+    render(<BlindTimer gameId={1} />);
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('blind-countdown').textContent).toBe('10:00');
+    });
+  });
+
+  // Bug fix: naive UTC timestamp (no Z suffix) must be treated as UTC
+  it('handles naive UTC timestamp from backend without timezone offset', async () => {
+    // Simulate backend returning a naive UTC datetime (no Z suffix) — just started
+    const nowUtc = new Date();
+    const naive = nowUtc.getUTCFullYear() + '-'
+      + String(nowUtc.getUTCMonth() + 1).padStart(2, '0') + '-'
+      + String(nowUtc.getUTCDate()).padStart(2, '0') + 'T'
+      + String(nowUtc.getUTCHours()).padStart(2, '0') + ':'
+      + String(nowUtc.getUTCMinutes()).padStart(2, '0') + ':'
+      + String(nowUtc.getUTCSeconds()).padStart(2, '0');
+    mockFetchBlinds.mockResolvedValue(blindsData({
+      blind_timer_started_at: naive,
+      blind_timer_remaining_seconds: null,
+      blind_timer_paused: false,
+      blind_timer_minutes: 1,
+    }));
+    render(<BlindTimer gameId={1} />);
+    await vi.waitFor(() => {
+      // Should be ~1:00 (just started, 1-minute timer), NOT offset by hours
+      const text = screen.getByTestId('blind-countdown').textContent!;
+      const [m] = text.split(':').map(Number);
+      expect(m).toBeLessThanOrEqual(1);
+    });
+  });
+
+  // Bug fix: Start Timer button should be centered
+  it('renders Start Timer button centered and full width', async () => {
+    mockFetchBlinds.mockResolvedValue(blindsData({
+      blind_timer_started_at: null,
+      blind_timer_remaining_seconds: null,
+    }));
+    render(<BlindTimer gameId={1} />);
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('blind-start-btn')).toBeDefined();
+    });
+    const container = screen.getByTestId('blind-start-btn').parentElement!;
+    expect(container.style.justifyContent).toBe('center');
   });
 });

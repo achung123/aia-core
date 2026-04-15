@@ -1330,6 +1330,9 @@ def update_player_result(
             credit = round(contribution + payload.profit_loss, 2)
             if credit != 0:
                 game_player.current_chips = round(game_player.current_chips + credit, 2)
+            # Auto-deactivate player if chips hit zero
+            if game_player.current_chips is not None and game_player.current_chips <= 0:
+                game_player.is_active = False
 
     _touch_hand_state(db, hand.hand_id)
     db.commit()
@@ -1395,6 +1398,9 @@ def record_hand_results(
                     game_player.current_chips = round(
                         game_player.current_chips + credit, 2
                     )
+                # Auto-deactivate player if chips hit zero
+                if game_player.current_chips is not None and game_player.current_chips <= 0:
+                    game_player.is_active = False
 
     db.commit()
     db.refresh(hand)

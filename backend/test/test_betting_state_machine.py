@@ -560,6 +560,46 @@ class TestStreetCompletion:
             actions, {1, 2, 3}, set(), 'preflop', bb_player_id=2
         )
 
+    def test_single_acting_player_postflop_no_actions_is_complete(self):
+        """One non-all-in player on a post-flop street with no actions — complete."""
+        from app.services.betting import is_street_complete
+
+        # Player 1 is all-in, player 2 covered the all-in.
+        # On flop, no actions yet. Only player 2 can act, but nobody to bet against.
+        assert is_street_complete(
+            [], {1, 2}, {1}, 'flop', bb_player_id=2
+        )
+
+    def test_single_acting_player_preflop_not_complete(self):
+        """One acting player on preflop still needs to respond to an all-in."""
+        from app.services.betting import is_street_complete
+
+        actions = [
+            {'player_id': 1, 'action': 'blind', 'amount': 0.10},
+            {'player_id': 2, 'action': 'blind', 'amount': 0.20},
+            {'player_id': 1, 'action': 'raise', 'amount': 10.00},
+        ]
+        # Player 1 went all-in, player 2 hasn't responded yet
+        assert not is_street_complete(
+            actions, {1, 2}, {1}, 'preflop', bb_player_id=2
+        )
+
+    def test_single_acting_player_turn_is_complete(self):
+        """One non-all-in player on the turn — complete immediately."""
+        from app.services.betting import is_street_complete
+
+        assert is_street_complete(
+            [], {1, 2, 3}, {1, 2}, 'turn', bb_player_id=2
+        )
+
+    def test_single_acting_player_river_is_complete(self):
+        """One non-all-in player on the river — complete immediately."""
+        from app.services.betting import is_street_complete
+
+        assert is_street_complete(
+            [], {1, 2}, {1}, 'river', bb_player_id=2
+        )
+
 
 # ────────────────────────────────────────────────────────────────────
 # Side pot computation unit tests

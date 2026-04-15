@@ -1847,6 +1847,90 @@ describe('DealerApp smart finish hand logic', () => {
     });
   });
 
+  it('does not show Finish Hand when river dealt but streetComplete is false', async () => {
+    vi.useFakeTimers();
+    (fetchHandStatus as ReturnType<typeof vi.fn>).mockResolvedValue({
+      hand_number: 1, community_recorded: true, players: [],
+      street_complete: false, current_player_name: 'Alice', legal_actions: ['call', 'raise', 'fold'],
+      amount_to_call: 1, pot: 5, phase: 'river',
+    });
+    useDealerStore.setState({
+      ...defaultTestState,
+      currentStep: 'activeHand',
+      currentHandId: 1,
+      players: [
+        { name: 'Alice', card1: 'Ah', card2: 'Kd', recorded: true, status: 'playing', outcomeStreet: null },
+        { name: 'Bob', card1: '9s', card2: 'Tc', recorded: true, status: 'playing', outcomeStreet: null },
+      ],
+      community: { ...riverCommunity },
+    });
+    const container = renderToContainer(<DealerApp />);
+
+    // Trigger polling so streetComplete gets set to false
+    await vi.advanceTimersByTimeAsync(3000);
+
+    await vi.waitFor(() => {
+      expect(findButton(container, 'Finish Hand')).toBeFalsy();
+    });
+    vi.useRealTimers();
+  });
+
+  it('shows Finish Hand when river dealt and streetComplete is true', async () => {
+    vi.useFakeTimers();
+    (fetchHandStatus as ReturnType<typeof vi.fn>).mockResolvedValue({
+      hand_number: 1, community_recorded: true, players: [],
+      street_complete: true, current_player_name: null, legal_actions: [],
+      amount_to_call: 0, pot: 10, phase: 'river',
+    });
+    useDealerStore.setState({
+      ...defaultTestState,
+      currentStep: 'activeHand',
+      currentHandId: 1,
+      players: [
+        { name: 'Alice', card1: 'Ah', card2: 'Kd', recorded: true, status: 'playing', outcomeStreet: null },
+        { name: 'Bob', card1: '9s', card2: 'Tc', recorded: true, status: 'playing', outcomeStreet: null },
+      ],
+      community: { ...riverCommunity },
+    });
+    const container = renderToContainer(<DealerApp />);
+
+    // Trigger polling so streetComplete gets set to true
+    await vi.advanceTimersByTimeAsync(3000);
+
+    await vi.waitFor(() => {
+      expect(findButton(container, 'Finish Hand')).toBeTruthy();
+    });
+    vi.useRealTimers();
+  });
+
+  it('shows Finish Hand when hand phase is showdown (all-in scenario)', async () => {
+    vi.useFakeTimers();
+    (fetchHandStatus as ReturnType<typeof vi.fn>).mockResolvedValue({
+      hand_number: 1, community_recorded: true, players: [],
+      street_complete: false, current_player_name: null, legal_actions: [],
+      amount_to_call: 0, pot: 20, phase: 'showdown',
+    });
+    useDealerStore.setState({
+      ...defaultTestState,
+      currentStep: 'activeHand',
+      currentHandId: 1,
+      players: [
+        { name: 'Alice', card1: 'Ah', card2: 'Kd', recorded: true, status: 'playing', outcomeStreet: null },
+        { name: 'Bob', card1: '9s', card2: 'Tc', recorded: true, status: 'playing', outcomeStreet: null },
+      ],
+      community: { ...riverCommunity },
+    });
+    const container = renderToContainer(<DealerApp />);
+
+    // Trigger polling so handPhase gets set to 'showdown'
+    await vi.advanceTimersByTimeAsync(3000);
+
+    await vi.waitFor(() => {
+      expect(findButton(container, 'Finish Hand')).toBeTruthy();
+    });
+    vi.useRealTimers();
+  });
+
   it('does not show Showdown button in street row', () => {
     useDealerStore.setState({
       ...defaultTestState,

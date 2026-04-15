@@ -237,7 +237,9 @@ export function ActiveHandDashboard({
                   ? 'Waiting for cards…'
                   : currentPlayerName
                     ? `Turn: ${currentPlayerName}`
-                    : 'Waiting for turn…'}
+                    : streetComplete && handPhase !== 'showdown'
+                      ? '🃏 All players all-in — deal community cards'
+                      : 'Waiting for turn…'}
               </span>
               {pot !== undefined && pot > 0 && (
                 <span data-testid="pot-display" style={styles.potBadge}>Pot: ${pot.toFixed(2)}</span>
