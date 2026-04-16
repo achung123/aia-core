@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { fetchSessions, fetchHands } from '../api/client.ts';
 import type { GameSessionListItem, HandResponse } from '../api/types';
 import { createPokerScene } from '../scenes/pokerScene.ts';
@@ -144,6 +145,7 @@ export function PlaybackView() {
   const [equityMap, setEquityMap] = useState<Record<string, number> | null>(null);
   const [equityLoading, setEquityLoading] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [searchParams] = useSearchParams();
 
   /* Fetch sessions on mount */
   useEffect(() => {
@@ -155,6 +157,17 @@ export function PlaybackView() {
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
   }, []);
+
+  /* Auto-select game from ?gameId= query param */
+  useEffect(() => {
+    const paramId = searchParams.get('gameId');
+    if (paramId && sessions.length > 0 && !activeGameId) {
+      const id = Number(paramId);
+      if (sessions.some(s => s.game_id === id)) {
+        selectGame(id);
+      }
+    }
+  }, [sessions, searchParams]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   /* Three.js scene lifecycle — re-runs when activeGameId changes so the
      canvas (only rendered for the playback screen) is in the DOM. */
@@ -435,51 +448,22 @@ export function PlaybackView() {
     }
   }, [activeGameId, handIndex, hands, currentStreet]);
 
-  /* ── Game selector screen ─────────────────────────────────────── */
+  /* ── No game selected — prompt user to pick from Game Sessions ── */
   if (!activeGameId) {
     return (
       <div data-testid="playback-game-selector" style={selectorStyles.container}>
         <h2 style={selectorStyles.heading}>Playback</h2>
 
-        {loading && <p style={selectorStyles.loading}>Loading games…</p>}
+        {loading && <p style={selectorStyles.loading}>Loading game…</p>}
         {error && <p style={selectorStyles.error}>{error}</p>}
 
-        {!loading && !error && sessions.length === 0 && (
-          <p style={selectorStyles.empty}>No games available.</p>
+        {!loading && !error && (
+          <p style={{ color: '#94a3b8', textAlign: 'center' as const, marginTop: '2rem' }}>
+            Select a game from{' '}
+            <a href="#/data" style={{ color: '#c084fc' }}>Game Sessions</a>
+            {' '}and click <strong>▶ Playback</strong> to watch it here.
+          </p>
         )}
-
-        <div style={selectorStyles.list}>
-          {sessions.map(s => {
-            const isActive = s.status === 'active';
-            return (
-              <button
-                key={s.game_id}
-                data-testid="game-card"
-                style={{
-                  ...selectorStyles.card,
-                  ...(isActive ? selectorStyles.cardActive : selectorStyles.cardComplete),
-                }}
-                onClick={() => selectGame(s.game_id)}
-              >
-                <div style={selectorStyles.cardDate}>
-                  {s.game_date} <span style={selectorStyles.gameId}>#{s.game_id}</span>
-                </div>
-                <div style={selectorStyles.cardDetails}>
-                  <span style={{ fontWeight: 600 }}>
-                    {isActive ? '● Active' : 'Complete'}
-                  </span>
-                  <span>{s.player_count} players</span>
-                  <span>{s.hand_count} hands</span>
-                </div>
-                {s.winners && s.winners.length > 0 && (
-                  <div style={selectorStyles.winnersRow}>
-                    🏆 {s.winners.join(', ')}
-                  </div>
-                )}
-              </button>
-            );
-          })}
-        </div>
       </div>
     );
   }

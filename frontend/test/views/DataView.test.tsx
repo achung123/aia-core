@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 
 vi.mock('../../src/api/client.ts', () => ({
   fetchSessions: vi.fn(),
@@ -30,6 +31,7 @@ import {
   createSession,
   deleteGame,
 } from '../../src/api/client.ts';
+import { useDealerStore } from '../../src/stores/dealerStore';
 import type { GameSessionListItem, HandResponse, PlayerResponse } from '../../src/api/types';
 
 const SESSIONS: GameSessionListItem[] = [
@@ -72,18 +74,18 @@ afterEach(() => {
 
 describe('DataView', () => {
   it('renders the title', async () => {
-    render(<DataView />);
+    render(<MemoryRouter><DataView /></MemoryRouter>);
     expect(screen.getByText('📊 Game Sessions')).toBeTruthy();
   });
 
   it('displays loading state initially', () => {
     vi.mocked(fetchSessions).mockReturnValue(new Promise(() => {}));
-    render(<DataView />);
+    render(<MemoryRouter><DataView /></MemoryRouter>);
     expect(screen.getByText('Loading sessions…')).toBeTruthy();
   });
 
   it('renders session rows after loading', async () => {
-    render(<DataView />);
+    render(<MemoryRouter><DataView /></MemoryRouter>);
     await waitFor(() => {
       expect(screen.getByText('2026-04-01')).toBeTruthy();
       expect(screen.getByText('2026-04-05')).toBeTruthy();
@@ -91,14 +93,14 @@ describe('DataView', () => {
   });
 
   it('renders toolbar buttons', () => {
-    render(<DataView />);
+    render(<MemoryRouter><DataView /></MemoryRouter>);
     expect(screen.getByText('+ New Game')).toBeTruthy();
     expect(screen.getByText('Import CSV')).toBeTruthy();
     expect(screen.getByText('Import ZIP')).toBeTruthy();
   });
 
   it('displays hand count and player count', async () => {
-    render(<DataView />);
+    render(<MemoryRouter><DataView /></MemoryRouter>);
     await waitFor(() => {
       expect(screen.getByText('3')).toBeTruthy();
       expect(screen.getByText('5')).toBeTruthy();
@@ -106,7 +108,7 @@ describe('DataView', () => {
   });
 
   it('sorts by date column on header click', async () => {
-    render(<DataView />);
+    render(<MemoryRouter><DataView /></MemoryRouter>);
     await waitFor(() => screen.getByText('2026-04-01'));
     const dateHeader = screen.getByText('Date ↑');
     fireEvent.click(dateHeader);
@@ -115,17 +117,16 @@ describe('DataView', () => {
   });
 
   it('expands session row to show hands on click', async () => {
-    render(<DataView />);
+    render(<MemoryRouter><DataView /></MemoryRouter>);
     await waitFor(() => screen.getByText('2026-04-01'));
     fireEvent.click(screen.getByText('2026-04-01'));
     await waitFor(() => {
       expect(screen.getByText('+ Add Hand')).toBeTruthy();
-      expect(screen.getByText('▶ Load in Visualizer')).toBeTruthy();
     });
   });
 
   it('shows hand details with formatted cards in expanded row', async () => {
-    render(<DataView />);
+    render(<MemoryRouter><DataView /></MemoryRouter>);
     await waitFor(() => screen.getByText('2026-04-01'));
     fireEvent.click(screen.getByText('2026-04-01'));
     await waitFor(() => {
@@ -140,35 +141,35 @@ describe('DataView', () => {
 
   it('shows error state when fetchSessions fails', async () => {
     vi.mocked(fetchSessions).mockRejectedValue(new Error('Network error'));
-    render(<DataView />);
+    render(<MemoryRouter><DataView /></MemoryRouter>);
     await waitFor(() => {
       expect(screen.getByText('Error: Network error')).toBeTruthy();
     });
   });
 
   it('opens create game modal on + New Game click', async () => {
-    render(<DataView />);
+    render(<MemoryRouter><DataView /></MemoryRouter>);
     await waitFor(() => screen.getByText('2026-04-01'));
     fireEvent.click(screen.getByText('+ New Game'));
     expect(screen.getByText('New Game Session')).toBeTruthy();
   });
 
   it('opens CSV upload modal on Import CSV click', async () => {
-    render(<DataView />);
+    render(<MemoryRouter><DataView /></MemoryRouter>);
     await waitFor(() => screen.getByText('2026-04-01'));
     fireEvent.click(screen.getByText('Import CSV'));
     expect(screen.getByText('Import Game from CSV')).toBeTruthy();
   });
 
   it('opens ZIP upload modal on Import ZIP click', async () => {
-    render(<DataView />);
+    render(<MemoryRouter><DataView /></MemoryRouter>);
     await waitFor(() => screen.getByText('2026-04-01'));
     fireEvent.click(screen.getByText('Import ZIP'));
     expect(screen.getByText('Import Game from ZIP')).toBeTruthy();
   });
 
   it('shows Export ZIP button in expanded game details', async () => {
-    render(<DataView />);
+    render(<MemoryRouter><DataView /></MemoryRouter>);
     await waitFor(() => screen.getByText('2026-04-01'));
     fireEvent.click(screen.getByText('2026-04-01'));
     await waitFor(() => {
@@ -178,7 +179,7 @@ describe('DataView', () => {
   });
 
   it('displays status badges', async () => {
-    render(<DataView />);
+    render(<MemoryRouter><DataView /></MemoryRouter>);
     await waitFor(() => {
       expect(screen.getByText('active')).toBeTruthy();
       expect(screen.getByText('completed')).toBeTruthy();
@@ -186,7 +187,7 @@ describe('DataView', () => {
   });
 
   it('collapses expanded row on second click', async () => {
-    render(<DataView />);
+    render(<MemoryRouter><DataView /></MemoryRouter>);
     await waitFor(() => screen.getByText('2026-04-01'));
     fireEvent.click(screen.getByText('2026-04-01'));
     await waitFor(() => screen.getByText('+ Add Hand'));
@@ -196,7 +197,7 @@ describe('DataView', () => {
   });
 
   it('shows outcome_street next to result in expanded hand details', async () => {
-    render(<DataView />);
+    render(<MemoryRouter><DataView /></MemoryRouter>);
     await waitFor(() => screen.getByText('2026-04-01'));
     fireEvent.click(screen.getByText('2026-04-01'));
     await waitFor(() => {
@@ -225,12 +226,59 @@ describe('DataView', () => {
   });
 
   it('renders hand cards alongside the hand table for mobile layout', async () => {
-    render(<DataView />);
+    render(<MemoryRouter><DataView /></MemoryRouter>);
     await waitFor(() => screen.getByText('2026-04-01'));
     fireEvent.click(screen.getByText('2026-04-01'));
     await waitFor(() => screen.getByText('+ Add Hand'));
     // Should have .hand-card elements in the DOM (shown on mobile, hidden on desktop)
     const cards = document.querySelectorAll('.hand-card');
     expect(cards.length).toBeGreaterThan(0);
+  });
+
+  it('resets dealerStore when the active dealer game is deleted', async () => {
+    // Set dealerStore to have game_id 1 as the active game
+    useDealerStore.getState().setGame({ gameId: 1, players: ['Alice', 'Bob'], gameDate: '2026-04-01' });
+    expect(useDealerStore.getState().gameId).toBe(1);
+
+    // Stub window.confirm to auto-accept
+    window.confirm = vi.fn(() => true);
+
+    render(<MemoryRouter><DataView /></MemoryRouter>);
+    await waitFor(() => screen.getByText('2026-04-01'));
+
+    // Expand the session row for game 1
+    fireEvent.click(screen.getByText('2026-04-01'));
+    await waitFor(() => screen.getByText('+ Add Hand'));
+
+    // Click Delete Game
+    fireEvent.click(screen.getByText('🗑 Delete Game'));
+
+    await waitFor(() => {
+      expect(deleteGame).toHaveBeenCalledWith(1);
+    });
+
+    // dealerStore should have been reset
+    await waitFor(() => {
+      expect(useDealerStore.getState().gameId).toBeNull();
+    });
+  });
+
+  it('enables playback button for games with hands', async () => {
+    render(<MemoryRouter><DataView /></MemoryRouter>);
+    await waitFor(() => screen.getByText('2026-04-01'));
+
+    const btn = screen.getByTestId('playback-btn-1');
+    expect(btn.hasAttribute('disabled')).toBe(false);
+  });
+
+  it('disables playback button for games with 0 hands', async () => {
+    vi.mocked(fetchSessions).mockResolvedValue([
+      { game_id: 10, game_date: '2026-04-15', status: 'active', hand_count: 0, player_count: 2, winners: [] },
+    ]);
+    render(<MemoryRouter><DataView /></MemoryRouter>);
+    await waitFor(() => screen.getByText('2026-04-15'));
+
+    const btn = screen.getByTestId('playback-btn-10');
+    expect(btn.hasAttribute('disabled')).toBe(true);
   });
 });

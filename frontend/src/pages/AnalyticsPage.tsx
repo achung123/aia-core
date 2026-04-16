@@ -3,18 +3,22 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { fetchLeaderboard } from '../api/client';
 import type { LeaderboardEntry } from '../api/types';
+import { usePlayerStore } from '../stores/playerStore';
+import { WinsDonutChart } from '../components/WinsDonutChart';
 
 export function AnalyticsPage() {
+  const playerName = usePlayerStore((state) => state.playerName);
   const { data: leaderboard, isLoading, isError } = useQuery<LeaderboardEntry[], Error>({
     queryKey: ['leaderboard'],
     queryFn: fetchLeaderboard,
   });
 
   return (
-    <div style={styles.page}>
-      <h1 style={styles.heading}>📊 Analytics</h1>
+    <div data-testid="landing-page" style={styles.page}>
+      <h1 style={styles.title}>All In Analytics</h1>
+      <p style={styles.subtitle}>Poker session tracking &amp; analysis</p>
 
-      {/* Leaderboard Section */}
+      {/* Leaderboard + Wins Chart */}
       <section style={styles.section}>
         <h2 style={styles.subheading}>Leaderboard</h2>
         {isLoading && (
@@ -26,42 +30,50 @@ export function AnalyticsPage() {
           </div>
         )}
         {leaderboard && (
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th style={styles.th}>Rank</th>
-                <th style={styles.th}>Player</th>
-                <th style={styles.th}>Profit / Loss</th>
-                <th style={styles.th}>Win Rate</th>
-                <th style={styles.th}>Hands</th>
-              </tr>
-            </thead>
-            <tbody>
-              {leaderboard.map((entry) => (
-                <tr key={entry.player_name} style={styles.row}>
-                  <td style={styles.td}>{entry.rank}</td>
-                  <td style={styles.td}>
-                    <Link to={`/players/${entry.player_name}`} style={styles.playerLink}>
-                      {entry.player_name}
-                    </Link>
-                  </td>
-                  <td
-                    data-testid={`profit-${entry.player_name}`}
-                    style={{
-                      ...styles.td,
-                      color: entry.total_profit_loss >= 0 ? '#22c55e' : '#ef4444',
-                      fontWeight: 600,
-                    }}
-                  >
-                    {entry.total_profit_loss >= 0 ? '+' : ''}
-                    {entry.total_profit_loss.toFixed(2)}
-                  </td>
-                  <td style={styles.td}>{(entry.win_rate * 100).toFixed(0)}%</td>
-                  <td style={styles.td}>{entry.hands_played}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div style={styles.leaderboardRow}>
+            <div style={styles.leaderboardTableWrap}>
+              <table style={styles.table}>
+                <thead>
+                  <tr>
+                    <th style={styles.th}>Rank</th>
+                    <th style={styles.th}>Player</th>
+                    <th style={styles.th}>Profit / Loss</th>
+                    <th style={styles.th}>Win Rate</th>
+                    <th style={styles.th}>Hands</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {leaderboard.map((entry) => (
+                    <tr key={entry.player_name} style={styles.row}>
+                      <td style={styles.td}>{entry.rank}</td>
+                      <td style={styles.td}>
+                        <Link to={`/players/${entry.player_name}`} style={styles.playerLink}>
+                          {entry.player_name}
+                        </Link>
+                      </td>
+                      <td
+                        data-testid={`profit-${entry.player_name}`}
+                        style={{
+                          ...styles.td,
+                          color: entry.total_profit_loss >= 0 ? '#22c55e' : '#ef4444',
+                          fontWeight: 600,
+                        }}
+                      >
+                        {entry.total_profit_loss >= 0 ? '+' : ''}
+                        {entry.total_profit_loss.toFixed(2)}
+                      </td>
+                      <td style={styles.td}>{entry.win_rate.toFixed(0)}%</td>
+                      <td style={styles.td}>{entry.hands_played}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={styles.donutWrap}>
+              <h3 style={styles.donutHeading}>Hands Won</h3>
+              <WinsDonutChart leaderboard={leaderboard} />
+            </div>
+          </div>
         )}
       </section>
 
@@ -69,7 +81,17 @@ export function AnalyticsPage() {
       <section style={styles.section}>
         <h2 style={styles.subheading}>Explore</h2>
         <div style={styles.cardGrid}>
-          <Link to="/games" style={styles.card}>
+          <Link to="/dealer" style={styles.card}>
+            <span style={styles.cardEmoji}>🃏</span>
+            <span style={styles.cardLabel}>Dealer</span>
+            <span style={styles.cardDesc}>Run a live game</span>
+          </Link>
+          <Link to="/player" style={styles.card}>
+            <span style={styles.cardEmoji}>👤</span>
+            <span style={styles.cardLabel}>Game</span>
+            <span style={styles.cardDesc}>Join a session</span>
+          </Link>
+          <Link to="/data" style={styles.card}>
             <span style={styles.cardEmoji}>🎰</span>
             <span style={styles.cardLabel}>Game Sessions</span>
             <span style={styles.cardDesc}>Browse game sessions and recaps</span>
@@ -84,6 +106,11 @@ export function AnalyticsPage() {
             <span style={styles.cardLabel}>Awards</span>
             <span style={styles.cardDesc}>Superlative awards and trophies</span>
           </Link>
+          <Link to={playerName ? `/players/${playerName}` : '#'} style={styles.card}>
+            <span style={styles.cardEmoji}>📊</span>
+            <span style={styles.cardLabel}>My Stats</span>
+            <span style={styles.cardDesc}>View your performance stats</span>
+          </Link>
         </div>
       </section>
     </div>
@@ -95,6 +122,19 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '1.5rem',
     maxWidth: 900,
     margin: '0 auto',
+  },
+  title: {
+    fontSize: '2.5rem',
+    fontWeight: 700,
+    marginBottom: '0.5rem',
+    color: '#f1f5f9',
+    textAlign: 'center' as const,
+  },
+  subtitle: {
+    fontSize: '1.1rem',
+    color: '#94a3b8',
+    marginBottom: '2rem',
+    textAlign: 'center' as const,
   },
   heading: {
     fontSize: '1.75rem',
@@ -174,6 +214,28 @@ const styles: Record<string, React.CSSProperties> = {
   cardDesc: {
     fontSize: '0.8rem',
     color: '#94a3b8',
+    textAlign: 'center' as const,
+  },
+  leaderboardRow: {
+    display: 'flex',
+    gap: '1.5rem',
+    alignItems: 'flex-start',
+    flexWrap: 'wrap' as const,
+  },
+  leaderboardTableWrap: {
+    flex: '1 1 420px',
+    minWidth: 0,
+    overflow: 'auto' as const,
+  },
+  donutWrap: {
+    flex: '0 1 320px',
+    minWidth: 260,
+  },
+  donutHeading: {
+    fontSize: '1rem',
+    fontWeight: 600,
+    color: '#e2e8f0',
+    marginBottom: '0.5rem',
     textAlign: 'center' as const,
   },
 };

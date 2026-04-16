@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, type MouseEvent, type ChangeEvent, type FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useDealerStore } from '../stores/dealerStore';
 import {
   fetchSessions,
   fetchHands,
@@ -75,6 +77,7 @@ const COLUMNS: Column[] = [
   { key: 'status', label: 'Status' },
   { key: 'hands', label: 'Hands' },
   { key: 'players', label: 'Players' },
+  { key: 'playback', label: '' },
 ];
 
 /* ── Create Game Modal ────────────────────────────────── */
@@ -602,19 +605,13 @@ function HandDetails({ session, onRefresh }: HandDetailsProps) {
     if (!confirm(`Delete game ${session.game_date} and all its hands? This cannot be undone.`)) return;
     try {
       await deleteGame(session.game_id);
+      if (useDealerStore.getState().gameId === session.game_id) {
+        useDealerStore.getState().reset();
+      }
       onRefresh();
     } catch (err: unknown) {
       alert(`Delete failed: ${err instanceof Error ? err.message : String(err)}`);
     }
-  };
-
-  const handleLoadViz = () => {
-    window.location.hash = '#/playback';
-    setTimeout(() => {
-      if ((window as unknown as Record<string, unknown>).__loadSessionById) {
-        (window as unknown as { __loadSessionById: (id: number) => void }).__loadSessionById(session.game_id);
-      }
-    }, 300);
   };
 
   const handleExportCsv = () => {
@@ -642,7 +639,6 @@ function HandDetails({ session, onRefresh }: HandDetailsProps) {
     <td colSpan={COLUMNS.length}>
       <div className="action-bar">
         <button type="button" className="dv-btn dv-btn-sm" onClick={() => setShowAddHand(true)}>+ Add Hand</button>
-        <button type="button" className="dv-btn dv-btn-sm dv-btn-success" onClick={handleLoadViz}>▶ Load in Visualizer</button>
         <button type="button" className="dv-btn dv-btn-sm" onClick={handleExportCsv}>📥 Export CSV</button>
         <button type="button" className="dv-btn dv-btn-sm" onClick={handleExportZip}>📦 Export ZIP</button>
         <button type="button" className="dv-btn dv-btn-sm dv-btn-danger" onClick={handleDeleteGame}>🗑 Delete Game</button>
@@ -820,6 +816,7 @@ interface SessionRowProps {
 
 function SessionRow({ session, expanded, onClick, onRefresh }: SessionRowProps) {
   const statusText = session.status || 'active';
+  const navigate = useNavigate();
   return (
     <>
       <tr className="session-row" data-game-id={session.game_id} onClick={onClick}>
@@ -827,6 +824,17 @@ function SessionRow({ session, expanded, onClick, onRefresh }: SessionRowProps) 
         <td><span className={`dv-status dv-status-${statusText}`}>{statusText}</span></td>
         <td>{String(session.hand_count ?? '?')}</td>
         <td>{String(session.player_count ?? '?')}</td>
+        <td>
+          <button
+            type="button"
+            className="dv-btn dv-btn-sm"
+            data-testid={`playback-btn-${session.game_id}`}
+            disabled={!session.hand_count}
+            onClick={(e) => { e.stopPropagation(); navigate(`/playback?gameId=${session.game_id}`); }}
+          >
+            ▶ Playback
+          </button>
+        </td>
       </tr>
       {expanded && (
         <tr className="hand-details-row">

@@ -69,6 +69,7 @@ import {
   fetchHand,
 } from '../../src/api/client.ts';
 import { DealerApp } from '../../src/../src/dealer/DealerApp.tsx';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const mockedCreateSession = createSession as ReturnType<typeof vi.fn>;
 const mockedFetchPlayers = fetchPlayers as ReturnType<typeof vi.fn>;
@@ -78,7 +79,10 @@ const mockedFetchGame = fetchGame as ReturnType<typeof vi.fn>;
 const mockedFetchHand = fetchHand as ReturnType<typeof vi.fn>;
 
 function renderApp(): HTMLElement {
-  const { container } = render(<DealerApp />);
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const { container } = render(
+    <QueryClientProvider client={queryClient}><DealerApp /></QueryClientProvider>
+  );
   return container;
 }
 

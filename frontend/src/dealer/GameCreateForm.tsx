@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { fetchPlayers, createPlayer, createSession } from '../api/client.ts';
 import type { PlayerResponse } from '../api/types';
 
@@ -21,6 +22,7 @@ export function GameCreateForm({ onGameCreated }: GameCreateFormProps) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [newPlayerName, setNewPlayerName] = useState('');
   const [addingPlayer, setAddingPlayer] = useState(false);
   const [addPlayerError, setAddPlayerError] = useState<string | null>(null);
@@ -49,6 +51,7 @@ export function GameCreateForm({ onGameCreated }: GameCreateFormProps) {
     setAddingPlayer(true);
     try {
       const player = await createPlayer({ name: trimmed });
+      queryClient.invalidateQueries({ queryKey: ['players'] });
       setPlayers(prev => [...prev, player]);
       setSelected(prev => new Set([...prev, player.name]));
       setNewPlayerName('');

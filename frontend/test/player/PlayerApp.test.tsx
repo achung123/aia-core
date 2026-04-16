@@ -19,6 +19,13 @@ vi.mock('../../src/api/client.ts', () => ({
   recordPlayerAction: vi.fn(),
 }));
 
+const mockPlayerName = { current: 'Bob' as string | null };
+vi.mock('../../src/stores/playerStore.ts', () => {
+  const usePlayerStore = (selector: (s: { playerName: string | null; setPlayerName: (n: string | null) => void }) => unknown) =>
+    selector({ playerName: mockPlayerName.current, setPlayerName: vi.fn() });
+  return { usePlayerStore };
+});
+
 import {
   fetchSessions,
   fetchGame,
@@ -59,6 +66,7 @@ describe('PlayerApp', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     sessionStorage.clear();
+    mockPlayerName.current = 'Bob';
     originalHash = window.location.hash;
     window.location.hash = '';
   });
@@ -102,9 +110,10 @@ describe('PlayerApp', () => {
     expect(cards[1].textContent).toContain('#2');
   });
 
-  it('selecting a game transitions to name picker step', async () => {
+  it('selecting a game transitions directly to playing step', async () => {
     mockFetchSessions.mockResolvedValue(SESSIONS);
-    mockFetchGame.mockResolvedValue({ game_id: 3, player_names: ['Alice', 'Bob'] });
+    mockFetchLatestHand.mockResolvedValue(null);
+    mockFetchHandStatusConditional.mockResolvedValue(wrapConditional({ hand_number: 1, community_recorded: false, players: [] }));
     const container = renderToContainer(<PlayerApp />);
     await vi.waitFor(() => {
       expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(2);
@@ -118,18 +127,22 @@ describe('PlayerApp', () => {
       expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(0);
       // Should show game id selected context
       expect(container.textContent).toContain('Game #3');
+      // Should show player name from store
+      expect(container.textContent).toContain('Bob');
     });
   });
 
-  it('auto-selects game from ?game= URL param and skips picker', async () => {
+  it('auto-selects game from ?game= URL param and goes to playing', async () => {
     window.location.hash = '#/player?game=2';
     mockFetchSessions.mockResolvedValue(SESSIONS);
-    mockFetchGame.mockResolvedValue({ game_id: 2, player_names: ['Dan', 'Eve'] });
+    mockFetchLatestHand.mockResolvedValue(null);
+    mockFetchHandStatusConditional.mockResolvedValue(wrapConditional({ hand_number: 1, community_recorded: false, players: [] }));
     const container = renderToContainer(<PlayerApp />);
     await vi.waitFor(() => {
       // Should not show game cards — auto-selected
       expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(0);
       expect(container.textContent).toContain('Game #2');
+      expect(container.textContent).toContain('Bob');
     });
   });
 
@@ -189,7 +202,7 @@ const GAME_DETAIL = {
   winners: [],
 };
 
-describe('PlayerApp — name picker', () => {
+describe('PlayerApp — no player selected in navbar', () => {
   let originalHash: string;
 
   beforeEach(() => {
@@ -197,9 +210,8 @@ describe('PlayerApp — name picker', () => {
     sessionStorage.clear();
     originalHash = window.location.hash;
     window.location.hash = '';
-    // Default mocks so polling in 'playing' step doesn't crash
-    mockFetchHands.mockResolvedValue([{ hand_number: 1 }]);
-    mockFetchLatestHand.mockResolvedValue({ hand_number: 1 });
+    mockPlayerName.current = null;
+    mockFetchLatestHand.mockResolvedValue(null);
     mockFetchHandStatusConditional.mockResolvedValue(wrapConditional({
       hand_number: 1,
       community_recorded: false,
@@ -212,9 +224,8 @@ describe('PlayerApp — name picker', () => {
     window.location.hash = originalHash;
   });
 
-  it('fetches game details and shows player names as buttons', async () => {
+  it('shows prompt to select name from navbar when playerName is null', async () => {
     mockFetchSessions.mockResolvedValue(SESSIONS);
-    mockFetchGame.mockResolvedValue(GAME_DETAIL);
     const container = renderToContainer(<PlayerApp />);
     await vi.waitFor(() => {
       expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(2);
@@ -223,200 +234,17 @@ describe('PlayerApp — name picker', () => {
     act(() => { container.querySelectorAll('[data-testid="game-card"]')[0].dispatchEvent(new MouseEvent('click', { bubbles: true })); });
 
     await vi.waitFor(() => {
-      const playerBtns = container.querySelectorAll('[data-testid="player-name-btn"]');
-      expect(playerBtns.length).toBe(3);
-      expect(playerBtns[0].textContent).toContain('Alice');
-      expect(playerBtns[1].textContent).toContain('Bob');
-      expect(playerBtns[2].textContent).toContain('Charlie');
-    });
-  });
-
-  it('shows loading while fetching players', async () => {
-    mockFetchSessions.mockResolvedValue(SESSIONS);
-    mockFetchGame.mockReturnValue(new Promise(() => {}));
-    const container = renderToContainer(<PlayerApp />);
-    await vi.waitFor(() => {
-      expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(2);
-    });
-
-    act(() => { container.querySelectorAll('[data-testid="game-card"]')[0].dispatchEvent(new MouseEvent('click', { bubbles: true })); });
-
-    await vi.waitFor(() => {
-      expect(container.textContent).toContain('Loading players');
-    });
-  });
-
-  it('shows message when game has no players', async () => {
-    mockFetchSessions.mockResolvedValue(SESSIONS);
-    mockFetchGame.mockResolvedValue({ ...GAME_DETAIL, player_names: [], players: [] });
-    const container = renderToContainer(<PlayerApp />);
-    await vi.waitFor(() => {
-      expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(2);
-    });
-
-    act(() => { container.querySelectorAll('[data-testid="game-card"]')[0].dispatchEvent(new MouseEvent('click', { bubbles: true })); });
-
-    await vi.waitFor(() => {
-      expect(container.textContent).toContain('No players');
-    });
-  });
-
-  it('selecting a name transitions directly to playing', async () => {
-    mockFetchSessions.mockResolvedValue(SESSIONS);
-    mockFetchGame.mockResolvedValue(GAME_DETAIL);
-    mockFetchHands.mockResolvedValue([{ hand_number: 1 }]);
-    mockFetchLatestHand.mockResolvedValue({ hand_number: 1 });
-    mockFetchHandStatusConditional.mockResolvedValue(wrapConditional({
-      hand_number: 1,
-      community_recorded: false,
-      players: [],
-    }));
-    const container = renderToContainer(<PlayerApp />);
-    await vi.waitFor(() => {
-      expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(2);
-    });
-
-    act(() => { container.querySelectorAll('[data-testid="game-card"]')[0].dispatchEvent(new MouseEvent('click', { bubbles: true })); });
-
-    await vi.waitFor(() => {
-      expect(container.querySelectorAll('[data-testid="player-name-btn"]').length).toBe(3);
-    });
-
-    act(() => { container.querySelectorAll('[data-testid="player-name-btn"]')[1].dispatchEvent(new MouseEvent('click', { bubbles: true })); });
-
-    // Should go directly to playing step (no seat picker)
-    await vi.waitFor(() => {
-      expect(container.textContent).toContain('Bob');
-      expect(container.textContent).toContain('Waiting for hand');
-    });
-  });
-
-  it('Change Player button returns to name picker', async () => {
-    mockFetchSessions.mockResolvedValue(SESSIONS);
-    mockFetchGame.mockResolvedValue(GAME_DETAIL);
-    mockFetchHands.mockResolvedValue([{ hand_number: 1 }]);
-    mockFetchLatestHand.mockResolvedValue({ hand_number: 1 });
-    mockFetchHandStatusConditional.mockResolvedValue(wrapConditional({
-      hand_number: 1,
-      community_recorded: false,
-      players: [],
-    }));
-    const container = renderToContainer(<PlayerApp />);
-    await vi.waitFor(() => {
-      expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(2);
-    });
-
-    act(() => { container.querySelectorAll('[data-testid="game-card"]')[0].dispatchEvent(new MouseEvent('click', { bubbles: true })); });
-
-    await vi.waitFor(() => {
-      expect(container.querySelectorAll('[data-testid="player-name-btn"]').length).toBe(3);
-    });
-
-    act(() => { container.querySelectorAll('[data-testid="player-name-btn"]')[0].dispatchEvent(new MouseEvent('click', { bubbles: true })); });
-
-    // Should go directly to playing
-    await vi.waitFor(() => {
-      expect(container.textContent).toContain('Alice');
-    });
-
-    act(() => { container.querySelector<HTMLElement>('[data-testid="change-player-btn"]')!.click(); });
-
-    await vi.waitFor(() => {
-      expect(container.querySelectorAll('[data-testid="player-name-btn"]').length).toBe(3);
-    });
-  });
-
-  it('auto-selected game via URL also fetches players', async () => {
-    window.location.hash = '#/player?game=2';
-    mockFetchSessions.mockResolvedValue(SESSIONS);
-    mockFetchGame.mockResolvedValue({
-      ...GAME_DETAIL,
-      game_id: 2,
-      player_names: ['Dan', 'Eve'],
-      players: [
-        { name: 'Dan', is_active: true, seat_number: null, buy_in: null },
-        { name: 'Eve', is_active: true, seat_number: null, buy_in: null },
-      ],
-    });
-    const container = renderToContainer(<PlayerApp />);
-
-    await vi.waitFor(() => {
-      const playerBtns = container.querySelectorAll('[data-testid="player-name-btn"]');
-      expect(playerBtns.length).toBe(2);
-      expect(playerBtns[0].textContent).toContain('Dan');
-      expect(playerBtns[1].textContent).toContain('Eve');
-    });
-  });
-
-  it('auto-selects game AND player when both are in URL, skipping name pick', async () => {
-    window.location.hash = '#/player?game=2&player=Bob';
-    mockFetchSessions.mockResolvedValue(SESSIONS);
-    mockFetchHands.mockResolvedValue([{ hand_number: 1 }]);
-    mockFetchLatestHand.mockResolvedValue({ hand_number: 1 });
-    mockFetchHandStatusConditional.mockResolvedValue(wrapConditional({
-      hand_number: 1,
-      community_recorded: false,
-      players: [
-        { name: 'Bob', participation_status: 'idle', card_1: null, card_2: null, result: null, outcome_street: null, is_current_turn: false },
-      ],
-    }));
-    const container = renderToContainer(<PlayerApp />);
-
-    // Should go straight to playing step, not name pick
-    await vi.waitFor(() => {
-      expect(container.textContent).toContain('Bob');
-      expect(container.textContent).toContain('Game #2');
-      expect(container.textContent).toContain('Waiting for hand');
-    });
-    // Should NOT show name pick buttons
-    expect(container.querySelectorAll('[data-testid="player-name-btn"]').length).toBe(0);
-  });
-});
-
-describe('PlayerApp — seat picker step removed', () => {
-  let originalHash: string;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    sessionStorage.clear();
-    originalHash = window.location.hash;
-    window.location.hash = '';
-    mockFetchHands.mockResolvedValue([{ hand_number: 1 }]);
-    mockFetchLatestHand.mockResolvedValue({ hand_number: 1 });
-    mockFetchHandStatusConditional.mockResolvedValue(wrapConditional({
-      hand_number: 1,
-      community_recorded: false,
-      players: [],
-    }));
-  });
-
-  afterEach(() => {
-    cleanup();
-    window.location.hash = originalHash;
-  });
-
-  it('selecting a player name goes directly to playing (no seat picker)', async () => {
-    mockFetchSessions.mockResolvedValue(SESSIONS);
-    mockFetchGame.mockResolvedValue(GAME_DETAIL);
-    const { container } = render(<PlayerApp />);
-    await vi.waitFor(() => {
-      expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(2);
-    });
-    act(() => { container.querySelectorAll('[data-testid="game-card"]')[0].dispatchEvent(new MouseEvent('click', { bubbles: true })); });
-    await vi.waitFor(() => {
-      expect(container.querySelectorAll('[data-testid="player-name-btn"]').length).toBe(3);
-    });
-    act(() => { container.querySelectorAll('[data-testid="player-name-btn"]')[1].dispatchEvent(new MouseEvent('click', { bubbles: true })); });
-    // Should go directly to playing — no seat picker
-    await vi.waitFor(() => {
-      expect(container.textContent).toContain('Bob');
-      expect(container.querySelector('[data-testid="seat-picker"]')).toBeNull();
+      expect(container.querySelector('[data-testid="no-player-selected"]')).not.toBeNull();
+      expect(container.textContent).toContain('Select your name from the dropdown above.');
     });
   });
 });
 
 /* ---- Helper: navigate to playing step ---- */
 async function goToPlaying(playerIndex = 1, { hands, handStatus }: { hands?: { hand_number: number }[]; handStatus?: Record<string, unknown> } = {}): Promise<HTMLElement> {
+  // Set the player name in the mock store based on index
+  mockPlayerName.current = GAME_DETAIL.player_names[playerIndex];
+
   mockFetchSessions.mockResolvedValue(SESSIONS);
   mockFetchGame.mockResolvedValue(GAME_DETAIL);
   mockFetchHands.mockResolvedValue(hands || [{ hand_number: 1 }]);
@@ -444,11 +272,7 @@ async function goToPlaying(playerIndex = 1, { hands, handStatus }: { hands?: { h
     expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(2);
   });
   act(() => { container.querySelectorAll('[data-testid="game-card"]')[0].dispatchEvent(new MouseEvent('click', { bubbles: true })); });
-  await vi.waitFor(() => {
-    expect(container.querySelectorAll('[data-testid="player-name-btn"]').length).toBe(3);
-  });
-  act(() => { container.querySelectorAll('[data-testid="player-name-btn"]')[playerIndex].dispatchEvent(new MouseEvent('click', { bubbles: true })); });
-  // Should go directly to playing — no seat picker step
+  // Should go directly to playing — player name comes from store
   await vi.waitFor(() => {
     expect(container.textContent).toContain(GAME_DETAIL.player_names[playerIndex]);
   });
@@ -495,6 +319,7 @@ describe('PlayerApp — polling and status', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     sessionStorage.clear();
+    mockPlayerName.current = 'Bob';
     vi.useFakeTimers();
     originalHash = window.location.hash;
     window.location.hash = '';
@@ -635,17 +460,17 @@ describe('PlayerApp — polling and status', () => {
     });
   });
 
-  it('stops polling when returning to name picker via Change Player', async () => {
+  it('stops polling when leaving game via Leave Game', async () => {
     const container = await goToPlaying(1);
 
     await vi.waitFor(() => {
       expect(mockFetchHandStatusConditional).toHaveBeenCalled();
     });
 
-    act(() => { container.querySelector<HTMLElement>('[data-testid="change-player-btn"]')!.click(); });
+    act(() => { container.querySelector<HTMLElement>('[data-testid="leave-game-btn"]')!.click(); });
 
     await vi.waitFor(() => {
-      expect(container.querySelectorAll('[data-testid="player-name-btn"]').length).toBe(3);
+      expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(2);
     });
 
     const callsBefore = mockFetchHandStatusConditional.mock.calls.length;
@@ -682,6 +507,7 @@ describe('PlayerApp — camera capture flow', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     sessionStorage.clear();
+    mockPlayerName.current = 'Bob';
     vi.useFakeTimers();
     originalHash = window.location.hash;
     window.location.hash = '';
@@ -925,6 +751,7 @@ describe('PlayerApp — hand back cards removed', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     sessionStorage.clear();
+    mockPlayerName.current = 'Bob';
     vi.useFakeTimers();
     originalHash = window.location.hash;
     window.location.hash = '';
@@ -983,6 +810,7 @@ describe('PlayerApp — polling edge cases', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     sessionStorage.clear();
+    mockPlayerName.current = 'Bob';
     vi.useFakeTimers();
     originalHash = window.location.hash;
     window.location.hash = '';
@@ -1072,7 +900,7 @@ describe('PlayerApp — polling edge cases', () => {
 
     // Component should still be mounted and functional
     expect(container.textContent).toContain('Bob');
-    expect(container.querySelector('[data-testid="change-player-btn"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="leave-game-btn"]')).not.toBeNull();
   });
 
   it('handles network error on fetchHandStatusConditional without crashing', async () => {
@@ -1134,6 +962,7 @@ describe('PlayerApp — button alignment', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     sessionStorage.clear();
+    mockPlayerName.current = 'Bob';
     vi.useFakeTimers();
     originalHash = window.location.hash;
     window.location.hash = '';
@@ -1154,24 +983,24 @@ describe('PlayerApp — button alignment', () => {
     });
   });
 
-  it('change-player-btn has flex layout for side-by-side', async () => {
+  it('leave-game-btn has flex layout', async () => {
     const container = await goToPlaying(1, { handStatus: makeStatus('Bob', 'pending') });
     await vi.waitFor(() => {
-      const btn = container.querySelector('[data-testid="change-player-btn"]') as HTMLElement;
+      const btn = container.querySelector('[data-testid="leave-game-btn"]') as HTMLElement;
       expect(btn).not.toBeNull();
       expect(btn.style.minHeight).toBe('44px');
     });
   });
 
-  it('capture-cards-btn and change-player-btn both have adequate minHeight', async () => {
+  it('capture-cards-btn and leave-game-btn both have adequate minHeight', async () => {
     const container = await goToPlaying(1, { handStatus: makeStatus('Bob', 'pending') });
     await vi.waitFor(() => {
       const capture = container.querySelector('[data-testid="capture-cards-btn"]') as HTMLElement;
-      const change = container.querySelector('[data-testid="change-player-btn"]') as HTMLElement;
+      const leave = container.querySelector('[data-testid="leave-game-btn"]') as HTMLElement;
       expect(capture).not.toBeNull();
-      expect(change).not.toBeNull();
+      expect(leave).not.toBeNull();
       expect(parseInt(capture.style.minHeight)).toBeGreaterThanOrEqual(44);
-      expect(parseInt(change.style.minHeight)).toBeGreaterThanOrEqual(44);
+      expect(parseInt(leave.style.minHeight)).toBeGreaterThanOrEqual(44);
     });
   });
 
@@ -1206,6 +1035,7 @@ describe('PlayerApp — session pinning (sessionStorage)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
+    mockPlayerName.current = 'Bob';
     originalHash = window.location.hash;
     window.location.hash = '';
     sessionStorage.clear();
@@ -1232,7 +1062,7 @@ describe('PlayerApp — session pinning (sessionStorage)', () => {
     sessionStorage.clear();
   });
 
-  it('stores gameId and playerName in sessionStorage after selecting game and player', async () => {
+  it('stores gameId and playerName in sessionStorage after selecting game', async () => {
     const container = await goToPlaying(1); // Bob
 
     await vi.waitFor(() => {
@@ -1244,19 +1074,18 @@ describe('PlayerApp — session pinning (sessionStorage)', () => {
   });
 
   it('restores session from sessionStorage and skips to playing step on mount', async () => {
-    sessionStorage.setItem(PLAYER_SESSION_KEY, JSON.stringify({ gameId: 2, playerName: 'Eve' }));
+    sessionStorage.setItem(PLAYER_SESSION_KEY, JSON.stringify({ gameId: 2, playerName: 'Bob' }));
     mockFetchSessions.mockResolvedValue(SESSIONS);
 
     const { container } = render(<PlayerApp />);
 
     await vi.waitFor(() => {
-      expect(container.textContent).toContain('Eve');
+      expect(container.textContent).toContain('Bob');
       expect(container.textContent).toContain('Game #2');
     });
 
-    // Should not show game cards or name picker
+    // Should not show game cards
     expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(0);
-    expect(container.querySelectorAll('[data-testid="player-name-btn"]').length).toBe(0);
   });
 
   it('clears storage and shows selector when stored game is not active', async () => {
@@ -1309,24 +1138,6 @@ describe('PlayerApp — session pinning (sessionStorage)', () => {
     expect(sessionStorage.getItem(PLAYER_SESSION_KEY)).toBeNull();
   });
 
-  it('Change Player button clears sessionStorage', async () => {
-    const container = await goToPlaying(1); // Bob
-
-    await vi.waitFor(() => {
-      expect(container.textContent).toContain('Bob');
-    });
-
-    expect(sessionStorage.getItem(PLAYER_SESSION_KEY)).not.toBeNull();
-
-    act(() => { container.querySelector<HTMLElement>('[data-testid="change-player-btn"]')!.click(); });
-
-    await vi.waitFor(() => {
-      expect(container.querySelectorAll('[data-testid="player-name-btn"]').length).toBe(3);
-    });
-
-    expect(sessionStorage.getItem(PLAYER_SESSION_KEY)).toBeNull();
-  });
-
   it('does not restore session when sessionStorage is empty', async () => {
     mockFetchSessions.mockResolvedValue(SESSIONS);
 
@@ -1340,11 +1151,11 @@ describe('PlayerApp — session pinning (sessionStorage)', () => {
     expect(container.textContent).toContain('Select a Game');
   });
 
-  it('URL params take precedence over sessionStorage', async () => {
-    // Store session for game 3/Alice
+  it('URL game param takes precedence over sessionStorage', async () => {
+    // Store session for game 3
     sessionStorage.setItem(PLAYER_SESSION_KEY, JSON.stringify({ gameId: 3, playerName: 'Alice' }));
-    // URL points to game 2/Bob
-    window.location.hash = '#/player?game=2&player=Bob';
+    // URL points to game 2
+    window.location.hash = '#/player?game=2';
     mockFetchSessions.mockResolvedValue(SESSIONS);
 
     const { container } = render(<PlayerApp />);
@@ -1354,7 +1165,7 @@ describe('PlayerApp — session pinning (sessionStorage)', () => {
       expect(container.textContent).toContain('Game #2');
     });
 
-    // Session should be updated to URL values
+    // Session should be updated to URL game with store player name
     const stored = JSON.parse(sessionStorage.getItem(PLAYER_SESSION_KEY)!);
     expect(stored).toEqual({ gameId: 2, playerName: 'Bob' });
   });
@@ -1392,6 +1203,7 @@ describe('PlayerApp — running total', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     sessionStorage.clear();
+    mockPlayerName.current = 'Bob';
     vi.useFakeTimers();
     originalHash = window.location.hash;
     window.location.hash = '';
@@ -1422,16 +1234,12 @@ describe('PlayerApp — running total', () => {
       })),
     }));
 
+    // Bob: buy_in=100 + total_rebuys=0 + profit_loss=-50 = $50.00
     const { container } = render(<PlayerApp />);
     await vi.waitFor(() => {
       expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(2);
     });
     act(() => { container.querySelectorAll('[data-testid="game-card"]')[0].dispatchEvent(new MouseEvent('click', { bubbles: true })); });
-    await vi.waitFor(() => {
-      expect(container.querySelectorAll('[data-testid="player-name-btn"]').length).toBe(3);
-    });
-    // Select Bob (index 1): buy_in=100 + total_rebuys=0 + profit_loss=-50 = $50.00
-    act(() => { container.querySelectorAll('[data-testid="player-name-btn"]')[1].dispatchEvent(new MouseEvent('click', { bubbles: true })); });
 
     await vi.waitFor(() => {
       const stackEl = container.querySelector('[data-testid="player-stack"]');
@@ -1441,6 +1249,7 @@ describe('PlayerApp — running total', () => {
   });
 
   it('colors the stack green when positive', async () => {
+    mockPlayerName.current = 'Alice';
     mockFetchSessions.mockResolvedValue(SESSIONS);
     mockFetchGame.mockResolvedValue(GAME_DETAIL_WITH_BUYIN);
     mockFetchGameStats.mockResolvedValue(GAME_STATS_FOR_PLAYER);
@@ -1459,16 +1268,12 @@ describe('PlayerApp — running total', () => {
       })),
     }));
 
+    // Alice: buy_in=100 + 0 + 30 = $130.00 (positive)
     const { container } = render(<PlayerApp />);
     await vi.waitFor(() => {
       expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(2);
     });
     act(() => { container.querySelectorAll('[data-testid="game-card"]')[0].dispatchEvent(new MouseEvent('click', { bubbles: true })); });
-    await vi.waitFor(() => {
-      expect(container.querySelectorAll('[data-testid="player-name-btn"]').length).toBe(3);
-    });
-    // Select Alice (index 0): buy_in=100 + 0 + 30 = $130.00 (positive)
-    act(() => { container.querySelectorAll('[data-testid="player-name-btn"]')[0].dispatchEvent(new MouseEvent('click', { bubbles: true })); });
 
     await vi.waitFor(() => {
       const stackEl = container.querySelector('[data-testid="player-stack"]');
@@ -1478,6 +1283,7 @@ describe('PlayerApp — running total', () => {
   });
 
   it('colors the stack red when negative', async () => {
+    mockPlayerName.current = 'Alice';
     mockFetchSessions.mockResolvedValue(SESSIONS);
     mockFetchGame.mockResolvedValue({
       ...GAME_DETAIL_WITH_BUYIN,
@@ -1510,16 +1316,12 @@ describe('PlayerApp — running total', () => {
       })),
     }));
 
+    // Alice: buy_in=100 + 0 + (-120) = -$20.00 (negative)
     const { container } = render(<PlayerApp />);
     await vi.waitFor(() => {
       expect(container.querySelectorAll('[data-testid="game-card"]').length).toBe(2);
     });
     act(() => { container.querySelectorAll('[data-testid="game-card"]')[0].dispatchEvent(new MouseEvent('click', { bubbles: true })); });
-    await vi.waitFor(() => {
-      expect(container.querySelectorAll('[data-testid="player-name-btn"]').length).toBe(3);
-    });
-    // Select Alice (index 0): buy_in=100 + 0 + (-120) = -$20.00 (negative)
-    act(() => { container.querySelectorAll('[data-testid="player-name-btn"]')[0].dispatchEvent(new MouseEvent('click', { bubbles: true })); });
 
     await vi.waitFor(() => {
       const stackEl = container.querySelector('[data-testid="player-stack"]');

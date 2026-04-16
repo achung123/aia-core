@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, type CSSProperties } from 'react';
+import { useState, useEffect, useRef, type CSSProperties } from 'react';
 import {
   fetchSessions,
   fetchGame,
@@ -17,6 +17,7 @@ import { CameraCapture } from '../dealer/CameraCapture.tsx';
 import { DetectionReview } from '../dealer/DetectionReview.tsx';
 import { PlayerActionButtons } from './PlayerActionButtons.tsx';
 import { usePolling } from '../hooks/usePolling.ts';
+import { usePlayerStore } from '../stores/playerStore';
 
 export const PLAYER_SESSION_KEY = 'aia-player-session';
 
@@ -42,7 +43,7 @@ function clearSession() {
   sessionStorage.removeItem(PLAYER_SESSION_KEY);
 }
 
-type PlayerStep = 'gameSelect' | 'namePick' | 'playing';
+type PlayerStep = 'gameSelect' | 'playing';
 type CaptureStep = null | 'camera' | 'review';
 type ParticipationStatus = 'idle' | 'pending' | 'joined' | 'folded' | 'handed_back' | 'won' | 'lost';
 
@@ -56,12 +57,6 @@ function parseGameIdFromHash(): number | null {
   const hash = window.location.hash || '';
   const match = hash.match(/[?&]game=(\d+)/);
   return match ? Number(match[1]) : null;
-}
-
-function parsePlayerFromHash(): string | null {
-  const hash = window.location.hash || '';
-  const match = hash.match(/[?&]player=([^&]+)/);
-  return match ? decodeURIComponent(match[1]) : null;
 }
 
 interface PlayerStatusViewProps {
@@ -109,9 +104,7 @@ export function PlayerApp() {
   const [sessions, setSessions] = useState<GameSessionListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [players, setPlayers] = useState<{ name: string; isActive: boolean }[]>([]);
-  const [playersLoading, setPlayersLoading] = useState(false);
-  const [playerName, setPlayerName] = useState<string | null>(null);
+  const playerName = usePlayerStore((s) => s.playerName);
   const [playerStatus, setPlayerStatus] = useState<ParticipationStatus>('idle');
   const [, setCommunityRecorded] = useState(false);
   const [handNumber, setHandNumber] = useState<number | null>(null);
@@ -129,43 +122,8 @@ export function PlayerApp() {
   const [pot, setPot] = useState(0);
   const [runningTotal, setRunningTotal] = useState<number | null>(null);
 
-  const loadPlayers = useCallback(function loadPlayers(id: number) {
-    setPlayersLoading(true);
-    fetchGame(id)
-      .then(data => {
-        const playerList = (data.players || []).map((p: PlayerInfo) => ({
-          name: p.name,
-          isActive: p.is_active,
-        }));
-        setPlayers(playerList.length > 0 ? playerList : (data.player_names || []).map((n: string) => ({ name: n, isActive: true })));
-      })
-      .catch(err => setError(err.message))
-      .finally(() => setPlayersLoading(false));
-  }, []);
-
   useEffect(() => {
     const urlGameId = parseGameIdFromHash();
-    const urlPlayer = parsePlayerFromHash();
-
-    // If both game and player are in URL, skip selection screens
-    if (urlGameId !== null && urlPlayer) {
-      fetchSessions()
-        .then(data => {
-          const active = data.filter(s => s.status === 'active');
-          const found = active.find(s => s.game_id === urlGameId);
-          if (found) {
-            setGameId(urlGameId);
-            setPlayerName(urlPlayer);
-            setStep('playing');
-            saveSession(urlGameId, urlPlayer);
-          } else {
-            setError(`Game #${urlGameId} not found or not active`);
-          }
-        })
-        .catch(err => setError(err.message))
-        .finally(() => setLoading(false));
-      return;
-    }
 
     const saved = loadSession();
 
@@ -175,62 +133,42 @@ export function PlayerApp() {
         const sorted = [...active].sort((a, b) => b.game_id - a.game_id);
         setSessions(sorted);
 
+        // URL game param takes precedence over sessionStorage
+        if (urlGameId !== null) {
+          const found = sorted.find(s => s.game_id === urlGameId);
+          if (found) {
+            setGameId(urlGameId);
+            setStep('playing');
+            if (playerName) saveSession(urlGameId, playerName);
+          } else {
+            setError(`Game #${urlGameId} not found or not active`);
+          }
+          return;
+        }
+
         if (saved) {
           const found = active.find(s => s.game_id === saved.gameId);
           if (found) {
             setGameId(saved.gameId);
-            setPlayerName(saved.playerName);
             setStep('playing');
             return;
           } else {
             clearSession();
           }
         }
-
-        if (urlGameId !== null) {
-          const found = sorted.find(s => s.game_id === urlGameId);
-          if (found) {
-            setGameId(urlGameId);
-            setStep('namePick');
-            loadPlayers(urlGameId);
-          } else {
-            setError(`Game #${urlGameId} not found or not active`);
-          }
-        }
       })
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
-  }, [loadPlayers]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleSelectGame(id: number) {
     setGameId(id);
-    setStep('namePick');
-    loadPlayers(id);
-  }
-
-  function handleSelectPlayer(name: string) {
-    setPlayerName(name);
-    setPlayerStatus('idle');
-    if (gameId) saveSession(gameId, name);
+    if (playerName) saveSession(id, playerName);
     setStep('playing');
-  }
-
-  function handleChangePlayer() {
-    clearSession();
-    setPlayerName(null);
-    setPlayerStatus('idle');
-    setNoActiveHand(false);
-    handNumberRef.current = null;
-    setCaptureStep(null);
-    setReviewData(null);
-    setCaptureError(null);
-    if (gameId) loadPlayers(gameId);
-    setStep('namePick');
   }
 
   function handleLeaveGame() {
     clearSession();
-    setPlayerName(null);
     setGameId(null);
     setPlayerStatus('idle');
     setNoActiveHand(false);
@@ -356,6 +294,22 @@ export function PlayerApp() {
   });
 
   if (step === 'playing') {
+    if (!playerName) {
+      return (
+        <div style={styles.container}>
+          <p style={{ color: '#94a3b8', margin: '0 0 0.25rem', fontSize: '0.85rem' }}>Game #{gameId}</p>
+          <p data-testid="no-player-selected">Select your name from the dropdown above.</p>
+          <button
+            data-testid="leave-game-btn"
+            style={styles.changeBtn}
+            onClick={handleLeaveGame}
+          >
+            Leave Game
+          </button>
+        </div>
+      );
+    }
+
     const stackColor = runningTotal === null ? '#94a3b8' : runningTotal > 0 ? '#4ade80' : runningTotal < 0 ? '#f87171' : '#e2e8f0';
 
     return (
@@ -375,7 +329,7 @@ export function PlayerApp() {
         {captureStep === 'camera' && gameId && (
           <CameraCapture
             gameId={gameId}
-            targetName={playerName!}
+            targetName={playerName}
             onDetectionResult={handleDetectionResult}
             onCancel={handleCaptureCancel}
           />
@@ -410,7 +364,7 @@ export function PlayerApp() {
               <PlayerActionButtons
                 gameId={gameId!}
                 handNumber={handNumber}
-                playerName={playerName!}
+                playerName={playerName}
                 communityCardCount={communityCardCount}
                 legalActions={legalActions}
                 amountToCall={amountToCall}
@@ -448,20 +402,13 @@ export function PlayerApp() {
           data-testid="table-view-btn"
           style={styles.tableViewBtn}
           onClick={() => {
-            window.location.hash = `#/player/table?game=${gameId}&player=${encodeURIComponent(playerName!)}`;
+            window.location.hash = `#/player/table?game=${gameId}&player=${encodeURIComponent(playerName)}`;
           }}
         >
           🎬 Table View
         </button>
 
         <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-          <button
-            data-testid="change-player-btn"
-            style={styles.changeBtn}
-            onClick={handleChangePlayer}
-          >
-            Switch Player
-          </button>
           <button
             data-testid="leave-game-btn"
             style={styles.changeBtn}
@@ -474,43 +421,9 @@ export function PlayerApp() {
     );
   }
 
-  if (step === 'namePick') {
-    return (
-      <div style={styles.container}>
-        <h1>Player Mode</h1>
-        <p>Game #{gameId}</p>
-        <h2 style={styles.heading}>Select Your Name</h2>
-
-        {playersLoading && <p>Loading players…</p>}
-        {error && <p style={styles.error}>{error}</p>}
-
-        {!playersLoading && !error && players.length === 0 && (
-          <p>No players in this game.</p>
-        )}
-
-        <div style={styles.list}>
-          {players.map(({ name, isActive }) => (
-            <button
-              key={name}
-              data-testid="player-name-btn"
-              disabled={!isActive}
-              style={{
-                ...styles.card,
-                ...(isActive ? {} : { opacity: 0.4, cursor: 'not-allowed', background: '#2a2b3d' }),
-              }}
-              onClick={() => isActive && handleSelectPlayer(name)}
-            >
-              {name}{!isActive && ' (inactive)'}
-            </button>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div style={styles.container}>
-      <h1>Player Mode</h1>
+      <h1>Game Mode</h1>
       <h2 style={styles.heading}>Select a Game</h2>
 
       {loading && <p>Loading games…</p>}

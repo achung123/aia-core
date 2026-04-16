@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup, waitFor, fireEvent } from '@testing-library/react';
 import { GameCreateForm } from '../../src/../src/dealer/GameCreateForm.tsx';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 vi.mock('../../src/api/client.ts', () => ({
   fetchPlayers: vi.fn(),
@@ -21,6 +22,13 @@ const PLAYERS = [
   { player_id: 3, name: 'Charlie', created_at: '2026-01-01T00:00:00' },
 ];
 
+function createTestWrapper() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+  );
+}
+
 describe('GameCreateForm', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -33,12 +41,12 @@ describe('GameCreateForm', () => {
 
   it('shows loading state while fetching players', () => {
     mockedFetchPlayers.mockReturnValue(new Promise(() => {}));
-    render(<GameCreateForm onGameCreated={() => {}} />);
+    render(<GameCreateForm onGameCreated={() => {}} />, { wrapper: createTestWrapper() });
     expect(screen.getByText(/Loading players/)).toBeTruthy();
   });
 
   it('renders player chips after loading', async () => {
-    render(<GameCreateForm onGameCreated={() => {}} />);
+    render(<GameCreateForm onGameCreated={() => {}} />, { wrapper: createTestWrapper() });
     await waitFor(() => {
       expect(screen.getByText('Alice')).toBeTruthy();
       expect(screen.getByText('Bob')).toBeTruthy();
@@ -47,13 +55,13 @@ describe('GameCreateForm', () => {
   });
 
   it('renders New Game heading and date input', async () => {
-    render(<GameCreateForm onGameCreated={() => {}} />);
+    render(<GameCreateForm onGameCreated={() => {}} />, { wrapper: createTestWrapper() });
     expect(screen.getByText('New Game')).toBeTruthy();
     expect(document.querySelector('input[type="date"]')).toBeTruthy();
   });
 
   it('submit button is disabled until 2 players are selected', async () => {
-    render(<GameCreateForm onGameCreated={() => {}} />);
+    render(<GameCreateForm onGameCreated={() => {}} />, { wrapper: createTestWrapper() });
     await waitFor(() => {
       expect(screen.getByText('Alice')).toBeTruthy();
     });
@@ -71,7 +79,7 @@ describe('GameCreateForm', () => {
   });
 
   it('toggling a player chip deselects it', async () => {
-    render(<GameCreateForm onGameCreated={() => {}} />);
+    render(<GameCreateForm onGameCreated={() => {}} />, { wrapper: createTestWrapper() });
     await waitFor(() => {
       expect(screen.getByText('Alice')).toBeTruthy();
     });
@@ -94,7 +102,7 @@ describe('GameCreateForm', () => {
     });
     const onGameCreated = vi.fn();
 
-    render(<GameCreateForm onGameCreated={onGameCreated} />);
+    render(<GameCreateForm onGameCreated={onGameCreated} />, { wrapper: createTestWrapper() });
     await waitFor(() => {
       expect(screen.getByText('Alice')).toBeTruthy();
     });
@@ -110,7 +118,7 @@ describe('GameCreateForm', () => {
 
   it('shows error when session creation fails', async () => {
     mockedCreateSession.mockRejectedValue(new Error('Server error'));
-    render(<GameCreateForm onGameCreated={() => {}} />);
+    render(<GameCreateForm onGameCreated={() => {}} />, { wrapper: createTestWrapper() });
     await waitFor(() => {
       expect(screen.getByText('Alice')).toBeTruthy();
     });
@@ -126,7 +134,7 @@ describe('GameCreateForm', () => {
 
   it('add player creates and auto-selects new player', async () => {
     mockedCreatePlayer.mockResolvedValue({ player_id: 4, name: 'Diana', created_at: '2026-04-11T00:00:00' });
-    render(<GameCreateForm onGameCreated={() => {}} />);
+    render(<GameCreateForm onGameCreated={() => {}} />, { wrapper: createTestWrapper() });
     await waitFor(() => {
       expect(screen.getByText('Alice')).toBeTruthy();
     });
@@ -143,7 +151,7 @@ describe('GameCreateForm', () => {
 
   it('shows error when adding duplicate player', async () => {
     mockedCreatePlayer.mockRejectedValue(new Error('HTTP 409: conflict'));
-    render(<GameCreateForm onGameCreated={() => {}} />);
+    render(<GameCreateForm onGameCreated={() => {}} />, { wrapper: createTestWrapper() });
     await waitFor(() => {
       expect(screen.getByText('Alice')).toBeTruthy();
     });
@@ -158,13 +166,13 @@ describe('GameCreateForm', () => {
   });
 
   it('does not render game mode selection', async () => {
-    render(<GameCreateForm onGameCreated={() => {}} />);
+    render(<GameCreateForm onGameCreated={() => {}} />, { wrapper: createTestWrapper() });
     expect(screen.queryByText('Game Mode')).toBeNull();
     expect(screen.queryByText('Dealer Centric')).toBeNull();
   });
 
   it('renders buy-in input field', async () => {
-    render(<GameCreateForm onGameCreated={() => {}} />);
+    render(<GameCreateForm onGameCreated={() => {}} />, { wrapper: createTestWrapper() });
     await waitFor(() => {
       expect(screen.getByText('Alice')).toBeTruthy();
     });
@@ -179,7 +187,7 @@ describe('GameCreateForm', () => {
       game_date: '2026-04-11',
       default_buy_in: 20.0,
     });
-    render(<GameCreateForm onGameCreated={() => {}} />);
+    render(<GameCreateForm onGameCreated={() => {}} />, { wrapper: createTestWrapper() });
     await waitFor(() => {
       expect(screen.getByText('Alice')).toBeTruthy();
     });
@@ -202,7 +210,7 @@ describe('GameCreateForm', () => {
       player_names: ['Alice', 'Bob'],
       game_date: '2026-04-11',
     });
-    render(<GameCreateForm onGameCreated={() => {}} />);
+    render(<GameCreateForm onGameCreated={() => {}} />, { wrapper: createTestWrapper() });
     await waitFor(() => {
       expect(screen.getByText('Alice')).toBeTruthy();
     });
@@ -221,7 +229,7 @@ describe('GameCreateForm', () => {
   });
 
   it('defaults buy-in input to 25', () => {
-    render(<GameCreateForm onGameCreated={() => {}} />);
+    render(<GameCreateForm onGameCreated={() => {}} />, { wrapper: createTestWrapper() });
     const input = screen.getByTestId('buy-in-input') as HTMLInputElement;
     expect(input.value).toBe('25');
   });

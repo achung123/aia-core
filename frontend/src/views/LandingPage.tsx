@@ -1,47 +1,11 @@
-import { type CSSProperties, type MouseEvent } from 'react';
-import { useDealerStore } from '../stores/dealerStore';
+import { type CSSProperties } from 'react';
 
 export function LandingPage() {
-  const gameId = useDealerStore((state) => state.gameId);
-  const currentStep = useDealerStore((state) => state.currentStep);
-  const gameActive = gameId !== null && currentStep !== 'gameSelector';
-
-  const handlePlaybackClick = (e: MouseEvent<HTMLAnchorElement>): void => {
-    if (gameActive) e.preventDefault();
-  };
-
   return (
     <div data-testid="landing-page" style={styles.container}>
       <h1 style={styles.title}>All In Analytics</h1>
       <p style={styles.subtitle}>Poker session tracking &amp; analysis</p>
       <div style={styles.links}>
-        <a
-          href={gameActive ? undefined : '#/playback'}
-          style={{ ...styles.card, ...(gameActive ? styles.cardDisabled : {}) }}
-          data-testid="nav-playback"
-          onClick={handlePlaybackClick}
-        >
-          <div style={styles.cardIcon}>🎬</div>
-          <div style={styles.cardTitle}>Playback</div>
-          <div style={styles.cardDesc}>
-            {gameActive ? 'Locked — game in progress' : 'Review recorded sessions'}
-          </div>
-        </a>
-        <a href="#/dealer" style={styles.card} data-testid="nav-dealer">
-          <div style={styles.cardIcon}>🃏</div>
-          <div style={styles.cardTitle}>Dealer</div>
-          <div style={styles.cardDesc}>Run a live game</div>
-        </a>
-        <a href="#/player" style={styles.card} data-testid="nav-player">
-          <div style={styles.cardIcon}>👤</div>
-          <div style={styles.cardTitle}>Player</div>
-          <div style={styles.cardDesc}>Join a session</div>
-        </a>
-        <a href="#/data" style={styles.card} data-testid="nav-data">
-          <div style={styles.cardIcon}>📊</div>
-          <div style={styles.cardTitle}>Data</div>
-          <div style={styles.cardDesc}>Import &amp; export</div>
-        </a>
         <a href="#/analytics" style={styles.card} data-testid="nav-analytics">
           <div style={styles.cardIcon}>📈</div>
           <div style={styles.cardTitle}>Analytics</div>
@@ -94,12 +58,6 @@ const styles: Record<string, CSSProperties> = {
     color: '#c7d2fe',
     transition: 'transform 0.15s, box-shadow 0.15s, border-color 0.15s',
     cursor: 'pointer',
-  },
-  cardDisabled: {
-    opacity: 0.35,
-    cursor: 'not-allowed',
-    filter: 'grayscale(0.6)',
-    pointerEvents: 'auto' as const,
   },
   cardIcon: {
     fontSize: '2rem',

@@ -14,8 +14,8 @@ import { AnalyticsPage } from '../../src/pages/AnalyticsPage';
 const mockedFetchLeaderboard = vi.mocked(fetchLeaderboard);
 
 const LEADERBOARD = [
-  { rank: 1, player_name: 'Alice', total_profit_loss: 250.5, win_rate: 0.65, hands_played: 40 },
-  { rank: 2, player_name: 'Bob', total_profit_loss: -80, win_rate: 0.35, hands_played: 30 },
+  { rank: 1, player_name: 'Alice', total_profit_loss: 250.5, win_rate: 65, hands_played: 40 },
+  { rank: 2, player_name: 'Bob', total_profit_loss: -80, win_rate: 35, hands_played: 30 },
 ];
 
 function renderPage() {
@@ -90,7 +90,7 @@ describe('AnalyticsPage', () => {
     renderPage();
 
     const gamesLink = await waitFor(() => screen.getByRole('link', { name: /game sessions/i }));
-    expect(gamesLink.getAttribute('href')).toBe('/games');
+    expect(gamesLink.getAttribute('href')).toBe('/data');
     const h2hLink = screen.getByRole('link', { name: /head to head/i });
     expect(h2hLink.getAttribute('href')).toBe('/head-to-head');
     const awardsLink = screen.getByRole('link', { name: /awards.*superlative/i });
@@ -107,5 +107,27 @@ describe('AnalyticsPage', () => {
     expect(profitCell.style.color).toBe('#22c55e');
     const lossCell = screen.getByTestId('profit-Bob');
     expect(lossCell.style.color).toBe('#ef4444');
+  });
+
+  it('renders the wins donut chart alongside the leaderboard', async () => {
+    mockedFetchLeaderboard.mockResolvedValue(LEADERBOARD);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Hands Won')).toBeTruthy();
+    });
+    expect(screen.getByTestId('wins-donut-chart')).toBeTruthy();
+  });
+
+  it('displays win rate as a percentage without double-multiplying', async () => {
+    mockedFetchLeaderboard.mockResolvedValue(LEADERBOARD);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Alice')).toBeTruthy();
+    });
+    // win_rate comes from backend as 65 (meaning 65%), should display "65%" not "6500%"
+    expect(screen.getByText('65%')).toBeTruthy();
+    expect(screen.getByText('35%')).toBeTruthy();
+    expect(screen.queryByText('6500%')).toBeNull();
+    expect(screen.queryByText('3500%')).toBeNull();
   });
 });
