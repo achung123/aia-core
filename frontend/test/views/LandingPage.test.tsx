@@ -50,12 +50,13 @@ describe('LandingPage', () => {
     expect(screen.getByText('Poker session tracking & analysis')).toBeTruthy();
   });
 
-  it('renders 4 navigation cards', () => {
+  it('renders 5 navigation cards', () => {
     render(<LandingPage />);
     expect(screen.getByTestId('nav-playback')).toBeTruthy();
     expect(screen.getByTestId('nav-dealer')).toBeTruthy();
     expect(screen.getByTestId('nav-player')).toBeTruthy();
     expect(screen.getByTestId('nav-data')).toBeTruthy();
+    expect(screen.getByTestId('nav-analytics')).toBeTruthy();
   });
 
   it('playback card links to #/playback when no game is active', () => {

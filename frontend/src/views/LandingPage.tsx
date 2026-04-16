@@ -42,6 +42,11 @@ export function LandingPage() {
           <div style={styles.cardTitle}>Data</div>
           <div style={styles.cardDesc}>Import &amp; export</div>
         </a>
+        <a href="#/analytics" style={styles.card} data-testid="nav-analytics">
+          <div style={styles.cardIcon}>📈</div>
+          <div style={styles.cardTitle}>Analytics</div>
+          <div style={styles.cardDesc}>Leaderboard &amp; player stats</div>
+        </a>
       </div>
     </div>
   );

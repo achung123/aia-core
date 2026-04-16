@@ -11,6 +11,7 @@ import { GameRecapPage } from './pages/GameRecapPage';
 import { PlayerProfilePage } from './pages/PlayerProfilePage';
 import { HeadToHeadPage } from './pages/HeadToHeadPage';
 import { AwardsGridPage } from './pages/AwardsGridPage';
+import { AnalyticsPage } from './pages/AnalyticsPage';
 
 export default function App() {
   return (
@@ -28,6 +29,7 @@ export default function App() {
           <Route path="/games/:gameId/recap" element={<GameRecapPage />} />
           <Route path="/players/:playerName" element={<PlayerProfilePage />} />
           <Route path="/head-to-head" element={<HeadToHeadPage />} />
+          <Route path="/analytics" element={<AnalyticsPage />} />
           <Route path="/awards" element={<AwardsGridPage />} />
         </Routes>
       </div>
