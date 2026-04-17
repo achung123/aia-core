@@ -149,4 +149,26 @@ describe('AwardsGridPage', () => {
       expect(mockedFetchAwards).toHaveBeenCalledWith(undefined);
     });
   });
+
+  it('renders the awards grid with responsive columns', async () => {
+    mockedFetchAwards.mockResolvedValue(AWARDS);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Big Stack')).toBeTruthy();
+    });
+    const grid = screen.getByTestId('awards-grid');
+    // Grid should use auto-fill with a min size so it wraps on narrow screens
+    expect(grid.style.gridTemplateColumns).toContain('auto-fill');
+  });
+
+  it('constrains the page width to prevent horizontal overflow', async () => {
+    mockedFetchAwards.mockResolvedValue(AWARDS);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Big Stack')).toBeTruthy();
+    });
+    const page = screen.getByTestId('awards-grid').parentElement!;
+    expect(page.style.width).toBe('100%');
+    expect(page.style.overflowX).toBe('hidden');
+  });
 });

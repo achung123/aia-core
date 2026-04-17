@@ -130,4 +130,41 @@ describe('AnalyticsPage', () => {
     expect(screen.queryByText('6500%')).toBeNull();
     expect(screen.queryByText('3500%')).toBeNull();
   });
+
+  it('page container constrains width and clips horizontal overflow', async () => {
+    mockedFetchLeaderboard.mockResolvedValue(LEADERBOARD);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Alice')).toBeTruthy();
+    });
+    const page = screen.getByTestId('landing-page');
+    expect(page.style.width).toBe('100%');
+    expect(page.style.overflowX).toBe('hidden');
+  });
+
+  it('leaderboard table wrapper allows horizontal scrolling', async () => {
+    mockedFetchLeaderboard.mockResolvedValue(LEADERBOARD);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Alice')).toBeTruthy();
+    });
+    const wrapper = screen.getByTestId('leaderboard-table-wrap');
+    expect(wrapper.style.overflowX).toBe('auto');
+    // Must allow shrinking in flex context
+    expect(wrapper.style.minWidth).toBe('0');
+  });
+
+  it('leaderboard profit/loss values include dollar signs', async () => {
+    mockedFetchLeaderboard.mockResolvedValue(LEADERBOARD);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Alice')).toBeTruthy();
+    });
+    const aliceProfit = screen.getByTestId('profit-Alice');
+    expect(aliceProfit.textContent).toContain('$');
+    expect(aliceProfit.textContent).toContain('250.50');
+    const bobLoss = screen.getByTestId('profit-Bob');
+    expect(bobLoss.textContent).toContain('$');
+    expect(bobLoss.textContent).toContain('80.00');
+  });
 });

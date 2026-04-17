@@ -65,7 +65,7 @@ export function GameRecapPage() {
   const stats = statsQuery.data;
 
   return (
-    <div style={{ padding: '1rem', maxWidth: 600, margin: '0 auto' }}>
+    <div style={{ padding: '1rem', maxWidth: 600, margin: '0 auto', width: '100%', boxSizing: 'border-box' as const, overflowX: 'hidden' as const }}>
       {/* Summary */}
       <section data-testid="recap-summary" style={{ marginBottom: '1.5rem' }}>
         <h1>Game Recap</h1>

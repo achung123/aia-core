@@ -1,7 +1,7 @@
 /** @vitest-environment happy-dom */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, waitFor, fireEvent, cleanup } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
 
 // Mock API client
 vi.mock('../../src/api/client.ts', () => ({
@@ -83,7 +83,10 @@ const HANDS: HandResponse[] = [
 function renderWithGameId(gameId: number) {
   return renderToContainer(
     <MemoryRouter initialEntries={[`/playback?gameId=${gameId}`]}>
-      <PlaybackView />
+      <Routes>
+        <Route path="/playback" element={<PlaybackView />} />
+        <Route path="/data" element={<div data-testid="data-view">Game Sessions</div>} />
+      </Routes>
     </MemoryRouter>
   );
 }
@@ -165,16 +168,14 @@ describe('PlaybackView', () => {
     });
   });
 
-  it('back button returns to prompt screen', async () => {
+  it('back button navigates to Game Sessions page', async () => {
     const container = renderWithGameId(2);
     await waitFor(() => {
       expect(container.querySelector('[data-testid="back-button"]')).toBeTruthy();
     });
     fireEvent.click(container.querySelector('[data-testid="back-button"]')!);
     await waitFor(() => {
-      expect(container.querySelector('[data-testid="back-button"]')).toBeNull();
-      expect(container.querySelector('[data-testid="session-scrubber"]')).toBeNull();
-      expect(container.querySelector('[data-testid="playback-game-selector"]')).toBeTruthy();
+      expect(container.querySelector('[data-testid="data-view"]')).toBeTruthy();
     });
   });
 
@@ -345,7 +346,10 @@ describe('PlaybackView', () => {
 
       const container = renderToContainer(
         <MemoryRouter initialEntries={['/playback?gameId=10']}>
-          <PlaybackView />
+          <Routes>
+            <Route path="/playback" element={<PlaybackView />} />
+            <Route path="/data" element={<div data-testid="data-view">Game Sessions</div>} />
+          </Routes>
         </MemoryRouter>
       );
 
@@ -361,10 +365,10 @@ describe('PlaybackView', () => {
       const backBtn = container.querySelector('[data-testid="back-button"]');
       expect(backBtn).toBeTruthy();
 
-      // Go back
+      // Go back — should navigate to /data
       fireEvent.click(backBtn!);
       await vi.advanceTimersByTimeAsync(0);
-      expect(container.querySelector('[data-testid="playback-game-selector"]')).toBeTruthy();
+      expect(container.querySelector('[data-testid="data-view"]')).toBeTruthy();
 
       const callCount = vi.mocked(fetchHands).mock.calls.length;
 

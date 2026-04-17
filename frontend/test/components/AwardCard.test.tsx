@@ -17,7 +17,7 @@ describe('AwardCard', () => {
     expect(screen.getByText('🏆')).toBeTruthy();
     expect(screen.getByText('Biggest Winner')).toBeTruthy();
     expect(screen.getByText('Alice')).toBeTruthy();
-    expect(screen.getByText('250')).toBeTruthy();
+    expect(screen.getByText('$250.00')).toBeTruthy();
     expect(screen.getByText('profit')).toBeTruthy();
   });
 
@@ -89,5 +89,48 @@ describe('AwardCard', () => {
       />
     );
     expect(container.firstElementChild).toBeTruthy();
+  });
+
+  it('formats dollar values for profit stat_label', () => {
+    render(
+      <AwardCard
+        emoji="💰"
+        awardName="Big Stack"
+        winnerName="Alice"
+        statValue={250.5}
+        statLabel="profit"
+      />
+    );
+    expect(screen.getByText('$250.50')).toBeTruthy();
+  });
+
+  it('formats dollar values for loss stat_label', () => {
+    render(
+      <AwardCard
+        emoji="🎰"
+        awardName="Degen"
+        winnerName="Bob"
+        statValue={-80.5}
+        statLabel="loss"
+      />
+    );
+    expect(screen.getByText('-$80.50')).toBeTruthy();
+  });
+
+  it('does not add dollar sign for non-monetary stat_labels', () => {
+    const { container } = render(
+      <AwardCard
+        emoji="🔥"
+        awardName="Hot Streak"
+        winnerName="Frank"
+        statValue={7}
+        statLabel="wins in a row"
+      />
+    );
+    const statSpans = container.querySelectorAll('span');
+    const valueSpan = Array.from(statSpans).find(s => s.textContent === '7');
+    expect(valueSpan).toBeTruthy();
+    // Should not contain a dollar sign anywhere in this card
+    expect(container.textContent).not.toContain('$');
   });
 });

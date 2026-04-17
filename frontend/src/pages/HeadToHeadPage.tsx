@@ -51,7 +51,7 @@ export function HeadToHeadPage() {
   }
 
   return (
-    <div style={{ maxWidth: 720, margin: '0 auto', padding: '1rem' }}>
+    <div style={{ maxWidth: 720, margin: '0 auto', padding: '1rem', width: '100%', boxSizing: 'border-box' as const, overflowX: 'hidden' as const }}>
       <h1>Head-to-Head</h1>
 
       <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start', marginBottom: '1rem' }}>
@@ -125,6 +125,7 @@ export function HeadToHeadPage() {
             player2FoldRate={data.player2_fold_rate}
           />
 
+          <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
@@ -159,6 +160,7 @@ export function HeadToHeadPage() {
               </tr>
             </tbody>
           </table>
+          </div>
 
           {data.street_breakdown.length > 0 && (
             <>
@@ -169,6 +171,7 @@ export function HeadToHeadPage() {
               />
 
               <h3>By Street</h3>
+              <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr>
@@ -189,6 +192,7 @@ export function HeadToHeadPage() {
                   ))}
                 </tbody>
               </table>
+              </div>
             </>
           )}
         </div>

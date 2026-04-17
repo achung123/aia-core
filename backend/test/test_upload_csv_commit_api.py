@@ -245,6 +245,25 @@ class TestCommitMultiDateSessions:
         finally:
             db.close()
 
+    def test_imported_sessions_have_completed_status(self, client):
+        from app.database.models import GameSession
+
+        csv_bytes = _make_csv([ADAM_H1, GIL_H1, ADAM_D2, GIL_D2])
+        client.post(
+            '/upload/csv/commit',
+            files={'file': ('hands.csv', csv_bytes, 'text/csv')},
+        )
+        db = SessionLocal()
+        try:
+            sessions = db.query(GameSession).all()
+            assert len(sessions) == 2
+            for session in sessions:
+                assert session.status == 'completed', (
+                    f'Game {session.game_id} should be completed, got {session.status!r}'
+                )
+        finally:
+            db.close()
+
 
 # ---------------------------------------------------------------------------
 # AC-2: Players auto-created and reused by name

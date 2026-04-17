@@ -6,6 +6,7 @@ import { StatCard } from '../components/StatCard';
 import { WinRateTrendChart } from '../components/WinRateTrendChart';
 import { OutcomeDonutCharts } from '../components/OutcomeDonutCharts';
 import { SessionHistoryTable } from '../components/SessionHistoryTable';
+import { PnLCandlestickChart } from '../components/PnLCandlestickChart';
 
 export function PlayerProfilePage() {
   const { playerName } = useParams<{ playerName: string }>();
@@ -58,7 +59,7 @@ export function PlayerProfilePage() {
             <StatCard label="Win Rate" value={fmtPct(stats?.win_rate)} />
             <StatCard
               label="P&L"
-              value={stats?.total_profit_loss ?? null}
+              value={stats ? (stats.total_profit_loss < 0 ? `-$${Math.abs(stats.total_profit_loss).toFixed(2)}` : `$${stats.total_profit_loss.toFixed(2)}`) : null}
               trend={
                 stats
                   ? stats.total_profit_loss > 0
@@ -93,6 +94,10 @@ export function PlayerProfilePage() {
           </section>
         )}
 
+        <section style={styles.section}>
+          <h2 style={styles.sectionTitle}>P&L Candlestick</h2>
+          <PnLCandlestickChart data={trends ?? []} />
+        </section>
         <section style={styles.section}>
           <h2 style={styles.sectionTitle}>Session History</h2>
           <SessionHistoryTable data={trends ?? []} />

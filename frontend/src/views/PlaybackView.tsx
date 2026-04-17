@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { fetchSessions, fetchHands } from '../api/client.ts';
 import type { GameSessionListItem, HandResponse } from '../api/types';
 import { createPokerScene } from '../scenes/pokerScene.ts';
@@ -146,6 +146,7 @@ export function PlaybackView() {
   const [equityLoading, setEquityLoading] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   /* Fetch sessions on mount */
   useEffect(() => {
@@ -384,14 +385,9 @@ export function PlaybackView() {
       clearInterval(pollRef.current);
       pollRef.current = null;
     }
-    setActiveGameId(null);
-    setActiveGameStatus(null);
-    setHands([]);
-    setHandIndex(0);
-    setCurrentStreet('Pre-Flop');
-    setEquityMap(null);
     labelsRef.current.forEach(el => el.remove());
     labelsRef.current = [];
+    navigate('/data');
   }
 
   /* Clean up polling on unmount */

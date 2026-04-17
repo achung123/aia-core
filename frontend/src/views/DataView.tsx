@@ -171,19 +171,12 @@ function CsvUploadModal({ onClose, onDone }: CsvUploadModalProps) {
   const [validating, setValidating] = useState(false);
   const [committing, setCommitting] = useState(false);
 
-  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    setFile(e.target.files?.[0] || null);
-    setValidated(false);
-    setStatus('');
-  };
-
-  const handleValidate = async () => {
-    if (!file) return;
+  const runValidation = async (f: File) => {
     setValidating(true);
     setStatus('Validating…');
     setStatusColor('#94a3b8');
     try {
-      const result = await uploadCsvValidate(file);
+      const result = await uploadCsvValidate(f);
       if (result.valid) {
         setStatus(`✓ Valid — ${result.total_rows} rows`);
         setStatusColor('#34d399');
@@ -197,6 +190,14 @@ function CsvUploadModal({ onClose, onDone }: CsvUploadModalProps) {
       setStatus(`Error: ${e instanceof Error ? e.message : String(e)}`);
       setStatusColor('#f87171');
     } finally { setValidating(false); }
+  };
+
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files?.[0] || null;
+    setFile(selected);
+    setValidated(false);
+    setStatus('');
+    if (selected) runValidation(selected);
   };
 
   const handleCommit = async () => {
@@ -232,7 +233,6 @@ function CsvUploadModal({ onClose, onDone }: CsvUploadModalProps) {
         {status && <div className="status-msg" style={{ color: statusColor, whiteSpace: 'pre-wrap' }}>{status}</div>}
         <div className="btn-row">
           <button type="button" className="dv-btn" onClick={onClose}>Cancel</button>
-          <button type="button" className="dv-btn" disabled={!file || validating} onClick={handleValidate}>Validate</button>
           <button type="button" className="dv-btn dv-btn-success" disabled={!validated || committing} onClick={handleCommit}>Commit</button>
         </div>
       </div>

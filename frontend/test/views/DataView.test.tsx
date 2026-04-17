@@ -30,6 +30,7 @@ import {
   fetchPlayers,
   createSession,
   deleteGame,
+  uploadCsvValidate,
 } from '../../src/api/client.ts';
 import { useDealerStore } from '../../src/stores/dealerStore';
 import type { GameSessionListItem, HandResponse, PlayerResponse } from '../../src/api/types';
@@ -280,5 +281,33 @@ describe('DataView', () => {
 
     const btn = screen.getByTestId('playback-btn-10');
     expect(btn.hasAttribute('disabled')).toBe(true);
+  });
+
+  it('auto-validates CSV when a file is selected', async () => {
+    vi.mocked(uploadCsvValidate).mockResolvedValue({ valid: true, total_rows: 4, error_count: 0, errors: [] });
+    render(<MemoryRouter><DataView /></MemoryRouter>);
+    await waitFor(() => screen.getByText('2026-04-01'));
+    fireEvent.click(screen.getByText('Import CSV'));
+    expect(screen.getByText('Import Game from CSV')).toBeTruthy();
+
+    const modal = screen.getByText('Import Game from CSV').closest('.modal')!;
+    const fileInput = modal.querySelector('input[type="file"]') as HTMLInputElement;
+    const testFile = new File(['col1,col2\nval1,val2'], 'test.csv', { type: 'text/csv' });
+    fireEvent.change(fileInput, { target: { files: [testFile] } });
+
+    // Validation should trigger automatically — no Validate button click needed
+    await waitFor(() => {
+      expect(uploadCsvValidate).toHaveBeenCalledWith(testFile);
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/valid/i)).toBeTruthy();
+    });
+  });
+
+  it('CSV modal has no manual Validate button', async () => {
+    render(<MemoryRouter><DataView /></MemoryRouter>);
+    await waitFor(() => screen.getByText('2026-04-01'));
+    fireEvent.click(screen.getByText('Import CSV'));
+    expect(screen.queryByRole('button', { name: /^validate$/i })).toBeNull();
   });
 });

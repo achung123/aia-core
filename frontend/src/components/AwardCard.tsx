@@ -8,11 +8,23 @@ export interface AwardCardProps {
   statLabel: string;
 }
 
+const DOLLAR_LABELS = new Set(['profit', 'loss']);
+
+function fmtValue(value: string | number | null, label: string): string {
+  if (value === null || value === undefined) return '—';
+  if (typeof value === 'number' && DOLLAR_LABELS.has(label)) {
+    return value < 0
+      ? `-$${Math.abs(value).toFixed(2)}`
+      : `$${value.toFixed(2)}`;
+  }
+  return String(value);
+}
+
 export function AwardCard({ emoji, awardName, winnerName, statValue, statLabel }: AwardCardProps) {
   const isEmptyValue = statValue === null || statValue === undefined;
   const isZero = statValue === 0;
   const isMuted = isEmptyValue || isZero;
-  const displayValue = isEmptyValue ? '—' : String(statValue);
+  const displayValue = fmtValue(statValue, statLabel);
 
   return (
     <div style={styles.container}>
@@ -29,16 +41,17 @@ export function AwardCard({ emoji, awardName, winnerName, statValue, statLabel }
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    display: 'inline-flex',
+    display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    padding: '16px 20px',
+    justifyContent: 'center',
+    padding: '16px 12px',
     background: '#1a1a1a',
     borderRadius: '12px',
     border: '1px solid #333',
-    minWidth: '140px',
-    flex: '1 1 auto',
     textAlign: 'center',
+    height: '100%',
+    boxSizing: 'border-box',
   },
   emoji: {
     fontSize: '2rem',

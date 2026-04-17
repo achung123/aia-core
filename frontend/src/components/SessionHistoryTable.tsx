@@ -122,7 +122,7 @@ export function SessionHistoryTable({ data }: Props) {
                       color: row.profit_loss > 0 ? '#22c55e' : row.profit_loss < 0 ? '#ef4444' : undefined,
                     }}
                   >
-                    {row.profit_loss}
+                    {row.profit_loss < 0 ? `-$${Math.abs(row.profit_loss).toFixed(2)}` : `$${row.profit_loss.toFixed(2)}`}
                   </td>
                 </tr>
               );

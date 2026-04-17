@@ -98,7 +98,7 @@ async def commit_csv(
             # --- Game Session ---
             if game_date_str not in session_by_date:
                 game_date = datetime.strptime(game_date_str, '%m-%d-%Y').date()
-                game_session = GameSession(game_date=game_date, status='active')
+                game_session = GameSession(game_date=game_date, status='completed')
                 db.add(game_session)
                 db.flush()
                 games_created += 1

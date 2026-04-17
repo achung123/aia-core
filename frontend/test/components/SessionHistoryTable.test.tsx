@@ -56,7 +56,7 @@ describe('SessionHistoryTable', () => {
       expect(screen.getByText('4')).toBeTruthy();
       expect(screen.getByText('6')).toBeTruthy(); // losses = 10 - 4
       expect(screen.getByText('40%')).toBeTruthy();
-      expect(screen.getByText('100')).toBeTruthy();
+      expect(screen.getByText('$100.00')).toBeTruthy();
     });
 
     it('renders empty state when no data', () => {
@@ -104,8 +104,8 @@ describe('SessionHistoryTable', () => {
 
       const rows = screen.getAllByRole('row');
       // Default for new column is desc
-      expect(rows[1].textContent).toContain('200');
-      expect(rows[3].textContent).toContain('-50');
+      expect(rows[1].textContent).toContain('$200.00');
+      expect(rows[3].textContent).toContain('-$50.00');
     });
 
     it('shows sort indicator on active column', () => {

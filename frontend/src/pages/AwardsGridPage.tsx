@@ -58,7 +58,7 @@ export function AwardsGridPage() {
           No awards yet.
         </div>
       ) : (
-        <div style={styles.grid}>
+        <div data-testid="awards-grid" style={styles.grid}>
           {awards?.map((award) => (
             <Link
               key={award.award_name}
@@ -85,6 +85,9 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '1.5rem',
     maxWidth: 900,
     margin: '0 auto',
+    width: '100%',
+    boxSizing: 'border-box' as const,
+    overflowX: 'hidden' as const,
   },
   heading: {
     fontSize: '1.75rem',
@@ -106,7 +109,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   grid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
     gap: '1rem',
   },
   cardLink: {

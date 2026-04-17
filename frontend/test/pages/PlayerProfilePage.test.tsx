@@ -21,7 +21,8 @@ vi.mock('recharts', () => {
     Tooltip: () => <div />,
     ReferenceLine: () => <div />,
     CartesianGrid: () => <div />,
-    PieChart: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    BarChart: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    Bar: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,    PieChart: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     Pie: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     Cell: () => <div />,
     Legend: () => <div />,
@@ -113,7 +114,7 @@ describe('PlayerProfilePage', () => {
     expect(screen.getByText('18')).toBeTruthy();
     expect(screen.getByText('12')).toBeTruthy();
     expect(screen.getByText('40%')).toBeTruthy();
-    expect(screen.getByText('350')).toBeTruthy();
+    expect(screen.getByText('$350.00')).toBeTruthy();
   });
 
   it('renders street percentages', async () => {

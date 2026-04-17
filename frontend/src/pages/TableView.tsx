@@ -450,7 +450,7 @@ const styles: Record<string, CSSProperties> = {
     position: 'fixed',
     top: 0,
     left: 0,
-    width: '100vw',
+    width: '100%',
     height: '100dvh',
     overflow: 'hidden',
     background: '#1a1a2e',

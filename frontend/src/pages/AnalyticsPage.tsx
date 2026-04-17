@@ -31,7 +31,7 @@ export function AnalyticsPage() {
         )}
         {leaderboard && (
           <div style={styles.leaderboardRow}>
-            <div style={styles.leaderboardTableWrap}>
+            <div data-testid="leaderboard-table-wrap" style={styles.leaderboardTableWrap}>
               <table style={styles.table}>
                 <thead>
                   <tr>
@@ -59,8 +59,8 @@ export function AnalyticsPage() {
                           fontWeight: 600,
                         }}
                       >
-                        {entry.total_profit_loss >= 0 ? '+' : ''}
-                        {entry.total_profit_loss.toFixed(2)}
+                        {entry.total_profit_loss >= 0 ? '+$' : '-$'}
+                        {Math.abs(entry.total_profit_loss).toFixed(2)}
                       </td>
                       <td style={styles.td}>{entry.win_rate.toFixed(0)}%</td>
                       <td style={styles.td}>{entry.hands_played}</td>
@@ -119,12 +119,14 @@ export function AnalyticsPage() {
 
 const styles: Record<string, React.CSSProperties> = {
   page: {
-    padding: '1.5rem',
+    width: '100%',
+    padding: 'clamp(0.75rem, 3vw, 1.5rem)',
     maxWidth: 900,
     margin: '0 auto',
+    overflowX: 'hidden' as const,
   },
   title: {
-    fontSize: '2.5rem',
+    fontSize: 'clamp(1.5rem, 6vw, 2.5rem)',
     fontWeight: 700,
     marginBottom: '0.5rem',
     color: '#f1f5f9',
@@ -166,7 +168,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   th: {
     textAlign: 'left' as const,
-    padding: '0.75rem 1rem',
+    padding: '0.75rem clamp(0.35rem, 2vw, 1rem)',
     color: '#94a3b8',
     fontSize: '0.8rem',
     fontWeight: 600,
@@ -177,9 +179,9 @@ const styles: Record<string, React.CSSProperties> = {
     borderBottom: '1px solid #222',
   },
   td: {
-    padding: '0.65rem 1rem',
+    padding: '0.65rem clamp(0.35rem, 2vw, 1rem)',
     color: '#e2e8f0',
-    fontSize: '0.95rem',
+    fontSize: 'clamp(0.8rem, 2.5vw, 0.95rem)',
   },
   playerLink: {
     color: '#818cf8',
@@ -188,7 +190,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   cardGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
     gap: '1rem',
   },
   card: {
@@ -223,13 +225,13 @@ const styles: Record<string, React.CSSProperties> = {
     flexWrap: 'wrap' as const,
   },
   leaderboardTableWrap: {
-    flex: '1 1 420px',
+    flex: '1 1 280px',
     minWidth: 0,
-    overflow: 'auto' as const,
+    overflowX: 'auto' as const,
   },
   donutWrap: {
     flex: '0 1 320px',
-    minWidth: 260,
+    minWidth: 0,
   },
   donutHeading: {
     fontSize: '1rem',
