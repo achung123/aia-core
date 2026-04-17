@@ -1,20 +1,22 @@
 services:
   backend:
     profiles: ["cpu"]
-    build: .
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     ports:
       - "8000:8000"
     volumes: &backend-volumes
-      - ./src:/app/src
-      - ./alembic:/app/alembic
-      - ./alembic.ini:/app/alembic.ini
-      - ./pyproject.toml:/app/pyproject.toml
-      - ./uv.lock:/app/uv.lock
-      - ./docker-entrypoint.sh:/app/docker-entrypoint.sh
+      - ./backend/src:/app/src
+      - ./backend/alembic:/app/alembic
+      - ./backend/alembic.ini:/app/alembic.ini
+      - ./backend/pyproject.toml:/app/pyproject.toml
+      - ./backend/uv.lock:/app/uv.lock
+      - ./scripts/docker/docker-entrypoint.sh:/app/docker-entrypoint.sh
       - ./scripts:/app/scripts
-      - ./models:/app/models
-      - ./poker.db:/app/poker.db
-      - ./uploads:/app/uploads
+      - ./backend/models:/app/models
+      - ./backend/poker.db:/app/poker.db
+      - ./backend/uploads:/app/uploads
     environment: &backend-env
       - PYTHONPATH=/app/src
       - DATABASE_URL=sqlite:///./poker.db
@@ -27,7 +29,7 @@ services:
     profiles: ["gpu"]
     build:
       context: .
-      dockerfile: Dockerfile.gpu
+      dockerfile: backend/Dockerfile.gpu
     ports:
       - "8000:8000"
     volumes: *backend-volumes
@@ -53,11 +55,5 @@ services:
       - ./frontend/src:/app/src
       - ./frontend/index.html:/app/index.html
       - ./frontend/public:/app/public
-      - ./frontend/vite.config.js:/app/vite.config.js
-
-  tunnel:
-    image: cloudflare/cloudflared:latest
-    command: tunnel --no-autoupdate --protocol http2 --url http://frontend:5173
-    restart: unless-stopped
-    depends_on:
-      - frontend
+      - ./frontend/vite.config.ts:/app/vite.config.ts
+      - ./frontend/tsconfig.json:/app/tsconfig.json

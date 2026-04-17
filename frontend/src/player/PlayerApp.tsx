@@ -1,0 +1,551 @@
+import { useState, useEffect, useRef, type CSSProperties } from 'react';
+import {
+  fetchSessions,
+  fetchGame,
+  fetchLatestHand,
+  fetchHandStatusConditional,
+  fetchGameStats,
+  updateHolecards,
+} from '../api/client.ts';
+import type {
+  GameSessionListItem,
+  CardDetectionEntry,
+  PlayerInfo,
+  GameStatsPlayerEntry,
+} from '../api/types';
+import { CameraCapture } from '../dealer/CameraCapture.tsx';
+import { DetectionReview } from '../dealer/DetectionReview.tsx';
+import { PlayerActionButtons } from './PlayerActionButtons.tsx';
+import { usePolling } from '../hooks/usePolling.ts';
+import { usePlayerStore } from '../stores/playerStore';
+
+export const PLAYER_SESSION_KEY = 'aia-player-session';
+
+function saveSession(gameId: number, playerName: string) {
+  sessionStorage.setItem(PLAYER_SESSION_KEY, JSON.stringify({ gameId, playerName }));
+}
+
+function loadSession(): { gameId: number; playerName: string } | null {
+  try {
+    const raw = sessionStorage.getItem(PLAYER_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed.gameId === 'number' && typeof parsed.playerName === 'string') {
+      return parsed;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function clearSession() {
+  sessionStorage.removeItem(PLAYER_SESSION_KEY);
+}
+
+type PlayerStep = 'gameSelect' | 'playing';
+type CaptureStep = null | 'camera' | 'review';
+type ParticipationStatus = 'idle' | 'pending' | 'joined' | 'folded' | 'handed_back' | 'won' | 'lost';
+
+interface ReviewData {
+  targetName: string;
+  detections: CardDetectionEntry[];
+  imageUrl: string;
+}
+
+function parseGameIdFromHash(): number | null {
+  const hash = window.location.hash || '';
+  const match = hash.match(/[?&]game=(\d+)/);
+  return match ? Number(match[1]) : null;
+}
+
+interface PlayerStatusViewProps {
+  status: ParticipationStatus;
+  onCapture: () => void;
+}
+
+function PlayerStatusView({ status, onCapture }: PlayerStatusViewProps) {
+  switch (status) {
+    case 'pending':
+      return (
+        <div>
+          <p style={{ color: '#ca8a04' }}>Your turn! Capture your cards.</p>
+          <button
+            data-testid="capture-cards-btn"
+            style={styles.captureBtn}
+            onClick={onCapture}
+          >
+            Capture Cards
+          </button>
+        </div>
+      );
+    case 'joined':
+      return (
+        <div>
+          <p style={{ color: '#4ade80' }}>Cards submitted ✓</p>
+        </div>
+      );
+    case 'folded':
+      return <p style={{ color: '#f87171' }}>Folded</p>;
+    case 'handed_back':
+      return <p style={{ color: '#60a5fa' }}>Waiting for dealer decision…</p>;
+    case 'won':
+      return <p style={{ color: '#4ade80' }}>You won! 🏆</p>;
+    case 'lost':
+      return <p style={{ color: '#94a3b8' }}>You lost.</p>;
+    default:
+      return <p style={{ color: '#94a3b8' }}>Waiting for hand…</p>;
+  }
+}
+
+export function PlayerApp() {
+  const [step, setStep] = useState<PlayerStep>('gameSelect');
+  const [gameId, setGameId] = useState<number | null>(null);
+  const [sessions, setSessions] = useState<GameSessionListItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const playerName = usePlayerStore((s) => s.playerName);
+  const [playerStatus, setPlayerStatus] = useState<ParticipationStatus>('idle');
+  const [, setCommunityRecorded] = useState(false);
+  const [handNumber, setHandNumber] = useState<number | null>(null);
+  const [captureStep, setCaptureStep] = useState<CaptureStep>(null);
+  const [reviewData, setReviewData] = useState<ReviewData | null>(null);
+  const [captureError, setCaptureError] = useState<string | null>(null);
+  const [noActiveHand, setNoActiveHand] = useState(false);
+  const [communityCardCount, setCommunityCardCount] = useState(0);
+  const handNumberRef = useRef<number | null>(null);
+  const [isMyTurn, setIsMyTurn] = useState(false);
+  const [legalActions, setLegalActions] = useState<string[]>([]);
+  const [amountToCall, setAmountToCall] = useState(0);
+  const [minimumBet, setMinimumBet] = useState<number | null>(null);
+  const [minimumRaise, setMinimumRaise] = useState<number | null>(null);
+  const [pot, setPot] = useState(0);
+  const [runningTotal, setRunningTotal] = useState<number | null>(null);
+
+  useEffect(() => {
+    const urlGameId = parseGameIdFromHash();
+
+    const saved = loadSession();
+
+    fetchSessions()
+      .then(data => {
+        const active = data.filter(s => s.status === 'active');
+        const sorted = [...active].sort((a, b) => b.game_id - a.game_id);
+        setSessions(sorted);
+
+        // URL game param takes precedence over sessionStorage
+        if (urlGameId !== null) {
+          const found = sorted.find(s => s.game_id === urlGameId);
+          if (found) {
+            setGameId(urlGameId);
+            setStep('playing');
+            if (playerName) saveSession(urlGameId, playerName);
+          } else {
+            setError(`Game #${urlGameId} not found or not active`);
+          }
+          return;
+        }
+
+        if (saved) {
+          const found = active.find(s => s.game_id === saved.gameId);
+          if (found) {
+            setGameId(saved.gameId);
+            setStep('playing');
+            return;
+          } else {
+            clearSession();
+          }
+        }
+      })
+      .catch(err => setError(err.message))
+      .finally(() => setLoading(false));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleSelectGame(id: number) {
+    setGameId(id);
+    if (playerName) saveSession(id, playerName);
+    setStep('playing');
+  }
+
+  function handleLeaveGame() {
+    clearSession();
+    setGameId(null);
+    setPlayerStatus('idle');
+    setNoActiveHand(false);
+    handNumberRef.current = null;
+    setCaptureStep(null);
+    setReviewData(null);
+    setCaptureError(null);
+    setStep('gameSelect');
+  }
+
+  function handleStartCapture() {
+    setCaptureStep('camera');
+    setCaptureError(null);
+  }
+
+  function handleDetectionResult(targetName: string, apiResponse: CardDetectionEntry[], file: File) {
+    setCaptureStep('review');
+    const imageUrl = URL.createObjectURL(file);
+    setReviewData({
+      targetName,
+      detections: apiResponse,
+      imageUrl,
+    });
+  }
+
+  function handleCaptureCancel() {
+    setCaptureStep(null);
+    setReviewData(null);
+  }
+
+  function handleReviewConfirm(_targetName: string, cardValues: string[]) {
+    if (reviewData?.imageUrl) URL.revokeObjectURL(reviewData.imageUrl);
+    const card1 = cardValues[0] || null;
+    const card2 = cardValues[1] || null;
+    // Optimistically transition out of capture UI immediately
+    setCaptureStep(null);
+    setReviewData(null);
+    setCaptureError(null);
+    // Fire API call in the background — surface errors if it fails
+    updateHolecards(gameId!, handNumber!, playerName!, {
+      card_1: card1,
+      card_2: card2,
+    }).catch((err: unknown) => {
+      const message = err instanceof Error ? err.message : 'Failed to submit cards';
+      setCaptureError(message);
+    });
+  }
+
+  function handleReviewRetake() {
+    if (reviewData?.imageUrl) URL.revokeObjectURL(reviewData.imageUrl);
+    setReviewData(null);
+    setCaptureStep('camera');
+  }
+
+  const etagRef = useRef<string | null>(null);
+
+  function loadRunningTotal() {
+    if (!gameId || !playerName) return;
+    Promise.all([fetchGame(gameId), fetchGameStats(gameId)])
+      .then(([gameData, statsData]) => {
+        const player = (gameData.players || []).find((p: PlayerInfo) => p.name === playerName);
+        const stat = (statsData.player_stats || []).find((s: GameStatsPlayerEntry) => s.player_name === playerName);
+        if (player) {
+          // Prefer live current_chips from the backend; fall back to static formula
+          const total = player.current_chips ?? ((player.buy_in ?? 0) + (player.total_rebuys ?? 0) + (stat?.profit_loss ?? 0));
+          setRunningTotal(total);
+        }
+      })
+      .catch(() => {});
+  }
+
+  useEffect(() => {
+    if (step === 'playing' && gameId && playerName) {
+      loadRunningTotal();
+    }
+  }, [step, gameId, playerName]);
+
+  const { isReconnecting: playerReconnecting, triggerNow: triggerPlayerPoll } = usePolling({
+    intervalMs: 5000,
+    enabled: step === 'playing' && !!gameId && !!playerName,
+    fetchFn: (signal) =>
+      fetchLatestHand(gameId!, { signal })
+        .then(latest => {
+          if (signal.aborted) return;
+          if (!latest) {
+            setNoActiveHand(true);
+            setHandNumber(null);
+            handNumberRef.current = null;
+            setPlayerStatus('idle');
+            etagRef.current = null;
+            return;
+          }
+          setNoActiveHand(false);
+          if (latest.hand_number !== handNumberRef.current) {
+            setHandNumber(latest.hand_number);
+            handNumberRef.current = latest.hand_number;
+            setPlayerStatus('idle');
+            etagRef.current = null;
+          }
+          const ccCount = [latest.flop_1, latest.flop_2, latest.flop_3, latest.turn, latest.river]
+            .filter(c => c != null).length;
+          setCommunityCardCount(ccCount);
+          return fetchHandStatusConditional(gameId!, latest.hand_number, { signal, etag: etagRef.current })
+            .then(result => {
+              if (signal.aborted) return;
+              if (result.notModified) return;
+              etagRef.current = result.etag;
+              if (!result.data) return;
+              setCommunityRecorded(result.data.community_recorded);
+              setLegalActions(result.data.legal_actions ?? []);
+              setAmountToCall(result.data.amount_to_call ?? 0);
+              setMinimumBet(result.data.minimum_bet ?? null);
+              setMinimumRaise(result.data.minimum_raise ?? null);
+              setPot(result.data.pot ?? 0);
+              const me = result.data.players.find(p => p.name === playerName);
+              if (me) {
+                setPlayerStatus(me.participation_status as ParticipationStatus);
+                setIsMyTurn(me.is_current_turn ?? false);
+              }
+              loadRunningTotal();
+            });
+        }),
+  });
+
+  if (step === 'playing') {
+    if (!playerName) {
+      return (
+        <div style={styles.container}>
+          <p style={{ color: '#94a3b8', margin: '0 0 0.25rem', fontSize: '0.85rem' }}>Game #{gameId}</p>
+          <p data-testid="no-player-selected">Select your name from the dropdown above.</p>
+          <button
+            data-testid="leave-game-btn"
+            style={styles.changeBtn}
+            onClick={handleLeaveGame}
+          >
+            Leave Game
+          </button>
+        </div>
+      );
+    }
+
+    const stackColor = runningTotal === null ? '#94a3b8' : runningTotal > 0 ? '#4ade80' : runningTotal < 0 ? '#f87171' : '#e2e8f0';
+
+    return (
+      <div style={styles.container}>
+        <p style={{ color: '#94a3b8', margin: '0 0 0.25rem', fontSize: '0.85rem' }}>Game #{gameId}</p>
+        <h2 style={styles.playerName}>{playerName}</h2>
+        {runningTotal !== null && (
+          <p
+            data-testid="player-stack"
+            style={{ color: stackColor, fontWeight: 700, fontSize: '1.1rem', margin: '0 0 0.5rem' }}
+          >
+            Stack: {runningTotal < 0 ? `-$${Math.abs(runningTotal).toFixed(2)}` : `$${runningTotal.toFixed(2)}`}
+          </p>
+        )}
+        {handNumber && <p style={{ color: '#64748b', margin: '0 0 0.75rem', fontSize: '0.85rem' }}>Hand #{handNumber}</p>}
+
+        {captureStep === 'camera' && gameId && (
+          <CameraCapture
+            gameId={gameId}
+            targetName={playerName}
+            onDetectionResult={handleDetectionResult}
+            onCancel={handleCaptureCancel}
+          />
+        )}
+
+        {captureStep === 'review' && reviewData && (
+          <DetectionReview
+            detections={reviewData.detections}
+            imageUrl={reviewData.imageUrl}
+            mode="player"
+            targetName={reviewData.targetName}
+            onConfirm={handleReviewConfirm}
+            onRetake={handleReviewRetake}
+          />
+        )}
+
+        {!captureStep && (
+          <>
+            {noActiveHand && (
+              <p data-testid="no-active-hand" style={{ color: '#94a3b8' }}>No hands yet — waiting for dealer</p>
+            )}
+            {playerReconnecting && (
+              <p data-testid="player-reconnecting" style={{ color: '#ca8a04', fontSize: '0.85rem' }}>Reconnecting…</p>
+            )}
+            {!noActiveHand && (
+              <>
+              <PlayerStatusView
+              status={playerStatus}
+              onCapture={handleStartCapture}
+            />
+            {playerStatus === 'joined' && handNumber && isMyTurn && (
+              <PlayerActionButtons
+                gameId={gameId!}
+                handNumber={handNumber}
+                playerName={playerName}
+                communityCardCount={communityCardCount}
+                legalActions={legalActions}
+                amountToCall={amountToCall}
+                minimumBet={minimumBet}
+                minimumRaise={minimumRaise}
+                pot={pot}
+                currentStack={runningTotal}
+                onActionConfirmed={() => {
+                  etagRef.current = null;
+                  triggerPlayerPoll();
+                }}
+              />
+            )}
+            {playerStatus === 'joined' && handNumber && !isMyTurn && (
+              <p data-testid="waiting-turn" style={{ color: '#ca8a04' }}>Waiting for your turn…</p>
+            )}
+            {captureError && (
+              <div style={styles.error}>
+                <p>{captureError}</p>
+                <button
+                  data-testid="capture-retry-btn"
+                  style={styles.captureBtn}
+                  onClick={handleStartCapture}
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+              </>
+            )}
+          </>
+        )}
+
+        <button
+          data-testid="table-view-btn"
+          style={styles.tableViewBtn}
+          onClick={() => {
+            window.location.hash = `#/player/table?game=${gameId}&player=${encodeURIComponent(playerName)}`;
+          }}
+        >
+          🎬 Table View
+        </button>
+
+        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+          <button
+            data-testid="leave-game-btn"
+            style={styles.changeBtn}
+            onClick={handleLeaveGame}
+          >
+            Leave Game
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={styles.container}>
+      <h1>Game Mode</h1>
+      <h2 style={styles.heading}>Select a Game</h2>
+
+      {loading && <p>Loading games…</p>}
+      {error && <p style={styles.error}>{error}</p>}
+
+      {!loading && !error && sessions.length === 0 && (
+        <p>No active games available.</p>
+      )}
+
+      <div style={styles.list}>
+        {sessions.map(s => (
+          <button
+            key={s.game_id}
+            data-testid="game-card"
+            style={styles.card}
+            onClick={() => handleSelectGame(s.game_id)}
+          >
+            <div style={styles.cardDate}>
+              {s.game_date} <span style={styles.gameId}>#{s.game_id}</span>
+            </div>
+            <div style={styles.cardDetails}>
+              <span>{s.player_count} players</span>
+              <span>{s.hand_count} hands</span>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const styles: Record<string, CSSProperties> = {
+  container: {
+    maxWidth: '480px',
+    margin: '0 auto',
+    padding: '1rem',
+    textAlign: 'center',
+  },
+  heading: {
+    fontSize: '1.4rem',
+    marginBottom: '0.75rem',
+  },
+  playerName: {
+    fontSize: '1.6rem',
+    fontWeight: 700,
+    margin: '0 0 0.25rem',
+    color: '#f1f5f9',
+  },
+  error: {
+    color: '#f87171',
+    padding: '0.75rem 0',
+  },
+  list: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.75rem',
+  },
+  card: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.4rem',
+    padding: '1rem',
+    borderRadius: '12px',
+    border: '2px solid #6366f1',
+    background: 'rgba(99, 102, 241, 0.12)',
+    color: '#c7d2fe',
+    cursor: 'pointer',
+    textAlign: 'left',
+    width: '100%',
+    fontSize: '1rem',
+    WebkitTapHighlightColor: 'transparent',
+  },
+  cardDate: {
+    fontWeight: 'bold',
+    fontSize: '1.1rem',
+  },
+  gameId: {
+    fontWeight: 'normal',
+    fontSize: '0.85rem',
+    color: '#94a3b8',
+  },
+  cardDetails: {
+    display: 'flex',
+    gap: '1rem',
+    fontSize: '0.9rem',
+  },
+  changeBtn: {
+    flex: 1,
+    padding: '0.6rem 1rem',
+    minHeight: '44px',
+    borderRadius: '8px',
+    border: '1px solid #2e303a',
+    background: '#1e1f2b',
+    color: '#94a3b8',
+    cursor: 'pointer',
+    fontSize: '0.9rem',
+  },
+  captureBtn: {
+    marginTop: '0.5rem',
+    padding: '0.75rem 1.5rem',
+    minHeight: '48px',
+    minWidth: '48px',
+    width: '100%',
+    fontSize: '1rem',
+    fontWeight: 'bold',
+    border: 'none',
+    borderRadius: '8px',
+    background: '#4f46e5',
+    color: '#fff',
+    cursor: 'pointer',
+  },
+  tableViewBtn: {
+    marginTop: '1rem',
+    padding: '0.75rem 1.5rem',
+    minHeight: '48px',
+    width: '100%',
+    fontSize: '1rem',
+    fontWeight: 'bold',
+    border: '2px solid #6366f1',
+    borderRadius: '8px',
+    background: 'rgba(99, 102, 241, 0.15)',
+    color: '#a5b4fc',
+    cursor: 'pointer',
+  },
+};

@@ -21,10 +21,10 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: uv sync --frozen --group test
+        run: cd backend && uv sync --frozen --group test
 
       - name: Run tests
-        run: PYTHONPATH=src/ uv run pytest test/ -vv
+        run: cd backend && uv run pytest test/ -vv
 
   frontend:
     runs-on: ubuntu-latest
