@@ -127,7 +127,7 @@ const containerStyle: React.CSSProperties = {
 };
 
 const chartBlock: React.CSSProperties = {
-  flex: '1 1 260px',
+  flex: '1 1 200px',
   minWidth: 0,
   maxWidth: 360,
 };

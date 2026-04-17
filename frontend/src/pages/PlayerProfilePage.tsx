@@ -107,7 +107,7 @@ export function PlayerProfilePage() {
   }
 
   return (
-    <div style={styles.page}>
+    <div data-testid="profile-page" style={styles.page}>
       <h1 style={styles.heading}>{name}</h1>
       <div style={styles.selectorWrapper}>
         <PlayerSelector onSelect={handlePlayerSelect} value={name} placeholder="Switch player…" />
@@ -122,6 +122,9 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '1rem',
     maxWidth: '600px',
     margin: '0 auto',
+    width: '100%',
+    boxSizing: 'border-box' as const,
+    overflowX: 'hidden' as const,
   },
   heading: {
     fontSize: '1.5rem',

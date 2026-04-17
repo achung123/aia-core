@@ -203,4 +203,20 @@ describe('PlayerProfilePage', () => {
 
     expect(screen.getByText('Win Rate Trend')).toBeTruthy();
   });
+
+  it('constrains the page container for mobile viewports', async () => {
+    mockedFetchPlayers.mockResolvedValue([]);
+    mockedFetchPlayerStats.mockResolvedValue(FULL_STATS);
+    renderWithProviders('Alice');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('profile-stats')).toBeTruthy();
+    });
+
+    const page = screen.getByTestId('profile-stats').closest('[data-testid="profile-page"]')!;
+    expect(page).toBeTruthy();
+    expect(page.style.width).toBe('100%');
+    expect(page.style.overflowX).toBe('hidden');
+    expect(page.style.boxSizing).toBe('border-box');
+  });
 });
