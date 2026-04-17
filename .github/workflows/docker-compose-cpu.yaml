@@ -1,0 +1,189 @@
+name: docker-compose-cpu
+
+# Smoke-tests the CPU docker-compose stack end-to-end:
+#   • builds backend (CPU) + frontend + Nginx Proxy Manager images
+#   • starts all services (mdns, proxy, backend, frontend)
+#   • verifies each service becomes healthy
+#   • configures NPM via its REST API to route aia.local → frontend
+#   • adds aia.local to /etc/hosts to simulate mDNS resolution on the runner
+#   • asserts the reverse proxy returns HTTP 2xx for http://aia.local/
+#   • soft-checks the mDNS container (avahi needs a real LAN to broadcast;
+#     we only verify it started — no failure if avahi can't bind in CI)
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  integration:
+    name: CPU stack — build, start, proxy smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45   # torch + ultralytics install is large on a cold cache
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # ── Docker Buildx ────────────────────────────────────────────────────────
+      # "docker" driver keeps images in the local daemon so docker compose can
+      # use them directly.  Build-layer caching across runs is a future
+      # optimisation (requires --cache-from/--cache-to in docker compose build);
+      # on a warm runner the Docker daemon's own layer cache already helps.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker
+
+      # ── prepare bind-mount targets ───────────────────────────────────────────
+      # docker-compose bind-mounts several host paths.  If they don't exist,
+      # Docker creates them as *directories*, which breaks services expecting
+      # files or empty writable directories.
+      - name: Prepare bind-mount targets
+        run: |
+          touch backend/poker.db
+          mkdir -p backend/uploads npm_data npm_letsencrypt
+          # backend/models/.gitkeep is already tracked; directory exists.
+
+      # ── build ────────────────────────────────────────────────────────────────
+      - name: Build CPU profile services
+        run: docker compose --profile cpu build
+
+      # ── start ────────────────────────────────────────────────────────────────
+      - name: Start CPU stack
+        run: docker compose --profile cpu up -d
+
+      # ── wait for backend ─────────────────────────────────────────────────────
+      - name: Wait for backend (localhost:8000)
+        run: |
+          echo "Polling http://localhost:8000/ ..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/ > /dev/null 2>&1; then
+              echo "Backend is up."
+              exit 0
+            fi
+            echo "  attempt $i/30 — sleeping 5 s"
+            sleep 5
+          done
+          echo "ERROR: backend did not become ready within 150 s"
+          exit 1
+
+      # ── wait for frontend ────────────────────────────────────────────────────
+      - name: Wait for frontend Vite dev server (localhost:5173)
+        run: |
+          echo "Polling http://localhost:5173/ ..."
+          for i in $(seq 1 24); do
+            if curl -sf http://localhost:5173/ > /dev/null 2>&1; then
+              echo "Frontend is up."
+              exit 0
+            fi
+            echo "  attempt $i/24 — sleeping 5 s"
+            sleep 5
+          done
+          echo "ERROR: frontend did not become ready within 120 s"
+          exit 1
+
+      # ── wait for NPM admin UI ────────────────────────────────────────────────
+      - name: Wait for Nginx Proxy Manager admin UI (localhost:81)
+        run: |
+          echo "Polling http://localhost:81/ ..."
+          for i in $(seq 1 24); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:81/ 2>/dev/null || echo "000")
+            if [ "$STATUS" -ge 200 ] 2>/dev/null && [ "$STATUS" -lt 500 ] 2>/dev/null; then
+              echo "NPM admin UI is up (HTTP $STATUS)."
+              exit 0
+            fi
+            echo "  attempt $i/24 (HTTP $STATUS) — sleeping 5 s"
+            sleep 5
+          done
+          echo "ERROR: NPM admin UI did not become ready within 120 s"
+          exit 1
+
+      # ── configure NPM reverse proxy via API ─────────────────────────────────
+      # NPM creates a default admin user (admin@example.com / changeme) on first
+      # run.  must_change_password is true, but the API still accepts requests.
+      - name: Configure NPM proxy host via API (aia.local → frontend:5173)
+        run: |
+          echo "Obtaining NPM API token ..."
+          TOKEN=$(curl -sf -X POST http://localhost:81/api/tokens \
+            -H "Content-Type: application/json" \
+            -d '{"identity":"admin@example.com","secret":"changeme"}' \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])")
+
+          if [ -z "$TOKEN" ]; then
+            echo "ERROR: failed to obtain NPM API token"
+            exit 1
+          fi
+          echo "Token obtained."
+
+          echo "Creating proxy host: aia.local → frontend:5173 ..."
+          RESULT=$(curl -sf -X POST http://localhost:81/api/nginx/proxy-hosts \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "domain_names": ["aia.local"],
+              "forward_scheme": "http",
+              "forward_host": "frontend",
+              "forward_port": 5173,
+              "block_exploits": false,
+              "allow_websocket_upgrade": true,
+              "enabled": true
+            }')
+          echo "Proxy host created: $RESULT"
+
+          # Give NPM time to write the nginx config and reload nginx.
+          sleep 5
+
+      # ── simulate mDNS resolution on the CI runner ────────────────────────────
+      - name: Add aia.local to /etc/hosts
+        run: echo "127.0.0.1 aia.local" | sudo tee -a /etc/hosts
+
+      # ── reverse proxy smoke test ─────────────────────────────────────────────
+      - name: Test reverse proxy — http://aia.local/ returns HTTP 2xx
+        run: |
+          echo "Testing http://aia.local/ through the NPM reverse proxy ..."
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://aia.local/)
+          echo "HTTP status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 400 ]; then
+            echo "PASS — proxy correctly routed aia.local to the frontend."
+          else
+            echo "FAIL — expected HTTP 2xx/3xx, got $HTTP_STATUS"
+            exit 1
+          fi
+
+      # ── mDNS container check (soft) ──────────────────────────────────────────
+      # avahi needs a real LAN to broadcast on; in CI it may exit immediately
+      # because dbus is not running as a daemon.  We report the status but do
+      # NOT fail the job — the important thing is the container lifecycle is
+      # visible and the proxy test above proves end-to-end routing works.
+      - name: Check mDNS container status (informational)
+        run: |
+          STATUS=$(docker inspect aia-mdns --format='{{.State.Status}}' 2>/dev/null || echo "not found")
+          echo "aia-mdns container status: $STATUS"
+          docker logs aia-mdns 2>&1 || true
+          echo ""
+          case "$STATUS" in
+            running)
+              echo "INFO: mDNS container is running — avahi broadcasting on the CI host network." ;;
+            exited)
+              EXIT_CODE=$(docker inspect aia-mdns --format='{{.State.ExitCode}}' 2>/dev/null || echo "?")
+              echo "INFO: mDNS container exited (code $EXIT_CODE)." \
+                   "Expected in CI — avahi requires a real LAN and dbus daemon to stay alive." ;;
+            *)
+              echo "WARNING: mDNS container not found (status: $STATUS)" ;;
+          esac
+
+      # ── diagnostics on failure ───────────────────────────────────────────────
+      - name: Dump container logs on failure
+        if: failure()
+        run: |
+          echo "=== backend ===" && docker compose --profile cpu logs backend 2>&1 || true
+          echo "=== frontend ===" && docker compose --profile cpu logs frontend 2>&1 || true
+          echo "=== proxy (NPM) ===" && docker compose --profile cpu logs proxy 2>&1 || true
+          echo "=== mdns (avahi) ===" && docker compose --profile cpu logs mdns 2>&1 || true
+          echo "=== docker ps -a ===" && docker ps -a
+
+      # ── teardown ─────────────────────────────────────────────────────────────
+      - name: Tear down stack
+        if: always()
+        run: docker compose --profile cpu down --volumes
