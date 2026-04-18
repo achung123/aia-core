@@ -1,5 +1,6 @@
 #!/bin/bash
-# Stops LAN sharing: removes port forwarding and mDNS broadcaster on the Windows host.
+# Stops LAN sharing: removes the Windows-side mDNS broadcaster, port proxy,
+# and firewall rule created by share.sh.
 set -e
 
 echo "1/2 Stopping mDNS broadcaster..."
@@ -9,7 +10,7 @@ powershell.exe -NoProfile -Command "
     ForEach-Object { Stop-Process -Id \$_.ProcessId -Force }
 " 2>/dev/null || true
 
-echo "2/2 Removing port forwarding & firewall rule (UAC prompt will appear)..."
+echo "2/2 Removing port forwarding and firewall rule (UAC prompt will appear)..."
 powershell.exe -NoProfile -Command "
   Start-Process -Verb RunAs -Wait -FilePath powershell.exe -ArgumentList \
     '-NoProfile','-Command',
@@ -18,7 +19,4 @@ powershell.exe -NoProfile -Command "
 "
 
 echo ""
-echo "✅ Sharing stopped"
-#!/bin/bash
-powershell.exe -Command "Start-Process -Verb RunAs -Wait -FilePath powershell.exe -ArgumentList '-Command \"netsh interface portproxy reset\"'"
-echo "✅ Port forwarding removed"
+echo "Sharing stopped"

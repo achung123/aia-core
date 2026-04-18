@@ -215,12 +215,25 @@ export async function uploadImage(gameId: number, file: File): Promise<ImageUplo
   const form = new FormData();
   form.append('file', file);
   const response = await fetch(`${BASE_URL}/games/${gameId}/hands/image`, { method: 'POST', body: form });
-  const body = await response.json();
+
+  // Read as text first so non-JSON error bodies (e.g. nginx 413 HTML) don't
+  // throw an opaque "The string did not match the expected pattern" on iOS Safari.
+  const raw = await response.text();
+  let body: { detail?: unknown } & Record<string, unknown> = {};
+  try {
+    body = raw ? JSON.parse(raw) : {};
+  } catch {
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${raw.slice(0, 200) || response.statusText}`);
+    }
+    throw new Error('Upload succeeded but response was not valid JSON');
+  }
+
   if (!response.ok) {
     const detail = typeof body.detail === 'object' ? JSON.stringify(body.detail) : (body.detail || `HTTP ${response.status}`);
-    throw new Error(detail);
+    throw new Error(String(detail));
   }
-  return body as ImageUploadResponse;
+  return body as unknown as ImageUploadResponse;
 }
 
 export function getDetectionResults(gameId: number, uploadId: number): Promise<DetectionResultsResponse> {
