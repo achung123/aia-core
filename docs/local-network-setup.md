@@ -64,40 +64,13 @@ docker compose --profile cpu up -d
 docker compose --profile gpu up -d
 ```
 
-The `mdns` container starts broadcasting `aia.local` on your LAN immediately. The `proxy` container starts the NPM reverse proxy on port 80.
+The `mdns` container starts broadcasting `aia.local` on your LAN immediately. The `proxy` container starts a lightweight nginx reverse proxy on port 80 that forwards all traffic to the frontend (which in turn proxies API calls to the backend via Vite).
+
+No manual proxy configuration is needed — the routing rules live in `scripts/docker/proxy.conf` and are loaded automatically.
 
 ---
 
-## Step 3 — Configure Nginx Proxy Manager
-
-NPM is configured through its web UI — proxy rules are persisted in `./npm_data/` and survive restarts.
-
-1. Open **http://localhost:81** in your browser
-2. Log in with the default credentials:
-   - Email: `admin@example.com`
-   - Password: `changeme`
-3. Change the password when prompted
-4. Go to **Proxy Hosts → Add Proxy Host**
-
-### Proxy Host — Frontend
-
-| Field | Value |
-|---|---|
-| Domain Names | `aia.local` |
-| Scheme | `http` |
-| Forward Hostname / IP | `frontend` |
-| Forward Port | `5173` |
-| Block Common Exploits | ✅ |
-
-Click **Save**.
-
-That's it — the Vite dev server already proxies all `/games`, `/players`, `/stats`, `/upload`, and `/images` requests to the backend internally, so a single proxy-host entry is enough.
-
-> **Optional:** If you want to expose the backend API directly (e.g. `http://aia.local/api`), add a second proxy host with a custom location or use NPM's **Custom Locations** tab to route `/games → backend:8000`, etc.
-
----
-
-## Step 4 — Verify
+## Step 3 — Verify
 
 From any device on the same Wi-Fi network:
 
@@ -115,7 +88,7 @@ If the page doesn't load, check:
 # Is avahi broadcasting?
 docker compose logs mdns
 
-# Is NPM running?
+# Is the proxy running?
 docker compose logs proxy
 
 # Are port forwards active on Windows?
@@ -151,8 +124,7 @@ The `flungo/avahi` image requires `network_mode: host`. Confirm that Docker Desk
 ## File Layout Added by This Feature
 
 ```
-docker-compose.yml   ← mdns + proxy services added; ALLOWED_ORIGINS updated
-npm_data/            ← NPM runtime data (gitignored, created on first run)
-npm_letsencrypt/     ← NPM cert storage (gitignored, created on first run)
-docs/local-network-setup.md   ← this file
+docker-compose.yml              ← mdns + proxy services added; ALLOWED_ORIGINS updated
+scripts/docker/proxy.conf       ← nginx reverse-proxy config (version-controlled)
+docs/local-network-setup.md     ← this file
 ```
