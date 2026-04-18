@@ -1,4 +1,30 @@
 services:
+  # --- mDNS BROADCASTER ---
+  # Advertises "aia.local" on your LAN via Avahi/mDNS so phones and laptops
+  # can reach the app at http://aia.local without knowing the WSL IP.
+  # Requires host networking — WSL users see notes in docs/local-network-setup.md.
+  mdns:
+    image: flungo/avahi
+    container_name: aia-mdns
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - SERVER_HOST_NAME=aia   # advertises as http://aia.local
+
+  # --- REVERSE PROXY ---
+  # Lightweight nginx proxy on port 80 routes http://aia.local → frontend:5173.
+  # Config is version-controlled in scripts/docker/proxy.conf — no manual UI setup needed.
+  proxy:
+    image: nginx:alpine
+    container_name: aia-proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./scripts/docker/proxy.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - frontend
+
   backend:
     profiles: ["cpu"]
     build:
@@ -21,7 +47,7 @@ services:
       - PYTHONPATH=/app/src
       - DATABASE_URL=sqlite:///./poker.db
       - SEED_DATA=0
-      - ALLOWED_ORIGINS=http://localhost:5173,http://0.0.0.0:5173,http://127.0.0.1:5173
+      - ALLOWED_ORIGINS=http://localhost:5173,http://0.0.0.0:5173,http://127.0.0.1:5173,http://aia.local
     working_dir: /app
 
   # GPU-accelerated backend — use: docker compose --profile gpu up

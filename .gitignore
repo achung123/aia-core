@@ -30,3 +30,7 @@ yolo26n.pt
 start.ps1
 # Windows Zone.Identifier files
 *:Zone.Identifier
+
+# Nginx Proxy Manager runtime data (generated on first run)
+npm_data/
+npm_letsencrypt/
