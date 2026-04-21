@@ -3346,3 +3346,57 @@ _None — all findings MEDIUM / LOW, recorded below only._
 - Closed: **aia-core-ewtb** (T-029) — mobile audit + two tap-target fixes + gesture matrix landed
 - Unblocked: _None new_
 - Still open carry-forward: Cycle 35 **M-1 / M-2 / M-3 / L-1 / L-2**; Cycle 36 **L-1 / L-2**; Cycle 37 **M-1 / M-2 / L-1 / L-2**; Cycle 38 **L-1 / L-2**; Cycle 39 **L-1**; Cycle 40 **L-1 / L-2**; Cycle 41 **M-1 / M-2 / L-1 / L-2**; Cycle 42 **M-1** (reduced per Cycle 45) / **M-2 / L-1 / L-2**; Cycle 43 **M-1 / M-2 / L-1 / L-2**; Cycle 44 **M-2 / L-1 / L-2 / L-3**; Cycle 45 **M-1 / M-2 / L-1 / L-2 / L-3**; Cycle 46 **L-1** (remainder → T-034) / **L-2**; Cycle 47 **M-2** (T-034 grep sweep) / **L-1 / L-2**; Cycle 48 **M-1** (T-034 AC-3) / **M-2 / L-1 / L-2** — all unchanged; plus Cycle 49 **M-1** (Playwright/browser 360px harness) / **M-2** (PlaybackView E2E at 360) / **L-1** (extract `MIN_TAP_TARGET_PX`) / **L-2** (resolved by L-1) newly opened this cycle
+
+
+### Cycle 50 — aia-core-7uds (T-034 docs pass — architecture.md + frontend/README.md rewrite, Scott review, 2026-04-21)
+
+**Source:** [docs/agent/reviews/cycle-50-aia-core-7uds-2026-04-21.md](../../docs/agent/reviews/cycle-50-aia-core-7uds-2026-04-21.md)
+**Source task:** aia-core-7uds — T-034 Docs pass — **CLOSED**
+
+#### Summary
+
+`aia-core-7uds` lands T-034, the final docs pass for the table-3d-revamp-010 epic. [docs/frontend/architecture.md](../../docs/frontend/architecture.md) rewritten end-to-end (271 lines changed): new `scenes3d/` directory tree, Public API (`<PokerCanvas>` / `<PokerTable>`), scene-graph mermaid, `canSee()` visibility policy + security note, controller + driver animation split, quality tiers (`QUALITY_TIER_SETTINGS`, `useFPSMonitor`, `<QualityToast>`, `<TableSettingsPanel>`), camera / preset / player-lock narrative, and `<SessionReplayShell>` composition. `## Poker Logic` rewritten around the `evaluator.ts` deletion. Routing and flow diagrams migrated `MobilePlaybackView → PlaybackView`. Testing table refreshed (`scenes/ → scenes3d/` 46 tests; `poker/` row removed). [frontend/README.md](../../frontend/README.md) § "How the 3D Scene Works" fully rewritten (34 lines). [frontend/test/scenes3d/tableLayout.test.ts](../../frontend/test/scenes3d/tableLayout.test.ts) L54 describe-string updated to canonical `<PokerTable>` wording. All 4 ACs **SATISFIED**. Full frontend suite **1856 / 1856** green; lint delta 0. Scott flagged **0 CRITICAL, 0 HIGH, 1 MEDIUM, 3 LOW**. **No beads filings this cycle per Anna contract** (MED/LOW → tasks.md only). **Carry-forwards resolved: Cycle 46 L-1, Cycle 47 M-2, Cycle 48 L-2.**
+
+#### Filed Bug Cards
+
+_None — all findings MEDIUM / LOW, recorded below only._
+
+#### Rolled-forward findings (MEDIUM / LOW — not filed to beads)
+
+1. **[MEDIUM] M-1 — `## Mobile Adaptations` framing still reads mobile-route-centric**
+   - **Location:** [docs/frontend/architecture.md](../../docs/frontend/architecture.md) § Mobile Adaptations
+   - **Category:** docs / framing
+   - **Description:** The section's narrative paragraph was updated for the `MobilePlaybackView` deletion, but the section header and table structure still read as if serving a dedicated mobile route rather than the unified PlaybackView responsive surface.
+   - **Recommended fix:** Rename/restructure on the next docs touch — non-blocking polish.
+
+2. **[LOW] L-1 — Three test files retain `pokerScene` / `createPokerScene` as negative-assertion regex literals**
+   - **Location:** `frontend/test/**/*.test.ts(x)` (three files)
+   - **Category:** test hygiene (intentional)
+   - **Description:** Literals are SUT-guards asserting the deleted modules never reappear; accepted design from Cycle 48.
+   - **Recommended fix:** None — accepted.
+
+3. **[LOW] L-2 — `## 3D Rendering` could cross-ref `## Poker Logic` near `<EquityBadges>`**
+   - **Location:** [docs/frontend/architecture.md](../../docs/frontend/architecture.md) § 3D Rendering
+   - **Category:** docs / cross-reference
+   - **Description:** Cosmetic — a link from the `<EquityBadges>` mention to `## Poker Logic` would aid discoverability.
+   - **Recommended fix:** Drive-by on next docs touch.
+
+4. **[LOW] L-3 — Ascii tree under `animations/` uses inconsistent formatting**
+   - **Location:** [docs/frontend/architecture.md](../../docs/frontend/architecture.md) § scenes3d/ directory tree
+   - **Category:** docs / formatting
+   - **Description:** Comma-run vs. one-file-per-line style inconsistency inside the `animations/` branch of the tree.
+   - **Recommended fix:** Normalize on next docs touch.
+
+#### Recommendation
+
+**T-034 CLOSED.** `aia-core-7uds` landed the full docs rewrite; all 4 ACs SATISFIED. Carry-forwards **Cycle 46 L-1**, **Cycle 47 M-2**, and **Cycle 48 L-2** all **RESOLVED** this cycle. All new findings non-blocking docs polish. **EPIC `aia-core-6o9t` (table-3d-revamp-010) COMPLETE** — all 47 children closed; final suite state 1856/1856 green; the declarative React Three Fiber migration is shipped.
+
+#### Links
+
+- Review artifact: [docs/agent/reviews/cycle-50-aia-core-7uds-2026-04-21.md](../../docs/agent/reviews/cycle-50-aia-core-7uds-2026-04-21.md)
+- Prior cycle: [Cycle 49 — aia-core-ewtb](#cycle-49--aia-core-ewtb-t-029-mobile-touch--tap-target--360px-width-audit-scott-review-2026-04-21)
+- Filed to beads: _None_
+- Closed: **aia-core-7uds** (T-034 — docs pass); **EPIC aia-core-6o9t** (table-3d-revamp-010) — all 47 children closed
+- Unblocked: _None — epic terminal cycle_
+- Closed carry-forward: **Cycle 46 L-1** (lineage doc-comments remainder) RESOLVED; **Cycle 47 M-2** (architecture.md grep sweep) RESOLVED; **Cycle 48 L-2** (T-034 docs sweep) RESOLVED
+- Still open carry-forward: Cycle 35 **M-1 / M-2 / M-3 / L-1 / L-2**; Cycle 36 **L-1 / L-2**; Cycle 37 **M-1 / M-2 / L-1 / L-2**; Cycle 38 **L-1 / L-2**; Cycle 39 **L-1**; Cycle 40 **L-1 / L-2**; Cycle 41 **M-1 / M-2 / L-1 / L-2**; Cycle 42 **M-1** (reduced per Cycle 45) / **M-2 / L-1 / L-2**; Cycle 43 **M-1 / M-2 / L-1 / L-2**; Cycle 44 **M-2 / L-1 / L-2 / L-3**; Cycle 45 **M-1 / M-2 / L-1 / L-2 / L-3**; Cycle 46 **L-2**; Cycle 47 **L-1 / L-2**; Cycle 48 **M-1 / M-2 / L-1**; Cycle 49 **M-1 / M-2 / L-1 / L-2** — all unchanged; plus Cycle 50 **M-1** (Mobile Adaptations framing) / **L-1** (intentional SUT-guard regexes) / **L-2** (3D Rendering ↔ Poker Logic cross-ref) / **L-3** (animations/ tree formatting) newly opened this cycle. All carry-forward findings are cosmetic docs / test-harness polish; none block any open work in this repo.
