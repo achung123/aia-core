@@ -23,7 +23,7 @@ Add missing test coverage or fix broken tests for a specified target — without
 
 Hank writes tests that document and verify existing behavior. This command is used when test coverage is missing, tests are broken, or the user wants tests for a specific module. No production code changes — if a test reveals a bug, Hank reports it and suggests using `@hank debug` to fix it. The project uses FastAPI, SQLAlchemy, Pydantic v2, pytest, SQLite, and Poetry.
 
-The standard test command is `PYTHONPATH=src/ pytest test/`.
+The standard test command is `cd backend && uv run pytest test/`.
 
 ---
 
@@ -37,7 +37,7 @@ The standard test command is `PYTHONPATH=src/ pytest test/`.
    - Name tests descriptively: `test_<function>_<scenario>_<expected>`
    - Follow existing test patterns (fixtures, client usage, assertions)
    - Use the in-memory SQLite fixture pattern from `conftest.py`
-6. **Run the tests.** `PYTHONPATH=src/ pytest test/<test_file>.py -v`.
+6. **Run the tests.** `cd backend && uv run pytest test/<test_file>.py -v`.
    - If all pass → coverage is documented, done.
    - If any fail due to actual bugs → report the bug, do NOT fix production code. Suggest `@hank debug`.
    - If any fail due to test errors → fix the test, re-run.

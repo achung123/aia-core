@@ -18,7 +18,7 @@ Placeholders:
 
 **Date:** {{DATE}}
 **Target:** `{{TARGET}}`
-**Test Command:** `PYTHONPATH=src/ pytest test/ --cov=app --cov-report=term-missing`
+**Test Command:** `cd backend && uv run pytest test/ --cov=app --cov-report=term-missing`
 
 ---
 

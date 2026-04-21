@@ -18,7 +18,10 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'none',
     border: '1px solid #555',
     color: '#fff',
-    padding: '4px 8px',
+    // T-029 AC-2 — 44×44pt minimum tap target (iOS HIG / Material).
+    minWidth: 44,
+    minHeight: 44,
+    padding: '0 12px',
     cursor: 'pointer',
   },
   rangeWrapper: {

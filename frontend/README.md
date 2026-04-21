@@ -143,32 +143,36 @@ export ALLOWED_ORIGINS="https://app.example.com"
 
 ## How the 3D Scene Works
 
-The `#/playback` route renders an interactive 3D poker table using Three.js. Here is a plain-language tour for backend developers who are not familiar with WebGL.
+The `#/playback` route renders an interactive 3D poker table using a declarative React Three Fiber (R3F) tree rooted at `<PokerTable>`. All 3D code lives in `src/scenes3d/`. Here is a plain-language tour for backend developers who are not familiar with WebGL.
 
-### Scene initialization (`src/scenes/table.js`)
+### The public component — `<PokerTable>` (`src/scenes3d/PokerTable.tsx`)
 
-A `WebGLRenderer` is attached to a `<canvas>` element. A `PerspectiveCamera` is positioned above and slightly behind the table centre (`y=8, z=5`), looking straight down at the origin. Ambient and directional lights provide basic illumination. A `requestAnimationFrame` loop runs continuously, calling `renderer.render(scene, camera)` on every frame.
+`<PokerTable>` is a declarative scene: you pass it a `TableState` (seats, cards, pot, phase, …), a `viewer` policy, a `qualityTier`, and a `theme`, and it renders the whole table. It is mounted inside a `<PokerCanvas>` wrapper (`src/scenes3d/PokerCanvas.tsx`) which is an R3F `<Canvas>` with quality-tier-aware shadows. The container's size drives the renderer; there is no window-level resize listener.
 
-### The table and seat positions (`src/scenes/tableGeometry.js`)
+### The table and seats (`src/scenes3d/components/Table.tsx`, `Seat.tsx`, `tableLayout.ts`)
 
-The felt surface is a `CylinderGeometry` scaled to an ellipse (`3.5 × 2.0` units). Ten seat positions are computed by distributing points evenly around a slightly larger ellipse. Each seat gets a CSS `<div>` label that is projected from 3D world-space to 2D screen-space every frame, so the labels follow the seats as the canvas resizes.
+The felt surface is an ellipse ($3.5 \times 2.0$ units) with PBR felt + rail materials. Ten seat positions are computed in `tableLayout.ts` (single source of truth shared with the animation drivers). Each seat gets a DOM `<Nameplate>` projected from 3D world-space to 2D screen-space every frame.
 
-### Card meshes (`src/scenes/cards.js`)
+### Cards (`src/scenes3d/components/Card.tsx`, `CardAtlas.ts`)
 
-Each card is a thin `BoxGeometry` (0.7 × 1.0 × 0.02 units). The face texture is rendered on an off-screen `<canvas>` (rank, suit symbol, red/black colour) and uploaded to the GPU as a `CanvasTexture`. Face-down cards show a solid blue back face. When a card is revealed, a 300 ms Y-axis rotation animation swaps the front material from back-texture to face-texture at the halfway point, giving the appearance of a flip.
+All 52 card faces live in a single GPU texture atlas whose resolution is chosen per quality tier. `<Card>` renders through an `InstancedMesh` that UV-indexes into the atlas — constant draw-call cost regardless of how many cards are on the table. `<Card>.faceUp` routes through `canSee()` (see below) so the viewer never sees cards they shouldn't.
 
-### Hole cards (`src/scenes/holeCards.js`)
+### Chips (`src/scenes3d/components/ChipInstances.tsx`, `ChipStack.tsx`, `PotChipCluster.tsx`)
 
-Each occupied seat gets two card meshes placed slightly in front of and to the sides of the seat position. Folded hands show a "FOLD" sprite instead of cards. When a hand is marked as a winner, a brief glow animation fires on those meshes.
+Chips use `InstancedMesh` per denomination. Each seat has a committed-chip stack at `seatCommitChipWorldPosition(seat)`; the pot cluster sits at `POT_CHIP_WORLD_POSITION`. Chip colours come from the denomination palette in `ChipInstances.tsx`.
 
-### Community cards (`src/scenes/communityCards.js`)
+### Animations — controller + driver split (`src/scenes3d/animations/`)
 
-Up to five community cards are laid out horizontally across the table centre. Each card slides in from off-screen (z = 5) to its target position over 500 ms using a linear interpolation (`lerpVectors`), mimicking cards being dealt.
+Every animated effect is two files: a pure **controller** (state machine, tween math, zero React / zero Three.js) and an R3F **driver** that mounts it via `useFrame`. Current pairs are `DealAnimationController` / `DealAnimationDriver` (cards dealing in), `ChipSlideController` / `ChipSlideDriver` (bets sliding to the pot), and `PotSweepController` / `PotSweepDriver` (pot sweeping to winners).
 
-### Chip stacks (`src/scenes/chipStacks.js`)
+### Visibility policy (`src/scenes3d/state/visibilityPolicy.ts`)
 
-Each seat has a stack of five cylinder discs. Stack height is proportional to the player's cumulative profit/loss for the session: positive P&L scales the stack up (yellow), negative scales it down (red), neutral is grey. Height changes animate over 400 ms. The scrubber component (see below) drives these updates as the user steps through hands.
+`canSee({ viewerSeat, cardOwnerSeat, policy, phase, ownerFolded })` is a single pure function that decides whether each card renders face-up for the current viewer. **Spectator** policy only reveals non-folded hole cards at showdown; **player** policy always reveals the viewer's own cards and hides opponents until showdown. `canSee()` is a render-time presentation filter only — actual authorisation (which hole cards even reach the client) lives on the backend.
 
-### Session scrubber (`src/components/sessionScrubber.js`)
+### Quality tiers and auto-degrade (`src/scenes3d/state/qualitySettings.ts`, `useFPSMonitor.ts`)
 
-A horizontal scrubber bar lets the user step backward and forward through the hands in a session. On each step, the playback view recomputes cumulative P&L for every player from hand 0 up to the selected index, then calls the chip stack and card controllers to update the scene accordingly.
+`QUALITY_TIER_SETTINGS[tier]` is the canonical map of per-tier settings (PBR on/off, env-map resolution, shadow-map size, AA mode, card atlas resolution, etc.). Every tier-gated value reads from it — no inline ternaries scattered through the scene. `useFPSMonitor` / `<FPSMonitor>` runs a 120-sample rolling FPS window and, if the average stays below the degrade threshold for 3000 ms, steps down to the next lower tier exactly once (gated by a recovery flag). `<TableSettingsPanel>` exposes a tier radiogroup that flips `manualOverride=true` when a user picks a tier, halting the auto-degrade loop. `<QualityToast>` is the DOM surface users see when an auto-degrade fires.
+
+### Session replay (`src/scenes3d/SessionReplayShell.tsx`, `components/HandScrubberPanel.tsx`)
+
+`/playback` composes `<SessionReplayShell>` + `<HandScrubberPanel>` + `<PokerCanvas><PokerTable>`. `<SessionReplayShell>` owns the replay store slice (`handIndex`, `streetIndex`, `isPlaying`, `speed`) and auto-advances streets on a floored timer (never faster than a chip-slide) with an inter-hand pause. `handsToTableState` in `scenes3d/data/` adapts backend `HandResponse[]` payloads into the `TableState` the scene consumes.

@@ -1,129 +1,106 @@
-import { useRef, useEffect } from 'react';
-import { createPokerScene } from '../scenes/pokerScene.ts';
-import type { HandResponse } from '../api/types';
+// T-030 — dealer-embed 3D view, migrated from the imperative
+// imperative-scene helper to the declarative `<PokerTable>` composition.
+//
+// The dealer sees all hole cards (spectator policy) and benefits from
+// live equity badges while recording a hand, so:
+//   - `viewer.policy = 'spectator'` → `canSee()` returns true for every seat,
+//   - `equityOverlay = true`        → `<PokerTable>` mounts `<EquityBadges>`
+//                                     and `useEquityQuery` fetches `/equity`.
+//
+// Live polling is delegated to `useHandPolling` (10s interval, aborts on
+// unmount), identical to the player-POV route (T-032).
 
-/* ── Card-parsing helpers ─────────────────────────────────────── */
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
-const SUIT_SYMBOL: Record<string, string> = {
-  h: '♥', d: '♦', c: '♣', s: '♠',
-  H: '♥', D: '♦', C: '♣', S: '♠',
-};
+import { fetchGame } from '../api/client.ts';
+import { useHandPolling } from '../hooks/useHandPolling.ts';
+import { PokerCanvas } from '../scenes3d/PokerCanvas.tsx';
+import { PokerTable } from '../scenes3d/PokerTable.tsx';
+import { handsToTableState } from '../scenes3d/data/handsToTableState.ts';
+import { useTableStore } from '../scenes3d/state/tableStore.ts';
+import type { ViewerContext } from '../scenes3d/types';
 
-interface ParsedCard {
-  rank: string;
-  suit: string;
-}
-
-function parseCard(cardStr: string | null | undefined): ParsedCard | null {
-  if (!cardStr) return null;
-  const rank = cardStr.slice(0, -1);
-  const suitChar = cardStr.slice(-1);
-  return { rank, suit: SUIT_SYMBOL[suitChar] || suitChar };
-}
-
-const RESULT_MAP: Record<string, string> = { won: 'win', folded: 'fold', lost: 'loss' };
-
-function handToCardData(hand: HandResponse) {
-  return {
-    flop: [parseCard(hand.flop_1), parseCard(hand.flop_2), parseCard(hand.flop_3)],
-    turn: parseCard(hand.turn),
-    river: parseCard(hand.river),
-    player_hands: (hand.player_hands || []).map(playerHand => ({
-      player_name: playerHand.player_name,
-      hole_cards:
-        playerHand.card_1 && playerHand.card_2
-          ? ([parseCard(playerHand.card_1)!, parseCard(playerHand.card_2)!] as [ParsedCard, ParsedCard])
-          : null,
-      result: RESULT_MAP[playerHand.result ?? ''] || playerHand.result || '',
-    })),
-  };
-}
-
-function computeStreetIndex(hand: HandResponse): number {
-  if (hand.river) return 3;
-  if (hand.turn) return 2;
-  if (hand.flop_1) return 1;
-  return 0;
-}
-
-function buildSeatPlayerMap(hand: HandResponse): Record<number, string> {
-  const map: Record<number, string> = {};
-  (hand.player_hands || []).forEach((playerHand, i) => {
-    map[i] = playerHand.player_name;
-  });
-  return map;
-}
-
-/* ── Component ────────────────────────────────────────────────── */
+// Stable reference — `handsToTableState`'s memo key uses it.
+const SPECTATOR_VIEWER: ViewerContext = { policy: 'spectator' };
 
 export interface TableView3DProps {
-  hands: HandResponse[];
+  gameId: number;
 }
 
-export function TableView3D({ hands }: TableView3DProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sceneRef = useRef<any>(null);
+export function TableView3D({ gameId }: TableView3DProps) {
+  // Pinned hand index. The dealer embed always follows the latest hand —
+  // there's no scrubber at this layer (the sibling `<StreetScrubber>` in
+  // `ActiveHandDashboard` drives intra-hand street navigation, not
+  // cross-hand navigation).
+  const [scrubIndex, setScrubIndex] = useState<number>(-1);
 
-  // Initialize scene on mount, dispose on unmount
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+  // Route-level store→props wiring: read the user-selected theme and
+  // quality tier from the persisted `useTableStore` slice and forward them
+  // to `<PokerTable>` so the dealer embed reacts to <TableSettingsPanel>
+  // changes (T-030 AC-5 — theme dim: aia-core-r11d; qualityTier dim:
+  // aia-core-t4dp, now that T-027 / aia-core-y39z added the slice).
+  const theme = useTableStore((s) => s.theme);
+  const qualityTier = useTableStore((s) => s.qualityTier);
 
-    const pokerScene = createPokerScene(canvas, {
-      width: canvas.clientWidth || 800,
-      height: canvas.clientHeight || 600,
-      externalResize: true,
-    });
-    sceneRef.current = pokerScene;
+  const { data: game } = useQuery({
+    queryKey: ['game', gameId],
+    queryFn: () => fetchGame(gameId),
+    enabled: gameId !== null && gameId !== undefined,
+  });
 
-    // ResizeObserver for container-based resizing
-    const container = containerRef.current;
-    let observer: ResizeObserver | null = null;
-    if (container) {
-      observer = new ResizeObserver((entries) => {
-        for (const entry of entries) {
-          const { width, height } = entry.contentRect;
-          if (width > 0 && height > 0) {
-            pokerScene.renderer.setSize(width, height);
-            pokerScene.camera.aspect = width / height;
-            pokerScene.camera.updateProjectionMatrix();
-          }
-        }
-      });
-      observer.observe(container);
-    }
-
-    return () => {
-      observer?.disconnect();
-      pokerScene.dispose();
-      sceneRef.current = null;
-    };
+  const handleAutoAdvance = useCallback((newIndex: number) => {
+    setScrubIndex(newIndex);
   }, []);
 
-  // Update scene when hands change
+  const { hands } = useHandPolling({
+    gameId,
+    currentHandIndex: scrubIndex,
+    onAutoAdvance: handleAutoAdvance,
+  });
+
+  // Initial-load advance: `useHandPolling`'s `onAutoAdvance` is guarded
+  // by `prevCount > 0`, so it skips the first fetch. Sync scrubIndex to
+  // the latest hand once data arrives. See `pages/TableView.tsx` for
+  // the same pattern and rationale.
   useEffect(() => {
-    if (!sceneRef.current || hands.length === 0) return;
+    const latest = hands.length - 1;
+    if (latest >= 0 && latest !== scrubIndex) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setScrubIndex(latest);
+    }
+  }, [hands, scrubIndex]);
 
-    const latestHand = hands[hands.length - 1];
-    const cardData = handToCardData(latestHand);
-    const seatPlayerMap = buildSeatPlayerMap(latestHand);
-    const streetIndex = computeStreetIndex(latestHand);
+  const selectedHand =
+    scrubIndex >= 0 && scrubIndex < hands.length ? hands[scrubIndex] : null;
 
-    sceneRef.current.update({ cardData, seatPlayerMap, streetIndex });
-  }, [hands]);
+  const tableState = useMemo(() => {
+    if (!game || !selectedHand) return null;
+    return handsToTableState({ game, hand: selectedHand, viewer: SPECTATOR_VIEWER });
+  }, [game, selectedHand]);
 
   return (
-    <div
-      ref={containerRef}
-      data-testid="table-view-3d"
-      style={{ width: '100%', height: 'min(400px, 50vh)', position: 'relative' }}
-    >
-      <canvas
-        ref={canvasRef}
-        style={{ width: '100%', height: '100%', display: 'block' }}
-      />
+    <div data-testid="table-view-3d" style={styles.container}>
+      {tableState && (
+        <PokerCanvas>
+          <PokerTable
+            state={tableState}
+            viewer={SPECTATOR_VIEWER}
+            theme={theme}
+            qualityTier={qualityTier}
+            equityOverlay={true}
+            cameraPreset="topDown"
+          />
+        </PokerCanvas>
+      )}
     </div>
   );
 }
+
+const styles: Record<string, CSSProperties> = {
+  container: {
+    width: '100%',
+    height: 'min(400px, 50vh)',
+    position: 'relative',
+  },
+};
