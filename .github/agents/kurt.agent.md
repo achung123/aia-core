@@ -13,15 +13,15 @@ tools:
   - search/usages
 handoffs:
   - label: Plan a feature first
-    agent: jean
+    agent: Jean (Phoenix)
     prompt: This needs a spec before documentation. Please plan it.
     send: false
   - label: Implement documented design
-    agent: hank
+    agent: Hank (Beast)
     prompt: "@hank implement — Kurt produced the design documentation."
     send: false
   - label: Review documentation accuracy
-    agent: scott
+    agent: Scott (Cyclops)
     prompt: "@scott check — Verify the implementation matches Kurt's documentation."
     send: false
 ---

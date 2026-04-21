@@ -80,24 +80,9 @@ vi.mock('../../src/../src/dealer/DetectionReview.tsx', () => ({
   ),
 }));
 
-vi.mock('../../src/scenes/pokerScene.ts', () => ({
-  createPokerScene: vi.fn(() => ({
-    scene: {},
-    camera: { aspect: 1, updateProjectionMatrix: vi.fn() },
-    renderer: { setSize: vi.fn() },
-    seatPositions: [],
-    dispose: vi.fn(),
-    update: vi.fn(),
-  })),
-}));
-
 vi.mock('../../src/mobile/StreetScrubber.jsx', () => ({
   StreetScrubber: () => null,
   STREETS: ['Pre-Flop', 'Flop', 'Turn', 'River', 'Showdown'],
-}));
-
-vi.mock('../../src/poker/evaluator.js', () => ({
-  calculateEquity: vi.fn(() => []),
 }));
 
 vi.mock('../../src/../src/dealer/GamePlayerManagement.tsx', () => ({

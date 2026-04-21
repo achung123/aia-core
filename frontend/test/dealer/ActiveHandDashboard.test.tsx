@@ -24,8 +24,8 @@ vi.mock('../../src/../src/dealer/BlindTimer.tsx', () => ({
 }));
 
 vi.mock('../../src/../src/dealer/TableView3D.tsx', () => ({
-  TableView3D: (props: { hands: unknown[] }) =>
-    <div data-testid="table-view-3d">3D:{(props.hands || []).length}</div>,
+  TableView3D: (props: { gameId: number }) =>
+    <div data-testid="table-view-3d">3D:{props.gameId}</div>,
 }));
 
 import { fetchBlinds, recordPlayerAction, fetchHands } from '../../src/api/client.ts';

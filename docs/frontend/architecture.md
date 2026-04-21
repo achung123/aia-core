@@ -20,7 +20,7 @@
 6. [State Management](#state-management)
 7. [API Client Layer](#api-client-layer)
 8. [Polling Architecture](#polling-architecture)
-9. [3D Rendering (Three.js)](#3d-rendering-threejs)
+9. [3D Rendering (React Three Fiber)](#3d-rendering-react-three-fiber)
 10. [Poker Logic](#poker-logic)
 11. [Mobile Adaptations](#mobile-adaptations)
 12. [Build & Dev](#build--dev)
@@ -37,7 +37,7 @@ The All In Analytics frontend is a React 19 + TypeScript single-page application
 - **Player interface** — join a session via QR code, capture hole cards, submit betting actions, and view a personalized 3D table
 - **Playback / Data interface** — review recorded sessions with a 3D poker table, scrub through hands and streets, and import/export data via CSV or ZIP
 
-All three share a common API client, Zustand state store, Three.js scene engine, and component library.
+All three share a common API client, Zustand state store, declarative React Three Fiber scene (`<PokerTable>`), and component library.
 
 ---
 
@@ -50,7 +50,7 @@ All three share a common API client, Zustand state store, Three.js scene engine,
 | Build tool | Vite | 8.0 |
 | Routing | react-router-dom (HashRouter) | 7.5 |
 | State | Zustand (with `persist` middleware) | 5.0 |
-| 3D rendering | Three.js + OrbitControls | 0.183 |
+| 3D rendering | React Three Fiber + drei (Three.js) | 9.x / 10.x / 0.183 |
 | QR codes | qrcode | 1.5 |
 | Test runner | Vitest + @testing-library/react | 4.1 / 16.3 |
 | DOM environment | happy-dom | 20.8 |
@@ -95,7 +95,6 @@ frontend/src/
 │   ├── GamePlayerManagement.tsx  # Add/remove/toggle players mid-game
 │   ├── TableView3D.tsx       # Embedded 3D table in dealer view
 │   ├── BlindTimer.tsx        # Blind level countdown timer
-│   ├── DealerPreview.tsx     # Collapsed 3D preview with equity
 │   ├── dealerState.ts        # Legacy reducer types (re-exports from store)
 │   └── showdownHelpers.ts    # Outcome inference from equity data
 │
@@ -106,8 +105,7 @@ frontend/src/
 ├── views/                    # ── Full-Page Views ──
 │   ├── LandingPage.tsx       # Home page with navigation cards
 │   ├── DataView.tsx          # Session list, CSV/ZIP upload, CRUD
-│   ├── PlaybackView.tsx      # Desktop 3D playback + equity overlay
-│   └── MobilePlaybackView.tsx   # Mobile-optimized 3D playback
+│   └── PlaybackView.tsx      # Session replay — mounts <SessionReplayShell> + <PokerCanvas><PokerTable>
 │
 ├── pages/                    # ── Route Pages ──
 │   └── TableView.tsx         # Per-player 3D table (polled updates)
@@ -126,18 +124,47 @@ frontend/src/
 │   ├── PlayerManagement.tsx  # Player CRUD list
 │   └── cardUtils.ts          # Card validation / normalization
 │
-├── scenes/                   # ── Three.js Scene Modules ──
-│   ├── pokerScene.ts         # Scene factory (renderer, camera, controls)
-│   ├── tableGeometry.ts      # Elliptical table mesh + seat positions
-│   ├── cards.ts              # Card mesh with CanvasTexture rendering
-│   ├── holeCards.ts          # Per-seat hole card layout + fold sprite
-│   ├── communityCards.ts     # Community card layout + slide animation
-│   ├── chipStacks.ts         # Animated chip stacks (P/L visualization)
-│   ├── showdown.ts           # Showdown detection utility
-│   └── seatCamera.ts         # Camera position + animation per seat
-│
-├── poker/                    # ── Poker Logic ──
-│   └── evaluator.ts          # Hand evaluator + Monte Carlo equity
+├── scenes3d/                 # ── Declarative R3F Poker Scene ──
+│   ├── PokerCanvas.tsx       # R3F <Canvas> wrapper — sizing, quality-tier shadows
+│   ├── PokerTable.tsx        # <PokerTable> public component — composes the full scene
+│   ├── SessionReplayShell.tsx # Replay driver — crosses-hand timeline + <HandScrubberPanel>
+│   ├── index.ts              # Public exports (PokerTable, PokerCanvas, store, tiers, hooks)
+│   ├── types.ts              # TableState, ViewerContext, QualityTier, Policy
+│   ├── components/           # Leaf render components
+│   │   ├── Table.tsx         # Elliptical felt + rail (PBR materials)
+│   │   ├── Seat.tsx          # Per-seat group (anchor for cards + chips + overlays)
+│   │   ├── Card.tsx          # InstancedMesh card (atlas-backed UV lookup)
+│   │   ├── CardAtlas.ts      # 52-face texture atlas (resolution per tier)
+│   │   ├── ChipInstances.tsx # InstancedMesh chips (denomination palette)
+│   │   ├── ChipStack.tsx     # Per-seat / pot committed stacks
+│   │   ├── PotChipCluster.tsx # Center-table pot cluster
+│   │   ├── Nameplate.tsx     # DOM-projected seat nameplates
+│   │   ├── ActionBadge.tsx   # Per-seat action/status badges
+│   │   ├── EquityBadge.tsx   # Spectator-only equity overlay
+│   │   ├── SeatHighlight.tsx # Seat ring + <ShowdownGlows> winner envelope
+│   │   ├── DealerButton.tsx  # Dealer button + blind markers
+│   │   ├── CameraRig.tsx     # Spectator orbit / player-POV rig
+│   │   ├── CameraPresetController.tsx # Preset tween controller
+│   │   ├── CameraPresetToolbar.tsx    # UI for preset selection
+│   │   ├── TableSettingsPanel.tsx     # Theme + quality-tier controls
+│   │   ├── QualityToast.tsx           # Auto-degrade notification surface
+│   │   ├── HandScrubberPanel.tsx      # Hand + street scrubber (replay)
+│   │   ├── tableLayout.ts    # Seat / pot / chip world-position math
+│   │   └── tableMaterials.ts # PBR felt + rail materials
+│   ├── animations/           # Controller (pure) + Driver (R3F) split
+│   │   ├── DealAnimationController.ts / DealAnimationDriver.tsx
+│   │   ├── ChipSlideController.ts     / ChipSlideDriver.tsx
+│   │   ├── PotSweepController.ts      / PotSweepDriver.tsx
+│   │   ├── cameraPresets.ts  # Preset poses + seat-POV math
+│   │   ├── chipMotion.ts, chipSlides.ts, dealCards.ts, potSweeps.ts, presets.ts, tweens.ts
+│   ├── data/                 # React Query hooks + payload adapters
+│   │   ├── useTableStateQuery.ts, useEquityQuery.ts, handsToTableState.ts
+│   └── state/                # Zustand slice + pure policies
+│       ├── tableStore.ts     # qualityTier, manualOverride, theme, replay
+│       ├── qualitySettings.ts # QUALITY_TIER_SETTINGS canonical map
+│       ├── useFPSMonitor.ts  # 120-sample rolling FPS + auto-degrade
+│       ├── visibilityPolicy.ts # canSee() hole-card presentation filter
+│       ├── useReducedMotion.ts, equityGuard.ts
 │
 ├── mobile/                   # ── Mobile-Specific Components ──
 │   ├── EquityRow.tsx         # Horizontal scrollable equity cards
@@ -157,7 +184,7 @@ The app uses `HashRouter` — all routes are prefixed with `#/` in the URL.
 | Route | Component | Purpose |
 |---|---|---|
 | `/` | `LandingPage` | Home screen — navigation cards to each section |
-| `/playback` | `MobilePlaybackView` | Session replay with 3D scene + scrubbers |
+| `/playback` | `PlaybackView` | Session replay — `<SessionReplayShell>` + `<PokerCanvas><PokerTable viewer=spectator equityOverlay>` |
 | `/data` | `DataView` | Session list, create game, CSV/ZIP import/export |
 | `/dealer` | `DealerApp` | Dealer interface — full game management |
 | `/player` | `PlayerApp` | Player interface — join and play |
@@ -170,7 +197,7 @@ flowchart LR
     subgraph "HashRouter"
         direction TB
         root["/ — LandingPage"]:::fe
-        playback["/playback — MobilePlaybackView"]:::fe
+        playback["/playback — PlaybackView"]:::fe
         data["/data — DataView"]:::fe
         dealer["/dealer — DealerApp"]:::fe
         player["/player — PlayerApp"]:::fe
@@ -268,7 +295,7 @@ flowchart TD
     DR2["DetectionReview"]:::fe
     PAB["PlayerActionButtons"]:::fe
     TV["TableView /player/table"]:::fe
-    PS["PokerScene 3D"]:::fe3d
+    PS["PokerTable (R3F)"]:::fe3d
 
     PA -->|"step: gameSelect"| GS2
     PA -->|"step: namePick"| NP
@@ -294,16 +321,16 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    MPV["MobilePlaybackView"]:::fe
-    PS["PokerScene 3D"]:::fe3d
+    PV["PlaybackView"]:::fe
+    PS["PokerTable (R3F)"]:::fe3d
     SS["SessionScrubber"]:::mob
     StS["StreetScrubber"]:::mob
     EQ["EquityRow"]:::mob
 
-    MPV --> PS
-    MPV --> SS
-    MPV --> StS
-    MPV --> EQ
+    PV --> PS
+    PV --> SS
+    PV --> StS
+    PV --> EQ
 
     classDef fe fill:#4A90D9,stroke:#2C6FB3,color:#FFFFFF
     classDef fe3d fill:#5DADE2,stroke:#3498DB,color:#FFFFFF
@@ -475,44 +502,64 @@ sequenceDiagram
 
 ---
 
-## 3D Rendering (Three.js)
+## 3D Rendering (React Three Fiber)
 
-### Scene Architecture
+All 3D rendering lives in `frontend/src/scenes3d/` and is structured as a declarative React Three Fiber (R3F) component tree rooted at `<PokerTable>`. The legacy imperative `scenes/` factory was removed in T-033. Three.js is still the underlying renderer; it is driven through `@react-three/fiber` + `@react-three/drei` rather than direct scene-graph mutation.
 
-`createPokerScene()` in `scenes/pokerScene.ts` is the central factory. It creates and returns:
+### Public API — `<PokerCanvas>` + `<PokerTable>`
 
-| Object | Purpose |
-|---|---|
-| `scene` | `THREE.Scene` with dark background (`#1a1a2e`) |
-| `camera` | `PerspectiveCamera` (45° FOV, overhead position) |
-| `renderer` | `WebGLRenderer` bound to a `<canvas>` element |
-| `controls` | `OrbitControls` (rotate, zoom, no pan; touch enabled) |
-| `seatPositions` | `Vector3[]` — 10 seats on an ellipse |
-| `chipStacks` | Animated P/L chip visualization per seat |
-| `holeCards` | Per-seat card meshes (face-up/face-down) |
-| `communityCards` | Center-table cards with slide animation |
-| `update(handState)` | Redraws scene for a new hand state |
-| `dispose()` | Cleans up all Three.js resources |
+Consumer routes mount a two-layer stack:
 
-### Scene Modules
+```tsx
+<PokerCanvas>
+  <PokerTable
+    state={tableState}            // Declarative TableState (seats, cards, pot, phase…)
+    viewer={{ policy, seat }}     // 'spectator' | 'player' | 'observer'
+    qualityTier={tier}            // 'low' | 'medium' | 'high' (from store)
+    theme={{ mode, feltColor, … }}
+    equityOverlay={spectatorOnly} // Hard-forced false for player policy
+    cameraPreset="default"
+  />
+</PokerCanvas>
+```
+
+- **`<PokerCanvas>`** (`scenes3d/PokerCanvas.tsx`) — R3F `<Canvas>` wrapper. Reads `qualityTier` from the store and enables `shadows` only at `high`. Sizing is delegated to the container's `ResizeObserver` (R3F's internal one); no window-level resize listener.
+- **`<PokerTable>`** (`scenes3d/PokerTable.tsx`) — declarative scene root. Composes `<Table>`, per-seat `<Seat>`, `<Card>`, `<ChipInstances>`/`<ChipStack>`, `<PotChipCluster>`, `<Nameplates>`, `<ActionBadges>`, `<SeatHighlights>` + `<ShowdownGlows>`, `<EquityBadges>`, `<CameraRig>` + `<CameraPresetController>`, and the three animation drivers (`DealAnimationDriver`, `ChipSlideDriver`, `PotSweepDriver`). Refer to `specs/table-3d-revamp-010/plan.md § Public API` for the full contract.
+
+Public exports live in `scenes3d/index.ts`: `PokerTable`, `PokerCanvas`, `useTableStore`, `QUALITY_TIER_SETTINGS`, `useFPSMonitor`, `QualityToast`, `HandScrubberPanel`, `TableSettingsPanel`, camera-preset helpers, etc.
+
+### Scene Graph
 
 ```mermaid
 flowchart TD
-    PS["pokerScene.ts — Factory"]:::fe3d
-    TG["tableGeometry.ts — Table + seats"]:::fe3d
-    CD["cards.ts — Card mesh + flip"]:::fe3d
-    HC["holeCards.ts — Per-seat cards"]:::fe3d
-    CC["communityCards.ts — Center cards"]:::fe3d
-    CS["chipStacks.ts — P/L chips"]:::fe3d
-    SC["seatCamera.ts — Camera animation"]:::fe3d
-    SD["showdown.ts — Result detection"]:::fe3d
+    PC["PokerCanvas<br/>(R3F Canvas + shadows gate)"]:::fe3d
+    PT["PokerTable<br/>(scene root)"]:::fe3d
+    T["Table (felt + rail)"]:::fe3d
+    S["Seat × N"]:::fe3d
+    C["Card (InstancedMesh + atlas)"]:::fe3d
+    CI["ChipInstances / ChipStack"]:::fe3d
+    PCC["PotChipCluster"]:::fe3d
+    CR["CameraRig + CameraPresetController"]:::fe3d
+    DAD["DealAnimationDriver"]:::fe3d
+    CSD["ChipSlideDriver"]:::fe3d
+    PSD["PotSweepDriver"]:::fe3d
+    NP["Nameplates / ActionBadges"]:::fe3d
+    SH["SeatHighlights / ShowdownGlows"]:::fe3d
+    EB["EquityBadges"]:::fe3d
 
-    PS --> TG
-    PS --> HC
-    PS --> CC
-    PS --> CS
-    HC --> CD
-    CC --> CD
+    PC --> PT
+    PT --> T
+    PT --> S
+    S --> C
+    S --> CI
+    PT --> PCC
+    PT --> CR
+    PT --> DAD
+    PT --> CSD
+    PT --> PSD
+    PT --> NP
+    PT --> SH
+    PT --> EB
 
     classDef fe3d fill:#5DADE2,stroke:#3498DB,color:#FFFFFF
 
@@ -522,67 +569,80 @@ flowchart TD
     end
 ```
 
-### Table Geometry
+### Table Layout
 
-- Elliptical table: $r_x = 3.5$, $r_z = 2.0$ (CylinderGeometry scaled)
-- 10 seats placed at equal angles on an ellipse offset 0.8 units outward
-- Seat labels are DOM `<div>` elements positioned via 3D→screen projection
+Seat / pot / chip world positions are centralised in `scenes3d/components/tableLayout.ts` so render positions and animation targets share a single source of truth:
 
-### Card Rendering
+- Elliptical felt with $r_x = 3.5$, $r_z = 2.0$
+- Seats distributed evenly around an outset ellipse (+0.8 units)
+- `POT_CHIP_WORLD_POSITION` fixes the pot cluster at table centre
+- `seatCommitChipWorldPosition(seat)` gives each seat's committed-chip origin (shared with `buildPokerTableChipSlideLayout`)
 
-`createCard(rank, suit, faceUp)` builds a `PlaneGeometry` mesh with:
-- **Face-up**: `CanvasTexture` with rank + suit rendered at 256×384px
-- **Face-down**: solid blue material (`#1a3a6e`)
-- **Flip animation**: 300ms rotation around Z-axis, material swap at midpoint
+### Visibility Policy — `canSee()`
 
-### Community Cards
+`scenes3d/state/visibilityPolicy.ts` exports a single pure function that every `<Card>.faceUp` decision routes through:
 
-5 slots (3 flop + turn + river), each positioned horizontally at the table center. `goToStreet(streetIndex)` animates cards in/out with a 500ms slide from off-table position.
+```ts
+canSee({ viewerSeat, cardOwnerSeat, policy, phase, ownerFolded })
+```
 
-### Chip Stacks
+- **`spectator`** — opponents' hole cards reveal **only** at `phase === 'showdown'` for non-folded seats.
+- **`player`** — viewer's own cards always visible; opponents hidden until showdown; folded opponents never reveal.
+- **`observer`** — reserved policy; treated as spectator today.
 
-- 5 discs per stack, colored by P/L:
-  - `#f5e6b2` (gold) for positive P/L
-  - `#c44e4e` (red) for negative P/L
-  - `#999999` (grey) for neutral
-- Stack height scales linearly with profit/loss magnitude (capped at 0.6 units)
-- 400ms height animation on update
+> **Security note:** `canSee()` is a render-time **presentation** filter, not an authorisation gate. Hole cards that must be hidden from a given viewer must already be absent from the payload delivered by the backend. Defence-in-depth lives on the server (dealer-API visibility gate).
 
-### Seat Camera
+### Animation Architecture — Controller + Driver Split
 
-`computeSeatCameraPosition(seatPos)` places the camera above and behind a seat, looking at the table center. `animateCameraToSeat()` smoothly transitions with ease-in-out quadratic easing over 400ms. Double-tap on mobile resets to overhead view.
+Every animated effect is split into two files:
+
+| Layer | File | Responsibility |
+|---|---|---|
+| Controller | `animations/*Controller.ts` | Pure logic — state machine, easing, tween math. Zero React, zero Three.js side effects. Directly unit-testable. |
+| Driver | `animations/*Driver.tsx` | R3F component — mounts the controller via `useFrame`, wires it to scene refs, handles registry lookup. |
+
+Current pairs: `DealAnimationController` / `DealAnimationDriver` (T-010), `ChipSlideController` / `ChipSlideDriver` (T-011), `PotSweepController` / `PotSweepDriver` (T-012). Each driver reads its controller's output every frame and applies it to the referenced meshes; the controller never imports Three.js.
+
+### Quality Tiers & Auto-Degrade
+
+Rendering quality is parameterised by a single `QualityTier` value (`'low' | 'medium' | 'high'`) persisted in the Zustand store slice `scenes3d/state/tableStore.ts`. The canonical mapping is in `scenes3d/state/qualitySettings.ts`:
+
+- `QUALITY_TIER_SETTINGS[tier]` — the authoritative per-tier settings object (PBR on/off, env-map mode + resolution, shadow map size, AA mode, card atlas resolution, etc.). Every tier-gated value in the scene reads from this map — no inline `tier === 'high' ? …` literals.
+- `useFPSMonitor` / `<FPSMonitor>` (`scenes3d/state/useFPSMonitor.ts`) — 120-sample rolling-window FPS monitor. When the average FPS stays below the degrade threshold for 3000 ms **and** `manualOverride` is false, it steps down to the `nextLowerTier` exactly once per recovery gate (requires at least one ≥30-avg frame before another drop). Never auto-upgrades; never drops below `low`.
+- `<QualityToast>` (`scenes3d/components/QualityToast.tsx`) — dismissible DOM surface shown when an auto-degrade fires. Mounted at route-root for `/playback`, `/dealer`'s `<TableView3D>`, and `/player/table`.
+- `<TableSettingsPanel>` exposes a tier radiogroup that calls `setTier(nextTier)` + `setManualOverride(true)`, halting auto-degrade so user choice sticks.
+
+Default tier is resolved per device via `resolveDefaultQualityTier()` using `MOBILE_BREAKPOINT_PX`.
+
+### Camera & Presets
+
+`<CameraRig>` selects between the spectator orbit preset and the player seat-POV preset based on `viewer.policy`. Named presets (`'default'`, `'topDown'`, `'cinematic'`, `{ kind: 'seat', seat }`) are resolved to poses by `animations/cameraPresets.ts` and tweened by `<CameraPresetController>`. Under `viewer.policy === 'player'` the camera is hard-locked to the viewer's seat POV; a conflicting caller-supplied preset logs a DEV warning but the player seat still wins.
+
+### Session Replay Composition
+
+The `/playback` route composes replay primitives declaratively:
+
+```tsx
+<SessionReplayShell>                          {/* cross-hand timeline driver */}
+  <HandScrubberPanel />                       {/* hand + street scrubber UI */}
+  <PokerCanvas>
+    <PokerTable viewer={{ policy: 'spectator' }} equityOverlay />
+  </PokerCanvas>
+</SessionReplayShell>
+```
+
+`<SessionReplayShell>` owns the `replay` store slice (`handIndex`, `streetIndex`, `isPlaying`, `speed`) and runs a single-`useEffect` auto-advance state machine: `max(CHIP_SLIDE_DURATION_MS, 1500 / speed)` ms per street, `1000 / speed` ms inter-hand pause, halt at last hand. `handsToTableState` (`data/handsToTableState.ts`) adapts backend `HandResponse[]` payloads into the declarative `TableState` consumed by `<PokerTable>`.
 
 ---
 
 ## Poker Logic
 
-### `poker/evaluator.ts`
-
-A client-side Texas Hold'em hand evaluator and equity calculator.
-
-**Hand evaluation:**
-- Evaluates all $\binom{n}{5}$ combinations for 5–7 cards
-- Scores encode hand rank category (0–8) + kicker hierarchy using a base-14 encoding
-- Supports all standard hand ranks: High Card through Straight Flush
-
-| `HandRank` | Value | Name |
-|---|---|---|
-| `HighCard` | 0 | High Card |
-| `Pair` | 1 | Pair |
-| `TwoPair` | 2 | Two Pair |
-| `ThreeOfAKind` | 3 | Three of a Kind |
-| `Straight` | 4 | Straight |
-| `Flush` | 5 | Flush |
-| `FullHouse` | 6 | Full House |
-| `FourOfAKind` | 7 | Four of a Kind |
-| `StraightFlush` | 8 | Straight Flush |
-
-**Equity calculation:**
-Uses Monte Carlo simulation — deals remaining community cards from the remaining deck, evaluates each player's best hand, and computes win/tie equity.
+The legacy client-side hand evaluator (`poker/evaluator.ts`) and its Monte Carlo equity calculator were removed in T-033. Equity is now computed server-side and delivered through the hand payload / dedicated equity endpoint; `<PokerTable equityOverlay>` renders per-seat `<EquityBadge>` overlays from that server-supplied data.
 
 ### `components/cardUtils.ts`
 
-Card validation utilities:
+Card validation utilities (still client-side):
+
 - `isValidCard(str)` — validates rank (2–A) + suit (H/D/C/S)
 - `normalizeCard(str)` — trims and uppercases
 - `findDuplicateCards(cards)` — returns set of duplicate card codes
@@ -599,7 +659,7 @@ The `mobile/` directory contains touch-optimized variants of shared components:
 | `StreetScrubber` | 48×48px buttons, `overflowX: auto`, flex-fill layout |
 | `EquityRow` | Horizontal scroll, 80px min-width cards, color-coded equity |
 
-The `MobilePlaybackView` uses these mobile components and renders a full-screen 3D scene with bottom-anchored scrubbers and equity row.
+`PlaybackView` composes `<SessionReplayShell>` + `<PokerCanvas><PokerTable>` and reuses the touch-optimized mobile scrubbers for narrow viewports (see § [Mobile Adaptations](#mobile-adaptations)).
 
 `ActiveHandDashboard` detects viewport width via `matchMedia('(min-width: 600px)')` and adjusts layout accordingly.
 
@@ -657,14 +717,13 @@ Every component and module has a co-located test file (`*.test.tsx` or `*.test.t
 |---|---|---|
 | `dealer/` | 18 test files | All dealer components + state + helpers |
 | `player/` | 2 test files | PlayerApp + PlayerActionButtons |
-| `views/` | 4 test files | LandingPage, DataView, PlaybackView, MobilePlaybackView |
+| `views/` | 3 test files | LandingPage, DataView, PlaybackView |
 | `pages/` | 1 test file | TableView |
 | `components/` | 12 test files | All shared components + cardUtils |
-| `scenes/` | 8 test files | All Three.js modules |
+| `scenes3d/` | 46 test files | `<PokerTable>`, `<PokerCanvas>`, components, animations (controller + driver), state, policies |
 | `hooks/` | 2 test files | usePolling + useHandPolling |
 | `stores/` | 1 test file | dealerStore |
 | `api/` | 1 test file | client |
-| `poker/` | 1 test file | evaluator |
 | `mobile/` | 3 test files | EquityRow, SessionScrubber, StreetScrubber |
 | Root | 3 test files | App, NavBar, vite-config |
 
