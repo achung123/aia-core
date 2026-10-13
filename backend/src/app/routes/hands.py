@@ -26,7 +26,6 @@ from app.database.queries import (
 )
 from app.database.session import get_db
 from app.services.betting import (
-    compute_side_pots,
     get_legal_actions,
     is_street_complete,
     validate_action,
@@ -39,6 +38,14 @@ from app.services.hand_state import (
     get_active_seat_order,
     next_seat,
     try_advance_phase,
+)
+from app.services.settlement import (
+    SettlementError,
+    apply_chip_credit,
+    build_pots,
+    contribution_cents,
+    from_cents,
+    settle_hand,
 )
 from pydantic_models.detection_schemas import EquityResponse
 from pydantic_models.hand_schemas import (
@@ -58,6 +65,8 @@ from pydantic_models.hand_schemas import (
     PlayerResultUpdate,
     PlayerStatusEntry,
     RiverUpdate,
+    SettlementResponse,
+    SettleRequest,
     TurnUpdate,
 )
 from pydantic_models.card_validator import validate_no_duplicate_cards
@@ -1313,26 +1322,13 @@ def update_player_result(
             )
             .first()
         )
-        if game_player and game_player.current_chips is not None:
-            # Compute player's total contribution from betting actions in this hand
-            actions = (
-                db.query(PlayerHandAction)
-                .filter(
-                    PlayerHandAction.player_hand_id == player_hand.player_hand_id,
-                    PlayerHandAction.action.in_(['blind', 'call', 'bet', 'raise']),
-                )
-                .all()
-            )
-            contribution = sum(a.amount or 0 for a in actions)
-            # credit = contribution + profit_loss
-            # For winners: equals pot share (positive)
-            # For losers/folders: equals 0 (contribution already deducted)
-            credit = round(contribution + payload.profit_loss, 2)
-            if credit != 0:
-                game_player.current_chips = round(game_player.current_chips + credit, 2)
-            # Auto-deactivate player if chips hit zero
-            if game_player.current_chips is not None and game_player.current_chips <= 0:
-                game_player.is_active = False
+        # credit = contribution + profit_loss
+        # For winners: equals pot share (positive)
+        # For losers/folders: equals 0 (contribution already deducted)
+        credit = round(
+            from_cents(contribution_cents(player_hand)) + payload.profit_loss, 2
+        )
+        apply_chip_credit(game_player, player_hand, credit)
 
     _touch_hand_state(db, hand.hand_id)
     db.commit()
@@ -1383,28 +1379,12 @@ def record_hand_results(
                 )
                 .first()
             )
-            if game_player and game_player.current_chips is not None:
-                actions = (
-                    db.query(PlayerHandAction)
-                    .filter(
-                        PlayerHandAction.player_hand_id == player_hand.player_hand_id,
-                        PlayerHandAction.action.in_(['blind', 'call', 'bet', 'raise']),
-                    )
-                    .all()
-                )
-                contribution = sum(a.amount or 0 for a in actions)
-                credit = round(contribution + entry.profit_loss, 2)
-                if credit != 0:
-                    game_player.current_chips = round(
-                        game_player.current_chips + credit, 2
-                    )
-                # Auto-deactivate player if chips hit zero
-                if (
-                    game_player.current_chips is not None
-                    and game_player.current_chips <= 0
-                ):
-                    game_player.is_active = False
+            credit = round(
+                from_cents(contribution_cents(player_hand)) + entry.profit_loss, 2
+            )
+            apply_chip_credit(game_player, player_hand, credit)
 
+    _touch_hand_state(db, hand.hand_id)
     db.commit()
     db.refresh(hand)
 
@@ -1566,12 +1546,8 @@ def record_player_action(
             if player_hand_row.result != 'folded'
         ]
         if len(non_folded_player_hands) == 1:
-            non_folded_player_hands[0].result = 'won'
             non_folded_player_hands[0].outcome_street = payload.street
-            if hand_state:
-                hand_state.phase = 'showdown'
-                hand_state.current_seat = None
-                hand_state.updated_at = datetime.now(timezone.utc)
+            settle_hand(db, game_id, hand)
             db.commit()
             db.refresh(action)
             return action
@@ -1583,25 +1559,28 @@ def record_player_action(
         if player_hand_row.is_all_in
     ]
     if all_in_player_hands:
-        cumulative: dict[int, float] = {}
-        for player_hand_row in hand.player_hands:
-            total = sum(
-                action_record.amount or 0
-                for action_record in player_hand_row.actions
-                if action_record.action in ('blind', 'call', 'bet', 'raise')
-                and action_record.amount
-            )
-            cumulative[player_hand_row.player_id] = total
-        non_folded_ids = {
-            player_hand_row.player_id
-            for player_hand_row in hand.player_hands
-            if player_hand_row.result != 'folded'
-        }
-        all_in_ids = {
-            player_hand_row.player_id for player_hand_row in all_in_player_hands
-        }
-        side_pots = compute_side_pots(cumulative, all_in_ids, non_folded_ids)
-        hand.side_pots = json.dumps(side_pots)
+        pots = build_pots(
+            {
+                player_hand_row.player_id: contribution_cents(player_hand_row)
+                for player_hand_row in hand.player_hands
+            },
+            {
+                player_hand_row.player_id
+                for player_hand_row in hand.player_hands
+                if player_hand_row.result == 'folded'
+            },
+        )
+        hand.side_pots = json.dumps(
+            [
+                {
+                    'amount': from_cents(pot['amount']),
+                    'eligible_player_ids': pot['eligible_player_ids'],
+                }
+                for pot in pots[1:]
+            ]
+        )
+        # try_advance_phase refreshes the hand, which would drop unflushed changes
+        db.flush()
 
     # Advance turn state
     if hand_state:
@@ -1641,3 +1620,59 @@ def record_player_action(
     db.commit()
     db.refresh(action)
     return action
+
+
+@router.post(
+    '/{game_id}/hands/{hand_number}/settle',
+    response_model=SettlementResponse,
+)
+def settle(
+    game_id: int,
+    hand_number: int,
+    db: Annotated[Session, Depends(get_db)],
+    payload: SettleRequest | None = None,
+    dry_run: bool = Query(default=False),
+):
+    """Pay out the hand: build pots, award them, record result and P&L.
+
+    Safe to call again after a correction — the previous payout is replaced.
+    With dry_run=true nothing is saved and the proposed payout is returned.
+    """
+    get_game_or_404(db, game_id)
+    hand = get_hand_or_404(db, game_id, hand_number)
+
+    ranking: list[list[int]] | None = None
+    if payload and payload.ranking is not None:
+        player_hand_by_player_id = {
+            player_hand.player_id: player_hand for player_hand in hand.player_hands
+        }
+        ranking = []
+        for tier in payload.ranking:
+            tier_ids = []
+            for name in tier:
+                player = get_player_by_name_or_404(db, name)
+                player_hand = player_hand_by_player_id.get(player.player_id)
+                if player_hand is None:
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f'Player {name!r} is not recorded in this hand',
+                    )
+                if player_hand.result == 'folded':
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f'Player {name!r} folded and cannot win the pot',
+                    )
+                tier_ids.append(player.player_id)
+            ranking.append(tier_ids)
+
+    try:
+        settlement = settle_hand(db, game_id, hand, ranking)
+    except SettlementError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if dry_run:
+        db.rollback()
+    else:
+        db.commit()
+    return settlement

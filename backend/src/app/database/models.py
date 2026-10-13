@@ -117,6 +117,7 @@ class PlayerHand(Base):
     profit_loss = Column(Float, nullable=True)
     outcome_street = Column(String, nullable=True)
     is_all_in = Column(Boolean, nullable=False, default=False)
+    chips_credited = Column(Float, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     hand = relationship('Hand', back_populates='player_hands')

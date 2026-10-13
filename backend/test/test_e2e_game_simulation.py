@@ -493,8 +493,10 @@ class TestSidePots:
         p3 = _current(client, gid, hn)
         _act(client, gid, p3, 'call', amount=7.60, hn=hn)
 
+        # All three matched the all-in: one pot, nothing on the side
         hand_data = client.get(f'/games/{gid}/hands/{hn}').json()
-        assert len(hand_data['side_pots']) >= 1
+        assert hand_data['side_pots'] == []
+        assert hand_data['pot'] == pytest.approx(23.40)
 
 
 # ---------------------------------------------------------------------------
@@ -740,9 +742,9 @@ class TestChipStackAcrossHands:
         # BB folds → SB wins the pot
         _act(client, game_id, bb_name, 'fold', hn=hn)
 
-        # SB still has 99.00 chips (pot not auto-added back)
+        # SB is paid the pot: own 1.00 back plus BB's 0.20
         final_chips = _get_chips(client, game_id)
-        assert final_chips[sb_name] == pytest.approx(99.00)
+        assert final_chips[sb_name] == pytest.approx(100.20)
         assert final_chips[bb_name] == pytest.approx(99.80)
 
     def test_rebuy_restores_chips(self, client):
@@ -760,9 +762,9 @@ class TestChipStackAcrossHands:
         bb = hand['bb_player_name']
         _act(client, game_id, bb, 'fold', hn=hn)
 
-        # SB's chips are now 0
+        # SB wins the pot uncontested: own 10.00 back plus BB's 0.20
         chips = _get_chips(client, game_id)
-        assert chips[sb] == pytest.approx(0.0)
+        assert chips[sb] == pytest.approx(10.2)
 
         # Rebuy for SB
         resp = client.post(
@@ -772,7 +774,7 @@ class TestChipStackAcrossHands:
         assert resp.status_code == 201
 
         chips_after = _get_chips(client, game_id)
-        assert chips_after[sb] == pytest.approx(50.0)
+        assert chips_after[sb] == pytest.approx(60.2)
 
 
 # ---------------------------------------------------------------------------

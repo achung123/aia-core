@@ -101,6 +101,36 @@ class PlayerResultUpdate(BaseModel):
     outcome_street: StreetEnum | None = None
 
 
+class SettleRequest(BaseModel):
+    """Who beat whom, best first; players in the same tier split.
+
+    Optional — pots the ranking does not decide are decided by the cards.
+    """
+
+    ranking: list[list[PlayerName]] | None = None
+
+
+class SettledPot(BaseModel):
+    amount: float
+    eligible_players: list[str]
+    winners: list[str]
+
+
+class SettledPlayer(BaseModel):
+    player_name: str
+    result: str | None = None
+    contribution: float
+    payout: float
+    profit_loss: float | None = None
+    current_chips: float | None = None
+
+
+class SettlementResponse(BaseModel):
+    pot: float
+    pots: list[SettledPot]
+    players: list[SettledPlayer]
+
+
 class CommunityCardsUpdate(BaseModel):
     model_config = ConfigDict(use_enum_values=True)
 
