@@ -26,6 +26,8 @@ import type {
   TurnUpdate,
   RiverUpdate,
   PlayerResultUpdate,
+  SettleRequest,
+  SettlementResponse,
   CompleteGameRequest,
   BlindsResponse,
   BlindsUpdate,
@@ -170,6 +172,15 @@ export function updateRiver(gameId: number, handNumber: number, data: RiverUpdat
 export function patchPlayerResult(gameId: number, handNumber: number, playerName: string, data: PlayerResultUpdate): Promise<HandResponse> {
   return request<HandResponse>(`/games/${gameId}/hands/${handNumber}/players/${encodeURIComponent(playerName)}/result`, {
     method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+}
+
+export function settleHand(gameId: number, handNumber: number, data: SettleRequest = {}, dryRun = false): Promise<SettlementResponse> {
+  const qs = dryRun ? '?dry_run=true' : '';
+  return request<SettlementResponse>(`/games/${gameId}/hands/${handNumber}/settle${qs}`, {
+    method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });

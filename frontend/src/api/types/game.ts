@@ -147,6 +147,34 @@ export interface PlayerResultUpdate {
   outcome_street?: StreetEnum | null;
 }
 
+// --- Settlement ---
+
+export interface SettleRequest {
+  /** Who beat whom, best first; players in the same tier split. */
+  ranking?: string[][] | null;
+}
+
+export interface SettledPot {
+  amount: number;
+  eligible_players: string[];
+  winners: string[];
+}
+
+export interface SettledPlayer {
+  player_name: string;
+  result: string | null;
+  contribution: number;
+  payout: number;
+  profit_loss: number | null;
+  current_chips: number | null;
+}
+
+export interface SettlementResponse {
+  pot: number;
+  pots: SettledPot[];
+  players: SettledPlayer[];
+}
+
 // --- Seat Assignment ---
 
 export interface SeatAssignmentRequest {

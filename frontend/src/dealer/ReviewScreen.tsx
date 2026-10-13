@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import type React from 'react';
 import { CardPicker } from './CardPicker.tsx';
-import { patchPlayerResult, updateCommunityCards, updateHolecards, fetchEquity, fetchHand, fetchHandActions } from '../api/client.ts';
+import { patchPlayerResult, settleHand, updateCommunityCards, updateHolecards, fetchEquity, fetchHand } from '../api/client.ts';
 import type { Player, CommunityCards } from '../stores/dealerStore.ts';
-import type { ResultEnum, StreetEnum, PlayerEquityEntry, HandActionResponse } from '../api/types';
+import type { ResultEnum, StreetEnum, PlayerEquityEntry } from '../api/types';
 import { inferOutcomeStreet, mapEquityToOutcomes } from './showdownHelpers.ts';
 import { PlayingCard } from '../components/PlayingCard.tsx';
 
@@ -99,10 +99,9 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
   const [showFinishConfirm, setShowFinishConfirm] = useState(false);
   const [equityData, setEquityData] = useState<PlayerEquityEntry[]>([]);
   const [handPot, setHandPot] = useState<number>(0);
-  const [playerContributions, setPlayerContributions] = useState<Record<string, number>>({});
   const [handDescriptions, setHandDescriptions] = useState<Record<string, string>>({});
 
-  // Fetch hand data for pot, hand descriptions, and actions for contributions
+  // Fetch hand data for pot and hand descriptions
   useEffect(() => {
     fetchHand(gameId, handId).then((hand) => {
       setHandPot(hand.pot ?? 0);
@@ -114,16 +113,6 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
         }
       }
       setHandDescriptions(descs);
-    }).catch(() => {});
-
-    fetchHandActions(gameId, handId).then((actions: HandActionResponse[]) => {
-      const contribs: Record<string, number> = {};
-      for (const a of actions) {
-        if (a.action in { call: 1, bet: 1, raise: 1, blind: 1 } && a.amount) {
-          contribs[a.player_name] = (contribs[a.player_name] ?? 0) + a.amount;
-        }
-      }
-      setPlayerContributions(contribs);
     }).catch(() => {});
   }, [gameId, handId]);
 
@@ -208,27 +197,6 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
     setSaving(true);
     setError(null);
 
-    // Compute profit_loss for each player based on pot and contributions
-    const winners = editPlayers.filter((player) => player.result === 'won');
-    const numWinners = winners.length || 1;
-    const pot = handPot;
-
-    function computeProfitLoss(player: EditablePlayer): number | null {
-      if (pot <= 0) return null; // no pot tracked — skip P&L
-      const contribution = playerContributions[player.name] ?? 0;
-      if (player.result === 'won') {
-        return round2(pot / numWinners - contribution);
-      }
-      if (player.result === 'lost' || player.result === 'folded') {
-        return round2(-contribution);
-      }
-      return null;
-    }
-
-    function round2(n: number): number {
-      return Math.round(n * 100) / 100;
-    }
-
     interface LabeledMutation {
       label: string;
       promise: Promise<unknown>;
@@ -240,14 +208,14 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
 
     // Patch only dirty player results not already saved
     for (const player of editPlayers) {
-      const pl = computeProfitLoss(player);
-      const isDirty = player.result !== player.origResult || player.outcomeStreet !== player.origOutcomeStreet || pl !== null;
+      const isDirty = player.result !== player.origResult || player.outcomeStreet !== player.origOutcomeStreet;
       if (isDirty && !savedResults.has(player.name)) {
         mutations.push({
           label: `${player.name} result`,
           promise: patchPlayerResult(gameId, handId, player.name, {
             result: player.result as ResultEnum,
-            profit_loss: pl,
+            // P&L and chip payouts are computed by the server at settlement
+            profit_loss: null,
             outcome_street: (player.outcomeStreet || null) as StreetEnum | null,
           }),
           type: 'result',
@@ -294,9 +262,24 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
       });
     }
 
+    // The server builds the pots (side pots, folded money, uncalled bets) and
+    // pays the winners. Safe to repeat, so a retry or a correction never pays twice.
+    async function settle(): Promise<boolean> {
+      const winners = editPlayers.filter((player) => player.result === 'won').map((player) => player.name);
+      if (handPot <= 0 || winners.length === 0) return true; // no betting tracked
+      try {
+        await settleHand(gameId, handId, { ranking: [winners] });
+        return true;
+      } catch (err: unknown) {
+        setError(`Could not pay out the hand: ${err instanceof Error ? err.message : 'unknown error'}`);
+        return false;
+      }
+    }
+
     if (mutations.length === 0) {
+      const settled = await settle();
       setSaving(false);
-      onSaved();
+      if (settled) onSaved();
       return;
     }
 
@@ -322,13 +305,16 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
     setSavedResults(newSavedResults);
     setSavedHolecards(newSavedHolecards);
     setCommunitySaved(newCommunitySaved);
-    setSaving(false);
 
     if (failed.length > 0) {
+      setSaving(false);
       setError(`Save failed for: ${failed.join(', ')}. Retry will only re-submit failed changes.`);
-    } else {
-      onSaved();
+      return;
     }
+
+    const settled = await settle();
+    setSaving(false);
+    if (settled) onSaved();
   }
 
   return (
