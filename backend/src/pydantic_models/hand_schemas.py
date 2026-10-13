@@ -101,6 +101,10 @@ class PlayerResultUpdate(BaseModel):
     outcome_street: StreetEnum | None = None
 
 
+class HandTurnUpdate(BaseModel):
+    current_player_name: PlayerName
+
+
 class SettleRequest(BaseModel):
     """Who beat whom, best first; players in the same tier split.
 
@@ -175,6 +179,8 @@ class PlayerActionCreate(BaseModel):
     action: ActionEnum
     amount: float | None = Field(default=None, ge=0)
     is_all_in: bool = False
+    # The action_index the client last saw; a mismatch means the hand moved on
+    expected_action_index: int | None = None
 
 
 class PlayerActionResponse(BaseModel):
@@ -224,6 +230,7 @@ class HandStatusResponse(BaseModel):
     side_pots: list = []
     street_complete: bool = False
     phase: str = 'preflop'
+    action_index: int = 0
 
 
 class HandStateResponse(BaseModel):

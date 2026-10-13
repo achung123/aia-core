@@ -91,6 +91,9 @@ class Hand(Base):
     )
     pot = Column(Float, nullable=False, default=0)
     side_pots = Column(String, nullable=False, default='[]')
+    # Blinds in force when the hand started; a mid-hand blind change does not apply
+    small_blind = Column(Float, nullable=True)
+    big_blind = Column(Float, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     game_session = relationship('GameSession', back_populates='hands')
@@ -227,6 +230,26 @@ class Rebuy(Base):
         Integer, ForeignKey('players.player_id'), nullable=False, index=True
     )
     amount = Column(Float, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    player = relationship('Player')
+
+
+class ChipAdjustment(Base):
+    """A dealer correction to a player's stack, kept as an audit trail."""
+
+    __tablename__ = 'chip_adjustments'
+
+    adjustment_id = Column(Integer, primary_key=True, autoincrement=True)
+    game_id = Column(
+        Integer, ForeignKey('game_sessions.game_id'), nullable=False, index=True
+    )
+    player_id = Column(
+        Integer, ForeignKey('players.player_id'), nullable=False, index=True
+    )
+    delta = Column(Float, nullable=False)
+    chips_after = Column(Float, nullable=False)
+    reason = Column(String, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     player = relationship('Player')

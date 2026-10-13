@@ -92,7 +92,9 @@ def _last_raise_increment(actions_this_street: list[dict], big_blind: float) -> 
             raiser_before = previous_contributions.get(action_record['player_id'], 0.0)
             call_needed = max_before - raiser_before
             increment = action_amount - call_needed
-            if increment > 0:
+            # Only a full raise re-opens the betting and sets a new minimum;
+            # a short all-in raise leaves it where it was.
+            if round(increment, 2) >= round(last_raise_increment, 2):
                 last_raise_increment = increment
     return round(last_raise_increment, 2)
 

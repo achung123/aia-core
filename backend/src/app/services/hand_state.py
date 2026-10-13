@@ -18,6 +18,17 @@ from app.services.betting import is_street_complete
 PHASE_ORDER = ['awaiting_cards', 'preflop', 'flop', 'turn', 'river', 'showdown']
 
 
+def hand_blinds(db: Session, hand: Hand) -> tuple[float, float]:
+    """(small blind, big blind) for this hand — the amounts it started with."""
+    if hand.small_blind is not None and hand.big_blind is not None:
+        return hand.small_blind, hand.big_blind
+    game = db.query(GameSession).filter(GameSession.game_id == hand.game_id).first()
+    return (
+        game.small_blind if game else 0.10,
+        game.big_blind if game else 0.20,
+    )
+
+
 def get_active_seat_order(
     db: Session,
     game_id: int,
@@ -25,9 +36,15 @@ def get_active_seat_order(
     exclude_all_in: bool = False,
 ) -> list[tuple[int, int]]:
     """Return list of (seat_number, player_id) for active non-folded players, sorted by seat."""
+    # The hand's own roster decides who is in it — not who is active in the game
+    # right now, which can change while the hand is being played.
+    hand_player_ids = [player_hand.player_id for player_hand in hand.player_hands]
     active_gps = (
         db.query(GamePlayer)
-        .filter(GamePlayer.game_id == game_id, GamePlayer.is_active.is_(True))
+        .filter(
+            GamePlayer.game_id == game_id,
+            GamePlayer.player_id.in_(hand_player_ids),
+        )
         .order_by(
             func.coalesce(GamePlayer.seat_number, 999999),
             GamePlayer.player_id,
@@ -88,6 +105,13 @@ def first_to_act_seat(
         # Wrap around
         return seats[0][0]
     else:
+        # Heads-up the small blind is the button, so the big blind acts first
+        if len(hand.player_hands) == 2:
+            big_blind_seats = [
+                seat for seat, player_id in seats if player_id == hand.bb_player_id
+            ]
+            if big_blind_seats:
+                return big_blind_seats[0]
         # Post-flop: first active non-folded player after dealer (SB seat)
         small_blind_game_player = (
             db.query(GamePlayer)
@@ -271,9 +295,7 @@ def try_advance_phase(
 
 def activate_preflop(db: Session, game_id: int, hand: Hand, state: HandState) -> None:
     """Transition from awaiting_cards to preflop: post blinds and set first-to-act."""
-    game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
-    small_blind_amount = game.small_blind if game else 0.10
-    big_blind_amount = game.big_blind if game else 0.20
+    small_blind_amount, big_blind_amount = hand_blinds(db, hand)
 
     small_blind_player_hand = (
         db.query(PlayerHand)
@@ -296,6 +318,8 @@ def activate_preflop(db: Session, game_id: int, hand: Hand, state: HandState) ->
         (small_blind_player_hand, hand.sb_player_id, small_blind_amount),
         (big_blind_player_hand, hand.bb_player_id, big_blind_amount),
     ):
+        if blind_player_hand is None:
+            continue  # the blind's player is no longer in the hand
         game_player = (
             db.query(GamePlayer)
             .filter(
