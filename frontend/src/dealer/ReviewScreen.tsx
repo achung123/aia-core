@@ -4,7 +4,7 @@ import { CardPicker } from './CardPicker.tsx';
 import { patchPlayerResult, settleHand, updateCommunityCards, updateHolecards, fetchEquity, fetchHand } from '../api/client.ts';
 import type { Player, CommunityCards } from '../stores/dealerStore.ts';
 import type { ResultEnum, StreetEnum, PlayerEquityEntry } from '../api/types';
-import { inferOutcomeStreet, mapEquityToOutcomes } from './showdownHelpers.ts';
+import { mapEquityToOutcomes } from './showdownHelpers.ts';
 import { PlayingCard } from '../components/PlayingCard.tsx';
 
 type CommunityField = 'flop1' | 'flop2' | 'flop3' | 'turn' | 'river';

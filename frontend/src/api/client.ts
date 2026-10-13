@@ -34,6 +34,9 @@ import type {
   AddPlayerToGameResponse,
   PlayerStatusResponse,
   PlayerActionCreate,
+  HandStateResponse,
+  ChipsUpdate,
+  ChipsResponse,
   PlayerActionResponse,
   HandActionResponse,
   PlayerInfo,
@@ -368,6 +371,26 @@ export function startHand(gameId: number): Promise<HandResponse> {
 export function recordPlayerAction(gameId: number, handNumber: number, playerName: string, data: PlayerActionCreate): Promise<PlayerActionResponse> {
   return request<PlayerActionResponse>(`/games/${gameId}/hands/${handNumber}/players/${encodeURIComponent(playerName)}/actions`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+}
+
+export function undoLastAction(gameId: number, handNumber: number): Promise<HandStateResponse> {
+  return request<HandStateResponse>(`/games/${gameId}/hands/${handNumber}/actions/last`, { method: 'DELETE' });
+}
+
+export function setCurrentPlayer(gameId: number, handNumber: number, playerName: string): Promise<HandStateResponse> {
+  return request<HandStateResponse>(`/games/${gameId}/hands/${handNumber}/state`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ current_player_name: playerName }),
+  });
+}
+
+export function setPlayerChips(gameId: number, playerName: string, data: ChipsUpdate): Promise<ChipsResponse> {
+  return request<ChipsResponse>(`/games/${gameId}/players/${encodeURIComponent(playerName)}/chips`, {
+    method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });

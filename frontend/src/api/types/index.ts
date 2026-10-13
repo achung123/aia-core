@@ -48,6 +48,9 @@ export type {
 export type {
   PlayerStatusEntry,
   HandStatusResponse,
+  HandStateResponse,
+  ChipsUpdate,
+  ChipsResponse,
   BlindsResponse,
   BlindsUpdate,
   AddPlayerToGameRequest,
