@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database.models import (
+    ChipAdjustment,
     GamePlayer,
     GameSession,
     Hand,
@@ -33,6 +34,9 @@ from pydantic_models.game_schemas import (
 from pydantic_models.player_schemas import (
     AddPlayerToGameRequest,
     AddPlayerToGameResponse,
+    ChipAdjustmentResponse,
+    ChipsResponse,
+    ChipsUpdate,
     PlayerInfo,
     PlayerStatusResponse,
     PlayerStatusUpdate,
@@ -932,3 +936,63 @@ def list_rebuys(
         .all()
     )
     return rebuys
+
+
+@router.patch(
+    '/{game_id}/players/{player_name}/chips',
+    response_model=ChipsResponse,
+)
+def set_player_chips(
+    game_id: int,
+    player_name: str,
+    payload: ChipsUpdate,
+    db: Annotated[Session, Depends(get_db)],
+):
+    """Dealer override: correct a player's stack. Every change is logged."""
+    _game, player, game_player = _get_game_player(db, game_id, player_name)
+
+    delta = round(payload.current_chips - (game_player.current_chips or 0), 2)
+    game_player.current_chips = round(payload.current_chips, 2)
+    db.add(
+        ChipAdjustment(
+            game_id=game_id,
+            player_id=player.player_id,
+            delta=delta,
+            chips_after=game_player.current_chips,
+            reason=payload.reason,
+        )
+    )
+    db.commit()
+
+    return ChipsResponse(
+        player_name=player.name,
+        current_chips=game_player.current_chips,
+        delta=delta,
+    )
+
+
+@router.get(
+    '/{game_id}/chip-adjustments',
+    response_model=list[ChipAdjustmentResponse],
+)
+def list_chip_adjustments(
+    game_id: int,
+    db: Annotated[Session, Depends(get_db)],
+):
+    get_game_or_404(db, game_id)
+    adjustments = (
+        db.query(ChipAdjustment)
+        .filter(ChipAdjustment.game_id == game_id)
+        .order_by(ChipAdjustment.adjustment_id.desc())
+        .all()
+    )
+    return [
+        ChipAdjustmentResponse(
+            player_name=adjustment.player.name,
+            delta=adjustment.delta,
+            chips_after=adjustment.chips_after,
+            reason=adjustment.reason,
+            created_at=adjustment.created_at,
+        )
+        for adjustment in adjustments
+    ]

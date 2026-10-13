@@ -26,12 +26,17 @@ import type {
   TurnUpdate,
   RiverUpdate,
   PlayerResultUpdate,
+  SettleRequest,
+  SettlementResponse,
   CompleteGameRequest,
   BlindsResponse,
   BlindsUpdate,
   AddPlayerToGameResponse,
   PlayerStatusResponse,
   PlayerActionCreate,
+  HandStateResponse,
+  ChipsUpdate,
+  ChipsResponse,
   PlayerActionResponse,
   HandActionResponse,
   PlayerInfo,
@@ -170,6 +175,15 @@ export function updateRiver(gameId: number, handNumber: number, data: RiverUpdat
 export function patchPlayerResult(gameId: number, handNumber: number, playerName: string, data: PlayerResultUpdate): Promise<HandResponse> {
   return request<HandResponse>(`/games/${gameId}/hands/${handNumber}/players/${encodeURIComponent(playerName)}/result`, {
     method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+}
+
+export function settleHand(gameId: number, handNumber: number, data: SettleRequest = {}, dryRun = false): Promise<SettlementResponse> {
+  const qs = dryRun ? '?dry_run=true' : '';
+  return request<SettlementResponse>(`/games/${gameId}/hands/${handNumber}/settle${qs}`, {
+    method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
@@ -357,6 +371,26 @@ export function startHand(gameId: number): Promise<HandResponse> {
 export function recordPlayerAction(gameId: number, handNumber: number, playerName: string, data: PlayerActionCreate): Promise<PlayerActionResponse> {
   return request<PlayerActionResponse>(`/games/${gameId}/hands/${handNumber}/players/${encodeURIComponent(playerName)}/actions`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+}
+
+export function undoLastAction(gameId: number, handNumber: number): Promise<HandStateResponse> {
+  return request<HandStateResponse>(`/games/${gameId}/hands/${handNumber}/actions/last`, { method: 'DELETE' });
+}
+
+export function setCurrentPlayer(gameId: number, handNumber: number, playerName: string): Promise<HandStateResponse> {
+  return request<HandStateResponse>(`/games/${gameId}/hands/${handNumber}/state`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ current_player_name: playerName }),
+  });
+}
+
+export function setPlayerChips(gameId: number, playerName: string, data: ChipsUpdate): Promise<ChipsResponse> {
+  return request<ChipsResponse>(`/games/${gameId}/players/${encodeURIComponent(playerName)}/chips`, {
+    method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });

@@ -342,7 +342,7 @@ class TestGetActiveSeatOrder:
         assert len(seats_without_all_in) == 1
         assert seats_without_all_in[0][1] == p2.player_id
 
-    def test_inactive_player_excluded(self, db: Session):
+    def test_player_deactivated_mid_hand_stays_in_the_hand(self, db: Session):
         game = _seed_game(db)
         p1 = _add_player(db, 'A')
         p2 = _add_player(db, 'B')
@@ -358,8 +358,26 @@ class TestGetActiveSeatOrder:
             player_ids=[p1.player_id, p2.player_id],
         )
         seats = get_active_seat_order(db, game.game_id, hand)
-        assert len(seats) == 1
-        assert seats[0][1] == p2.player_id
+        assert [player_id for _, player_id in seats] == [p1.player_id, p2.player_id]
+
+    def test_game_player_not_dealt_into_the_hand_is_excluded(self, db: Session):
+        game = _seed_game(db)
+        p1 = _add_player(db, 'A')
+        p2 = _add_player(db, 'B')
+        p3 = _add_player(db, 'C')
+        _seat_player(db, game.game_id, p1.player_id, 1)
+        _seat_player(db, game.game_id, p2.player_id, 2)
+        _seat_player(db, game.game_id, p3.player_id, 3)
+        db.flush()
+        hand = _make_hand(
+            db,
+            game.game_id,
+            sb_player_id=p1.player_id,
+            bb_player_id=p2.player_id,
+            player_ids=[p1.player_id, p2.player_id],
+        )
+        seats = get_active_seat_order(db, game.game_id, hand)
+        assert [player_id for _, player_id in seats] == [p1.player_id, p2.player_id]
 
 
 # ---------------------------------------------------------------------------
@@ -414,21 +432,19 @@ class TestFirstToActSeat:
         seat = first_to_act_seat(db, game.game_id, hand, 'flop')
         assert seat == 1
 
-    def test_no_active_players_returns_none(self, db: Session):
+    def test_nobody_in_the_hand_returns_none(self, db: Session):
         game = _seed_game(db)
         p1 = _add_player(db, 'A')
         p2 = _add_player(db, 'B')
-        gp1 = _seat_player(db, game.game_id, p1.player_id, 1)
-        gp2 = _seat_player(db, game.game_id, p2.player_id, 2)
-        gp1.is_active = False
-        gp2.is_active = False
+        _seat_player(db, game.game_id, p1.player_id, 1)
+        _seat_player(db, game.game_id, p2.player_id, 2)
         db.flush()
         hand = _make_hand(
             db,
             game.game_id,
             sb_player_id=p1.player_id,
             bb_player_id=p2.player_id,
-            player_ids=[p1.player_id, p2.player_id],
+            player_ids=[],
         )
         assert first_to_act_seat(db, game.game_id, hand, 'preflop') is None
 
@@ -471,21 +487,19 @@ class TestNextSeat:
         )
         assert next_seat(db, game.game_id, hand, 2) == 1
 
-    def test_empty_seats_returns_none(self, db: Session):
+    def test_nobody_in_the_hand_returns_none(self, db: Session):
         game = _seed_game(db)
         p1 = _add_player(db, 'A')
         p2 = _add_player(db, 'B')
-        gp1 = _seat_player(db, game.game_id, p1.player_id, 1)
-        gp2 = _seat_player(db, game.game_id, p2.player_id, 2)
-        gp1.is_active = False
-        gp2.is_active = False
+        _seat_player(db, game.game_id, p1.player_id, 1)
+        _seat_player(db, game.game_id, p2.player_id, 2)
         db.flush()
         hand = _make_hand(
             db,
             game.game_id,
             sb_player_id=p1.player_id,
             bb_player_id=p2.player_id,
-            player_ids=[p1.player_id, p2.player_id],
+            player_ids=[],
         )
         assert next_seat(db, game.game_id, hand, 1) is None
 

@@ -53,6 +53,8 @@ export function DealerApp() {
   const [streetComplete, setStreetComplete] = useState(true);
   const [handPhase, setHandPhase] = useState<string>('preflop');
   const [potContributions, setPotContributions] = useState<Record<string, number>>({});
+  const [playerChips, setPlayerChips] = useState<Record<string, number | null>>({});
+  const [actionIndex, setActionIndex] = useState(0);
 
   // Guard: reset to gameSelector if persisted state is inconsistent
   useLayoutEffect(() => {
@@ -97,6 +99,8 @@ export function DealerApp() {
             }
           }
           setPotContributions(contribs);
+          setActionIndex(data.action_index ?? 0);
+          setPlayerChips(Object.fromEntries((data.players || []).map((player) => [player.name, player.current_chips])));
 
           const joinedPlayers = (data.players || []).filter(
             (player) => player.participation_status === 'joined' || player.participation_status === 'handed_back',
@@ -436,6 +440,9 @@ export function DealerApp() {
               streetComplete={streetComplete}
               handPhase={handPhase}
               potContributions={potContributions}
+              playerChips={playerChips}
+              actionIndex={actionIndex}
+              onOverride={triggerDealerPoll}
             />
           )}
 

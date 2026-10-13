@@ -103,8 +103,9 @@ class TestBetAllIn:
         _act(client, game_id, _current(client, game_id), 'call', amount=4.80)
 
         hand = client.get(f'/games/{game_id}/hands/1').json()
-        # Side pots should exist because UTG is all-in
-        assert len(hand['side_pots']) >= 1
+        # Everyone matched the all-in, so there is one pot and no side pot
+        assert hand['side_pots'] == []
+        assert hand['pot'] == pytest.approx(15.00)
 
     def test_bet_all_in_pot_correct(self, client):
         game_id = _create_game(client, ['Alice', 'Bob', 'Charlie'])
@@ -265,5 +266,5 @@ class TestCallAllInFallback:
         _act(client, game_id, _current(client, game_id), 'fold')
 
         hand = client.get(f'/games/{game_id}/hands/1').json()
-        # Even though SB called the full amount, is_all_in was explicitly set
-        assert len(hand['side_pots']) >= 1
+        # SB matched the raise in full, so there is still only one pot
+        assert hand['side_pots'] == []

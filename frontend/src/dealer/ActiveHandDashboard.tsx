@@ -6,6 +6,7 @@ import { BlindTimer } from './BlindTimer.tsx';
 import { StreetScrubber } from '../mobile/StreetScrubber.tsx';
 import type { HandResponse, PlayerEquityEntry } from '../api/types';
 import { PlayingCard } from '../components/PlayingCard.tsx';
+import { DealerOverrides } from './DealerOverrides.tsx';
 
 const BOARD_STREET = ['flop', 'flop', 'flop', 'turn', 'river'] as const;
 
@@ -53,6 +54,10 @@ export interface ActiveHandDashboardProps {
   streetComplete?: boolean;
   handPhase?: string;
   potContributions?: Record<string, number>;
+  // Dealer overrides
+  playerChips?: Record<string, number | null>;
+  actionIndex?: number;
+  onOverride?: () => void;
 }
 
 export function ActiveHandDashboard({
@@ -79,6 +84,9 @@ export function ActiveHandDashboard({
   streetComplete,
   handPhase,
   potContributions,
+  playerChips,
+  actionIndex = 0,
+  onOverride,
 }: ActiveHandDashboardProps) {
   const [isWide, setIsWide] = useState(() =>
     typeof window !== 'undefined' && window.matchMedia('(min-width: 600px)').matches,
@@ -343,6 +351,26 @@ export function ActiveHandDashboard({
           </button>
         )}
       </div>
+      {onOverride && gameId != null && handNumber != null && (
+        <DealerOverrides
+          gameId={gameId}
+          handNumber={handNumber}
+          playerNames={players
+            .filter((player) => player.status !== 'folded' && player.status !== 'not_playing')
+            .map((player) => player.name)}
+          playerChips={playerChips ?? {}}
+          currentPlayerName={currentPlayerName ?? null}
+          communityCardCount={boardCards.filter(Boolean).length}
+          legalActions={legalActions ?? []}
+          amountToCall={amountToCall}
+          minimumBet={minimumBet}
+          minimumRaise={minimumRaise}
+          pot={pot ?? 0}
+          handPhase={handPhase ?? 'preflop'}
+          actionIndex={actionIndex}
+          onChanged={onOverride}
+        />
+      )}
       {patchError && (
         <div style={styles.toast}>{patchError}</div>
       )}

@@ -68,3 +68,22 @@ class PlayerStatusResponse(BaseModel):
 class SeatAssignmentRequest(BaseModel):
     seat_number: int = Field(ge=1, le=10)
     swap: bool = False
+
+
+class ChipsUpdate(BaseModel):
+    current_chips: float = Field(ge=0)
+    reason: str | None = None
+
+
+class ChipsResponse(BaseModel):
+    player_name: str
+    current_chips: float
+    delta: float
+
+
+class ChipAdjustmentResponse(BaseModel):
+    player_name: str
+    delta: float
+    chips_after: float
+    reason: str | None = None
+    created_at: datetime

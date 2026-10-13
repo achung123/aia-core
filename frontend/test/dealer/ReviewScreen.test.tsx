@@ -5,6 +5,7 @@ import { act } from 'react';
 
 vi.mock('../../src/api/client.ts', () => ({
   patchPlayerResult: vi.fn(() => Promise.resolve({})),
+  settleHand: vi.fn(() => Promise.resolve({ pot: 0, pots: [], players: [] })),
   updateCommunityCards: vi.fn(() => Promise.resolve({})),
   updateHolecards: vi.fn(() => Promise.resolve({})),
   fetchEquity: vi.fn(() => Promise.resolve({ equities: [] })),
@@ -12,7 +13,7 @@ vi.mock('../../src/api/client.ts', () => ({
   fetchHandActions: vi.fn(() => Promise.resolve([])),
 }));
 
-import { patchPlayerResult, updateCommunityCards, updateHolecards, fetchEquity } from '../../src/api/client.ts';
+import { patchPlayerResult, settleHand, updateCommunityCards, updateHolecards, fetchEquity, fetchHand } from '../../src/api/client.ts';
 import { ReviewScreen } from '../../src/../src/dealer/ReviewScreen.tsx';
 import type { ReviewScreenProps } from '../../src/../src/dealer/ReviewScreen.tsx';
 import type { Player, CommunityCards } from '../../src/stores/dealerStore.ts';
@@ -676,5 +677,70 @@ describe('ReviewScreen — winning hand descriptions', () => {
     });
     expect(container.querySelector('[data-testid="review-player-Alice-hand-desc"]')).toBeNull();
     expect(container.querySelector('[data-testid="review-player-Bob-hand-desc"]')).toBeNull();
+  });
+});
+
+describe('ReviewScreen — server settlement', () => {
+  const withPot = () =>
+    (fetchHand as ReturnType<typeof vi.fn>).mockResolvedValue({ pot: 12.5, player_hands: [] });
+
+  it('asks the server to pay the winners instead of sending computed P&L', async () => {
+    withPot();
+    const onSaved = vi.fn();
+    render(<ReviewScreen {...makeProps({ onSaved })} />);
+    await waitFor(() => expect(fetchHand).toHaveBeenCalled());
+
+    await clickFinishAndConfirm();
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(settleHand).toHaveBeenCalledTimes(1);
+    expect(settleHand).toHaveBeenCalledWith(42, 3, { ranking: [['Alice']] });
+    expect(patchPlayerResult).not.toHaveBeenCalled();
+  });
+
+  it('settles after result changes are saved, using the edited winners', async () => {
+    withPot();
+    const onSaved = vi.fn();
+    const { container } = render(<ReviewScreen {...makeProps({ onSaved })} />);
+    await waitFor(() => expect(fetchHand).toHaveBeenCalled());
+
+    fireEvent.click(container.querySelector('[data-testid="review-player-Alice-result-lost"]')!);
+    fireEvent.click(container.querySelector('[data-testid="review-player-Bob-result-won"]')!);
+    await clickFinishAndConfirm();
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(patchPlayerResult).toHaveBeenCalledWith(42, 3, 'Bob', {
+      result: 'won',
+      profit_loss: null,
+      outcome_street: 'river',
+    });
+    expect(settleHand).toHaveBeenCalledWith(42, 3, { ranking: [['Bob']] });
+  });
+
+  it('shows the server error and stays on the screen when the payout fails', async () => {
+    withPot();
+    (settleHand as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error('Cannot decide a pot between Bob, Charlie — rank them or record their cards'),
+    );
+    const onSaved = vi.fn();
+    render(<ReviewScreen {...makeProps({ onSaved })} />);
+    await waitFor(() => expect(fetchHand).toHaveBeenCalled());
+
+    await clickFinishAndConfirm();
+
+    await waitFor(() => expect(screen.getByText(/Could not pay out the hand/)).toBeDefined());
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  it('skips settlement when no betting was tracked', async () => {
+    (fetchHand as ReturnType<typeof vi.fn>).mockResolvedValue({ pot: 0, player_hands: [] });
+    const onSaved = vi.fn();
+    render(<ReviewScreen {...makeProps({ onSaved })} />);
+    await waitFor(() => expect(fetchHand).toHaveBeenCalled());
+
+    await clickFinishAndConfirm();
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(settleHand).not.toHaveBeenCalled();
   });
 });
