@@ -195,4 +195,3 @@ Low — the 3-tier coverage already triangulates the wiring because at least two
 **Still open carry-forward:** All prior Cycle 32–39 items as documented in the respective cycle ledgers — no changes this cycle.
 
 No beads filings this cycle per Anna contract (all findings MEDIUM / LOW). M-1 is the substantive Jean/Logan triage hand-off.
-
