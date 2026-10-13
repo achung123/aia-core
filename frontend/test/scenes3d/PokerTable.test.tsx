@@ -73,6 +73,7 @@ vi.mock('@react-three/fiber', () => ({
   Canvas: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
 
+import { computeSeatRotationY } from '../../src/scenes3d/components/tableLayout';
 import { PokerTable } from '../../src/scenes3d/PokerTable';
 import type {
   SeatState,
@@ -314,23 +315,28 @@ describe('<PokerTable>', () => {
     expect(container.querySelectorAll('group[name="hole-cards"]')).toHaveLength(1);
   });
 
-  it('rotates hole cards to face the seated player instead of the table center', () => {
+  it('lays hole cards flat inside a viewer-upright wrapper that cancels the seat rotation', () => {
     const state = makeState({
       seats: [
         makeSeat(0, { holeCards: [card('Ah'), card('Kd')] }),
       ],
     });
     const { container } = render(<PokerTable state={state} />);
-    const cardMesh = container.querySelector(
-      'group[name="seat-0"] group[name="hole-cards"] mesh[name="card"]',
+    const wrapper = container.querySelector(
+      'group[name="seat-0"] group[name="hole-cards"] group[name="viewer-upright"]',
     );
+    expect(wrapper).not.toBeNull();
+    // Before the first frame the wrapper undoes the seat's own yaw, so the
+    // card reads upright in world space rather than pointing at the seat.
+    const [, wrapperYaw] = wrapper!.getAttribute('rotation')!.split(',').map(Number);
+    expect(wrapperYaw).toBeCloseTo(-computeSeatRotationY(0, 1), 6);
+
+    const cardMesh = wrapper!.querySelector('mesh[name="card"]');
     expect(cardMesh).not.toBeNull();
-    const raw = cardMesh!.getAttribute('rotation');
-    expect(raw).toBeTruthy();
-    const [rx, ry, rz] = raw!.split(',').map(Number);
+    const [rx, ry, rz] = cardMesh!.getAttribute('rotation')!.split(',').map(Number);
     expect(rx).toBeCloseTo(-Math.PI / 2, 6);
     expect(ry).toBeCloseTo(0, 6);
-    expect(rz).toBeCloseTo(Math.PI, 6);
+    expect(rz).toBeCloseTo(0, 6);
   });
 
   // -------------------------------------------------------------------------

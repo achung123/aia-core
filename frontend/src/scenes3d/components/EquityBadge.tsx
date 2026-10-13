@@ -27,8 +27,10 @@ import {
 import {
   BILLBOARD_EPSILON,
   computeBillboardYRotation,
+  computeNameplateWorldPosition,
 } from './Nameplate';
 import { setYRotation, type RotationTarget } from './frameLoopMutations';
+import { faceScreen } from './screenFacing';
 import { useEquityQuery } from '../data/useEquityQuery';
 import { resolveEquityOverlay } from '../state/equityGuard';
 import type { TableState, ViewerContext } from '../types';
@@ -111,6 +113,11 @@ export function EquityBadge({ seatIndex, seatCount, equity }: EquityBadgeProps) 
     () => computeEquityBadgeWorldPosition(seatIndex, seatCount),
     [seatIndex, seatCount],
   );
+  const labelAnchor = useMemo<Vec3>(
+    () => computeNameplateWorldPosition(seatIndex, seatCount),
+    [seatIndex, seatCount],
+  );
+  const screenOffsetY = worldPosition[1] - labelAnchor[1];
   const groupRef = useRef<RotationTarget | null>(null);
   const rotationYRef = useRef<number>(0);
   const label = formatEquityPercent(equity);
@@ -127,6 +134,8 @@ export function EquityBadge({ seatIndex, seatCount, equity }: EquityBadgeProps) 
     ) {
       return;
     }
+    // Face the camera and stack above/below the nameplate on screen.
+    if (faceScreen(groupRef.current, fs.camera, labelAnchor, screenOffsetY)) return;
     const target = computeBillboardYRotation(camPos, {
       x: worldPosition[0],
       z: worldPosition[2],

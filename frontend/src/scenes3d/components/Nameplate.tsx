@@ -23,6 +23,7 @@ import { Text } from '@react-three/drei';
 
 import { seatAnchorLocalToWorld } from './tableLayout';
 import { useReducedMotion } from '../state/useReducedMotion';
+import { faceScreen } from './screenFacing';
 import { FOLDED_NAMEPLATE_OPACITY } from './SeatHighlight';
 import {
   setTextContent,
@@ -176,10 +177,7 @@ export interface NameplateProps {
  */
 export const BILLBOARD_EPSILON = 1e-4;
 
-/**
- * Scene-graph component rendering one seat's billboarded nameplate.
- * Returns `null` when the seat is empty (no player) or inactive — AC 4.
- */
+
 /* eslint-disable react/no-unknown-property -- R3F JSX intrinsics */
 export function Nameplate({
   seatIndex,
@@ -305,6 +303,11 @@ export function Nameplate({
     ) {
       return;
     }
+    // Face the camera fully and grow with distance, so the label stays
+    // readable from straight overhead and on a small phone canvas. (A
+    // yaw-only billboard is edge-on to a top-down camera.)
+    if (faceScreen(groupRef.current, fs.camera, worldPosition)) return;
+
     const target = computeBillboardYRotation(camPos, {
       x: worldPosition[0],
       z: worldPosition[2],

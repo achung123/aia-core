@@ -4,6 +4,7 @@ import { Environment } from '@react-three/drei';
 import { Table } from './components/Table';
 import { Seat } from './components/Seat';
 import { Card } from './components/Card';
+import { ViewerUpright } from './components/ViewerUpright';
 import { ChipInstances } from './components/ChipInstances';
 import { ChipStack } from './components/ChipStack';
 import { CameraPresetController } from './components/CameraPresetController';
@@ -17,6 +18,7 @@ import { resolveEquityOverlay } from './state/equityGuard';
 import type { CameraPreset } from './animations/cameraPresets';
 import {
   POT_CHIP_WORLD_POSITION,
+  computeSeatRotationY,
   seatCommitChipWorldPosition,
 } from './components/tableLayout';
 import {
@@ -126,8 +128,6 @@ class EnvironmentBoundary extends Component<
     return this.props.children;
   }
 }
-
-const HOLE_CARD_ROTATION: [number, number, number] = [-Math.PI / 2, 0, Math.PI];
 
 // ---------------------------------------------------------------------------
 // Layout constants
@@ -594,7 +594,9 @@ export function PokerTable({
               )}
               position={communityTargetPosition(i)}
             >
-              <Card id={c.id} faceUp tier={qualityTier} />
+              <ViewerUpright>
+                <Card id={c.id} faceUp tier={qualityTier} />
+              </ViewerUpright>
             </group>
           );
         })}
@@ -627,6 +629,7 @@ export function PokerTable({
             phase: state.phase,
             ownerFolded: seat.folded,
           });
+          const seatYaw = computeSeatRotationY(seat.seatIndex, seatCount);
           const holeId = (slot: 0 | 1): string | null =>
             faceUp && seat.holeCards ? seat.holeCards[slot].id : null;
           return (
@@ -648,12 +651,9 @@ export function PokerTable({
                     )}
                     position={[-HOLE_CARD_SPREAD_X, HOLE_CARD_Y, HOLE_CARD_LOCAL_Z]}
                   >
-                    <Card
-                      id={holeId(0)}
-                      faceUp={faceUp}
-                      tier={qualityTier}
-                      rotation={HOLE_CARD_ROTATION}
-                    />
+                    <ViewerUpright parentYaw={seatYaw}>
+                      <Card id={holeId(0)} faceUp={faceUp} tier={qualityTier} />
+                    </ViewerUpright>
                   </group>
                   <group
                     name="hole-card-wrap-1"
@@ -663,12 +663,9 @@ export function PokerTable({
                     )}
                     position={[HOLE_CARD_SPREAD_X, HOLE_CARD_Y, HOLE_CARD_LOCAL_Z]}
                   >
-                    <Card
-                      id={holeId(1)}
-                      faceUp={faceUp}
-                      tier={qualityTier}
-                      rotation={HOLE_CARD_ROTATION}
-                    />
+                    <ViewerUpright parentYaw={seatYaw}>
+                      <Card id={holeId(1)} faceUp={faceUp} tier={qualityTier} />
+                    </ViewerUpright>
                   </group>
                 </group>
               ) : null}

@@ -31,9 +31,11 @@ import {
   NAMEPLATE_LOCAL_Y,
   NAMEPLATE_WIDTH,
   computeBillboardYRotation,
+  computeNameplateWorldPosition,
   formatStackAmount,
 } from './Nameplate';
 import { setYRotation, type RotationTarget } from './frameLoopMutations';
+import { faceScreen } from './screenFacing';
 import { seatAnchorLocalToWorld } from './tableLayout';
 import type { Vec3 } from '../animations/tweens';
 import type { SeatState, TableStatePhase } from '../types';
@@ -205,6 +207,11 @@ export function ActionBadge({
     () => computeActionBadgeWorldPosition(seatIndex, seatCount),
     [seatIndex, seatCount],
   );
+  const labelAnchor = useMemo<Vec3>(
+    () => computeNameplateWorldPosition(seatIndex, seatCount),
+    [seatIndex, seatCount],
+  );
+  const screenOffsetY = worldPosition[1] - labelAnchor[1];
   const groupRef = useRef<RotationTarget | null>(null);
   const rotationYRef = useRef<number>(0);
 
@@ -226,6 +233,8 @@ export function ActionBadge({
     ) {
       return;
     }
+    // Face the camera and stack above/below the nameplate on screen.
+    if (faceScreen(groupRef.current, fs.camera, labelAnchor, screenOffsetY)) return;
     const target = computeBillboardYRotation(camPos, {
       x: worldPosition[0],
       z: worldPosition[2],
