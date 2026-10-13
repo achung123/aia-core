@@ -790,6 +790,14 @@ def _build_hand_response(hand: Hand, db: Session) -> HandResponse:
     )
 
 
+def _advance_after_deal(db: Session, game_id: int, hand: Hand) -> None:
+    """Move the hand to the next street once the cards it was waiting on are dealt."""
+    db.flush()
+    state = db.query(HandState).filter(HandState.hand_id == hand.hand_id).first()
+    if state and state.phase not in ('awaiting_cards', 'showdown'):
+        try_advance_phase(db, game_id, hand, state)
+
+
 def _get_game_and_hand(
     game_id: int, hand_number: int, db: Session
 ) -> tuple[GameSession, Hand]:
@@ -829,6 +837,7 @@ def set_flop(
     hand.flop_2 = str(payload.flop_2)
     hand.flop_3 = str(payload.flop_3)
 
+    _advance_after_deal(db, game_id, hand)
     _touch_hand_state(db, hand.hand_id)
     db.commit()
     db.refresh(hand)
@@ -867,6 +876,7 @@ def set_turn(
 
     hand.turn = str(payload.turn)
 
+    _advance_after_deal(db, game_id, hand)
     _touch_hand_state(db, hand.hand_id)
     db.commit()
     db.refresh(hand)
@@ -908,6 +918,7 @@ def set_river(
 
     hand.river = str(payload.river)
 
+    _advance_after_deal(db, game_id, hand)
     _touch_hand_state(db, hand.hand_id)
     db.commit()
     db.refresh(hand)
@@ -1433,27 +1444,32 @@ def record_player_action(
         .first()
     )
 
-    action_amount = payload.amount
-    if (
-        payload.is_all_in
-        and action_amount is None
-        and payload.action in ('bet', 'raise')
-    ):
-        current_chips = game_player.current_chips if game_player else None
-        if current_chips is None or current_chips <= 0:
-            raise HTTPException(
-                status_code=400,
-                detail='Cannot infer all-in amount without a positive chip stack',
-            )
-        action_amount = round(current_chips, 2)
+    if player_hand.result == 'folded':
+        raise HTTPException(
+            status_code=400,
+            detail=f'Player {player_name!r} has already folded',
+        )
 
-    # Turn-order validation (skip if force=true or no hand state)
     hand_state = db.query(HandState).filter(HandState.hand_id == hand.hand_id).first()
     if hand_state and hand_state.phase == 'awaiting_cards':
         raise HTTPException(
             status_code=403,
             detail='Awaiting card capture — all players must submit cards before betting',
         )
+    if hand_state:
+        # Community cards may have been dealt since the last poll
+        try_advance_phase(db, game_id, hand, hand_state)
+        if hand_state.phase == 'showdown':
+            raise HTTPException(
+                status_code=400, detail='The hand is over — no more betting'
+            )
+
+    # The server's phase is the authority on which street this is. Clients derive
+    # the street from the cards on the board and can be a street ahead when the
+    # dealer deals before betting has finished.
+    street = hand_state.phase if hand_state else payload.street
+
+    # Turn-order validation (skip if force=true or no hand state)
     if hand_state and not force:
         expected_name = _get_player_name_for_seat(db, game_id, hand_state.current_seat)
         if expected_name and expected_name.lower() != player_name.lower():
@@ -1465,56 +1481,79 @@ def record_player_action(
                 ),
             )
 
-    # Compute amount_to_call before recording the action (for all-in detection)
+    actions_data: list[dict] = []
     amount_to_call = 0.0
-    if hand_state:
-        actions_data = get_actions_this_street(db, hand, hand_state.phase)
-        street_contribs: dict[int, float] = {}
-        for action_record in actions_data:
-            action_player_id = action_record['player_id']
-            if action_record['action'] in ('blind', 'call', 'bet', 'raise'):
-                street_contribs[action_player_id] = street_contribs.get(
-                    action_player_id, 0
-                ) + (action_record.get('amount') or 0)
-        max_contrib = max(street_contribs.values()) if street_contribs else 0
-        amount_to_call = round(
-            max_contrib - street_contribs.get(player.player_id, 0), 2
-        )
-
-    # --- NLHE action validation ---
+    legal_info = None
+    big_blind_amount = 0.20
     if hand_state:
         game = db.query(GameSession).filter(GameSession.game_id == game_id).first()
         big_blind_amount = game.big_blind if game else 0.20
+        actions_data = get_actions_this_street(db, hand, hand_state.phase)
         legal_info = get_legal_actions(
             phase=hand_state.phase,
             actions_this_street=actions_data,
             current_player_id=player.player_id,
             blind_amounts=(game.small_blind if game else 0.10, big_blind_amount),
         )
+        amount_to_call = legal_info['amount_to_call']
+
+    # --- Stack limits (only when the game tracks chip stacks) ---
+    stack = game_player.current_chips if game_player else None
+    action_amount = payload.amount
+    is_all_in = payload.is_all_in
+    if payload.action in ('call', 'bet', 'raise'):
+        if payload.is_all_in and action_amount is None:
+            if stack is None or stack <= 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail='Cannot infer all-in amount without a positive chip stack',
+                )
+            action_amount = (
+                round(min(stack, amount_to_call), 2)
+                if payload.action == 'call'
+                else round(stack, 2)
+            )
+        if stack is not None and action_amount is not None:
+            if stack <= 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f'Player {player_name!r} has no chips left',
+                )
+            if round(action_amount, 2) > round(stack, 2):
+                if payload.action != 'call':
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            f'{player_name} only has {stack:.2f} — '
+                            f'cannot {payload.action} {action_amount:.2f}'
+                        ),
+                    )
+                # Calling for less: put in what is left
+                action_amount = round(stack, 2)
+            if round(action_amount, 2) == round(stack, 2):
+                is_all_in = True
+
+    # --- NLHE action validation ---
+    if legal_info:
         error = validate_action(
             action=payload.action,
             amount=action_amount,
             legal_actions=legal_info['legal_actions'],
-            amount_to_call=legal_info['amount_to_call'],
+            amount_to_call=amount_to_call,
             actions_this_street=actions_data,
             big_blind=big_blind_amount,
-            is_all_in=payload.is_all_in,
+            is_all_in=is_all_in,
         )
         if error:
             raise HTTPException(status_code=400, detail=error)
 
     if payload.action == 'fold':
-        if player_hand.result == 'folded':
-            raise HTTPException(
-                status_code=400,
-                detail=f'Player {player_name!r} has already folded',
-            )
         player_hand.result = 'folded'
-        player_hand.outcome_street = payload.street
+        player_hand.outcome_street = street
 
     action = PlayerHandAction(
         player_hand_id=player_hand.player_hand_id,
-        street=payload.street,
+        street=street,
         action=payload.action,
         amount=action_amount,
     )
@@ -1530,7 +1569,7 @@ def record_player_action(
             )
 
     # Detect all-in: explicit flag from client or auto-detect call-for-less
-    if payload.is_all_in:
+    if is_all_in:
         player_hand.is_all_in = True
     elif payload.action == 'call' and action_amount is not None and amount_to_call > 0:
         if action_amount < amount_to_call:
@@ -1546,7 +1585,7 @@ def record_player_action(
             if player_hand_row.result != 'folded'
         ]
         if len(non_folded_player_hands) == 1:
-            non_folded_player_hands[0].outcome_street = payload.street
+            non_folded_player_hands[0].outcome_street = street
             settle_hand(db, game_id, hand)
             db.commit()
             db.refresh(action)
@@ -1599,14 +1638,19 @@ def record_player_action(
             if player_id not in all_in_ids
         ]
         actions_data = get_actions_this_street(db, hand, hand_state.phase)
-        next_seat_number = next_seat(
-            db,
-            game_id,
-            hand,
-            hand_state.current_seat,
-            seats_cache=seats_excl_all_in,
+        # A forced out-of-turn action leaves the turn with whoever had it
+        acted_in_turn = hand_state.current_seat is None or (
+            game_player is not None
+            and game_player.seat_number == hand_state.current_seat
         )
-        hand_state.current_seat = next_seat_number
+        if acted_in_turn:
+            hand_state.current_seat = next_seat(
+                db,
+                game_id,
+                hand,
+                hand_state.current_seat,
+                seats_cache=seats_excl_all_in,
+            )
         # Check if phase should advance
         try_advance_phase(
             db,

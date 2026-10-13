@@ -288,11 +288,13 @@ class TestPlayerFlowIntegration:
         assert manual[5]['action'] == 'call'
 
         assert manual[6]['player_name'] == 'Alice'
-        assert manual[6]['street'] == 'river'
+        # Sent as 'river', but turn betting had not happened yet: the server
+        # records the action on the street the hand is actually on.
+        assert manual[6]['street'] == 'turn'
         assert manual[6]['action'] == 'check'
 
         assert manual[7]['player_name'] == 'Bob'
-        assert manual[7]['street'] == 'river'
+        assert manual[7]['street'] == 'turn'
         assert manual[7]['action'] == 'check'
 
         # All actions have created_at timestamps

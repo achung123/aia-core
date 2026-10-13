@@ -59,8 +59,8 @@ def first_to_act_seat(
     hand: Hand,
     phase: str,
 ) -> int | None:
-    """Determine the first-to-act seat for a given phase."""
-    seats = get_active_seat_order(db, game_id, hand)
+    """Determine the first-to-act seat for a given phase (all-in players never act)."""
+    seats = get_active_seat_order(db, game_id, hand, exclude_all_in=True)
     if not seats:
         return None
 
@@ -291,49 +291,37 @@ def activate_preflop(db: Session, game_id: int, hand: Hand, state: HandState) ->
         )
         .first()
     )
-    db.add(
-        PlayerHandAction(
-            player_hand_id=small_blind_player_hand.player_hand_id,
-            street='preflop',
-            action='blind',
-            amount=small_blind_amount,
+    posted_total = 0.0
+    for blind_player_hand, blind_player_id, blind_amount in (
+        (small_blind_player_hand, hand.sb_player_id, small_blind_amount),
+        (big_blind_player_hand, hand.bb_player_id, big_blind_amount),
+    ):
+        game_player = (
+            db.query(GamePlayer)
+            .filter(
+                GamePlayer.game_id == game_id,
+                GamePlayer.player_id == blind_player_id,
+            )
+            .first()
         )
-    )
-    db.add(
-        PlayerHandAction(
-            player_hand_id=big_blind_player_hand.player_hand_id,
-            street='preflop',
-            action='blind',
-            amount=big_blind_amount,
+        posted = blind_amount
+        if game_player and game_player.current_chips is not None:
+            # A short stack posts what it has and is all-in
+            posted = round(min(blind_amount, max(game_player.current_chips, 0)), 2)
+            game_player.current_chips = round(game_player.current_chips - posted, 2)
+            if game_player.current_chips <= 0:
+                blind_player_hand.is_all_in = True
+        db.add(
+            PlayerHandAction(
+                player_hand_id=blind_player_hand.player_hand_id,
+                street='preflop',
+                action='blind',
+                amount=posted,
+            )
         )
-    )
-    hand.pot = small_blind_amount + big_blind_amount
-
-    # Deduct blinds from player chip stacks
-    small_blind_game_player = (
-        db.query(GamePlayer)
-        .filter(
-            GamePlayer.game_id == game_id,
-            GamePlayer.player_id == hand.sb_player_id,
-        )
-        .first()
-    )
-    big_blind_game_player = (
-        db.query(GamePlayer)
-        .filter(
-            GamePlayer.game_id == game_id,
-            GamePlayer.player_id == hand.bb_player_id,
-        )
-        .first()
-    )
-    if small_blind_game_player and small_blind_game_player.current_chips is not None:
-        small_blind_game_player.current_chips = round(
-            small_blind_game_player.current_chips - small_blind_amount, 2
-        )
-    if big_blind_game_player and big_blind_game_player.current_chips is not None:
-        big_blind_game_player.current_chips = round(
-            big_blind_game_player.current_chips - big_blind_amount, 2
-        )
+        posted_total += posted
+    hand.pot = round(posted_total, 2)
+    db.flush()
 
     state.phase = 'preflop'
     state.current_seat = first_to_act_seat(db, game_id, hand, 'preflop')
