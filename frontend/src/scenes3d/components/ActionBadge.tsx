@@ -211,7 +211,8 @@ export function ActionBadge({
     () => computeNameplateWorldPosition(seatIndex, seatCount),
     [seatIndex, seatCount],
   );
-  const screenOffsetY = worldPosition[1] - labelAnchor[1];
+  // Slot beyond the nameplate, on the side away from the table.
+  const screenOffsetY = NAMEPLATE_HEIGHT / 2 + ACTION_BADGE_HEIGHT / 2 + 0.03;
   const groupRef = useRef<RotationTarget | null>(null);
   const rotationYRef = useRef<number>(0);
 

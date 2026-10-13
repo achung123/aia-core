@@ -550,6 +550,11 @@ export function PokerTable({
           </EnvironmentBoundary>
         </Suspense>
       )}
+      {/* Without an environment map (low tier) the felt and rail are lit by
+          the base lights alone and come out murky; add fill to compensate. */}
+      {QUALITY_TIER_SETTINGS[qualityTier].envMap.mode === 'none' && (
+        <ambientLight name="low-tier-fill" intensity={0.9} />
+      )}
       <directionalLight
         name="key-light"
         position={[6, 8, 4]}
@@ -617,7 +622,7 @@ export function PokerTable({
             viewer?.policy === 'player' && typeof viewer.seat === 'number'
               ? viewer.seat
               : null;
-          const renderHole = seat.isActive && (
+          const renderHole = seat.isActive && seat.inHand !== false && (
             viewerPolicy === 'spectator'
             || seat.seatIndex === viewerSeat
             || !seat.folded

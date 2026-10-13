@@ -23,7 +23,7 @@ import {
 import type { GameSessionResponse, HandResponse } from '../api/types/game';
 import type { HandActionResponse } from '../api/types/dealer';
 import { SessionScrubber } from '../components/SessionScrubber';
-import { HandScrubberPanel } from './components/HandScrubberPanel';
+import { ACTIVE_CONTROL_BUTTON_STYLE, CONTROL_BUTTON_STYLE, HandScrubberPanel } from './components/HandScrubberPanel';
 import { handsToTableState } from './data/handsToTableState';
 import {
   REPLAY_SPEEDS,
@@ -373,8 +373,8 @@ export function SessionReplayShell({
                 onClick={() => onSpeedClick(s)}
                 style={{
                   ...speedBtnStyle,
-                  fontWeight: active ? 700 : 400,
-                  opacity: active ? 1 : 0.7,
+                  fontWeight: active ? 700 : 500,
+                  ...(active ? ACTIVE_CONTROL_BUTTON_STYLE : {}),
                 }}
               >
                 {s}x
@@ -399,7 +399,7 @@ const controlsStyle: CSSProperties = {
   alignItems: 'center',
   gap: 8,
   padding: 8,
-  background: '#111',
+  background: '#0f0f1a',
 };
 
 const playBtnStyle: CSSProperties = {
@@ -407,9 +407,7 @@ const playBtnStyle: CSSProperties = {
   minHeight: MIN_TAP_TARGET_PX,
   cursor: 'pointer',
   fontWeight: 600,
-  background: 'none',
-  border: '1px solid #555',
-  color: '#fff',
+  ...CONTROL_BUTTON_STYLE,
 };
 
 const speedGroupStyle: CSSProperties = {
@@ -417,8 +415,8 @@ const speedGroupStyle: CSSProperties = {
   gap: 4,
 };
 const streetScrubberStyle: CSSProperties = {
-  background: '#111',
-  borderTop: '1px solid #222',
+  background: '#0f0f1a',
+  borderTop: '1px solid #1e1b4b',
   color: '#fff',
 };
 const speedBtnStyle: CSSProperties = {
@@ -426,7 +424,5 @@ const speedBtnStyle: CSSProperties = {
   minHeight: MIN_TAP_TARGET_PX,
   padding: '0 12px',
   cursor: 'pointer',
-  background: 'none',
-  border: '1px solid #555',
-  color: '#fff',
+  ...CONTROL_BUTTON_STYLE,
 };

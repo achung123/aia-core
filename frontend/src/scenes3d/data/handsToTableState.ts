@@ -191,43 +191,53 @@ function parseSidePots(
   });
 }
 
-function buildResolvedSeatMap(
+/**
+ * Give every player at the table a seat on the ring, numbered 1..N.
+ *
+ * The scene spaces `N` seats evenly and places seat `k` at slot `k mod N`,
+ * so the numbers must be dense: with gaps (say seats 2 and 4 of a
+ * two-player list) two players land on the same spot.
+ *
+ *   - Players with a saved `seat_number` come first, in that order. Their
+ *     numbers are kept when they are consecutive; otherwise they are
+ *     renumbered by rank, which preserves who sits next to whom.
+ *   - Games with no saved seats (older imports) seat the whole roster in
+ *     roster order, so a player keeps the same seat from hand to hand
+ *     instead of the table reshuffling around whoever was dealt in.
+ *   - Anyone dealt into the hand but missing from the above is added at
+ *     the end. Unseated players who are not in the hand are left out.
+ */
+export function resolveSeatMap(
   game: GameSessionResponse,
   hand: HandResponse,
 ): Map<string, number> {
-  const explicit = (game.players ?? []).filter(
-    (p): p is typeof p & { seat_number: number } => typeof p.seat_number === 'number',
-  );
-  if (explicit.length > 0) {
+  const roster = game.players ?? [];
+  const explicit = roster
+    .filter(
+      (p): p is typeof p & { seat_number: number } => typeof p.seat_number === 'number',
+    )
+    .sort((a, b) => a.seat_number - b.seat_number || a.name.localeCompare(b.name));
+
+  const order: string[] = explicit.map((p) => p.name);
+  if (explicit.length === 0 && hand.player_hands.length > 0) {
+    for (const p of roster) order.push(p.name);
+  }
+  const seated = new Set(order);
+  for (const ph of hand.player_hands) {
+    if (seated.has(ph.player_name)) continue;
+    seated.add(ph.player_name);
+    order.push(ph.player_name);
+  }
+
+  // Any run of N consecutive numbers (0-based or 1-based) maps to N
+  // distinct slots, so those are kept exactly as saved.
+  const savedNumbersAreDense =
+    explicit.length === order.length &&
+    explicit.every((p, i) => p.seat_number === explicit[0].seat_number + i);
+  if (savedNumbersAreDense) {
     return new Map(explicit.map((p) => [p.name, p.seat_number]));
   }
-
-  // Historical imported games can have full per-hand player/card data but
-  // no persisted seat metadata at the session layer. In that case synthesize
-  // a stable 1-based seat map from the hand participants, preserving
-  // `game.players` order when possible so playback can still render the full
-  // table instead of collapsing to zero seats.
-  if (hand.player_hands.length === 0) {
-    return new Map();
-  }
-
-  const handParticipants = new Set(hand.player_hands.map((ph) => ph.player_name));
-  const out = new Map<string, number>();
-  let nextSeat = 1;
-
-  for (const p of game.players ?? []) {
-    if (!handParticipants.has(p.name)) continue;
-    out.set(p.name, nextSeat);
-    nextSeat += 1;
-  }
-
-  for (const ph of hand.player_hands) {
-    if (out.has(ph.player_name)) continue;
-    out.set(ph.player_name, nextSeat);
-    nextSeat += 1;
-  }
-
-  return out;
+  return new Map(order.map((name, i) => [name, i + 1]));
 }
 
 function deriveDealerSeat(
@@ -251,7 +261,7 @@ export function handsToTableState(input: {
 }): TableState {
   const { game, hand, status, actions } = input;
 
-  const seatByName = buildResolvedSeatMap(game, hand);
+  const seatByName = resolveSeatMap(game, hand);
   const seatedNumbers = Array.from(seatByName.values()).sort((a, b) => a - b);
   const playersByName = new Map((game.players ?? []).map((p) => [p.name, p]));
 
@@ -271,6 +281,7 @@ export function handsToTableState(input: {
         seatIndex,
         playerName,
         isActive: player?.is_active ?? true,
+        inHand: ph !== undefined || hand.player_hands.length === 0,
         stack: ps?.current_chips ?? player?.current_chips ?? 0,
         committedThisStreet: sumActions(actions, playerName, phase),
         committedTotal: ps?.pot_contribution ?? 0,

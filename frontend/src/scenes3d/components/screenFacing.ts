@@ -11,9 +11,11 @@
 import * as THREE from 'three';
 
 /** Label scale per world unit of camera distance, and its limits. */
-export const LABEL_SCALE_PER_DISTANCE = 0.14;
+export const LABEL_SCALE_PER_DISTANCE = 0.12;
 export const LABEL_MIN_SCALE = 1;
-export const LABEL_MAX_SCALE = 3;
+export const LABEL_MAX_SCALE = 2.4;
+/** World units a label moves away from the table centre per unit of scale. */
+export const LABEL_OUTWARD_SHIFT = 0.3;
 
 export function computeLabelScale(distance: number): number {
   return Math.min(
@@ -28,7 +30,12 @@ type Vec3 = readonly [number, number, number];
 
 /**
  * Orient `target` to face the camera, scale it by distance, and place it at
- * `anchor` shifted `screenOffsetY` label-units up the screen.
+ * `anchor` shifted `screenOffset` label-units along the screen's vertical.
+ *
+ * The shift goes *away from the table centre as seen on screen*: up for
+ * seats in the top half of the picture, down for seats in the bottom half.
+ * That keeps badges off the hole cards, which always sit on the table side
+ * of the nameplate.
  *
  * Returns false — leaving the target untouched — unless both objects are
  * real three.js instances; unit tests exercise the yaw-only fallback with
@@ -38,7 +45,7 @@ export function faceScreen(
   target: unknown,
   camera: unknown,
   anchor: Vec3,
-  screenOffsetY = 0,
+  screenOffset = 0,
 ): boolean {
   if (!(target instanceof THREE.Object3D) || !(camera instanceof THREE.Camera)) {
     return false;
@@ -52,7 +59,19 @@ export function faceScreen(
     ),
   );
   target.scale.setScalar(scale);
-  up.set(0, 1, 0).applyQuaternion(camera.quaternion).multiplyScalar(screenOffsetY * scale);
-  target.position.set(anchor[0] + up.x, anchor[1] + up.y, anchor[2] + up.z);
+  up.set(0, 1, 0).applyQuaternion(camera.quaternion);
+  // Is this seat above or below the table centre on screen?
+  const towardTop = anchor[0] * up.x + anchor[2] * up.z;
+  const direction = towardTop < -0.05 ? -1 : 1;
+  up.multiplyScalar(Math.abs(screenOffset) * scale * direction);
+  // Slide the label outward from the table as it grows, so a large label
+  // at a side seat does not cover that seat's hole cards.
+  const radius = Math.hypot(anchor[0], anchor[2]);
+  const outward = radius > 0 ? (LABEL_OUTWARD_SHIFT * scale) / radius : 0;
+  target.position.set(
+    anchor[0] * (1 + outward) + up.x,
+    anchor[1] + up.y,
+    anchor[2] * (1 + outward) + up.z,
+  );
   return true;
 }

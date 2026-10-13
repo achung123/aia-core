@@ -122,6 +122,9 @@ export function computeBillboardYRotation(
 }
 
 function formatNameplateLabel(playerName: string, displayedStack: number): string {
+  // Games without chip tracking report every stack as 0; a column of "$0"
+  // under every name is noise, so show the name alone.
+  if (Math.round(displayedStack) <= 0) return playerName;
   return `${playerName}\n${formatStackAmount(displayedStack)}`;
 }
 

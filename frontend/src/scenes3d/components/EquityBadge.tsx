@@ -28,6 +28,7 @@ import {
   BILLBOARD_EPSILON,
   computeBillboardYRotation,
   computeNameplateWorldPosition,
+  NAMEPLATE_HEIGHT,
 } from './Nameplate';
 import { setYRotation, type RotationTarget } from './frameLoopMutations';
 import { faceScreen } from './screenFacing';
@@ -117,7 +118,8 @@ export function EquityBadge({ seatIndex, seatCount, equity }: EquityBadgeProps) 
     () => computeNameplateWorldPosition(seatIndex, seatCount),
     [seatIndex, seatCount],
   );
-  const screenOffsetY = worldPosition[1] - labelAnchor[1];
+  // Slot beyond the nameplate, on the side away from the table.
+  const screenOffsetY = NAMEPLATE_HEIGHT / 2 + ACTION_BADGE_HEIGHT + EQUITY_BADGE_HEIGHT / 2 + 0.06;
   const groupRef = useRef<RotationTarget | null>(null);
   const rotationYRef = useRef<number>(0);
   const label = formatEquityPercent(equity);

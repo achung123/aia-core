@@ -359,6 +359,48 @@ describe('handsToTableState', () => {
       });
     });
 
+    it('renumbers seats with gaps so no two players share a spot', () => {
+      const game = makeGame([
+        makePlayer('Alice', 2),
+        makePlayer('Bob', 4),
+      ]);
+      const ts = handsToTableState({ game, hand: makeHand(), viewer: spectator });
+      // Seats 2 and 4 of a two-seat ring would both land on slot 0.
+      const slots = ts.seats.map((seat) => seat.seatIndex % ts.seats.length);
+      expect(new Set(slots).size).toBe(2);
+      expect(ts.seats.map((seat) => seat.playerName)).toEqual(['Alice', 'Bob']);
+    });
+
+    it('keeps consecutive saved seat numbers exactly as saved', () => {
+      const game = makeGame([makePlayer('Alice', 0), makePlayer('Bob', 1), makePlayer('Carol', 2)]);
+      const ts = handsToTableState({ game, hand: makeHand(), viewer: spectator });
+      expect(ts.seats.map((seat) => seat.seatIndex)).toEqual([0, 1, 2]);
+    });
+
+    it('seats the whole roster when no seats were saved, marking who was dealt in', () => {
+      const game = makeGame([
+        makePlayer('Alice', 0, { seat_number: null }),
+        makePlayer('Bob', 0, { seat_number: null }),
+        makePlayer('Carol', 0, { seat_number: null }),
+      ]);
+      const hand = makeHand({
+        player_hands: [
+          {
+            player_hand_id: 1, hand_id: 10, player_id: 3, player_name: 'Carol',
+            card_1: 'Ah', card_2: 'Kd', result: 'won', profit_loss: 5,
+            outcome_street: 'river', winning_hand_description: null,
+          },
+        ],
+      });
+      const ts = handsToTableState({ game, hand, viewer: spectator });
+      // Roster order, so Carol keeps seat 3 whoever else is dealt in
+      expect(ts.seats.map((seat) => [seat.playerName, seat.seatIndex, seat.inHand])).toEqual([
+        ['Alice', 1, false],
+        ['Bob', 2, false],
+        ['Carol', 3, true],
+      ]);
+    });
+
     it('excludes players with null seat_number (unseated players are not rendered)', () => {
       const game = makeGame([makePlayer('Ghost', 0, { seat_number: null })]);
       const ts = handsToTableState({ game, hand: makeHand(), viewer: spectator });

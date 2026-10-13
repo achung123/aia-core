@@ -16,7 +16,9 @@ import { useTableStore } from '../state/tableStore';
 
 const toastStyle: CSSProperties = {
   position: 'fixed',
-  bottom: 20,
+  // Top of the screen: the bottom is where the replay controls live
+  top: 68,
+  maxWidth: 'calc(100vw - 24px)',
   left: '50%',
   transform: 'translateX(-50%)',
   zIndex: 1000,

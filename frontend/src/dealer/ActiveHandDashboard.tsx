@@ -168,7 +168,7 @@ export function ActiveHandDashboard({
   return (
     <div style={isWide ? styles.containerWide : styles.container}>
       {viewMode === '3d' ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', minWidth: 0 }}>
           <TableView3D gameId={gameId} street={streetScrub3D} />
           {hands3D.length > 0 && (
             <StreetScrubber

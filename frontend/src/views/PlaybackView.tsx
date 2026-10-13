@@ -9,7 +9,7 @@
 // Entry point: [DataView.tsx](../views/DataView.tsx) "▶ Playback" button
 // navigates to `#/playback?gameId=<id>`.
 
-import { useCallback, useMemo, type CSSProperties } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 
@@ -149,6 +149,21 @@ function PlaybackStatus({ title, detail }: { title: string; detail?: string }) {
 }
 
 export function PlaybackView() {
+  // The view sits below the nav bar, so "full height" is the viewport minus
+  // wherever the wrapper actually starts — otherwise the bottom row of
+  // controls is pushed off screen by the nav bar's height.
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const [topOffset, setTopOffset] = useState(0);
+  useLayoutEffect(() => {
+    const measure = () => {
+      const top = wrapperRef.current?.getBoundingClientRect().top ?? 0;
+      setTopOffset(Math.max(0, Math.round(top + window.scrollY)));
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  });
+
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const gameIdParam = searchParams.get('gameId');
@@ -217,7 +232,11 @@ export function PlaybackView() {
     gameQuery.status === 'pending' || handsQuery.status === 'pending';
 
   return (
-    <div data-testid="mobile-canvas" style={mobileStyles.wrapper}>
+    <div
+      data-testid="mobile-canvas"
+      ref={wrapperRef}
+      style={{ ...mobileStyles.wrapper, height: `calc(100dvh - ${topOffset}px)`, minHeight: 0 }}
+    >
       <button
         data-testid="back-button"
         onClick={handleBack}

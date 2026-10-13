@@ -19,7 +19,7 @@ import { fetchGame } from '../api/client.ts';
 import { useHandPolling } from '../hooks/useHandPolling.ts';
 import { PokerCanvas } from '../scenes3d/PokerCanvas.tsx';
 import { PokerTable } from '../scenes3d/PokerTable.tsx';
-import { handsToTableState } from '../scenes3d/data/handsToTableState.ts';
+import { handsToTableState, resolveSeatMap } from '../scenes3d/data/handsToTableState.ts';
 import type { ViewerContext } from '../scenes3d/types';
 import { SessionScrubber } from '../components/SessionScrubber.tsx';
 
@@ -79,11 +79,12 @@ export function TableView() {
     scrubIndex >= 0 && scrubIndex < hands.length ? hands[scrubIndex] : null;
   const currentHandNumber = selectedHand?.hand_number ?? 0;
 
+  // The viewer's seat comes from the same seat map the scene is built from,
+  // so it also resolves in games that never saved seat numbers.
   const viewerSeat = useMemo<number | null>(() => {
-    if (!game || !playerName) return null;
-    const p = (game.players ?? []).find((pp) => pp.name === playerName);
-    return typeof p?.seat_number === 'number' ? p.seat_number : null;
-  }, [game, playerName]);
+    if (!game || !selectedHand || !playerName) return null;
+    return resolveSeatMap(game, selectedHand).get(playerName) ?? null;
+  }, [game, selectedHand, playerName]);
 
   const viewer = useMemo<ViewerContext>(() => {
     return viewerSeat !== null

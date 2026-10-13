@@ -1,3 +1,4 @@
+import type React from 'react';
 import {
   useCallback,
   useEffect,
@@ -96,6 +97,25 @@ export function streetIndexFromOutcomePhase(
       return 4;
   }
 }
+
+/** Shared look for the replay controls — matches the app's dark theme. */
+export const CONTROL_BUTTON_STYLE: React.CSSProperties = {
+  background: '#1e1b4b',
+  color: '#e0e7ff',
+  border: '1px solid #3730a3',
+  borderRadius: 8,
+  fontSize: 'clamp(10px, 2.7vw, 13px)',
+  letterSpacing: '-0.01em',
+  lineHeight: 1.1,
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+};
+export const ACTIVE_CONTROL_BUTTON_STYLE: React.CSSProperties = {
+  background: '#4f46e5',
+  borderColor: '#818cf8',
+  color: '#ffffff',
+};
 
 export function HandScrubberPanel({
   bindToReplay = false,
@@ -217,6 +237,7 @@ export function HandScrubberPanel({
           minHeight: MIN_TAP_TARGET_PX,
           cursor: 'pointer',
           fontWeight: 600,
+          ...CONTROL_BUTTON_STYLE,
         }}
       >
         {isPlaying ? '❚❚' : '▶'}
@@ -251,12 +272,15 @@ export function HandScrubberPanel({
               style={{
                 minWidth: MIN_TAP_TARGET_PX,
                 minHeight: MIN_TAP_TARGET_PX,
-                padding: '0 12px',
+                // Five labels have to share a 360px-wide phone
+                padding: '0 2px',
                 flex: 1,
                 cursor: disabled ? 'default' : 'pointer',
                 opacity: disabled ? 0.35 : 1,
-                fontWeight: active ? 700 : 400,
+                fontWeight: active ? 700 : 500,
                 touchAction: 'manipulation',
+                ...CONTROL_BUTTON_STYLE,
+                ...(active ? ACTIVE_CONTROL_BUTTON_STYLE : {}),
               }}
             >
               {label}

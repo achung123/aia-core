@@ -25,6 +25,11 @@ export type SeatState = {
   playerName: string | null;
   /** game_player.is_active */
   isActive: boolean;
+  /**
+   * Dealt into the current hand. Seats that are at the table but sitting
+   * this hand out keep their nameplate and get no cards. Defaults to true.
+   */
+  inHand?: boolean;
   /** current_chips */
   stack: number;
   /** Summed from actions for the current phase. */
