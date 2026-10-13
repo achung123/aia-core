@@ -1,6 +1,7 @@
 /** @vitest-environment happy-dom */
 import { describe, it, expect, afterEach, beforeAll, afterAll, vi } from 'vitest';
 import { render, cleanup } from '@testing-library/react';
+import { Suspense } from 'react';
 
 // happy-dom has no WebGL. Mock the R3F <Canvas> so mounting doesn't try to
 // acquire a WebGL context. The mock captures the props it received so we can
@@ -35,9 +36,15 @@ vi.mock('@react-three/fiber', () => ({
     [key: string]: unknown;
   }) => {
     canvasPropsSpy(props);
+    // Mirror R3F's real <Canvas>, which wraps children in its own internal
+    // <Suspense> (see react-three-fiber.esm.js ≈ line 104). Keeping this
+    // shape in the mock is what lets the "lets R3F catch suspending
+    // children" regression test exercise the contract.
     return (
       <div data-testid="mock-r3f-canvas" className={props.className as string}>
-        {children}
+        <Suspense fallback={<div data-testid="mock-r3f-suspense-fallback" />}>
+          {children}
+        </Suspense>
       </div>
     );
   },
@@ -110,6 +117,58 @@ describe('<PokerCanvas>', () => {
       </PokerCanvas>,
     );
     expect(getByTestId('child-scene')).toBeInTheDocument();
+  });
+
+  // Regression — PlaybackView "slider flash then blank screen" bug.
+  //
+  // `<PokerTable>` renders drei's `<Environment preset=...>` at every tier
+  // except `low`. `<Environment>` suspends while loading the HDRI cubemap.
+  // R3F's `<Canvas>` ships with its own internal `<Suspense>` that catches
+  // suspending throws from inside the scene — nesting a second Suspense
+  // inside the same reconciler root triggers a `removeChild` crash in
+  // r3f's reconciler (`delete child.object.__r3f` on an uninitialised
+  // instance). `<PokerCanvas>` must therefore rely on R3F's built-in
+  // boundary and NOT add its own. This test pins the contract: a
+  // suspending child does not tear down the outer router tree.
+  it('lets R3F catch suspending children without tearing down the outer tree', async () => {
+    const Suspender = () => {
+      throw new Promise(() => {});
+    };
+    const { findByTestId } = render(
+      <div data-testid="outer">
+        <PokerCanvas>
+          <Suspender />
+        </PokerCanvas>
+      </div>,
+    );
+    await findByTestId('outer');
+  });
+
+  // Regression — same "slider flash then blank screen" symptom, but for
+  // a synchronous throw in scene composition (null deref, bad geometry
+  // args, WebGL init failure, etc.). Without an ErrorBoundary inside the
+  // Canvas the throw reaches the router root and React 18 unmounts the
+  // whole app. With the boundary the outer tree (nav bar, back button,
+  // playback controls) survives and the user sees a visible error panel.
+  it('catches synchronous scene errors without tearing down the outer tree', () => {
+    const Thrower = () => {
+      throw new Error('boom-in-scene');
+    };
+    // React still prints the error to the console — silence it for the
+    // duration of this test so it doesn't pollute CI output.
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { getByTestId } = render(
+        <div data-testid="outer">
+          <PokerCanvas>
+            <Thrower />
+          </PokerCanvas>
+        </div>,
+      );
+      expect(getByTestId('outer')).toBeInTheDocument();
+    } finally {
+      errSpy.mockRestore();
+    }
   });
 });
 

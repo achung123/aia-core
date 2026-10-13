@@ -15,10 +15,20 @@
 //     `computeEquityBadgeWorldPosition`, `countSeatsWithHoleCards`) so
 //     the behaviour is unit-testable without R3F / WebGL.
 
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
 import { Text } from '@react-three/drei';
 
 import { seatAnchorLocalToWorld } from './tableLayout';
+import {
+  ACTION_BADGE_HEIGHT,
+  ACTION_BADGE_LOCAL_Y,
+} from './ActionBadge';
+import {
+  BILLBOARD_EPSILON,
+  computeBillboardYRotation,
+} from './Nameplate';
+import { setYRotation, type RotationTarget } from './frameLoopMutations';
 import { useEquityQuery } from '../data/useEquityQuery';
 import { resolveEquityOverlay } from '../state/equityGuard';
 import type { TableState, ViewerContext } from '../types';
@@ -30,17 +40,22 @@ import type { Vec3 } from '../animations/tweens';
 
 /**
  * Vertical offset (world units) above the seat anchor. Sits below the
- * nameplate (which lives at y=0.6) but above the hole cards so both
- * labels are visible at the default camera preset.
+ * action badge so persistent fold/all-in labels never overlap the equity
+ * percentage, while still staying above the hole cards.
  */
-export const EQUITY_BADGE_LOCAL_Y = 0.35;
-
-/** Font size (world units) — matches `<Nameplate>` for legibility parity. */
-export const EQUITY_BADGE_FONT_SIZE = 0.08;
-
 /** Width / height (world units) of the badge card. */
 export const EQUITY_BADGE_WIDTH = 0.5;
 export const EQUITY_BADGE_HEIGHT = 0.16;
+
+export const EQUITY_BADGE_GAP = 0.04;
+export const EQUITY_BADGE_LOCAL_Y =
+  ACTION_BADGE_LOCAL_Y
+  - ACTION_BADGE_HEIGHT / 2
+  - EQUITY_BADGE_GAP
+  - EQUITY_BADGE_HEIGHT / 2;
+
+/** Font size (world units) — matches `<Nameplate>` for legibility parity. */
+export const EQUITY_BADGE_FONT_SIZE = 0.08;
 
 /** Amber tint — distinguishes equity text from the nameplate's white. */
 export const EQUITY_BADGE_COLOR = '#fbbf24';
@@ -96,12 +111,37 @@ export function EquityBadge({ seatIndex, seatCount, equity }: EquityBadgeProps) 
     () => computeEquityBadgeWorldPosition(seatIndex, seatCount),
     [seatIndex, seatCount],
   );
+  const groupRef = useRef<RotationTarget | null>(null);
+  const rotationYRef = useRef<number>(0);
   const label = formatEquityPercent(equity);
+
+  useFrame((frameState: unknown) => {
+    const fs = frameState as {
+      camera?: { position?: { x: number; z: number } };
+    };
+    const camPos = fs?.camera?.position;
+    if (
+      !camPos
+      || typeof camPos.x !== 'number'
+      || typeof camPos.z !== 'number'
+    ) {
+      return;
+    }
+    const target = computeBillboardYRotation(camPos, {
+      x: worldPosition[0],
+      z: worldPosition[2],
+    });
+    if (Math.abs(rotationYRef.current - target) < BILLBOARD_EPSILON) return;
+    rotationYRef.current = target;
+    setYRotation(groupRef.current, target);
+  });
 
   return (
     <group
+      ref={groupRef}
       name={`equity-badge-${seatIndex}`}
       position={worldPosition}
+      rotation={[0, 0, 0]}
       userData={{ seatIndex, equity, label, testid: 'equity-badge' }}
     >
       <mesh name="equity-badge-card">
@@ -166,13 +206,15 @@ export function EquityBadges({ state, viewer, equityOverlay }: EquityBadgesProps
   }
 
   const seatCount = state.seats.length;
+  const visibleSeats = state.seats.filter(
+    (seat) => seat.playerName && seat.holeCards != null,
+  );
 
   return (
     <group name="equity-badges">
-      {state.seats.map((seat) => {
+      {visibleSeats.map((seat) => {
         if (!seat.playerName) return null;
-        const eq = byName.get(seat.playerName);
-        if (eq == null) return null;
+        const eq = byName.get(seat.playerName) ?? 0;
         return (
           <EquityBadge
             key={`equity-badge-${seat.seatIndex}`}

@@ -1,6 +1,7 @@
 import { Canvas } from '@react-three/fiber';
-import type { ReactNode } from 'react';
+import { Suspense, type ReactNode } from 'react';
 import { useTableStore } from './state/tableStore';
+import { SceneErrorBoundary } from './components/SceneErrorBoundary';
 
 export interface PokerCanvasProps {
   children?: ReactNode;
@@ -13,23 +14,6 @@ export interface PokerCanvasProps {
   className?: string;
 }
 
-/**
- * Root R3F `<Canvas>` wrapper for the 3D poker scene.
- *
- * Provides baseline camera, lighting, and renderer defaults. Actual scene
- * content (table, seats, cards, chips, cameraRig) is composed by `<PokerTable>`
- * as children.
- *
- * Defaults:
- *   - `PerspectiveCamera` at [0, 6, 8], fov 45
- *   - Ambient light @ 0.4 + directional light @ 1.0 from above-right
- *   - `dpr` capped at [1, 2]
- *   - `antialias: true`, `powerPreference: 'high-performance'`
- *   - `shadows` enabled only when `useTableStore.qualityTier === 'high'`
- *     (T-038 Item-1 — closes Cycle 38 M-2: gives the `<directionalLight
- *     castShadow={qualityTier === 'high'}>` gate set in T-014 runtime effect
- *     instead of being a dead signal).
- */
 export function PokerCanvas({
   children,
   dpr = [1, 2],
@@ -43,13 +27,40 @@ export function PokerCanvas({
       dpr={dpr}
       camera={{ position: [0, 6, 8], fov: 45, near: 0.1, far: 100 }}
       gl={{ antialias: true, powerPreference: 'high-performance' }}
+      // DIAGNOSTIC: bright cyan clear color. If you see cyan on the
+      // phone, the canvas is painting and the scene contents are just
+      // being occluded or off-camera. If you see black, something is
+      // drawing a black fullscreen quad over the canvas.
+      onCreated={({ gl }) => {
+        gl.setClearColor(0x00ffff, 1);
+      }}
       {...(shadowsEnabled ? { shadows: true } : {})}
     >
       {/* eslint-disable react/no-unknown-property -- R3F JSX intrinsics */}
       <ambientLight intensity={0.4} />
       <directionalLight position={[5, 10, 5]} intensity={1.0} />
+      {/* Wrap children in a local Suspense so any suspending loader
+          (drei <Text> font fetch, <Environment> HDR, etc.) does NOT
+          collapse R3F's outer Suspense — which would replace the
+          ENTIRE scene tree with `null` until the loader resolves and
+          produce a black canvas with no DOM error. The empty fallback
+          renders nothing while children boot; siblings keep painting. */}
+      <Suspense fallback={null}>
+        <SceneErrorBoundary>{children}</SceneErrorBoundary>
+      </Suspense>
+      {/* DIAGNOSTIC: rendered AFTER children so it can't be depth-occluded
+          by the table. Disable depth test entirely so it always paints
+          on top. Massive radius + emissive basic material. */}
+      <mesh position={[0, 0, 0]} renderOrder={9999}>
+        <sphereGeometry args={[2, 24, 24]} />
+        <meshBasicMaterial
+          color={'#ff00ff'}
+          depthTest={false}
+          depthWrite={false}
+          toneMapped={false}
+        />
+      </mesh>
       {/* eslint-enable react/no-unknown-property */}
-      {children}
     </Canvas>
   );
 }

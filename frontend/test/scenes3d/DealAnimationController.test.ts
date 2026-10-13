@@ -27,6 +27,7 @@ import type { Vec3 } from '../../src/scenes3d/animations/tweens';
 class StubTarget implements DealTarget {
   position: Vec3 = [Number.NaN, Number.NaN, Number.NaN];
   rotation: Vec3 = [0, 0, 0];
+  visible = true;
   writes = 0;
   setPosition(x: number, y: number, z: number): void {
     this.position = [x, y, z];
@@ -34,6 +35,9 @@ class StubTarget implements DealTarget {
   }
   setRotation(x: number, y: number, z: number): void {
     this.rotation = [x, y, z];
+  }
+  setVisible(visible: boolean): void {
+    this.visible = visible;
   }
 }
 
@@ -330,6 +334,30 @@ describe('DealAnimationController — AC 4 (cancel on absent key)', () => {
 // ---------------------------------------------------------------------------
 
 describe('DealAnimationController — timing sanity', () => {
+  it('keeps delayed hole cards hidden until their own staggered start', () => {
+    const reg = new Registry();
+    const c = new DealAnimationController({
+      getTarget: (k) => reg.get(k),
+      reducedMotion: () => false,
+    });
+    c.sync(null, layout);
+    c.sync(makeState({ phase: 'preflop', streetIndex: 0, dealerSeat: 0 }), layout);
+
+    const first = reg.get('hole:10:1:0')!;
+    const second = reg.get('hole:10:2:0')!;
+
+    expect(first.visible).toBe(true);
+    expect(first.position).toEqual(DECK_POSITION);
+    expect(second.visible).toBe(false);
+    expect(second.position).toEqual(DECK_POSITION);
+
+    c.tick(DEAL_HOLE_STAGGER_MS - 1);
+    expect(second.visible).toBe(false);
+
+    c.tick(1);
+    expect(second.visible).toBe(true);
+  });
+
   it('hole cards deal at DEAL_HOLE_STAGGER_MS intervals', () => {
     const reg = new Registry();
     const c = new DealAnimationController({
@@ -339,8 +367,8 @@ describe('DealAnimationController — timing sanity', () => {
     c.sync(null, layout);
     c.sync(makeState({ phase: 'preflop', streetIndex: 0, dealerSeat: 0 }), layout);
 
-    // At t=0 the first hole card's tween has emitted an `onUpdate(from)`
-    // for every event (so it sits at DECK_POSITION). None has completed yet.
+    // At t=0 the first hole card is visible at DECK_POSITION; later cards
+    // stay hidden until their staggered start.
     // Advance by one stagger tick (80ms): the FIRST hole card should still
     // be in flight; some later hole cards have not yet started moving.
     c.tick(DEAL_HOLE_STAGGER_MS);
@@ -348,8 +376,8 @@ describe('DealAnimationController — timing sanity', () => {
     const k1 = reg.get('hole:10:2:0')!;
     expect(k0.writes).toBeGreaterThan(1); // from + at least one progress
     // k1 starts 80ms after k0; at exactly stagger time it should be at
-    // elapsed=0 past its own delay (just about to move) — position still
-    // near DECK_POSITION y.
+    // elapsed=0 past its own delay and becomes visible at the deck.
+    expect(k1.visible).toBe(true);
     expect(k1.position[1]).toBeCloseTo(DECK_POSITION[1], 1);
 
     // Drive out the rest of the deal — final card tween must complete.

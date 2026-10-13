@@ -16,6 +16,7 @@ vi.mock('../../src/api/client.ts', () => ({
   updateBlinds: vi.fn(),
   recordPlayerAction: vi.fn(),
   fetchHands: vi.fn(() => Promise.resolve([])),
+  fetchEquity: vi.fn(() => Promise.resolve({ equities: [] })),
 }));
 
 vi.mock('../../src/../src/dealer/BlindTimer.tsx', () => ({
@@ -24,11 +25,11 @@ vi.mock('../../src/../src/dealer/BlindTimer.tsx', () => ({
 }));
 
 vi.mock('../../src/../src/dealer/TableView3D.tsx', () => ({
-  TableView3D: (props: { gameId: number }) =>
-    <div data-testid="table-view-3d">3D:{props.gameId}</div>,
+  TableView3D: (props: { gameId: number; street?: string }) =>
+    <div data-testid="table-view-3d" data-street={props.street ?? ''}>3D:{props.gameId}</div>,
 }));
 
-import { fetchBlinds, recordPlayerAction, fetchHands } from '../../src/api/client.ts';
+import { fetchBlinds, recordPlayerAction, fetchHands, fetchEquity } from '../../src/api/client.ts';
 import { ActiveHandDashboard } from '../../src/../src/dealer/ActiveHandDashboard.tsx';
 import type { ActiveHandDashboardProps } from '../../src/../src/dealer/ActiveHandDashboard.tsx';
 import type { CommunityCards, Player } from '../../src/stores/dealerStore.ts';
@@ -521,6 +522,52 @@ describe('ActiveHandDashboard — 3D view has street scrubber', () => {
       expect(screen.getByTestId('table-view-3d')).toBeTruthy();
     });
     expect(screen.getByTestId('street-scrubber')).toBeTruthy();
+    expect(screen.getByTestId('table-view-3d').getAttribute('data-street')).toBe('Pre-Flop');
+  });
+
+  it('forwards the selected 3D street into TableView3D', async () => {
+    mockedFetchHands.mockResolvedValue(handData);
+    render(<ActiveHandDashboard {...defaultProps} />);
+    fireEvent.click(screen.getByTestId('view-toggle-btn'));
+    await waitFor(() => {
+      expect(screen.getByTestId('table-view-3d')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByTestId('street-showdown'));
+    await waitFor(() => {
+      expect(screen.getByTestId('table-view-3d').getAttribute('data-street')).toBe('Showdown');
+    });
+  });
+
+  it('keeps folded players in the dealer equity row with 0.0% when omitted by the endpoint', async () => {
+    mockedFetchHands.mockResolvedValue(handData);
+    (fetchEquity as ReturnType<typeof vi.fn>).mockResolvedValue({
+      equities: [
+        { player_name: 'Alice', equity: 0.72, winning_hand_description: null },
+      ],
+    });
+
+    render(
+      <ActiveHandDashboard
+        {...defaultProps}
+        handNumber={1}
+        players={[
+          { name: 'Alice', card1: 'Ah', card2: 'Kd', recorded: true, status: 'playing', outcomeStreet: null },
+          { name: 'Bob', card1: '7s', card2: '8s', recorded: true, status: 'folded', outcomeStreet: 'flop' },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('view-toggle-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('dealer-equity-row')).toBeTruthy();
+    });
+
+    expect(screen.getByText('Alice')).toBeTruthy();
+    expect(screen.getByText('72.0%')).toBeTruthy();
+    expect(screen.getByText('Bob')).toBeTruthy();
+    expect(screen.getByText('0.0%')).toBeTruthy();
   });
 });
 

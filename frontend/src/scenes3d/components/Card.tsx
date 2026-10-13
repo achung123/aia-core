@@ -128,6 +128,22 @@ export function Card({
     attr.needsUpdate = true;
   }, [id, faceUp, tier, geometry]);
 
+  // `data-*` attributes are only safe in test environments where the R3F
+  // `<Canvas>` is mocked into plain DOM. In production R3F's `applyProps`
+  // treats dashed prop names as pierced paths (`mesh.data.card.id`) and
+  // throws "Cannot set data-*. Ensure it is an object" — causing a
+  // WebGL context loss. Gate the inspectability attrs behind the vitest
+  // MODE so tests keep working and production stays safe. `userData`
+  // below carries the same fields for scene-graph consumers.
+  const testAttrs =
+    import.meta.env.MODE === 'test'
+      ? {
+          'data-card-id': canonicalId,
+          'data-face-up': String(faceUp),
+          'data-testid': faceUp ? 'card-face-up' : 'card-face-down',
+        }
+      : {};
+
   return (
     <mesh
       name="card"
@@ -135,9 +151,7 @@ export function Card({
       rotation={rotation}
       geometry={geometry}
       material={material}
-      data-card-id={canonicalId}
-      data-face-up={String(faceUp)}
-      data-testid={faceUp ? 'card-face-up' : 'card-face-down'}
+      {...testAttrs}
       userData={{ cardId: canonicalId, faceUp, tier }}
       castShadow
       receiveShadow

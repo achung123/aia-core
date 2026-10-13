@@ -465,4 +465,3 @@ describe('ChipSlideController — street change cancels in-flight slides', () =>
     expect(completed).toEqual([]);
   });
 });
-

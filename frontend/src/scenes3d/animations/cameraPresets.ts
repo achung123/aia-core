@@ -77,9 +77,9 @@ export const CAMERA_PRESETS: Record<CameraPresetName, CameraPresetPose> = {
 // target seat sits on the +Z axis.
 
 /** Distance (world units) the camera sits behind the seat along the outward radial. */
-export const SEAT_POV_BACK_OFFSET = 1.7;
+export const SEAT_POV_BACK_OFFSET = 2.6;
 /** Camera eye height above the felt, in world units. */
-export const SEAT_POV_CAM_HEIGHT = 2.4;
+export const SEAT_POV_CAM_HEIGHT = 3.2;
 /** Look-at target height above the felt (raises aim a touch above board level). */
 export const SEAT_POV_TARGET_HEIGHT = 0.3;
 /** Azimuth half-width of the seat-POV orbit clamp (±π/6 = ±30°). */

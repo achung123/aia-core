@@ -303,6 +303,79 @@ describe('<SessionReplayShell> — derived TableState context (AC 5 / AC 7)', ()
     expect(probe().getAttribute('data-hand-id')).toBe('20');
   });
 
+  it('clamps community in replay TableState to the selected street so reveal animations can fire', () => {
+    const hands = [
+      makeHand(1),
+      {
+        ...makeHand(2),
+        flop_1: 'Ah',
+        flop_2: 'Kd',
+        flop_3: 'Qc',
+        turn: '7s',
+        river: '2d',
+      },
+    ];
+
+    function Probe() {
+      const ctx = useSessionReplayContext();
+      const visible = ctx.tableState?.community.filter(Boolean).length ?? 0;
+      return <div data-testid="ctx-community" data-visible={String(visible)} />;
+    }
+
+    render(
+      <SessionReplayShell gameId={1} game={makeGame()} hands={hands} initialHandIndex={1}>
+        <Probe />
+      </SessionReplayShell>,
+    );
+
+    const probe = () => screen.getByTestId('ctx-community');
+    expect(probe().getAttribute('data-visible')).toBe('0');
+
+    act(() => {
+      useTableStore.getState().setReplayStreetIndex(1);
+    });
+    expect(probe().getAttribute('data-visible')).toBe('3');
+
+    act(() => {
+      useTableStore.getState().setReplayStreetIndex(2);
+    });
+    expect(probe().getAttribute('data-visible')).toBe('4');
+
+    act(() => {
+      useTableStore.getState().setReplayStreetIndex(3);
+    });
+    expect(probe().getAttribute('data-visible')).toBe('5');
+  });
+
+  it('keeps showdown reachable for resolved hands even when the board ended before river', () => {
+    const hands = [
+      {
+        ...makeHand(1),
+        flop_1: 'Ah',
+        player_hands: [
+          {
+            player_hand_id: 1,
+            hand_id: 10,
+            player_id: 1,
+            player_name: 'Alice',
+            card_1: 'As',
+            card_2: 'Kd',
+            result: 'won',
+            profit_loss: 10,
+            outcome_street: 'flop',
+            winning_hand_description: null,
+          },
+        ],
+      },
+    ];
+
+    render(<SessionReplayShell gameId={1} game={makeGame()} hands={hands} />);
+
+    const showdown = screen.getByTestId('scrubber-street-showdown');
+    expect(showdown.getAttribute('data-disabled')).toBe('false');
+    expect((showdown as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it('useSessionReplayContext throws when used outside the shell', () => {
     function Probe() {
       useSessionReplayContext();

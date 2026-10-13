@@ -331,4 +331,3 @@ describe('createCameraPresetState — seat-POV (T-022)', () => {
     expect(s.position).toEqual(computeSeatPresetPose(2, 6).position);
   });
 });
-

@@ -5,11 +5,12 @@
 //
 //   1. Label text is one of: `check`, `call`, `bet $X`, `raise $X`,
 //      `fold`, `all-in`.
-//   2. Transient actions (`check`/`call`/`bet`/`raise`) clear at street
-//      change; `fold` and `all-in` persist to hand end.
-//   3. Missing / unrecognised action data renders nothing — never an
+//   2. Transient actions (`check`/`call`/`bet`/`raise`/`fold`) clear at
+//      street change; `all-in` persists to hand end.
+//   3. Winners get a green `won` banner at showdown.
+//   4. Missing / unrecognised action data renders nothing — never an
 //      "undefined" placeholder.
-//   4. No new backend endpoint; we rely on `TableState.seats[].lastAction`
+//   5. No new backend endpoint; we rely on `TableState.seats[].lastAction`
 //      which is populated by the adapter from the existing `/actions`
 //      endpoint + `HandStatusResponse.players[].last_action`.
 //
@@ -20,7 +21,7 @@
 //
 // Consumed by `<PokerTable>`; must be mounted inside an R3F `<Canvas>`.
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Text } from '@react-three/drei';
 
@@ -32,6 +33,7 @@ import {
   computeBillboardYRotation,
   formatStackAmount,
 } from './Nameplate';
+import { setYRotation, type RotationTarget } from './frameLoopMutations';
 import { seatAnchorLocalToWorld } from './tableLayout';
 import type { Vec3 } from '../animations/tweens';
 import type { SeatState, TableStatePhase } from '../types';
@@ -59,10 +61,20 @@ export const ACTION_BADGE_LOCAL_Y =
 export const ACTION_BADGE_FONT_SIZE = 0.07;
 /** Background colour of the badge card. */
 export const ACTION_BADGE_BG_COLOR = '#1f2937';
+export const FOLD_BADGE_BG_COLOR = '#991b1b';
+export const LOSER_BADGE_BG_COLOR = '#9a3412';
+export const WINNER_BADGE_BG_COLOR = '#166534';
 /** Background opacity of the badge card. */
 export const ACTION_BADGE_BG_OPACITY = 0.85;
 /** Label colour of the badge text. */
 export const ACTION_BADGE_TEXT_COLOR = '#f8fafc';
+
+interface BadgeDescriptor {
+  label: string;
+  backgroundColor: string;
+  textColor: string;
+  variant: 'action' | 'fold' | 'winner' | 'loser';
+}
 
 // ---------------------------------------------------------------------------
 // Pure helpers (exported for unit tests)
@@ -114,10 +126,43 @@ export function shouldShowBadge(
   currentPhase: TableStatePhase,
 ): boolean {
   if (!lastAction) return false;
-  if (lastAction.action === 'fold' || lastAction.action === 'all-in') {
+  if (lastAction.action === 'all-in') {
     return true;
   }
   return lastAction.street === currentPhase;
+}
+
+function resolveBadgeDescriptor(
+  lastAction: SeatState['lastAction'],
+  result: SeatState['result'] | null,
+  currentPhase: TableStatePhase,
+): BadgeDescriptor | null {
+  if (currentPhase === 'showdown' && result === 'won') {
+    return {
+      label: 'won',
+      backgroundColor: WINNER_BADGE_BG_COLOR,
+      textColor: ACTION_BADGE_TEXT_COLOR,
+      variant: 'winner',
+    };
+  }
+  if (currentPhase === 'showdown' && result === 'lost') {
+    return {
+      label: 'lost',
+      backgroundColor: LOSER_BADGE_BG_COLOR,
+      textColor: ACTION_BADGE_TEXT_COLOR,
+      variant: 'loser',
+    };
+  }
+  if (!shouldShowBadge(lastAction, currentPhase)) return null;
+  const label = formatActionLabel(lastAction);
+  if (!label) return null;
+  return {
+    label,
+    backgroundColor:
+      lastAction?.action === 'fold' ? FOLD_BADGE_BG_COLOR : ACTION_BADGE_BG_COLOR,
+    textColor: ACTION_BADGE_TEXT_COLOR,
+    variant: lastAction?.action === 'fold' ? 'fold' : 'action',
+  };
 }
 
 /** World position of a seat's action badge (below the nameplate). */
@@ -140,6 +185,7 @@ export interface ActionBadgeProps {
   seatIndex: number;
   seatCount: number;
   lastAction: SeatState['lastAction'];
+  result?: SeatState['result'] | null;
   currentPhase: TableStatePhase;
 }
 
@@ -152,14 +198,15 @@ export function ActionBadge({
   seatIndex,
   seatCount,
   lastAction,
+  result = null,
   currentPhase,
 }: ActionBadgeProps) {
   const worldPosition = useMemo<Vec3>(
     () => computeActionBadgeWorldPosition(seatIndex, seatCount),
     [seatIndex, seatCount],
   );
-
-  const [rotationY, setRotationY] = useState<number>(0);
+  const groupRef = useRef<RotationTarget | null>(null);
+  const rotationYRef = useRef<number>(0);
 
   // Billboard about Y — mirrors <Nameplate>'s useFrame driver so the
   // badge stays locked to the active R3F camera azimuth.
@@ -183,26 +230,28 @@ export function ActionBadge({
       x: worldPosition[0],
       z: worldPosition[2],
     });
-    setRotationY((prev) =>
-      Math.abs(prev - target) < BILLBOARD_EPSILON ? prev : target,
-    );
+    if (Math.abs(rotationYRef.current - target) < BILLBOARD_EPSILON) return;
+    rotationYRef.current = target;
+    setYRotation(groupRef.current, target);
   });
 
-  const visible = shouldShowBadge(lastAction, currentPhase);
-  const label = visible ? formatActionLabel(lastAction) : null;
-  if (!label) return null;
+  const badge = resolveBadgeDescriptor(lastAction, result, currentPhase);
+  if (!badge) return null;
 
   return (
     <group
+      ref={groupRef}
       name={`action-badge-${seatIndex}`}
       position={worldPosition}
-      rotation={[0, rotationY, 0]}
+      rotation={[0, 0, 0]}
       userData={{
         seatIndex,
-        label,
+        label: badge.label,
+        variant: badge.variant,
         action: lastAction?.action ?? null,
         amount: lastAction?.amount ?? null,
         street: lastAction?.street ?? null,
+        result,
         currentPhase,
       }}
     >
@@ -211,7 +260,7 @@ export function ActionBadge({
           args={[ACTION_BADGE_WIDTH, ACTION_BADGE_HEIGHT]}
         />
         <meshBasicMaterial
-          color={ACTION_BADGE_BG_COLOR}
+          color={badge.backgroundColor}
           transparent
           opacity={ACTION_BADGE_BG_OPACITY}
           depthWrite={false}
@@ -221,14 +270,14 @@ export function ActionBadge({
         name="action-badge-text"
         position={[0, 0, 0.001]}
         fontSize={ACTION_BADGE_FONT_SIZE}
-        color={ACTION_BADGE_TEXT_COLOR}
+        color={badge.textColor}
         anchorX="center"
         anchorY="middle"
         maxWidth={ACTION_BADGE_WIDTH * 0.92}
         textAlign="center"
         lineHeight={1.1}
       >
-        {label}
+        {badge.label}
       </Text>
     </group>
   );
@@ -245,6 +294,7 @@ export interface ActionBadgesProps {
     playerName: string | null;
     isActive: boolean;
     lastAction: SeatState['lastAction'];
+    result: SeatState['result'];
   }>;
   seatCount: number;
   currentPhase: TableStatePhase;
@@ -274,6 +324,7 @@ export function ActionBadges({
             seatIndex={seat.seatIndex}
             seatCount={seatCount}
             lastAction={seat.lastAction}
+            result={seat.result}
             currentPhase={currentPhase}
           />
         );

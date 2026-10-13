@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import type { CommunityCards, Player } from '../stores/dealerStore.ts';
-import { fetchHands, fetchEquity } from '../api/client.ts';
+import { fetchHands, fetchEquity, type EquityStreet } from '../api/client.ts';
 import { TableView3D } from './TableView3D.tsx';
 import { BlindTimer } from './BlindTimer.tsx';
-import { StreetScrubber } from '../mobile/StreetScrubber.tsx';
+import { StreetScrubber, type Street } from '../mobile/StreetScrubber.tsx';
 import type { HandResponse, PlayerEquityEntry } from '../api/types';
 import { PlayingCard } from '../components/PlayingCard.tsx';
 import { DealerOverrides } from './DealerOverrides.tsx';
@@ -27,6 +27,35 @@ function formatStatus(status: string, outcomeStreet: string | null): string {
   if (status === 'idle') return 'playing';
   if (outcomeStreet) return `${status} on ${outcomeStreet}`;
   return status;
+}
+
+function dealtPlayerNames(
+  hand: HandResponse | undefined,
+  players: Player[],
+): string[] {
+  const fromHand = hand?.player_hands
+    .filter((ph) => ph.card_1 && ph.card_2)
+    .map((ph) => ph.player_name) ?? [];
+  const fromTiles = players
+    .filter((player) => player.recorded || (player.card1 && player.card2))
+    .map((player) => player.name);
+  return Array.from(new Set([...fromHand, ...fromTiles]));
+}
+
+function equityStreetFromScrubber(street: Street): EquityStreet {
+  switch (street) {
+    case 'Flop':
+      return 'flop';
+    case 'Turn':
+      return 'turn';
+    case 'River':
+      return 'river';
+    case 'Showdown':
+      return 'showdown';
+    case 'Pre-Flop':
+    default:
+      return 'preflop';
+  }
 }
 
 export interface ActiveHandDashboardProps {
@@ -93,8 +122,13 @@ export function ActiveHandDashboard({
   );
   const [viewMode, setViewMode] = useState<'tile' | '3d'>('tile');
   const [hands3D, setHands3D] = useState<HandResponse[]>([]);
-  const [streetScrub3D, setStreetScrub3D] = useState<string>('Pre-Flop');
+  const [streetScrub3D, setStreetScrub3D] = useState<Street>('Pre-Flop');
   const [equityEntries, setEquityEntries] = useState<PlayerEquityEntry[]>([]);
+
+  useEffect(() => {
+    if (viewMode !== '3d') return;
+    setStreetScrub3D('Pre-Flop');
+  }, [handNumber, viewMode]);
 
   useEffect(() => {
     const mql = window.matchMedia('(min-width: 600px)');
@@ -109,10 +143,10 @@ export function ActiveHandDashboard({
       setEquityEntries([]);
       return;
     }
-    fetchEquity(gameId, handNumber)
+    fetchEquity(gameId, handNumber, equityStreetFromScrubber(streetScrub3D))
       .then((res) => setEquityEntries(res.equities))
       .catch(() => setEquityEntries([]));
-  }, [viewMode, gameId, handNumber, community]);
+  }, [viewMode, gameId, handNumber, community, streetScrub3D]);
 
   const boardCards = [
     community.flop1,
@@ -121,26 +155,35 @@ export function ActiveHandDashboard({
     community.turn,
     community.river,
   ];
+  const latest3DHand = hands3D[hands3D.length - 1];
+  const dealerEquityEntries = dealtPlayerNames(latest3DHand, players).map((playerName) => {
+    const matched = equityEntries.find((entry) => entry.player_name === playerName);
+    return {
+      player_name: playerName,
+      equity: matched?.equity ?? 0,
+      winning_hand_description: matched?.winning_hand_description ?? null,
+    };
+  });
 
   return (
     <div style={isWide ? styles.containerWide : styles.container}>
       {viewMode === '3d' ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          <TableView3D gameId={gameId} />
+          <TableView3D gameId={gameId} street={streetScrub3D} />
           {hands3D.length > 0 && (
             <StreetScrubber
               currentStreet={streetScrub3D}
               handData={{
-                flop: [hands3D[hands3D.length - 1].flop_1, hands3D[hands3D.length - 1].flop_2, hands3D[hands3D.length - 1].flop_3].filter(Boolean),
-                turn: hands3D[hands3D.length - 1].turn,
-                river: hands3D[hands3D.length - 1].river,
+                flop: [latest3DHand.flop_1, latest3DHand.flop_2, latest3DHand.flop_3].filter(Boolean),
+                turn: latest3DHand.turn,
+                river: latest3DHand.river,
               }}
               onStreetChange={setStreetScrub3D}
             />
           )}
-          {equityEntries.length > 0 && (
+          {dealerEquityEntries.length > 0 && (
             <div data-testid="dealer-equity-row" style={{ display: 'flex', gap: 6, padding: '8px 12px', background: '#1a1a2e', borderRadius: '8px', overflowX: 'auto' }}>
-              {equityEntries.map((e) => (
+              {dealerEquityEntries.map((e) => (
                 <div key={e.player_name} style={{ minWidth: 70, padding: '6px 10px', borderRadius: 8, background: '#1e1b4b', border: '1px solid #312e81', textAlign: 'center', flexShrink: 0 }}>
                   <div style={{ color: '#c7d2fe', fontSize: 11, fontWeight: 600, marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.player_name}</div>
                   <div style={{ fontSize: 14, fontWeight: 700, color: e.equity >= 0.5 ? '#4ade80' : e.equity >= 0.25 ? '#facc15' : '#f87171' }}>
@@ -338,6 +381,7 @@ export function ActiveHandDashboard({
         <button
           data-testid="view-toggle-btn"
           onClick={() => {
+            setStreetScrub3D('Pre-Flop');
             setViewMode('3d');
             fetchHands(gameId).then(setHands3D).catch(() => {});
           }}

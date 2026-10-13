@@ -45,6 +45,8 @@ export interface TweenOptions<T> {
   durationMs: number;
   /** Optional delay before the tween starts progressing (stays at `from`). */
   delayMs?: number;
+  /** Emit `onUpdate(from)` immediately on construction. Defaults to true. */
+  emitInitial?: boolean;
   lerp: (a: T, b: T, t: number) => T;
   ease?: (t: number) => number;
   onUpdate: (value: T) => void;
@@ -79,6 +81,7 @@ export function createTween<T>(opts: TweenOptions<T>): TweenHandle {
   const ease = opts.ease ?? easeOutCubic;
   const delay = Math.max(0, opts.delayMs ?? 0);
   const duration = Math.max(0, opts.durationMs);
+  const emitInitial = opts.emitInitial ?? true;
 
   if (opts.reducedMotion) {
     opts.onUpdate(opts.to);
@@ -110,7 +113,9 @@ export function createTween<T>(opts: TweenOptions<T>): TweenHandle {
 
   // Emit the at-rest `from` frame so the mesh is positioned correctly
   // before the first tick advances time (important when a delay is set).
-  opts.onUpdate(opts.from);
+  if (emitInitial) {
+    opts.onUpdate(opts.from);
+  }
 
   let elapsed = 0;
   let done = false;

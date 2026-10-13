@@ -15,20 +15,64 @@ import { useQuery } from '@tanstack/react-query';
 
 import { fetchGame } from '../api/client.ts';
 import { useHandPolling } from '../hooks/useHandPolling.ts';
+import type { Street } from '../mobile/StreetScrubber.tsx';
 import { PokerCanvas } from '../scenes3d/PokerCanvas.tsx';
 import { PokerTable } from '../scenes3d/PokerTable.tsx';
 import { handsToTableState } from '../scenes3d/data/handsToTableState.ts';
 import { useTableStore } from '../scenes3d/state/tableStore.ts';
-import type { ViewerContext } from '../scenes3d/types';
+import type { TableState, TableStatePhase, ViewerContext } from '../scenes3d/types';
 
 // Stable reference — `handsToTableState`'s memo key uses it.
 const SPECTATOR_VIEWER: ViewerContext = { policy: 'spectator' };
 
 export interface TableView3DProps {
   gameId: number;
+  street?: Street;
 }
 
-export function TableView3D({ gameId }: TableView3DProps) {
+function streetIndexFromDealerStreet(street: Street): 0 | 1 | 2 | 3 | 4 {
+  switch (street) {
+    case 'Flop':
+      return 1;
+    case 'Turn':
+      return 2;
+    case 'River':
+      return 3;
+    case 'Showdown':
+      return 4;
+    case 'Pre-Flop':
+    default:
+      return 0;
+  }
+}
+
+function phaseFromDealerStreet(street: Street): TableStatePhase {
+  switch (street) {
+    case 'Flop':
+      return 'flop';
+    case 'Turn':
+      return 'turn';
+    case 'River':
+      return 'river';
+    case 'Showdown':
+      return 'showdown';
+    case 'Pre-Flop':
+    default:
+      return 'preflop';
+  }
+}
+
+function clampCommunityToStreet(
+  community: TableState['community'],
+  streetIndex: TableState['streetIndex'],
+): TableState['community'] {
+  return community.map((card, slot) => {
+    const minStreet = slot <= 2 ? 1 : slot === 3 ? 2 : 3;
+    return streetIndex >= minStreet ? card : null;
+  });
+}
+
+export function TableView3D({ gameId, street }: TableView3DProps) {
   // Pinned hand index. The dealer embed always follows the latest hand —
   // there's no scrubber at this layer (the sibling `<StreetScrubber>` in
   // `ActiveHandDashboard` drives intra-hand street navigation, not
@@ -76,8 +120,16 @@ export function TableView3D({ gameId }: TableView3DProps) {
 
   const tableState = useMemo(() => {
     if (!game || !selectedHand) return null;
-    return handsToTableState({ game, hand: selectedHand, viewer: SPECTATOR_VIEWER });
-  }, [game, selectedHand]);
+    const base = handsToTableState({ game, hand: selectedHand, viewer: SPECTATOR_VIEWER });
+    if (!street) return base;
+    const streetIndex = streetIndexFromDealerStreet(street);
+    return {
+      ...base,
+      streetIndex,
+      phase: phaseFromDealerStreet(street),
+      community: clampCommunityToStreet(base.community, streetIndex),
+    };
+  }, [game, selectedHand, street]);
 
   return (
     <div data-testid="table-view-3d" style={styles.container}>

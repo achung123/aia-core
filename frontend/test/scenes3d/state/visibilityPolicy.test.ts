@@ -14,9 +14,10 @@ const PRE_SHOWDOWN_PHASES: TableStatePhase[] = [
 const ALL_PHASES: TableStatePhase[] = [...PRE_SHOWDOWN_PHASES, 'showdown'];
 
 describe('canSee — spectator policy', () => {
-  // Row 1: spectator hides cards until showdown, regardless of fold state.
-  it.each(PRE_SHOWDOWN_PHASES)(
-    'hides all cards in phase %s (folded=false)',
+  // Dealer + playback modes are spectator views: all hole cards are visible
+  // at every street, regardless of fold state.
+  it.each(ALL_PHASES)(
+    'reveals all cards in phase %s (folded=false)',
     (phase) => {
       expect(
         canSee({
@@ -26,12 +27,12 @@ describe('canSee — spectator policy', () => {
           phase,
           ownerFolded: false,
         }),
-      ).toBe(false);
+      ).toBe(true);
     },
   );
 
-  it.each(PRE_SHOWDOWN_PHASES)(
-    'hides all cards in phase %s (folded=true)',
+  it.each(ALL_PHASES)(
+    'reveals all cards in phase %s (folded=true)',
     (phase) => {
       expect(
         canSee({
@@ -41,39 +42,13 @@ describe('canSee — spectator policy', () => {
           phase,
           ownerFolded: true,
         }),
-      ).toBe(false);
+      ).toBe(true);
     },
   );
 
-  // Row 2: spectator + showdown + folded → hidden.
-  it('hides folded cards at showdown', () => {
-    expect(
-      canSee({
-        viewerSeat: null,
-        cardOwnerSeat: 2,
-        policy: 'spectator',
-        phase: 'showdown',
-        ownerFolded: true,
-      }),
-    ).toBe(false);
-  });
-
-  // Row 3: spectator + showdown + not folded → revealed.
-  it('reveals non-folded cards at showdown', () => {
-    expect(
-      canSee({
-        viewerSeat: null,
-        cardOwnerSeat: 2,
-        policy: 'spectator',
-        phase: 'showdown',
-        ownerFolded: false,
-      }),
-    ).toBe(true);
-  });
-
   it('ignores viewerSeat (spectator never equals an owner)', () => {
-    // Even if a stray viewerSeat is passed, spectator policy must not
-    // accidentally leak based on seat-equality; only phase/fold matters.
+    // Even if a stray viewerSeat is passed, spectator policy remains the
+    // fully observable dealer/playback view.
     expect(
       canSee({
         viewerSeat: 2,
@@ -82,7 +57,7 @@ describe('canSee — spectator policy', () => {
         phase: 'preflop',
         ownerFolded: false,
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 });
 

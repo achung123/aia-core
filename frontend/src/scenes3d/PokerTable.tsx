@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
+import { Component, Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Environment } from '@react-three/drei';
 import { Table } from './components/Table';
@@ -96,6 +96,38 @@ export interface PokerTableProps {
   /** Escape hatch for feature modules (animations, nameplates, equity badges). */
   children?: ReactNode;
 }
+
+interface EnvironmentBoundaryProps {
+  children: ReactNode;
+}
+
+interface EnvironmentBoundaryState {
+  hasError: boolean;
+}
+
+class EnvironmentBoundary extends Component<
+  EnvironmentBoundaryProps,
+  EnvironmentBoundaryState
+> {
+  state: EnvironmentBoundaryState = { hasError: false };
+
+  static getDerivedStateFromError(): EnvironmentBoundaryState {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error): void {
+    if (import.meta.env?.DEV) {
+      console.warn('[PokerTable] Environment preset failed to load; disabling env map for this render', error);
+    }
+  }
+
+  render(): ReactNode {
+    if (this.state.hasError) return null;
+    return this.props.children;
+  }
+}
+
+const HOLE_CARD_ROTATION: [number, number, number] = [-Math.PI / 2, 0, Math.PI];
 
 // ---------------------------------------------------------------------------
 // Layout constants
@@ -493,16 +525,30 @@ export function PokerTable({
           read from QUALITY_TIER_SETTINGS[tier] — the canonical plan.md
           mapping. No inline tier literals remain on this call site. */}
       {QUALITY_TIER_SETTINGS[qualityTier].envMap.mode !== 'none' && (
-        <Environment
-          preset={qualityTier === 'high' ? 'studio' : 'apartment'}
-          {...(QUALITY_TIER_SETTINGS[qualityTier].envMap.resolution != null
-            ? {
-                resolution:
-                  QUALITY_TIER_SETTINGS[qualityTier].envMap.resolution!,
-              }
-            : {})}
-          background={false}
-        />
+        // Bug fix: drei's <Environment preset> fetches an HDR from
+        // raw.githack.com via useLoader, which suspends. R3F's outer
+        // Suspense covers the entire <Canvas> tree, so a slow or blocked
+        // HDR request (e.g. CSP block on iPhone Safari) keeps the WHOLE
+        // scene suspended and produces a black canvas with no DOM error.
+        // Wrap in a sub-Suspense with a null fallback so Environment can
+        // load (or fail) in isolation while the table, seats, cards,
+        // chips, and camera rig render immediately.
+        <Suspense fallback={null}>
+          <EnvironmentBoundary
+            key={`${qualityTier}:${QUALITY_TIER_SETTINGS[qualityTier].envMap.resolution ?? 'default'}`}
+          >
+            <Environment
+              preset={qualityTier === 'high' ? 'studio' : 'apartment'}
+              {...(QUALITY_TIER_SETTINGS[qualityTier].envMap.resolution != null
+                ? {
+                    resolution:
+                      QUALITY_TIER_SETTINGS[qualityTier].envMap.resolution!,
+                  }
+                : {})}
+              background={false}
+            />
+          </EnvironmentBoundary>
+        </Suspense>
       )}
       <directionalLight
         name="key-light"
@@ -525,10 +571,20 @@ export function PokerTable({
         qualityTier={qualityTier}
       />
 
-      {/* Community cards — render only revealed (non-null) slots. */}
+      {/* Community cards — render only revealed (non-null) slots that
+          the current `streetIndex` has reached. Slots 0-2 require
+          streetIndex ≥ 1 (flop), slot 3 requires ≥ 2 (turn), slot 4
+          requires ≥ 3 (river). This guards playback replay, which
+          pre-populates `community` with the hand's final board but
+          scrubs `streetIndex` back to preflop — without this gate the
+          whole board appears at preflop and the street scrubber feels
+          like a no-op. */}
       <group name="community-cards">
-        {state.community.map((c, i) =>
-          c ? (
+        {state.community.map((c, i) => {
+          if (!c) return null;
+          const minStreet = i <= 2 ? 1 : i === 3 ? 2 : 3;
+          if (state.streetIndex < minStreet) return null;
+          return (
             <group
               key={`community-${i}`}
               name={`community-card-wrap-${i}`}
@@ -540,23 +596,30 @@ export function PokerTable({
             >
               <Card id={c.id} faceUp tier={qualityTier} />
             </group>
-          ) : null,
-        )}
+          );
+        })}
       </group>
 
       {/* Seats — pads + per-seat hole-card placeholders. Visibility of each
-          hole card is routed through `canSee()` (T-025) — own seat always
-          face-up, opponents face-down until showdown under spectator policy,
-          and folded opponents never revealed. Viewer defaults to
+          hole card is routed through `canSee()` (T-025).
+
+          Spectator views (dealer + playback) are fully observable: all hole
+          cards render and all are face-up. Player views always keep the
+          viewer's own seat rendered face-up; opponents stay face-down until
+          showdown, and folded opponents never reveal. Viewer defaults to
           `{ policy: 'spectator' }` when the prop is omitted. */}
       <group name="seats">
         {state.seats.map((seat) => {
-          const renderHole = seat.isActive && !seat.folded;
           const viewerPolicy = viewer?.policy ?? 'spectator';
           const viewerSeat =
             viewer?.policy === 'player' && typeof viewer.seat === 'number'
               ? viewer.seat
               : null;
+          const renderHole = seat.isActive && (
+            viewerPolicy === 'spectator'
+            || seat.seatIndex === viewerSeat
+            || !seat.folded
+          );
           const faceUp = canSee({
             viewerSeat,
             cardOwnerSeat: seat.seatIndex,
@@ -585,7 +648,12 @@ export function PokerTable({
                     )}
                     position={[-HOLE_CARD_SPREAD_X, HOLE_CARD_Y, HOLE_CARD_LOCAL_Z]}
                   >
-                    <Card id={holeId(0)} faceUp={faceUp} tier={qualityTier} />
+                    <Card
+                      id={holeId(0)}
+                      faceUp={faceUp}
+                      tier={qualityTier}
+                      rotation={HOLE_CARD_ROTATION}
+                    />
                   </group>
                   <group
                     name="hole-card-wrap-1"
@@ -595,7 +663,12 @@ export function PokerTable({
                     )}
                     position={[HOLE_CARD_SPREAD_X, HOLE_CARD_Y, HOLE_CARD_LOCAL_Z]}
                   >
-                    <Card id={holeId(1)} faceUp={faceUp} tier={qualityTier} />
+                    <Card
+                      id={holeId(1)}
+                      faceUp={faceUp}
+                      tier={qualityTier}
+                      rotation={HOLE_CARD_ROTATION}
+                    />
                   </group>
                 </group>
               ) : null}
@@ -679,12 +752,21 @@ export function PokerTable({
         onSweepComplete={handleSweepComplete}
       />
       <TableMarkers state={state} seatCount={seatCount} />
-      <Nameplates seats={state.seats} seatCount={seatCount} />
-      <ActionBadges
-        seats={state.seats}
-        seatCount={seatCount}
-        currentPhase={state.phase}
-      />
+      {/* Local <Suspense> boundary — drei <Text> (troika-three-text)
+          suspends while fetching its default font from gstatic. Without
+          this isolation, the <Canvas>'s outer Suspense would blank the
+          entire scene tree on a slow or blocked font request (e.g. CSP
+          block on iPhone Safari). */}
+      <Suspense fallback={null}>
+        <Nameplates seats={state.seats} seatCount={seatCount} />
+      </Suspense>
+      <Suspense fallback={null}>
+        <ActionBadges
+          seats={state.seats}
+          seatCount={seatCount}
+          currentPhase={state.phase}
+        />
+      </Suspense>
       <SeatHighlights state={state} seatCount={seatCount} />
       {/* T-013 — Showdown reveal + winning-hand glow outline. Renders the
           per-winner card outlines + seat ring at `phase === 'showdown'`
@@ -693,11 +775,13 @@ export function PokerTable({
           face-up) is already handled upstream by `canSee()` above. */}
       <ShowdownGlows state={state} seatCount={seatCount} />
       {resolveEquityOverlay(equityOverlay, viewer) && (
-        <EquityBadges
-          state={state}
-          viewer={viewer}
-          equityOverlay={equityOverlay}
-        />
+        <Suspense fallback={null}>
+          <EquityBadges
+            state={state}
+            viewer={viewer}
+            equityOverlay={equityOverlay}
+          />
+        </Suspense>
       )}
     </group>
   );

@@ -6,8 +6,9 @@ __pycache__/
 .dolt/
 *.db
 
-# Training data (large, not tracked in git)
-data/
+# Training data (large, not tracked in git). Anchored to the repo root and
+# backend/ only: a bare `data/` also swallowed frontend/src/scenes3d/data.
+/data/
 backend/data/
 
 # Uploaded images (runtime artifacts)

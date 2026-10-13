@@ -160,13 +160,13 @@ function makeHand(overrides: Partial<HandResponse> = {}): HandResponse {
 const HAND_1 = makeHand({ hand_number: 1 });
 const HAND_2 = makeHand({ hand_id: 2, hand_number: 2, flop_1: '2c', flop_2: '3c', flop_3: '4c', turn: null, river: null });
 
-function renderView(gameId = 42) {
+function renderView(gameId = 42, street?: 'Pre-Flop' | 'Flop' | 'Turn' | 'River' | 'Showdown') {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <TableView3D gameId={gameId} />
+      <TableView3D gameId={gameId} street={street} />
     </QueryClientProvider>,
   );
 }
@@ -276,6 +276,23 @@ describe('TableView3D — <PokerTable> prop threading (AC-1)', () => {
     expect(props.state.seats.map((s) => s.playerName).sort()).toEqual(['Alice', 'Bob']);
   });
 
+  it('overrides the table state to showdown when the dealer scrubber selects Showdown', async () => {
+    vi.mocked(fetchHands).mockResolvedValue([
+      makeHand({
+        player_hands: [
+          { player_hand_id: 1, hand_id: 1, player_id: 1, player_name: 'Alice', card_1: 'Ah', card_2: 'Kd', result: 'won', profit_loss: 50, outcome_street: 'turn', winning_hand_description: null },
+          { player_hand_id: 2, hand_id: 1, player_id: 2, player_name: 'Bob', card_1: 'Jc', card_2: 'Ts', result: 'lost', profit_loss: -50, outcome_street: 'turn', winning_hand_description: null },
+        ],
+      }),
+    ]);
+    renderView(42, 'Showdown');
+    await waitFor(() => expect(pokerTablePropsSpy).toHaveBeenCalled());
+    const props = latestPokerTableProps() as { state: TableState };
+    expect(props.state.phase).toBe('showdown');
+    expect(props.state.streetIndex).toBe(4);
+    expect(props.state.seats.find((s) => s.playerName === 'Alice')?.result).toBe('won');
+  });
+
   it('every <PokerTable> render receives viewer.policy="spectator"', async () => {
     renderView();
     await waitFor(() => expect(pokerTablePropsSpy).toHaveBeenCalled());
@@ -380,7 +397,7 @@ describe('TableView3D — equity overlay wiring (AC-5)', () => {
     renderView();
     await waitFor(() => expect(pokerTablePropsSpy).toHaveBeenCalled());
     await waitFor(() => expect(vi.mocked(fetchEquity)).toHaveBeenCalled());
-    expect(vi.mocked(fetchEquity).mock.calls[0]).toEqual([42, 1]);
+    expect(vi.mocked(fetchEquity).mock.calls[0]).toEqual([42, 1, 'turn']);
   });
 
   it('EquityBadge overlay actually receives enabled=true via resolveEquityOverlay (integration)', async () => {

@@ -1,6 +1,7 @@
 /** @vitest-environment happy-dom */
 import { describe, it, expect, afterEach, beforeAll, afterAll, vi } from 'vitest';
 import { render, cleanup, act } from '@testing-library/react';
+import { Profiler } from 'react';
 
 // ---------------------------------------------------------------------------
 // R3F mock — mirrors DealerButton.test.tsx. Exposes `frameCallbacks` so
@@ -26,23 +27,43 @@ const textRenderSpy =
   vi.fn<
     (props: Record<string, unknown> & { children?: unknown }) => void
   >();
-vi.mock('@react-three/drei', () => ({
-  Text: (props: Record<string, unknown> & { children?: unknown }) => {
+vi.mock('@react-three/drei', async () => {
+  const { forwardRef, useImperativeHandle, useRef } = await import('react');
+  const MockText = forwardRef<
+    { text: string; sync: () => void },
+    Record<string, unknown> & { children?: unknown }
+  >((props, ref) => {
     textRenderSpy(props);
     const { children, name, position, ...rest } = props;
     void rest;
     const rawName = typeof name === 'string' ? name : 'drei-text';
+    const nodeRef = useRef<HTMLDivElement | null>(null);
+    const initialText = String(children ?? '');
+
+    useImperativeHandle(ref, () => ({
+      get text() {
+        return nodeRef.current?.getAttribute('data-text') ?? initialText;
+      },
+      set text(value: string) {
+        nodeRef.current?.setAttribute('data-text', String(value));
+      },
+      sync() {},
+    }), [initialText]);
+
     return (
       <div
+        ref={nodeRef}
         data-testid={rawName}
-        data-text={String(children ?? '')}
+        data-text={initialText}
         data-position={
           Array.isArray(position) ? (position as number[]).join(',') : ''
         }
       />
     );
-  },
-}));
+  });
+  MockText.displayName = 'MockText';
+  return { Text: MockText };
+});
 
 const R3F_TAG_WARNING =
   /is using incorrect casing|is unrecognized in this browser|React does not recognize the|Unknown event handler|Received .* for a non-boolean attribute/;
@@ -364,6 +385,28 @@ describe('<Nameplate> rendering', () => {
     expect(NAMEPLATE_FONT_SIZE).toBeGreaterThanOrEqual(0.08);
     expect(NAMEPLATE_WIDTH).toBeGreaterThanOrEqual(0.6);
   });
+
+  it('does not trigger a React rerender on frame-driven billboard updates', () => {
+    const renders = vi.fn();
+    render(
+      <Profiler id="nameplate-billboard" onRender={renders}>
+        <Nameplate
+          seatIndex={0}
+          seatCount={6}
+          playerName="Alice"
+          stack={100}
+        />
+      </Profiler>,
+    );
+
+    renders.mockClear();
+
+    act(() => {
+      frameCallbacks[0]!({ camera: { position: { x: 10, z: 0 } } }, 0.016);
+    });
+
+    expect(renders).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -418,6 +461,28 @@ describe('<Nameplate> stack tween (AC 2)', () => {
     );
     stepFrames(NAMEPLATE_STACK_ANIMATION_MS * 2);
     expect(readStack(findNameplate(container, 0)!)).toBe('$50');
+  });
+
+  it('does not trigger React rerenders while the stack tween advances', () => {
+    const renders = vi.fn();
+    const { rerender } = render(
+      <Profiler id="nameplate-stack-tween" onRender={renders}>
+        <Nameplate seatIndex={0} seatCount={6} playerName="Alice" stack={100} />
+      </Profiler>,
+    );
+
+    act(() => {
+      rerender(
+        <Profiler id="nameplate-stack-tween" onRender={renders}>
+          <Nameplate seatIndex={0} seatCount={6} playerName="Alice" stack={250} />
+        </Profiler>,
+      );
+    });
+
+    renders.mockClear();
+    stepFrames(NAMEPLATE_STACK_ANIMATION_MS / 2);
+
+    expect(renders).not.toHaveBeenCalled();
   });
 
   it('restarts the tween when stack changes mid-animation', () => {

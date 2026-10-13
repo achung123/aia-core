@@ -11,23 +11,25 @@
 //   - Pure helpers (`formatStackAmount`, `computeNameplateWorldPosition`,
 //     `computeBillboardYRotation`) are exported so the billboard math and
 //     stack formatting can be unit-tested without R3F / WebGL.
-//   - The tween driver mirrors the DealerButton pattern: a state-backed
-//     `displayedStack` re-renders on each tick so the value is observable
-//     via the DOM under happy-dom.
-//   - Billboarding is driven inside a `useFrame` read of
-//     `state.camera.position`; under the test mock (which passes `{}`) the
-//     callback is a no-op and the math is exercised via the pure helper.
+//   - Stack tweening and billboarding mutate scene refs directly inside
+//     `useFrame` so the render loop does not schedule React updates.
 //   - `useReducedMotion()` is honoured: stack updates snap instantly.
 //
 // Consumed by `<PokerTable>`; must be mounted inside an R3F `<Canvas>`.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Text } from '@react-three/drei';
 
 import { seatAnchorLocalToWorld } from './tableLayout';
 import { useReducedMotion } from '../state/useReducedMotion';
 import { FOLDED_NAMEPLATE_OPACITY } from './SeatHighlight';
+import {
+  setTextContent,
+  setYRotation,
+  type RotationTarget,
+  type TextContentTarget,
+} from './frameLoopMutations';
 import {
   createTween,
   lerpNumber,
@@ -118,6 +120,34 @@ export function computeBillboardYRotation(
   return Math.atan2(dx, dz);
 }
 
+function formatNameplateLabel(playerName: string, displayedStack: number): string {
+  return `${playerName}\n${formatStackAmount(displayedStack)}`;
+}
+
+function syncNameplateLabel(
+  target: TextContentTarget | null,
+  playerName: string,
+  displayedStack: number,
+) {
+  setTextContent(target, formatNameplateLabel(playerName, displayedStack));
+}
+
+function syncNameplateUserData(
+  target: RotationTarget | null,
+  playerName: string,
+  stack: number,
+  displayedStack: number,
+  folded: boolean,
+) {
+  if (!target) return;
+  const userData = target.userData ?? (target.userData = {});
+  userData.playerName = playerName;
+  userData.stack = stack;
+  userData.displayedStack = displayedStack;
+  userData.label = formatNameplateLabel(playerName, displayedStack);
+  userData.folded = folded;
+}
+
 // ---------------------------------------------------------------------------
 // <Nameplate>
 // ---------------------------------------------------------------------------
@@ -168,16 +198,14 @@ export function Nameplate({
     [seatIndex, seatCount],
   );
 
-  const [displayedStack, setDisplayedStack] = useState<number>(stack);
-  // Mirror of `displayedStack` kept in a ref so the stack-reconcile effect
-  // can read the latest rendered value without re-running every frame.
-  // Written only inside the tween callback and the reconcile effect —
-  // never during render (satisfies `react-hooks/refs`).
   const displayedStackRef = useRef<number>(stack);
-
-  const [rotationY, setRotationY] = useState<number>(0);
-
+  const groupRef = useRef<RotationTarget | null>(null);
+  const textRef = useRef<TextContentTarget | null>(null);
+  const rotationYRef = useRef<number>(0);
   const tweenRef = useRef<TweenHandle | null>(null);
+  const playerNameRef = useRef<string | null>(playerName);
+  const stackRef = useRef<number>(stack);
+  const foldedRef = useRef<boolean>(folded);
 
   // Track previous `occupied` so we can detect the hidden→visible
   // transition. On that edge we snap `displayedStack` to the current
@@ -186,6 +214,28 @@ export function Nameplate({
   // different stack) would briefly tween from the old player's stack
   // to the new one. See bug-card Cycle 16 MEDIUM M2.
   const prevOccupiedRef = useRef<boolean>(occupied);
+
+  const syncNameplatePresentation = (displayedStack: number) => {
+    const currentPlayerName = playerNameRef.current;
+    if (!currentPlayerName) return;
+    syncNameplateLabel(textRef.current, currentPlayerName, displayedStack);
+    syncNameplateUserData(
+      groupRef.current,
+      currentPlayerName,
+      stackRef.current,
+      displayedStack,
+      foldedRef.current,
+    );
+  };
+
+  useEffect(() => {
+    playerNameRef.current = playerName;
+    stackRef.current = stack;
+    foldedRef.current = folded;
+
+    if (!occupied || !playerName) return;
+    syncNameplatePresentation(displayedStackRef.current);
+  }, [occupied, playerName, stack, folded]);
 
   // Reconcile `stack` prop → tween whenever it changes.
   useEffect(() => {
@@ -197,11 +247,6 @@ export function Nameplate({
       tweenRef.current = null;
       if (displayedStackRef.current !== stack) {
         displayedStackRef.current = stack;
-        // Keep the rendered value in lockstep with the source of truth
-        // even while the seat is hidden — otherwise a repopulated seat
-        // would briefly show the previous occupant's stack on remount.
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- sync on hidden→visible transition
-        setDisplayedStack(stack);
       }
       return;
     }
@@ -215,13 +260,16 @@ export function Nameplate({
       tweenRef.current = null;
       if (displayedStackRef.current !== stack) {
         displayedStackRef.current = stack;
-        setDisplayedStack(stack);
       }
+      syncNameplatePresentation(stack);
       return;
     }
 
     const latestFrom = displayedStackRef.current;
-    if (latestFrom === stack) return;
+    if (latestFrom === stack) {
+      syncNameplatePresentation(latestFrom);
+      return;
+    }
     tweenRef.current?.cancel();
     const tween = createTween<number>({
       from: latestFrom,
@@ -230,7 +278,7 @@ export function Nameplate({
       lerp: lerpNumber,
       onUpdate: (v) => {
         displayedStackRef.current = v;
-        setDisplayedStack(v);
+        syncNameplatePresentation(v);
       },
       onComplete: () => {
         tweenRef.current = null;
@@ -261,9 +309,9 @@ export function Nameplate({
       x: worldPosition[0],
       z: worldPosition[2],
     });
-    setRotationY((prev) =>
-      Math.abs(prev - target) < BILLBOARD_EPSILON ? prev : target,
-    );
+    if (Math.abs(rotationYRef.current - target) < BILLBOARD_EPSILON) return;
+    rotationYRef.current = target;
+    setYRotation(groupRef.current, target);
   });
 
   // Cancel on unmount.
@@ -276,22 +324,25 @@ export function Nameplate({
 
   if (!occupied) return null;
 
+  const renderedStack = !prevOccupiedRef.current ? stack : displayedStackRef.current;
+
   // Two-line label: name on top, formatted stack below. The rendered
   // (tween-driven) stack is what the viewer sees; the source-of-truth
   // prop value is mirrored on `group.userData.stack` for scene-graph
   // debugging / regression hooks (see `userData` below).
-  const label = `${playerName}\n${formatStackAmount(displayedStack)}`;
+  const label = formatNameplateLabel(playerName, renderedStack);
 
   return (
     <group
+      ref={groupRef}
       name={`nameplate-${seatIndex}`}
       position={worldPosition}
-      rotation={[0, rotationY, 0]}
+      rotation={[0, 0, 0]}
       userData={{
         seatIndex,
         playerName,
         stack,
-        displayedStack,
+        displayedStack: renderedStack,
         label,
         folded,
       }}
@@ -312,6 +363,7 @@ export function Nameplate({
         draws on top of the card background.
       */}
       <Text
+        ref={textRef}
         name="nameplate-text"
         position={[0, 0, 0.001]}
         fontSize={NAMEPLATE_FONT_SIZE}

@@ -290,6 +290,28 @@ describe('handsToTableState', () => {
       expect(ts.seats[0].lastAction).toBeNull();
     });
 
+    it('synthesizes a fold lastAction from hand results when no action history exists', () => {
+      const game = makeGame([makePlayer('Alice', 1)]);
+      const hand = makeHand({
+        player_hands: [
+          {
+            player_hand_id: 1,
+            hand_id: 10,
+            player_id: 1,
+            player_name: 'Alice',
+            card_1: 'Ah',
+            card_2: 'Kd',
+            result: 'folded',
+            profit_loss: -5,
+            outcome_street: 'turn',
+            winning_hand_description: null,
+          },
+        ],
+      });
+      const ts = handsToTableState({ game, hand, viewer: spectator });
+      expect(ts.seats[0].lastAction).toEqual({ action: 'fold', street: 'turn' });
+    });
+
     it('prefers actions[] list — populates amount and real street (T-017)', () => {
       const game = makeGame([makePlayer('Alice', 1)]);
       const status = makeStatus('flop', [
@@ -337,10 +359,70 @@ describe('handsToTableState', () => {
       });
     });
 
-    it('handles null seat_number (uses -1)', () => {
+    it('excludes players with null seat_number (unseated players are not rendered)', () => {
       const game = makeGame([makePlayer('Ghost', 0, { seat_number: null })]);
       const ts = handsToTableState({ game, hand: makeHand(), viewer: spectator });
-      expect(ts.seats[0].seatIndex).toBe(-1);
+      // Unseated players are omitted so every seat in the scene has a
+      // real `seat_number`; this prevents duplicate React keys
+      // (`seat--1`) that would otherwise crash R3F's reconciler.
+      expect(ts.seats).toEqual([]);
+    });
+
+    it('synthesizes stable seats when a historical hand has player_hands but no seat metadata', () => {
+      const game = makeGame([
+        makePlayer('Alice', 0, { seat_number: null }),
+        makePlayer('Bob', 0, { seat_number: null }),
+        makePlayer('Carol', 0, { seat_number: null }),
+      ]);
+      const hand = makeHand({
+        sb_player_name: 'Alice',
+        bb_player_name: 'Bob',
+        player_hands: [
+          {
+            player_hand_id: 1,
+            hand_id: 10,
+            player_id: 1,
+            player_name: 'Alice',
+            card_1: 'Ah',
+            card_2: 'Kd',
+            result: 'lost',
+            profit_loss: -5,
+            outcome_street: 'river',
+            winning_hand_description: null,
+          },
+          {
+            player_hand_id: 2,
+            hand_id: 10,
+            player_id: 2,
+            player_name: 'Bob',
+            card_1: 'Qc',
+            card_2: 'Qs',
+            result: 'won',
+            profit_loss: 10,
+            outcome_street: 'river',
+            winning_hand_description: 'Pair of queens',
+          },
+          {
+            player_hand_id: 3,
+            hand_id: 10,
+            player_id: 3,
+            player_name: 'Carol',
+            card_1: '2d',
+            card_2: '2c',
+            result: 'folded',
+            profit_loss: -5,
+            outcome_street: 'flop',
+            winning_hand_description: null,
+          },
+        ],
+      });
+
+      const ts = handsToTableState({ game, hand, viewer: spectator });
+
+      expect(ts.seats.map((s) => s.playerName)).toEqual(['Alice', 'Bob', 'Carol']);
+      expect(ts.seats.map((s) => s.seatIndex)).toEqual([1, 2, 3]);
+      expect(ts.sbSeat).toBe(1);
+      expect(ts.bbSeat).toBe(2);
     });
   });
 

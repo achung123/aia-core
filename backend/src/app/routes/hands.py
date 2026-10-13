@@ -72,6 +72,7 @@ from pydantic_models.hand_schemas import (
     TurnUpdate,
 )
 from pydantic_models.card_validator import validate_no_duplicate_cards
+from pydantic_models.common import StreetEnum
 
 router = APIRouter(prefix='/games', tags=['hands'])
 
@@ -645,12 +646,36 @@ def _db_card_to_tuple(card_str: str) -> tuple[str, str]:
     return (card_str[:-1], card_str[-1].lower())
 
 
+def _community_cards_for_street(
+    hand: Hand,
+    street: StreetEnum | None,
+) -> tuple[list[tuple[str, str]], list[str]]:
+    all_cards = [hand.flop_1, hand.flop_2, hand.flop_3, hand.turn, hand.river]
+    if street == StreetEnum.PREFLOP:
+        scoped_cards = []
+    elif street == StreetEnum.FLOP:
+        scoped_cards = all_cards[:3]
+    elif street == StreetEnum.TURN:
+        scoped_cards = all_cards[:4]
+    else:
+        scoped_cards = all_cards
+
+    community_cards: list[tuple[str, str]] = []
+    raw_community: list[str] = []
+    for card_str in scoped_cards:
+        if card_str is not None:
+            community_cards.append(_db_card_to_tuple(card_str))
+            raw_community.append(card_str)
+    return community_cards, raw_community
+
+
 @router.get('/{game_id}/hands/{hand_number}/equity', response_model=EquityResponse)
 def get_hand_equity(
     game_id: int,
     hand_number: int,
     db: Annotated[Session, Depends(get_db)],
     player: str | None = None,
+    street: Annotated[StreetEnum | None, Query()] = None,
 ):
     get_game_or_404(db, game_id)
 
@@ -679,13 +704,7 @@ def get_hand_equity(
         raw_hole = [player_hand.card_1, player_hand.card_2]
         players_with_cards.append((player_name, hole_cards, raw_hole))
 
-    # Gather community cards
-    community_cards: list[tuple[str, str]] = []
-    raw_community: list[str] = []
-    for card_str in [hand.flop_1, hand.flop_2, hand.flop_3, hand.turn, hand.river]:
-        if card_str is not None:
-            community_cards.append(_db_card_to_tuple(card_str))
-            raw_community.append(card_str)
+    community_cards, raw_community = _community_cards_for_street(hand, street)
 
     # Player-perspective equity: single player vs random opponents
     if player is not None:

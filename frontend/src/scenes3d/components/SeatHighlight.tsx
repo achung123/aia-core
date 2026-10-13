@@ -43,6 +43,12 @@ import {
   BILLBOARD_EPSILON,
   computeBillboardYRotation,
 } from './Nameplate';
+import {
+  setOpacity,
+  setYRotation,
+  type OpacityTarget,
+  type RotationTarget,
+} from './frameLoopMutations';
 import { useReducedMotion } from '../state/useReducedMotion';
 import type { Vec3 } from '../animations/tweens';
 import type { SeatState, TableState } from '../types';
@@ -178,24 +184,26 @@ export function TurnPulseRing({ seatIndex, seatCount }: TurnPulseRingProps) {
     () => turnPulseRingWorldPosition(seatIndex, seatCount),
     [seatIndex, seatCount],
   );
+  const initialOpacity = pulseOpacity(0, reducedMotion);
   const elapsedRef = useRef(0);
-  const [opacity, setOpacity] = useState<number>(() =>
-    pulseOpacity(0, reducedMotion),
-  );
+  const materialRef = useRef<OpacityTarget | null>(null);
+  const opacityRef = useRef<number>(initialOpacity);
 
   // Reset the oscillator whenever the seat changes so the new ring starts
   // at t=0 rather than jumping mid-phase.
   useEffect(() => {
     elapsedRef.current = 0;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset oscillator on seat / motion-pref change
-    setOpacity(pulseOpacity(0, reducedMotion));
+    opacityRef.current = pulseOpacity(0, reducedMotion);
+    setOpacity(materialRef.current, opacityRef.current);
   }, [seatIndex, reducedMotion]);
 
   useFrame((_s, dt: number) => {
     if (reducedMotion) return;
     elapsedRef.current += dt * 1000;
     const next = pulseOpacity(elapsedRef.current, false);
-    setOpacity((prev) => (Math.abs(prev - next) < 1e-4 ? prev : next));
+    if (Math.abs(opacityRef.current - next) < 1e-4) return;
+    opacityRef.current = next;
+    setOpacity(materialRef.current, next);
   });
 
   return (
@@ -209,9 +217,10 @@ export function TurnPulseRing({ seatIndex, seatCount }: TurnPulseRingProps) {
           args={[TURN_PULSE_RING_INNER_R, TURN_PULSE_RING_OUTER_R, 48]}
         />
         <meshBasicMaterial
+          ref={materialRef}
           color={TURN_PULSE_RING_COLOR}
           transparent
-          opacity={opacity}
+          opacity={initialOpacity}
           depthWrite={false}
         />
       </mesh>
@@ -260,15 +269,17 @@ export function BetGlowOverlay({
   );
 
   const elapsedRef = useRef(0);
-  const [opacity, setOpacity] = useState<number>(BET_GLOW_MAX_OPACITY);
-  const [rotationY, setRotationY] = useState<number>(0);
+  const groupRef = useRef<RotationTarget | null>(null);
+  const materialRef = useRef<OpacityTarget | null>(null);
+  const opacityRef = useRef<number>(BET_GLOW_MAX_OPACITY);
+  const rotationYRef = useRef<number>(0);
 
   // Reset the fade whenever we transition into an active glow window.
   useEffect(() => {
     if (active) {
       elapsedRef.current = 0;
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- reset fade timer on glow activation
-      setOpacity(BET_GLOW_MAX_OPACITY);
+      opacityRef.current = BET_GLOW_MAX_OPACITY;
+      setOpacity(materialRef.current, BET_GLOW_MAX_OPACITY);
     }
   }, [active, seatIndex]);
 
@@ -278,7 +289,10 @@ export function BetGlowOverlay({
       elapsedRef.current += dt * 1000;
       const t = Math.min(1, elapsedRef.current / BET_GLOW_DURATION_MS);
       const next = BET_GLOW_MAX_OPACITY * (1 - t);
-      setOpacity((prev) => (Math.abs(prev - next) < 1e-4 ? prev : next));
+      if (Math.abs(opacityRef.current - next) >= 1e-4) {
+        opacityRef.current = next;
+        setOpacity(materialRef.current, next);
+      }
     }
 
     // Billboard — mirrors Nameplate's useFrame driver so the glow tracks
@@ -299,26 +313,28 @@ export function BetGlowOverlay({
       x: position[0],
       z: position[2],
     });
-    setRotationY((prev) =>
-      Math.abs(prev - target) < BILLBOARD_EPSILON ? prev : target,
-    );
+    if (Math.abs(rotationYRef.current - target) < BILLBOARD_EPSILON) return;
+    rotationYRef.current = target;
+    setYRotation(groupRef.current, target);
   });
 
   if (!active) return null;
 
   return (
     <group
+      ref={groupRef}
       name={`bet-glow-${seatIndex}`}
       position={position}
-      rotation={[0, rotationY, 0]}
+      rotation={[0, 0, 0]}
       userData={{ seatIndex, reducedMotion }}
     >
       <mesh name="bet-glow">
         <planeGeometry args={[BET_GLOW_WIDTH, BET_GLOW_HEIGHT]} />
         <meshBasicMaterial
+          ref={materialRef}
           color={BET_GLOW_COLOR}
           transparent
-          opacity={reducedMotion ? BET_GLOW_MAX_OPACITY : opacity}
+          opacity={BET_GLOW_MAX_OPACITY}
           depthWrite={false}
         />
       </mesh>

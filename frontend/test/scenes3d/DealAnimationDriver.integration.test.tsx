@@ -640,6 +640,43 @@ describe('DealAnimationDriver (integration) — H-1 hole-card render/target pari
   );
 });
 
+describe('DealAnimationDriver (integration) — undealt cards stay hidden until start', () => {
+  it('hides delayed hole-card groups until their staggered deal begins', () => {
+    const handId = 77;
+    const seatCount = 4;
+    const rig = buildRig(seatCount);
+    const layout = buildPokerTableDealLayout(seatCount);
+    const c = makeController(rig, false);
+
+    for (let s = 0; s < seatCount; s++) {
+      rig.mountHoleCard(handId, s, 0);
+      rig.mountHoleCard(handId, s, 1);
+    }
+
+    c.sync(null, layout);
+    c.sync(
+      makeState({ handId, phase: 'preflop', streetIndex: 0, dealerSeat: 0 }),
+      layout,
+    );
+
+    const first = rig.registry.current.get('hole:77:1:0')!;
+    const delayed = rig.registry.current.get('hole:77:2:0')!;
+
+    expect(first.visible).toBe(true);
+    expect(delayed.visible).toBe(false);
+    const [dx, dy, dz] = worldPosition(delayed as THREE.Object3D);
+    expect(dx).toBeCloseTo(DECK_POSITION[0], 10);
+    expect(dy).toBeCloseTo(DECK_POSITION[1], 10);
+    expect(dz).toBeCloseTo(DECK_POSITION[2], 10);
+
+    c.tick(DEAL_HOLE_STAGGER_MS - 1);
+    expect(delayed.visible).toBe(false);
+
+    c.tick(1);
+    expect(delayed.visible).toBe(true);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Cycle 13 H-2 — same-hand transitions preserve in-flight hole tweens
 // ---------------------------------------------------------------------------

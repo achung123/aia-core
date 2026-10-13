@@ -44,7 +44,7 @@ const styles: Record<string, React.CSSProperties> = {
   buttonActive: {
     background: '#4f46e5',
     color: '#fff',
-    borderColor: '#818cf8',
+    border: '2px solid #818cf8',
   },
   buttonDisabled: {
     opacity: 0.3,

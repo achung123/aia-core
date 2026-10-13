@@ -54,7 +54,12 @@ export function Table({
   const { feltNormalMap, feltRoughnessMap, railNormalMap } =
     getTableMaterialTextures();
   const railHeight = TABLE_THICKNESS * 1.2;
-  const feltCenterY = TABLE_TOP_Y - TABLE_THICKNESS / 2;
+  // Lift the felt a hair above the rail so its top cap sits clear of the
+  // rail's top cap. Both cylinders share `TABLE_TOP_Y` by default, which
+  // produced visible z-fighting (green/brown flicker) across the entire
+  // felt surface at medium+ tiers.
+  const FELT_Z_EPSILON = 0.002;
+  const feltCenterY = TABLE_TOP_Y - TABLE_THICKNESS / 2 + FELT_Z_EPSILON;
   const railCenterY = TABLE_TOP_Y - railHeight / 2;
 
   // T-038 Item-2 (Cycle 39 L-2): drop the inline `qualityTier !== 'low'`

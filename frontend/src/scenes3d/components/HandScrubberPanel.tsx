@@ -55,6 +55,13 @@ export interface HandScrubberPanelProps {
   onStreetIndexChange?: (i: StreetIdx) => void;
   /** Fires whenever the play/pause state changes (both modes). */
   onPlayingChange?: (isPlaying: boolean) => void;
+  /**
+   * When true, suppresses the panel's internal `setInterval` auto-advance.
+   * Used by `<SessionReplayShell>`, which already owns a cross-hand state
+   * machine on the same `replay` slice — without this gate the two timers
+   * would fire in parallel and double-tick the scrubber.
+   */
+  disableAutoAdvance?: boolean;
   hidden?: boolean;
   className?: string;
   style?: CSSProperties;
@@ -98,6 +105,7 @@ export function HandScrubberPanel({
   outcomeStreet,
   onStreetIndexChange,
   onPlayingChange,
+  disableAutoAdvance = false,
   hidden,
   className,
   style,
@@ -167,6 +175,7 @@ export function HandScrubberPanel({
 
   useEffect(() => {
     if (!isPlaying) return;
+    if (disableAutoAdvance) return;
     const periodMs = Math.max(1, msPerStreet / effectiveSpeed);
     const handle = setInterval(() => {
       const cur = streetRef.current;
@@ -178,7 +187,7 @@ export function HandScrubberPanel({
       setStreet((cur + 1) as StreetIdx);
     }, periodMs);
     return () => clearInterval(handle);
-  }, [isPlaying, effectiveSpeed, msPerStreet, setStreet, setPlaying]);
+  }, [isPlaying, effectiveSpeed, msPerStreet, setStreet, setPlaying, disableAutoAdvance]);
 
   if (hidden) return null;
 

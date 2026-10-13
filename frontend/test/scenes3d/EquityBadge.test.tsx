@@ -8,16 +8,20 @@ import {
   afterAll,
   vi,
 } from 'vitest';
-import { render, cleanup, waitFor } from '@testing-library/react';
+import { act, render, cleanup, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
+import { Profiler, type ReactNode } from 'react';
+
+const frameCallbacks: Array<(state: unknown, dt: number) => void> = [];
 
 // ---------------------------------------------------------------------------
 // Mocks — R3F + drei, same pattern as Nameplate/PokerTable tests. `<Text>`
 // becomes a plain div so we can read the label via `data-text`.
 // ---------------------------------------------------------------------------
 vi.mock('@react-three/fiber', () => ({
-  useFrame: () => {},
+  useFrame: (cb: (state: unknown, dt: number) => void) => {
+    frameCallbacks.push(cb);
+  },
   Canvas: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
 }));
 
@@ -36,7 +40,11 @@ vi.mock('@react-three/drei', () => ({
   Text: (props: Record<string, unknown> & { children?: unknown }) => {
     const name = typeof props.name === 'string' ? props.name : 'drei-text';
     return (
-      <div data-testid={name} data-text={String(props.children ?? '')} />
+      <div
+        data-testid={name}
+        data-text={String(props.children ?? '')}
+        data-position={Array.isArray(props.position) ? (props.position as number[]).join(',') : ''}
+      />
     );
   },
 }));
@@ -55,7 +63,12 @@ import {
   countSeatsWithHoleCards,
   computeEquityBadgeWorldPosition,
   EQUITY_BADGE_LOCAL_Y,
+  EQUITY_BADGE_HEIGHT,
 } from '../../src/scenes3d/components/EquityBadge';
+import {
+  ACTION_BADGE_HEIGHT,
+  ACTION_BADGE_LOCAL_Y,
+} from '../../src/scenes3d/components/ActionBadge';
 import { PokerTable } from '../../src/scenes3d/PokerTable';
 import type {
   CardRef,
@@ -88,6 +101,7 @@ afterAll(() => {
 
 afterEach(() => {
   cleanup();
+  frameCallbacks.length = 0;
   vi.clearAllMocks();
 });
 
@@ -201,6 +215,12 @@ describe('computeEquityBadgeWorldPosition', () => {
     const expected = seatAnchorLocalToWorld(0, 6, [0, EQUITY_BADGE_LOCAL_Y, 0]);
     expect(pos).toEqual(expected);
   });
+
+  it('positions the equity badge below the action badge without vertical overlap', () => {
+    const actionBottom = ACTION_BADGE_LOCAL_Y - ACTION_BADGE_HEIGHT / 2;
+    const equityTop = EQUITY_BADGE_LOCAL_Y + EQUITY_BADGE_HEIGHT / 2;
+    expect(equityTop).toBeLessThan(actionBottom);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -214,6 +234,40 @@ describe('<EquityBadge>', () => {
     expect(group).not.toBeNull();
     const textEl = container.querySelector('[data-testid="equity-badge-text"]');
     expect(textEl?.getAttribute('data-text')).toBe('70.0%');
+  });
+
+  it('billboards the badge to face the active camera (Y-axis rotation tracks camera azimuth)', () => {
+    const { container } = render(
+      <EquityBadge seatIndex={0} seatCount={1} equity={0.7} />,
+    );
+    act(() => {
+      frameCallbacks[0]!({ camera: { position: { x: 10, z: 0 } } }, 0.016);
+    });
+    const group = container.querySelector('group[name="equity-badge-0"]');
+    expect(group).not.toBeNull();
+    const raw = group?.getAttribute('rotation');
+    expect(raw).toBeTruthy();
+    const [rx, ry, rz] = raw!.split(',').map(Number);
+    expect(rx).toBeCloseTo(0, 5);
+    expect(rz).toBeCloseTo(0, 5);
+    expect(ry).toBeCloseTo(Math.PI / 2, 4);
+  });
+
+  it('does not trigger a React rerender on frame-driven billboard updates', () => {
+    const renders = vi.fn();
+    render(
+      <Profiler id="equity-badge" onRender={renders}>
+        <EquityBadge seatIndex={0} seatCount={1} equity={0.7} />
+      </Profiler>,
+    );
+
+    renders.mockClear();
+
+    act(() => {
+      frameCallbacks[0]!({ camera: { position: { x: 10, z: 0 } } }, 0.016);
+    });
+
+    expect(renders).not.toHaveBeenCalled();
   });
 });
 
@@ -264,9 +318,36 @@ describe('<EquityBadges> triple-layer gate', () => {
       expect(container.querySelector('group[name="equity-badges"]')).not.toBeNull(),
     );
     expect(fetchEquity).toHaveBeenCalledTimes(1);
-    expect(fetchEquity).toHaveBeenCalledWith(7, 12);
+    expect(fetchEquity).toHaveBeenCalledWith(7, 12, 'flop');
     // One badge per seat with hole cards that appears in the response.
     expect(container.querySelectorAll('[data-testid="equity-badge-text"]').length).toBe(3);
+  });
+
+  it('keeps a 0.0% badge for folded seats that are omitted from the equity response', async () => {
+    const Wrapper = wrapWithQueryClient();
+    vi.mocked(fetchEquity).mockResolvedValue({
+      equities: [
+        { player_name: 'P0', equity: 0.65, winning_hand_description: null },
+      ],
+    });
+    const state = makeState({
+      seats: [
+        makeSeat(0, { holeCards: [card('Ah'), card('Ks')] }),
+        makeSeat(1, { holeCards: [card('2c'), card('3d')], folded: true, result: 'folded' }),
+      ],
+    });
+    const { container } = render(
+      <Wrapper>
+        <EquityBadges state={state} viewer={SPECTATOR} equityOverlay={true} />
+      </Wrapper>,
+    );
+    await waitFor(() => {
+      expect(fetchEquity).toHaveBeenCalledTimes(1);
+      expect(container.querySelectorAll('[data-testid="equity-badge-text"]').length).toBe(2);
+    });
+
+    const foldedBadge = container.querySelector('group[name="equity-badge-1"] [data-testid="equity-badge-text"]');
+    expect(foldedBadge?.getAttribute('data-text')).toBe('0.0%');
   });
 
   it('never fetches and never renders under player policy — even with equityOverlay=true (AC 2, AC 7a)', async () => {

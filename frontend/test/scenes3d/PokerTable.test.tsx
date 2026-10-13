@@ -24,6 +24,7 @@ afterAll(() => {
 // props forwarded to <OrbitControls> / <PerspectiveCamera> for assertions.
 const orbitPropsSpy = vi.fn<(props: Record<string, unknown>) => void>();
 const cameraPropsSpy = vi.fn<(props: Record<string, unknown>) => void>();
+let environmentShouldThrow = false;
 vi.mock('@react-three/drei', () => ({
   OrbitControls: (props: Record<string, unknown>) => {
     orbitPropsSpy(props);
@@ -33,14 +34,19 @@ vi.mock('@react-three/drei', () => ({
     cameraPropsSpy(props);
     return <div data-testid="mock-perspective-camera" />;
   },
-  Environment: (props: Record<string, unknown>) => (
-    <div
-      data-testid="mock-environment"
-      data-preset={String(props.preset ?? '')}
-      data-resolution={String(props.resolution ?? '')}
-      data-background={String(props.background ?? '')}
-    />
-  ),
+  Environment: (props: Record<string, unknown>) => {
+    if (environmentShouldThrow) {
+      throw new Error('Could not load studio_small_03_1k.hdr: Failed to fetch');
+    }
+    return (
+      <div
+        data-testid="mock-environment"
+        data-preset={String(props.preset ?? '')}
+        data-resolution={String(props.resolution ?? '')}
+        data-background={String(props.background ?? '')}
+      />
+    );
+  },
   // <Nameplate> uses drei <Text> for real WebGL text rasterization
   // (bug aia-core-ovhb). happy-dom has no WebGL, so we shim it to a
   // plain div carrying the rendered label via `data-text`.
@@ -89,6 +95,7 @@ afterEach(() => {
   cleanup();
   orbitPropsSpy.mockClear();
   cameraPropsSpy.mockClear();
+  environmentShouldThrow = false;
   __getTestProbe().reset();
   frameCallbacks.length = 0;
 });
@@ -226,34 +233,77 @@ describe('<PokerTable>', () => {
     ).toHaveLength(5);
   });
 
+  // Regression: playback replay pre-populates `community` with the hand's
+  // final board but scrubs `streetIndex` back to 0 (preflop). The scene
+  // must hide flop/turn/river slots that haven't yet been "reached" by the
+  // current `streetIndex`, otherwise all five cards appear on the felt at
+  // preflop and the street scrubber feels like a no-op.
+  it('hides community slots whose street has not been reached by streetIndex', () => {
+    const full = [card('Ah'), card('Kd'), card('2c'), card('7s'), card('9h')];
+    // preflop (streetIndex=0): zero community cards rendered regardless of
+    // what's in state.community.
+    {
+      const state = makeState({ phase: 'preflop', streetIndex: 0, community: full });
+      const { container } = render(<PokerTable state={state} />);
+      expect(
+        container.querySelectorAll('group[name="community-cards"] mesh[name="card"]'),
+      ).toHaveLength(0);
+    }
+    // flop (streetIndex=1): first 3.
+    {
+      const state = makeState({ phase: 'flop', streetIndex: 1, community: full });
+      const { container } = render(<PokerTable state={state} />);
+      expect(
+        container.querySelectorAll('group[name="community-cards"] mesh[name="card"]'),
+      ).toHaveLength(3);
+    }
+    // turn (streetIndex=2): first 4.
+    {
+      const state = makeState({ phase: 'turn', streetIndex: 2, community: full });
+      const { container } = render(<PokerTable state={state} />);
+      expect(
+        container.querySelectorAll('group[name="community-cards"] mesh[name="card"]'),
+      ).toHaveLength(4);
+    }
+    // river (streetIndex=3): all 5.
+    {
+      const state = makeState({ phase: 'river', streetIndex: 3, community: full });
+      const { container } = render(<PokerTable state={state} />);
+      expect(
+        container.querySelectorAll('group[name="community-cards"] mesh[name="card"]'),
+      ).toHaveLength(5);
+    }
+  });
+
   // -------------------------------------------------------------------------
   // Hole cards (placeholder — T-024 will refine visibility)
   // -------------------------------------------------------------------------
 
-  it('renders 2 face-down hole-card placeholders per active non-folded seat', () => {
+  it('renders 2 hole-card placeholders per active spectator seat, including folded seats', () => {
     const state = makeState({
       seats: [
         makeSeat(0), // active, not folded → 2 cards
-        makeSeat(1, { folded: true }), // folded → 0 cards
+        makeSeat(1, { folded: true }), // folded spectator seat → still renders
         makeSeat(2, { isActive: false, playerName: null }), // empty → 0 cards
         makeSeat(3), // active → 2 cards
       ],
     });
     const { container } = render(<PokerTable state={state} />);
     const holeGroups = container.querySelectorAll('group[name="hole-cards"]');
-    expect(holeGroups).toHaveLength(2);
+    expect(holeGroups).toHaveLength(3);
     const cards = container.querySelectorAll(
       'group[name="hole-cards"] mesh[name="card"]',
     );
-    expect(cards).toHaveLength(4);
-    // All face-down placeholders — T-024 flips the viewer's own seat up.
+    expect(cards).toHaveLength(6);
+    // Spectator is fully observable, but missing hole-card payload still
+    // renders the card back texture.
     for (const c of cards) {
-      expect(c.getAttribute('data-face-up')).toBe('false');
+      expect(c.getAttribute('data-face-up')).toBe('true');
       expect(c.getAttribute('data-card-id')).toBe('back');
     }
   });
 
-  it('does not render hole cards for folded or empty seats', () => {
+  it('does not render hole cards for empty seats; folded spectator seats still render', () => {
     const state = makeState({
       seats: [
         makeSeat(0, { folded: true }),
@@ -261,7 +311,26 @@ describe('<PokerTable>', () => {
       ],
     });
     const { container } = render(<PokerTable state={state} />);
-    expect(container.querySelectorAll('group[name="hole-cards"]')).toHaveLength(0);
+    expect(container.querySelectorAll('group[name="hole-cards"]')).toHaveLength(1);
+  });
+
+  it('rotates hole cards to face the seated player instead of the table center', () => {
+    const state = makeState({
+      seats: [
+        makeSeat(0, { holeCards: [card('Ah'), card('Kd')] }),
+      ],
+    });
+    const { container } = render(<PokerTable state={state} />);
+    const cardMesh = container.querySelector(
+      'group[name="seat-0"] group[name="hole-cards"] mesh[name="card"]',
+    );
+    expect(cardMesh).not.toBeNull();
+    const raw = cardMesh!.getAttribute('rotation');
+    expect(raw).toBeTruthy();
+    const [rx, ry, rz] = raw!.split(',').map(Number);
+    expect(rx).toBeCloseTo(-Math.PI / 2, 6);
+    expect(ry).toBeCloseTo(0, 6);
+    expect(rz).toBeCloseTo(Math.PI, 6);
   });
 
   // -------------------------------------------------------------------------
@@ -459,10 +528,10 @@ describe('<PokerTable>', () => {
     expect(
       container.querySelectorAll('group[name="community-cards"] mesh[name="card"]'),
     ).toHaveLength(3);
-    // active & not-folded seats: 0,1,3,5,6,7,8 → 7 seats × 2 = 14 hole cards
+    // active spectator seats: 0,1,2,3,5,6,7,8 → 8 seats × 2 = 16 hole cards
     expect(
       container.querySelectorAll('group[name="hole-cards"] mesh[name="card"]'),
-    ).toHaveLength(14);
+    ).toHaveLength(16);
     // Chip decomposition: pot=$5 + 1+2+2 committed = $10 → 10 Black chips
     const meshes = __getTestProbe().getMeshes();
     const expected = chipCountsFor(10, 20);
@@ -580,13 +649,13 @@ describe('<PokerTable> — T-025 hole-card visibility policy', () => {
     }
   });
 
-  it('spectator policy: all hole cards face-down pre-showdown', () => {
+  it('spectator policy: all hole cards are face-up pre-showdown, including folded seats', () => {
     const state = makeState({
       phase: 'turn',
       streetIndex: 2,
       seats: [
         makeSeat(0, { holeCards: [hc('Ah'), hc('Kd')] }),
-        makeSeat(1, { holeCards: [hc('2c'), hc('3c')] }),
+        makeSeat(1, { holeCards: [hc('2c'), hc('3c')], folded: true }),
       ],
     });
     const { container } = render(
@@ -595,9 +664,8 @@ describe('<PokerTable> — T-025 hole-card visibility policy', () => {
     const cards = container.querySelectorAll(
       'group[name="hole-cards"] mesh[name="card"]',
     );
-    for (const c of cards) {
-      expect(c.getAttribute('data-face-up')).toBe('false');
-    }
+    expect(cards).toHaveLength(4);
+    for (const c of cards) expect(c.getAttribute('data-face-up')).toBe('true');
   });
 
   it('spectator policy: non-folded seats reveal at showdown', () => {
@@ -622,7 +690,7 @@ describe('<PokerTable> — T-025 hole-card visibility policy', () => {
   });
 
   it('default viewer (prop omitted) behaves as spectator', () => {
-    // Pre-showdown → all face-down.
+    // Pre-showdown → all visible.
     const pre = makeState({
       phase: 'flop',
       streetIndex: 1,
@@ -632,9 +700,7 @@ describe('<PokerTable> — T-025 hole-card visibility policy', () => {
     const preCards = preC.querySelectorAll(
       'group[name="hole-cards"] mesh[name="card"]',
     );
-    for (const c of preCards) {
-      expect(c.getAttribute('data-face-up')).toBe('false');
-    }
+    for (const c of preCards) expect(c.getAttribute('data-face-up')).toBe('true');
     unmount();
 
     // Showdown → revealed (spectator default).
@@ -651,6 +717,23 @@ describe('<PokerTable> — T-025 hole-card visibility policy', () => {
     for (const c of sdCards) {
       expect(c.getAttribute('data-face-up')).toBe('true');
     }
+  });
+
+  it('player policy: viewer\'s own cards stay rendered face-up even after folding', () => {
+    const state = makeState({
+      phase: 'turn',
+      streetIndex: 2,
+      seats: [
+        makeSeat(0, { holeCards: [hc('Ah'), hc('Kd')], folded: true }),
+        makeSeat(1, { holeCards: [hc('2c'), hc('3c')] }),
+      ],
+    });
+    const { container } = render(
+      <PokerTable state={state} viewer={{ policy: 'player', seat: 0 }} />,
+    );
+    const own = holeCardsOfSeat(container, 0);
+    expect(own).toHaveLength(2);
+    for (const c of own) expect(c.getAttribute('data-face-up')).toBe('true');
   });
 
   it('renders face-down back when own seat has no holeCards payload yet', () => {
@@ -967,6 +1050,21 @@ describe('<PokerTable> — T-014 PBR lighting + env map', () => {
     expect(QUALITY_TIER_SETTINGS.high.envMap.resolution).toBeNull();
     expect(env!.getAttribute('data-resolution')).toBe('');
     expect(env!.getAttribute('data-background')).toBe('false');
+  });
+
+  it('degrades gracefully when the env-map preset fails to load instead of crashing the whole scene', () => {
+    environmentShouldThrow = true;
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { container } = render(
+        <PokerTable state={makeState()} qualityTier="high" />,
+      );
+      expect(container.querySelector('group[name="poker-table-scene"]')).not.toBeNull();
+      expect(container.querySelector('mesh[name="table-felt"]')).not.toBeNull();
+      expect(container.querySelector('[data-testid="mock-environment"]')).toBeNull();
+    } finally {
+      errSpy.mockRestore();
+    }
   });
 
   it('forwards qualityTier to <Table> so felt/rail materials still render', () => {

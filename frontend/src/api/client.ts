@@ -258,8 +258,15 @@ export function fetchCsvSchema(): Promise<CsvSchemaResponse> {
   return request<CsvSchemaResponse>('/upload/csv/schema');
 }
 
-export function fetchEquity(gameId: number, handNumber: number): Promise<EquityResponse> {
-  return request<EquityResponse>(`/games/${gameId}/hands/${handNumber}/equity`);
+export type EquityStreet = 'preflop' | 'flop' | 'turn' | 'river' | 'showdown';
+
+export function fetchEquity(gameId: number, handNumber: number, street?: EquityStreet): Promise<EquityResponse> {
+  const params = new URLSearchParams();
+  if (street) {
+    params.set('street', street === 'showdown' ? 'river' : street);
+  }
+  const query = params.toString();
+  return request<EquityResponse>(`/games/${gameId}/hands/${handNumber}/equity${query ? `?${query}` : ''}`);
 }
 
 export function fetchPlayerEquity(gameId: number, handNumber: number, playerName: string): Promise<EquityResponse> {

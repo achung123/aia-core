@@ -16,6 +16,7 @@
 
 import { describe, it, expect, afterEach, beforeAll, afterAll, vi } from 'vitest';
 import { render, cleanup, act } from '@testing-library/react';
+import { Profiler } from 'react';
 
 // ---------------------------------------------------------------------------
 // R3F mock — mirrors DealerButton.test.tsx. Each render registers a *new*
@@ -31,12 +32,31 @@ vi.mock('@react-three/fiber', () => ({
   Canvas: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
 
-vi.mock('@react-three/drei', () => ({
-  Text: (props: Record<string, unknown> & { children?: unknown }) => {
+vi.mock('@react-three/drei', async () => {
+  const { forwardRef, useImperativeHandle, useRef } = await import('react');
+  const MockText = forwardRef<
+    { text: string; sync: () => void },
+    Record<string, unknown> & { children?: unknown }
+  >((props, ref) => {
     const name = typeof props.name === 'string' ? props.name : 'drei-text';
-    return <div data-testid={name} data-text={String(props.children ?? '')} />;
-  },
-}));
+    const nodeRef = useRef<HTMLDivElement | null>(null);
+    const initialText = String(props.children ?? '');
+
+    useImperativeHandle(ref, () => ({
+      get text() {
+        return nodeRef.current?.getAttribute('data-text') ?? initialText;
+      },
+      set text(value: string) {
+        nodeRef.current?.setAttribute('data-text', String(value));
+      },
+      sync() {},
+    }), [initialText]);
+
+    return <div ref={nodeRef} data-testid={name} data-text={initialText} />;
+  });
+  MockText.displayName = 'MockText';
+  return { Text: MockText };
+});
 
 const R3F_TAG_WARNING =
   /is using incorrect casing|is unrecognized in this browser|React does not recognize the|Unknown event handler|Received .* for a non-boolean attribute/;
@@ -404,6 +424,22 @@ describe('<TurnPulseRing>', () => {
     )!;
     expect(mat.getAttribute('color')).toBe(TURN_PULSE_RING_COLOR);
   });
+
+  it('does not trigger React rerenders while the pulse animation advances', () => {
+    installReducedMotion(false);
+    const renders = vi.fn();
+
+    render(
+      <Profiler id="turn-pulse" onRender={renders}>
+        <TurnPulseRing seatIndex={1} seatCount={6} />
+      </Profiler>,
+    );
+
+    renders.mockClear();
+    stepFrames(200);
+
+    expect(renders).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -524,6 +560,22 @@ describe('<BetGlowOverlay> billboard rotation (H-2)', () => {
       nameplateRender.container.querySelector('group[name="nameplate-0"]')!,
     );
     expect(phiGlow).toBeCloseTo(phiName, 6);
+  });
+
+  it('does not trigger React rerenders while glow fade and billboarding advance', () => {
+    installReducedMotion(false);
+    const renders = vi.fn();
+
+    render(
+      <Profiler id="bet-glow" onRender={renders}>
+        <BetGlowOverlay seatIndex={0} seatCount={6} active />
+      </Profiler>,
+    );
+
+    renders.mockClear();
+    stepFrames(200, 16, { camera: { position: { x: 10, z: 0 } } });
+
+    expect(renders).not.toHaveBeenCalled();
   });
 });
 

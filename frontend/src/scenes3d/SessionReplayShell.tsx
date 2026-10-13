@@ -21,7 +21,9 @@ import {
 } from 'react';
 
 import type { GameSessionResponse, HandResponse } from '../api/types/game';
+import type { HandActionResponse } from '../api/types/dealer';
 import { SessionScrubber } from '../components/SessionScrubber';
+import { HandScrubberPanel } from './components/HandScrubberPanel';
 import { handsToTableState } from './data/handsToTableState';
 import {
   REPLAY_SPEEDS,
@@ -57,6 +59,24 @@ const PHASE_BY_STREET: Record<StreetIdx, TableStatePhase> = {
 /** Inverse of `streetIndexFromPhase`; exported so T-030 / T-031 can reuse. */
 export function phaseFromStreetIndex(i: StreetIdx): TableStatePhase {
   return PHASE_BY_STREET[i];
+}
+
+function outcomePhaseForResolvedHand(hand: HandResponse): TableStatePhase {
+  if (hand.player_hands.some((ph) => ph.result === 'won')) return 'showdown';
+  if (hand.river) return 'river';
+  if (hand.turn) return 'turn';
+  if (hand.flop_1) return 'flop';
+  return 'preflop';
+}
+
+function clampCommunityToStreet(
+  community: TableState['community'],
+  streetIndex: StreetIdx,
+): TableState['community'] {
+  return community.map((card, slot) => {
+    const minStreet = slot <= 2 ? 1 : slot === 3 ? 2 : 3;
+    return streetIndex >= minStreet ? card : null;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -107,6 +127,14 @@ export interface SessionReplayShellProps {
   game: GameSessionResponse;
   /** All hands of the session, in hand_number order. */
   hands: HandResponse[];
+  /**
+   * Optional per-hand action lists keyed by `hand_id`. When provided,
+   * actions for the current hand are threaded into `handsToTableState`
+   * so per-seat committed-this-street chip stacks and accurate
+   * `lastAction` amounts render. Omitted hands fall back to the
+   * zero-committed / last-action-only derivation.
+   */
+  actionsByHandId?: Record<number, HandActionResponse[]>;
   initialHandIndex?: number;
   initialSpeed?: ReplaySpeed;
   /** Viewer policy exposed to children via context. Default spectator. */
@@ -126,6 +154,7 @@ export function SessionReplayShell({
   gameId,
   game,
   hands,
+  actionsByHandId,
   initialHandIndex = 0,
   initialSpeed = 1,
   viewer = DEFAULT_VIEWER,
@@ -223,11 +252,20 @@ export function SessionReplayShell({
 
   // --- Derived TableState ------------------------------------------------
   const currentHand: HandResponse | null = hands[handIndex] ?? null;
+  // Outcome phase — the latest street the hand actually reached. Used to
+  // clamp the per-hand street scrubber so the user can't scrub past the
+  // last played street. Independent of the scrubbed `streetIndex`.
+  const outcomePhase: TableStatePhase | undefined = useMemo(() => {
+    if (!currentHand) return undefined;
+    return outcomePhaseForResolvedHand(currentHand);
+  }, [currentHand]);
   const tableState: TableState | null = useMemo(() => {
     if (!currentHand) return null;
+    const actions = actionsByHandId?.[currentHand.hand_id];
     const base = handsToTableState({
       game,
       hand: currentHand,
+      actions,
       viewer,
     });
     // Override phase + streetIndex so they track the replay slice even if
@@ -237,8 +275,9 @@ export function SessionReplayShell({
       ...base,
       streetIndex,
       phase: phaseFromStreetIndex(streetIndex),
+      community: clampCommunityToStreet(base.community, streetIndex),
     };
-  }, [game, currentHand, streetIndex, viewer]);
+  }, [game, currentHand, actionsByHandId, streetIndex, viewer]);
 
   const contextValue = useMemo<SessionReplayContextValue>(
     () => ({
@@ -281,10 +320,23 @@ export function SessionReplayShell({
       className={className}
       style={style}
     >
+      <SessionReplayContext.Provider value={contextValue}>
+        {children}
+      </SessionReplayContext.Provider>
       <SessionScrubber
         handCount={Math.max(1, hands.length)}
         currentHand={Math.min(handIndex + 1, Math.max(1, hands.length))}
         onChange={onScrubHand}
+      />
+      {/* Per-hand street scrubber — binds to the same `replay` slice
+          as this shell so play/pause + speed here and in HandScrubberPanel
+          stay in lockstep. Clamps reachable streets to the current hand's
+          outcome (e.g. folded preflop → only preflop reachable). */}
+      <HandScrubberPanel
+        bindToReplay
+        disableAutoAdvance
+        outcomeStreet={outcomePhase}
+        style={streetScrubberStyle}
       />
       <div
         role="group"
@@ -331,9 +383,6 @@ export function SessionReplayShell({
           })}
         </div>
       </div>
-      <SessionReplayContext.Provider value={contextValue}>
-        {children}
-      </SessionReplayContext.Provider>
     </section>
   );
 }
@@ -367,7 +416,11 @@ const speedGroupStyle: CSSProperties = {
   display: 'flex',
   gap: 4,
 };
-
+const streetScrubberStyle: CSSProperties = {
+  background: '#111',
+  borderTop: '1px solid #222',
+  color: '#fff',
+};
 const speedBtnStyle: CSSProperties = {
   minWidth: MIN_TAP_TARGET_PX,
   minHeight: MIN_TAP_TARGET_PX,

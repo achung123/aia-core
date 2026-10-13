@@ -39,6 +39,7 @@ import {
 export interface DealTarget {
   setPosition(x: number, y: number, z: number): void;
   setRotation(x: number, y: number, z: number): void;
+  setVisible(visible: boolean): void;
 }
 
 export interface DealAnimationControllerOptions {
@@ -137,13 +138,26 @@ export class DealAnimationController {
       const target = this.opts.getTarget(event.key);
       if (!target) continue;
 
+      const startsImmediately = reducedMotion || event.startMs <= 0;
+      target.setPosition(event.from[0], event.from[1], event.from[2]);
+      target.setVisible(startsImmediately);
+
+      let started = startsImmediately;
+
       const tween = createTween<Vec3>({
         from: event.from,
         to: event.to,
         durationMs: event.durationMs,
         delayMs: event.startMs,
         lerp: lerpVec3,
-        onUpdate: (v) => target.setPosition(v[0], v[1], v[2]),
+        emitInitial: false,
+        onUpdate: (v) => {
+          if (!started) {
+            started = true;
+            target.setVisible(true);
+          }
+          target.setPosition(v[0], v[1], v[2]);
+        },
         onComplete: () => {
           this.active.delete(event.key);
         },

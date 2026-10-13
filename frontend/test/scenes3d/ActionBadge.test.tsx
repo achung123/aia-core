@@ -1,6 +1,7 @@
 /** @vitest-environment happy-dom */
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render } from '@testing-library/react';
+import { Profiler } from 'react';
 
 // ---------------------------------------------------------------------------
 // R3F mock — mirrors Nameplate.test.tsx. `frameCallbacks` let tests step
@@ -56,6 +57,9 @@ import {
   ACTION_BADGE_FONT_SIZE,
   ACTION_BADGE_LOCAL_Y,
   ACTION_BADGE_WIDTH,
+  FOLD_BADGE_BG_COLOR,
+  LOSER_BADGE_BG_COLOR,
+  WINNER_BADGE_BG_COLOR,
   computeActionBadgeWorldPosition,
   formatActionLabel,
   shouldShowBadge,
@@ -133,9 +137,11 @@ describe('shouldShowBadge', () => {
 
   it('persists fold across every street (AC 2)', () => {
     const la: SeatState['lastAction'] = { action: 'fold', street: 'preflop' };
-    for (const p of ['preflop', 'flop', 'turn', 'river', 'showdown'] as TableStatePhase[]) {
-      expect(shouldShowBadge(la, p)).toBe(true);
-    }
+    expect(shouldShowBadge(la, 'preflop')).toBe(true);
+    expect(shouldShowBadge(la, 'flop')).toBe(false);
+    expect(shouldShowBadge(la, 'turn')).toBe(false);
+    expect(shouldShowBadge(la, 'river')).toBe(false);
+    expect(shouldShowBadge(la, 'showdown')).toBe(false);
   });
 
   it('persists all-in across every street (AC 2)', () => {
@@ -209,12 +215,56 @@ describe('<ActionBadge>', () => {
       <ActionBadge
         {...seatProps}
         lastAction={{ action: 'fold', street: 'preflop' }}
+        result={null}
         currentPhase="river"
+      />,
+    );
+    expect(findBadge(container, 0)).toBeNull();
+  });
+
+  it('renders fold as a red banner on the fold street', () => {
+    const { container } = render(
+      <ActionBadge
+        {...seatProps}
+        lastAction={{ action: 'fold', street: 'turn' }}
+        result={null}
+        currentPhase="turn"
       />,
     );
     const el = findBadge(container, 0);
     expect(el).not.toBeNull();
     expect(readLabel(el!)).toBe('fold');
+    expect(el?.innerHTML.toLowerCase()).toContain(FOLD_BADGE_BG_COLOR.slice(1).toLowerCase());
+  });
+
+  it('renders a green winner banner at showdown', () => {
+    const { container } = render(
+      <ActionBadge
+        {...seatProps}
+        lastAction={null}
+        result="won"
+        currentPhase="showdown"
+      />,
+    );
+    const el = findBadge(container, 0);
+    expect(el).not.toBeNull();
+    expect(readLabel(el!)).toBe('won');
+    expect(el?.innerHTML.toLowerCase()).toContain(WINNER_BADGE_BG_COLOR.slice(1).toLowerCase());
+  });
+
+  it('renders a loser banner at showdown for players who lost without folding', () => {
+    const { container } = render(
+      <ActionBadge
+        {...seatProps}
+        lastAction={null}
+        result="lost"
+        currentPhase="showdown"
+      />,
+    );
+    const el = findBadge(container, 0);
+    expect(el).not.toBeNull();
+    expect(readLabel(el!)).toBe('lost');
+    expect(el?.innerHTML.toLowerCase()).toContain(LOSER_BADGE_BG_COLOR.slice(1).toLowerCase());
   });
 
   it('persists all-in into later streets (AC 2)', () => {
@@ -222,6 +272,7 @@ describe('<ActionBadge>', () => {
       <ActionBadge
         {...seatProps}
         lastAction={{ action: 'all-in', street: 'preflop' }}
+          result={null}
         currentPhase="showdown"
       />,
     );
@@ -235,6 +286,7 @@ describe('<ActionBadge>', () => {
       <ActionBadge
         {...seatProps}
         lastAction={{ action: 'check', street: 'flop' }}
+        result={null}
         currentPhase="flop"
       />,
     );
@@ -245,6 +297,7 @@ describe('<ActionBadge>', () => {
         {...seatProps}
         seatIndex={1}
         lastAction={{ action: 'call', amount: 10, street: 'flop' }}
+        result={null}
         currentPhase="flop"
       />,
     );
@@ -256,6 +309,7 @@ describe('<ActionBadge>', () => {
       <ActionBadge
         {...seatProps}
         lastAction={{ action: 'bet', street: 'flop' }}
+        result={null}
         currentPhase="flop"
       />,
     );
@@ -274,6 +328,7 @@ describe('<ActionBadge>', () => {
         seatIndex={0}
         seatCount={1}
         lastAction={{ action: 'bet', amount: 5, street: 'flop' }}
+          result={null}
         currentPhase="flop"
       />,
     );
@@ -292,6 +347,27 @@ describe('<ActionBadge>', () => {
     expect(ry).toBeCloseTo(Math.PI / 2, 4);
   });
 
+  it('does not trigger a React rerender on frame-driven billboard updates', () => {
+    const renders = vi.fn();
+    render(
+      <Profiler id="action-badge" onRender={renders}>
+        <ActionBadge
+          {...seatProps}
+          lastAction={{ action: 'bet', amount: 25, street: 'flop' }}
+          currentPhase="flop"
+        />
+      </Profiler>,
+    );
+
+    renders.mockClear();
+
+    act(() => {
+      frameCallbacks[0]!({ camera: { position: { x: 10, z: 0 } } }, 0.016);
+    });
+
+    expect(renders).not.toHaveBeenCalled();
+  });
+
   it('preserves the shared font size / width layout constants', () => {
     expect(ACTION_BADGE_FONT_SIZE).toBeGreaterThan(0);
     expect(ACTION_BADGE_WIDTH).toBeGreaterThan(0);
@@ -306,11 +382,11 @@ describe('<ActionBadges>', () => {
   it('renders one badge per occupied seat and skips empty / inactive seats (AC 3)', () => {
     const seats = [
       { seatIndex: 0, playerName: 'Alice', isActive: true,
-        lastAction: { action: 'bet' as const, amount: 10, street: 'flop' as const } },
-      { seatIndex: 1, playerName: null,    isActive: true,  lastAction: null },
+        lastAction: { action: 'bet' as const, amount: 10, street: 'flop' as const }, result: null },
+      { seatIndex: 1, playerName: null,    isActive: true,  lastAction: null, result: null },
       { seatIndex: 2, playerName: 'Carol', isActive: false,
-        lastAction: { action: 'call' as const, street: 'flop' as const } },
-      { seatIndex: 3, playerName: 'Dan',   isActive: true,  lastAction: null },
+        lastAction: { action: 'call' as const, street: 'flop' as const }, result: null },
+      { seatIndex: 3, playerName: 'Dan',   isActive: true,  lastAction: null, result: 'won' as const },
     ];
     const { container } = render(
       <ActionBadges seats={seats} seatCount={6} currentPhase="flop" />,

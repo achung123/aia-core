@@ -33,9 +33,11 @@ import type {
   ViewerContext,
 } from '../../src/scenes3d/types';
 import type {
+  GameSessionListItem,
   GameSessionResponse,
   HandResponse,
 } from '../../src/api/types/game';
+import type { HandActionResponse } from '../../src/api/types/dealer';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -104,11 +106,13 @@ vi.mock('../../src/scenes3d/components/QualityToast.tsx', () => ({
 }));
 
 vi.mock('../../src/api/client.ts', () => ({
+  fetchSessions: vi.fn(),
   fetchGame: vi.fn(),
   fetchHands: vi.fn(),
+  fetchHandActions: vi.fn(),
 }));
 
-import { fetchGame, fetchHands } from '../../src/api/client.ts';
+import { fetchSessions, fetchGame, fetchHands, fetchHandActions } from '../../src/api/client.ts';
 const { PlaybackView } = await import('../../src/views/PlaybackView.tsx');
 
 // ---------------------------------------------------------------------------
@@ -132,6 +136,24 @@ const COMPLETED_GAME: GameSessionResponse = {
 
 const ACTIVE_GAME: GameSessionResponse = { ...COMPLETED_GAME, game_id: 10, status: 'active' };
 
+const PLAYABLE_SESSION: GameSessionListItem = {
+  game_id: 7,
+  game_date: '2026-04-05',
+  status: 'completed',
+  player_count: 2,
+  hand_count: 1,
+  winners: ['Alice'],
+};
+
+const EMPTY_SESSION: GameSessionListItem = {
+  game_id: 10,
+  game_date: '2026-04-15',
+  status: 'active',
+  player_count: 2,
+  hand_count: 0,
+  winners: [],
+};
+
 const HAND: HandResponse = {
   hand_id: 1,
   game_id: 7,
@@ -149,6 +171,23 @@ const HAND: HandResponse = {
   created_at: '2026-04-05T12:00:00Z',
   player_hands: [],
 };
+
+const HAND_2: HandResponse = {
+  ...HAND,
+  hand_id: 2,
+  hand_number: 2,
+  created_at: '2026-04-05T12:05:00Z',
+};
+
+const HAND_ACTIONS: HandActionResponse[] = [
+  {
+    player_name: 'Alice',
+    street: 'preflop',
+    action: 'call',
+    amount: 5,
+    created_at: '2026-04-05T12:00:01Z',
+  },
+];
 
 function renderAt(path: string) {
   const client = new QueryClient({
@@ -178,8 +217,10 @@ const resetStore = () =>
 beforeEach(() => {
   vi.clearAllMocks();
   resetStore();
+  vi.mocked(fetchSessions).mockResolvedValue([PLAYABLE_SESSION, EMPTY_SESSION]);
   vi.mocked(fetchGame).mockResolvedValue(COMPLETED_GAME);
   vi.mocked(fetchHands).mockResolvedValue([HAND]);
+  vi.mocked(fetchHandActions).mockResolvedValue(HAND_ACTIONS);
 });
 
 afterEach(() => {
@@ -195,7 +236,38 @@ describe('PlaybackView — no gameId', () => {
   it('renders the playback-game-selector prompt', () => {
     const { container } = renderAt('/playback');
     expect(container.querySelector('[data-testid="playback-game-selector"]')).toBeTruthy();
-    expect(container.textContent).toContain('Game Sessions');
+    expect(container.textContent).toContain('Playback Visualizer');
+  });
+
+  it('shows playable sessions in the playback view menu', async () => {
+    const { container } = renderAt('/playback');
+
+    await waitFor(() => expect(fetchSessions).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(container.textContent).toContain('2026-04-05');
+    });
+    const playableButton = container.querySelector(
+      '[data-testid="playback-session-7"]',
+    ) as HTMLButtonElement;
+    const emptyButton = container.querySelector(
+      '[data-testid="playback-session-10"]',
+    ) as HTMLButtonElement;
+    expect(playableButton.hasAttribute('disabled')).toBe(false);
+    expect(emptyButton.hasAttribute('disabled')).toBe(true);
+    expect(container.textContent).toContain('Open Visualizer');
+    expect(container.textContent).toContain('No hands to replay');
+  });
+
+  it('opens the selected replay from the playback view menu', async () => {
+    const { container } = renderAt('/playback');
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="playback-session-7"]')).toBeTruthy();
+    });
+    fireEvent.click(container.querySelector('[data-testid="playback-session-7"]')!);
+
+    await waitFor(() => expect(fetchGame).toHaveBeenCalledWith(7));
+    await waitFor(() => expect(shellPropsSpy).toHaveBeenCalled());
   });
 
   it('does NOT mount the canvas / shell when gameId is absent', () => {
@@ -217,6 +289,18 @@ describe('PlaybackView — no gameId', () => {
 // ---------------------------------------------------------------------------
 
 describe('PlaybackView — with gameId', () => {
+  it('shows a loading state instead of a black screen while replay data loads', async () => {
+    vi.mocked(fetchGame).mockImplementation(() => new Promise(() => {}));
+    vi.mocked(fetchHands).mockImplementation(() => new Promise(() => {}));
+
+    const { container } = renderAt('/playback?gameId=7');
+
+    expect(container.querySelector('[data-testid="playback-status"]')).toBeTruthy();
+    expect(container.textContent).toContain('Loading replay');
+    expect(shellPropsSpy).not.toHaveBeenCalled();
+    expect(pokerCanvasRenderSpy).not.toHaveBeenCalled();
+  });
+
   it('mounts <SessionReplayShell> wrapping <PokerCanvas>/<PokerTable>', async () => {
     const { container } = renderAt('/playback?gameId=7');
     await waitFor(() => expect(shellPropsSpy).toHaveBeenCalled());
@@ -236,6 +320,68 @@ describe('PlaybackView — with gameId', () => {
     expect(props.initialHandIndex).toBe(0);
     expect(props.initialSpeed).toBe(1);
     expect(props.viewer).toEqual({ policy: 'spectator' });
+  });
+
+  it('seeds replay on the latest hand so playback opens like the dealer view', async () => {
+    vi.mocked(fetchHands).mockResolvedValue([HAND, HAND_2]);
+    renderAt('/playback?gameId=7');
+    await waitFor(() => expect(shellPropsSpy).toHaveBeenCalled());
+    const props = shellPropsSpy.mock.calls.at(-1)![0];
+    expect(props.hands).toEqual([HAND, HAND_2]);
+    expect(props.initialHandIndex).toBe(1);
+  });
+
+  it('threads fetched hand actions into <SessionReplayShell> by hand_id', async () => {
+    renderAt('/playback?gameId=7');
+    await waitFor(() => expect(fetchHandActions).toHaveBeenCalledWith(7, 1));
+    await waitFor(() => expect(shellPropsSpy).toHaveBeenCalled());
+    const props = shellPropsSpy.mock.calls.at(-1)![0] as {
+      actionsByHandId?: Record<number, HandActionResponse[]>;
+    };
+    expect(props.actionsByHandId).toEqual({ 1: HAND_ACTIONS });
+  });
+
+  it('does not flood the proxy by fetching actions for every hand at once', async () => {
+    const manyHands = Array.from({ length: 44 }, (_, index) => ({
+      ...HAND,
+      hand_id: index + 1,
+      hand_number: index + 1,
+    }));
+    vi.mocked(fetchHands).mockResolvedValue(manyHands);
+
+    renderAt('/playback?gameId=7');
+
+    await waitFor(() => expect(shellPropsSpy).toHaveBeenCalled());
+    expect(fetchHandActions).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a no-hands state instead of a black screen for sessions with no recorded hands', async () => {
+    vi.mocked(fetchGame).mockResolvedValue({ ...ACTIVE_GAME, hand_count: 0 });
+    vi.mocked(fetchHands).mockResolvedValue([]);
+
+    const { container } = renderAt('/playback?gameId=10');
+
+    await waitFor(() => {
+      expect(container.textContent).toContain('No recorded hands yet');
+    });
+    expect(container.querySelector('[data-testid="playback-status"]')).toBeTruthy();
+    expect(shellPropsSpy).not.toHaveBeenCalled();
+    expect(pokerCanvasRenderSpy).not.toHaveBeenCalled();
+  });
+
+  it('shows an error state instead of a black screen when replay data fails to load', async () => {
+    vi.mocked(fetchGame).mockResolvedValue(COMPLETED_GAME);
+    vi.mocked(fetchHands).mockRejectedValue(new Error('hands exploded'));
+
+    const { container } = renderAt('/playback?gameId=7');
+
+    await waitFor(() => {
+      expect(container.textContent).toContain('Playback unavailable');
+    });
+    expect(container.querySelector('[data-testid="playback-status"]')).toBeTruthy();
+    expect(container.textContent).toContain('hands exploded');
+    expect(shellPropsSpy).not.toHaveBeenCalled();
+    expect(pokerCanvasRenderSpy).not.toHaveBeenCalled();
   });
 });
 
@@ -275,6 +421,12 @@ describe('PlaybackView — <PokerTable> prop threading', () => {
       qualityTier?: QualityTier;
     };
     expect(props.qualityTier).toBe('low');
+  });
+
+  it('matches the dealer replay framing with cameraPreset="topDown"', async () => {
+    renderAt('/playback?gameId=7');
+    await waitFor(() => expect(pokerTablePropsSpy).toHaveBeenCalled());
+    expect(pokerTablePropsSpy.mock.calls.at(-1)![0].cameraPreset).toBe('topDown');
   });
 });
 

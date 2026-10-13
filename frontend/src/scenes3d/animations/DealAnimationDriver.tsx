@@ -201,5 +201,8 @@ export function buildTarget(obj: THREE.Object3D | undefined): DealTarget | null 
     setRotation(x, y, z) {
       obj.rotation.set(x, y, z);
     },
+    setVisible(visible) {
+      obj.visible = visible;
+    },
   };
 }

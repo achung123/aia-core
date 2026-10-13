@@ -28,7 +28,8 @@ export function canSee(args: {
   ownerFolded: boolean;
 }): boolean {
   if (args.policy === 'spectator') {
-    return args.phase === 'showdown' && !args.ownerFolded;
+    // Dealer + playback: fully observable table state at every street.
+    return true;
   }
   // Player policy
   if (args.viewerSeat === args.cardOwnerSeat) return true; // own cards always

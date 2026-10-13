@@ -36,7 +36,7 @@ export const gameSelectorStyles: Record<string, CSSProperties> = {
     flexDirection: 'column',
     gap: '0.4rem',
     padding: '1rem',
-    borderRadius: 12,
+    borderRadius: 8,
     border: '2px solid',
     cursor: 'pointer',
     textAlign: 'left',
@@ -55,6 +55,10 @@ export const gameSelectorStyles: Record<string, CSSProperties> = {
     background: '#1e1f2b',
     color: '#94a3b8',
   },
+  cardDisabled: {
+    cursor: 'not-allowed',
+    opacity: 0.58,
+  },
   cardDate: {
     fontWeight: 'bold',
     fontSize: '1.1rem',
@@ -70,6 +74,10 @@ export const gameSelectorStyles: Record<string, CSSProperties> = {
     gap: '1rem',
     fontSize: '0.9rem',
   },
+  cardAction: {
+    fontSize: '0.9rem',
+    fontWeight: 700,
+  },
   winnersRow: {
     fontSize: '0.85rem',
     fontWeight: 600,
@@ -78,9 +86,48 @@ export const gameSelectorStyles: Record<string, CSSProperties> = {
 };
 
 export const playbackLayoutStyles: Record<string, CSSProperties> = {
-  wrapper: { display: 'flex', flexDirection: 'column', position: 'relative', width: '100%', height: '100vh', overflow: 'hidden' },
-  canvasArea: { flex: 1, position: 'relative', overflow: 'hidden' },
+  // `100dvh` (dynamic viewport) is the iOS Safari fix for `100vh`
+  // mis-reporting when the URL bar is shown. We keep `100vh` as a
+  // fallback for older browsers via the `minHeight` shorthand.
+  wrapper: {
+    display: 'flex',
+    flexDirection: 'column',
+    position: 'relative',
+    width: '100%',
+    height: '100vh',
+    minHeight: '100dvh',
+    overflow: 'hidden',
+  },
+  // `minHeight: 0` is required so the flex child can actually shrink
+  // below its content's intrinsic height — without it, R3F's `<Canvas>`
+  // measures its parent at 0×0 on iOS Safari and the WebGL drawing
+  // buffer never gets a paintable area (mounted-but-blank symptom).
+  canvasArea: { flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' },
   canvas: { display: 'block', width: '100%', height: '100%' },
+  statusShell: {
+    flex: 1,
+    minHeight: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    padding: '72px 24px 24px',
+    textAlign: 'center',
+    background: '#16171d',
+    color: '#e2e8f0',
+  },
+  statusTitle: {
+    fontSize: 18,
+    fontWeight: 700,
+    color: '#f8fafc',
+  },
+  statusDetail: {
+    maxWidth: 360,
+    color: '#94a3b8',
+    fontSize: 14,
+    lineHeight: 1.4,
+  },
   backButton: {
     position: 'absolute',
     top: 12,

@@ -6,7 +6,8 @@
 // `<PokerTable>` render surface (mirrors Cycle 27 / Cycle 29 rigor for
 // T-018):
 //
-//   AC 1 — Folded opponent cards stay face-down at showdown.
+//   AC 1 — In spectator views, all hole cards remain visible at showdown,
+//          including folded seats.
 //   AC 2 — Winning seat's cards render a theme-coloured outline mesh;
 //          mucked / fold_then_win winners still get a seat ring glow.
 //   AC 3 — Glow clears on handId change / phase change away from
@@ -227,8 +228,7 @@ describe('<PokerTable> showdown glow — AC 2', () => {
 });
 
 // ---------------------------------------------------------------------------
-// AC 1 — Folded opponent cards stay face-down at showdown.
-// AC 4 — Spectator policy reveals non-folded opponents at showdown.
+// Spectator showdown visibility.
 // ---------------------------------------------------------------------------
 
 describe('<PokerTable> showdown reveal — ACs 1 & 4', () => {
@@ -254,13 +254,12 @@ describe('<PokerTable> showdown reveal — ACs 1 & 4', () => {
     expect(faceDown.length).toBe(0);
   });
 
-  it('folded opponent cards are NOT rendered face-up at showdown', () => {
+  it('spectator policy still renders folded opponent cards face-up at showdown', () => {
     const state = makeState({
       phase: 'showdown',
       streetIndex: 4,
       seats: [
         makeSeat(0, { holeCards: [card('Ah'), card('Kd')], result: 'won' }),
-        // Folded seat — must not render face-up cards.
         makeSeat(1, {
           holeCards: [card('Qh'), card('Jd')],
           folded: true,
@@ -270,16 +269,12 @@ describe('<PokerTable> showdown reveal — ACs 1 & 4', () => {
       ],
     });
     const { container } = render(<PokerTable state={state} />);
-    // The winning seat renders two face-up cards.
     const faceUp = container.querySelectorAll('[data-testid="card-face-up"]');
-    expect(faceUp.length).toBe(2);
-    // And the folded seat's cards are NOT face-up (they are gated out
-    // entirely by `renderHole = isActive && !folded`).
+    expect(faceUp.length).toBe(4);
     const seat1Cards = container.querySelectorAll(
       'group[name="seat-1"] [data-testid="card-face-up"]',
     );
-    expect(seat1Cards.length).toBe(0);
-    // Winning seat's glow outlines present (AC 2 smoke).
+    expect(seat1Cards.length).toBe(2);
     expect(
       container.querySelectorAll('mesh[name="showdown-card-outline"]').length,
     ).toBe(2);
