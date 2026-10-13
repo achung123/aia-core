@@ -13,7 +13,12 @@
 
 import type { Vec3 } from './tweens';
 import { easeOutCubic, lerpVec3 } from './tweens';
-import { computeSeatPosition } from '../components/tableLayout';
+import {
+  SEAT_RING_OFFSET,
+  TABLE_RADIUS_X,
+  TABLE_RADIUS_Z,
+  computeSeatPosition,
+} from '../components/tableLayout';
 
 export type CameraPresetName = 'default' | 'topDown' | 'cinematic';
 
@@ -68,6 +73,97 @@ export const CAMERA_PRESETS: Record<CameraPresetName, CameraPresetPose> = {
   topDown: { position: [0, 12, 0.01], target: [0, 0, 0] },
   cinematic: { position: [9, 5, 0], target: [0, 0, 0] },
 };
+
+// --- Fit to viewport ---------------------------------------------------------
+//
+// Preset poses are authored for a landscape desktop canvas. On a portrait
+// phone the same pose crops the table off both sides, and on a wide monitor
+// it leaves the table tiny. `fitPoseToAspect` keeps the preset's viewing
+// direction and slides the camera along it until the whole table — felt,
+// seat ring and nameplates — just fills the frame.
+
+/** How far past the seat ring the framed area extends (nameplates, badges). */
+export const FIT_OUTER_MARGIN = 0.75;
+/** Height of the tallest thing above the felt that must stay in frame. */
+export const FIT_TOP_HEIGHT = 0.95;
+/** Fraction of the frame the scene may occupy (leaves a little air). */
+export const FIT_FILL = 0.94;
+
+const FIT_SAMPLES = 24;
+
+function fitSamplePoints(): Vec3[] {
+  const rx = TABLE_RADIUS_X + SEAT_RING_OFFSET + FIT_OUTER_MARGIN;
+  const rz = TABLE_RADIUS_Z + SEAT_RING_OFFSET + FIT_OUTER_MARGIN;
+  const points: Vec3[] = [];
+  for (let i = 0; i < FIT_SAMPLES; i++) {
+    const angle = (i / FIT_SAMPLES) * Math.PI * 2;
+    const x = Math.cos(angle) * rx;
+    const z = Math.sin(angle) * rz;
+    points.push([x, 0, z], [x, FIT_TOP_HEIGHT, z]);
+  }
+  return points;
+}
+
+const FIT_POINTS = fitSamplePoints();
+
+/**
+ * Move the camera along its viewing direction so the table fills a viewport
+ * of the given aspect ratio (width / height). The direction and target are
+ * unchanged; only the distance is. Returns the pose untouched when the
+ * aspect is unknown or degenerate.
+ */
+export function fitPoseToAspect(
+  pose: CameraPresetPose,
+  aspect: number | null | undefined,
+  fovDegrees: number,
+): CameraPresetPose {
+  if (!aspect || !Number.isFinite(aspect) || aspect <= 0) return pose;
+  const [px, py, pz] = pose.position;
+  const [tx, ty, tz] = pose.target;
+  let fx = tx - px;
+  let fy = ty - py;
+  let fz = tz - pz;
+  const length = Math.hypot(fx, fy, fz);
+  if (length === 0) return pose;
+  fx /= length;
+  fy /= length;
+  fz /= length;
+
+  // right = forward × worldUp; straight-down views have no horizontal
+  // component, so fall back to +X (matches OrbitControls at azimuth 0).
+  let rx = -fz;
+  let rz = fx;
+  const rLength = Math.hypot(rx, rz);
+  if (rLength < 1e-3) {
+    rx = 1;
+    rz = 0;
+  } else {
+    rx /= rLength;
+    rz /= rLength;
+  }
+  // up = right × forward
+  const ux = -rz * fy;
+  const uy = rz * fx - rx * fz;
+  const uz = rx * fy;
+
+  const tanV = Math.tan((fovDegrees * Math.PI) / 360) * FIT_FILL;
+  const tanH = tanV * aspect;
+
+  let distance = 0;
+  for (const [x, y, z] of FIT_POINTS) {
+    const dx = x - tx;
+    const dy = y - ty;
+    const dz = z - tz;
+    const along = dx * fx + dy * fy + dz * fz;
+    const across = Math.abs(dx * rx + dz * rz);
+    const up = Math.abs(dx * ux + dy * uy + dz * uz);
+    distance = Math.max(distance, across / tanH - along, up / tanV - along);
+  }
+  return {
+    position: [tx - fx * distance, ty - fy * distance, tz - fz * distance],
+    target: pose.target,
+  };
+}
 
 // --- Seat-POV geometry (T-022) ---------------------------------------------
 //

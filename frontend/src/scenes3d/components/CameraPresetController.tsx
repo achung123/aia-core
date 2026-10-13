@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 
-import { CameraRig } from './CameraRig';
+import { CameraRig, getCameraRigConfig } from './CameraRig';
 import {
   computeSeatYawCenter,
   createCameraPresetState,
+  fitPoseToAspect,
   resolveCameraPresetPose,
   type CameraPreset,
   type CameraPresetState,
@@ -69,9 +70,20 @@ export function CameraPresetController({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on serialised preset
   }, [presetKey]);
 
-  useFrame((_state, dt) => {
+  // Canvas aspect ratio, read from the frame loop. The preset pose is slid
+  // along its viewing direction so the whole table fits whatever shape the
+  // canvas is — portrait phone, landscape tablet or wide desktop.
+  const [aspect, setAspect] = useState<number | null>(null);
+  const fov = getCameraRigConfig(viewer).fov;
+
+  useFrame((frameState, dt) => {
     const machine = machineRef.current!;
     machine.tick(dt * 1000);
+    const size = (frameState as { size?: { width?: number; height?: number } } | undefined)?.size;
+    if (size && size.width && size.height) {
+      const next = Math.round((size.width / size.height) * 100) / 100;
+      setAspect((prev) => (prev === next ? prev : next));
+    }
     const p = machine.position;
     const t = machine.target;
     setPose((prev) => {
@@ -97,11 +109,23 @@ export function CameraPresetController({
     }
   }, [onInteract]);
 
+  const fitted = fitPoseToAspect(pose, aspect, fov);
+  const fitDistance =
+    aspect == null
+      ? undefined
+      : Math.hypot(
+          fitted.position[0] - fitted.target[0],
+          fitted.position[1] - fitted.target[1],
+          fitted.position[2] - fitted.target[2],
+        );
+
   return (
     <CameraRig
       viewer={viewer}
-      position={pose.position}
-      target={pose.target}
+      position={fitted.position}
+      target={fitted.target}
+      fitDistance={fitDistance}
+      allowOverhead={preset === 'topDown'}
       yawCenter={
         typeof preset === 'string'
           ? null

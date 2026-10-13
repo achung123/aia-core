@@ -141,6 +141,15 @@ export interface CameraRigProps {
    * to yield the cinematic orbit on user input (T-021 AC 3).
    */
   onUserInteract?: () => void;
+  /**
+   * Distance at which the current preset frames the whole table for this
+   * viewport. When set, the zoom limits widen to include it — otherwise a
+   * portrait phone, which needs the camera further back, gets pulled in to
+   * the desktop limit and the table is cropped.
+   */
+  fitDistance?: number;
+  /** Let the camera look straight down (the top-down preset). */
+  allowOverhead?: boolean;
 }
 
 /**
@@ -159,6 +168,8 @@ export function CameraRig({
   yawCenter,
   makeDefault = true,
   onUserInteract,
+  fitDistance,
+  allowOverhead = false,
 }: CameraRigProps) {
   const base = useMemo(() => getCameraRigConfig(viewer), [viewer]);
   const effPosition = position ?? base.position;
@@ -183,11 +194,18 @@ export function CameraRig({
   const yawHalfWidth = Math.PI / 6;
   const minAzimuthAngle = seatPov ? yawCenter - yawHalfWidth : o.minAzimuthAngle;
   const maxAzimuthAngle = seatPov ? yawCenter + yawHalfWidth : o.maxAzimuthAngle;
-  const minPolarAngle = seatPov ? PLAYER_CAMERA_CONFIG.orbit.minPolarAngle : o.minPolarAngle;
+  const baseMinPolarAngle = seatPov ? PLAYER_CAMERA_CONFIG.orbit.minPolarAngle : o.minPolarAngle;
   const maxPolarAngle = seatPov ? PLAYER_CAMERA_CONFIG.orbit.maxPolarAngle : o.maxPolarAngle;
-  const minDistance = seatPov ? PLAYER_CAMERA_CONFIG.orbit.minDistance : o.minDistance;
-  const maxDistance = seatPov ? PLAYER_CAMERA_CONFIG.orbit.maxDistance : o.maxDistance;
+  const baseMinDistance = seatPov ? PLAYER_CAMERA_CONFIG.orbit.minDistance : o.minDistance;
+  const baseMaxDistance = seatPov ? PLAYER_CAMERA_CONFIG.orbit.maxDistance : o.maxDistance;
   const enablePan = seatPov ? false : o.enablePan;
+  // The preset must be reachable: OrbitControls clamps the camera every
+  // frame, so limits tighter than the preset pose silently override it.
+  const minPolarAngle = allowOverhead ? 0 : baseMinPolarAngle;
+  const minDistance =
+    fitDistance == null ? baseMinDistance : Math.min(baseMinDistance, fitDistance * 0.6);
+  const maxDistance =
+    fitDistance == null ? baseMaxDistance : Math.max(baseMaxDistance, fitDistance * 1.25);
 
   return (
     <>

@@ -9,7 +9,7 @@
 // Entry point: [DataView.tsx](../views/DataView.tsx) "▶ Playback" button
 // navigates to `#/playback?gameId=<id>`.
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useMemo, type CSSProperties } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 
@@ -113,87 +113,25 @@ function ReplayCanvas() {
   const qualityTier = useTableStore((s) => s.qualityTier);
   const { tableState, viewer } = useSessionReplayContext();
 
-  // DIAGNOSTIC: bypass React state so remounts don't reset what we
-  // see. We bump a module-level mount counter and a render counter
-  // and write live values into a DOM node via ref. If "mounts" climbs
-  // every second, the canvas tree is throwing and being remounted.
-  PROBE_MOUNTS.value += 1;
-  PROBE_RENDERS.value += 1;
-  const probeRef = useRef<HTMLDivElement | null>(null);
-  const wrapRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    let raf = 0;
-    let lastT = performance.now();
-    const tick = () => {
-      const now = performance.now();
-      const dt = now - lastT;
-      lastT = now;
-      const el = wrapRef.current?.querySelector('canvas');
-      const size = el ? `${el.clientWidth}x${el.clientHeight}` : 'no-canvas';
-      if (probeRef.current) {
-        probeRef.current.textContent =
-          `mounts:${PROBE_MOUNTS.value} renders:${PROBE_RENDERS.value} ` +
-          `ts:${tableState ? 'yes' : 'NO'} seats:${tableState?.seats.length ?? 0} ` +
-          `tier:${qualityTier} canvas:${size} dt:${Math.round(dt)}ms`;
-      }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [tableState, qualityTier]);
-
-  const probe = (
-    <div
-      data-testid="replay-canvas-probe"
-      ref={probeRef}
-      style={{
-        position: 'absolute',
-        top: 60,
-        left: 8,
-        right: 8,
-        zIndex: 1500,
-        padding: '6px 10px',
-        background: 'rgba(0, 80, 0, 0.9)',
-        color: '#fff',
-        font: '11px ui-monospace, monospace',
-        borderRadius: 6,
-        pointerEvents: 'none',
-        whiteSpace: 'nowrap',
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
-      }}
-    >
-      booting…
-    </div>
-  );
-  if (!tableState) {
-    return (
-      <div ref={wrapRef} style={{ position: 'absolute', inset: 0 }}>
-        {probe}
-        <PokerCanvas />
-      </div>
-    );
-  }
+  // The wrapper is always mounted so the canvas area keeps its size while
+  // the first hand loads; the scene itself appears once there is state.
   return (
-    <div ref={wrapRef} style={{ position: 'absolute', inset: 0 }}>
-      {probe}
+    <div style={{ position: 'absolute', inset: 0 }}>
       <PokerCanvas>
-        <PokerTable
-          state={tableState}
-          viewer={viewer}
-          theme={theme}
-          qualityTier={qualityTier}
-          equityOverlay={true}
-          cameraPreset="topDown"
-        />
+        {tableState ? (
+          <PokerTable
+            state={tableState}
+            viewer={viewer}
+            theme={theme}
+            qualityTier={qualityTier}
+            equityOverlay={true}
+            cameraPreset="topDown"
+          />
+        ) : null}
       </PokerCanvas>
     </div>
   );
 }
-
-// Module-level counters so React-driven remounts don't reset them.
-const PROBE_MOUNTS = { value: 0 };
-const PROBE_RENDERS = { value: 0 };
 
 function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;

@@ -14,6 +14,16 @@ export interface PokerCanvasProps {
   className?: string;
 }
 
+/**
+ * Root R3F `<Canvas>` wrapper for the 3D poker scene.
+ *
+ * Provides baseline camera, lighting, and renderer defaults. Scene content
+ * (table, seats, cards, chips, camera rig) is composed by `<PokerTable>` as
+ * children, inside a local Suspense + error boundary so a slow font or
+ * environment load can never blank the whole canvas.
+ *
+ * `shadows` is enabled only on the high quality tier.
+ */
 export function PokerCanvas({
   children,
   dpr = [1, 2],
@@ -27,13 +37,6 @@ export function PokerCanvas({
       dpr={dpr}
       camera={{ position: [0, 6, 8], fov: 45, near: 0.1, far: 100 }}
       gl={{ antialias: true, powerPreference: 'high-performance' }}
-      // DIAGNOSTIC: bright cyan clear color. If you see cyan on the
-      // phone, the canvas is painting and the scene contents are just
-      // being occluded or off-camera. If you see black, something is
-      // drawing a black fullscreen quad over the canvas.
-      onCreated={({ gl }) => {
-        gl.setClearColor(0x00ffff, 1);
-      }}
       {...(shadowsEnabled ? { shadows: true } : {})}
     >
       {/* eslint-disable react/no-unknown-property -- R3F JSX intrinsics */}
@@ -48,18 +51,6 @@ export function PokerCanvas({
       <Suspense fallback={null}>
         <SceneErrorBoundary>{children}</SceneErrorBoundary>
       </Suspense>
-      {/* DIAGNOSTIC: rendered AFTER children so it can't be depth-occluded
-          by the table. Disable depth test entirely so it always paints
-          on top. Massive radius + emissive basic material. */}
-      <mesh position={[0, 0, 0]} renderOrder={9999}>
-        <sphereGeometry args={[2, 24, 24]} />
-        <meshBasicMaterial
-          color={'#ff00ff'}
-          depthTest={false}
-          depthWrite={false}
-          toneMapped={false}
-        />
-      </mesh>
       {/* eslint-enable react/no-unknown-property */}
     </Canvas>
   );
