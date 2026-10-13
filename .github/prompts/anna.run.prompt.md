@@ -37,10 +37,13 @@ Drive an entire beads epic to completion by looping through implement → review
    - Run `bd list --json` to inventory all tasks in the epic and count total tasks
    - Run `bd ready --json` to see what's available now
 
-2. **Phase 1 — Pick Task:**
-   - Invoke **Logan** via sub-agent: `@logan ready` to get the next unblocked task for this epic
-   - If no ready tasks remain → output Epic Summary, exit loop
-   - Invoke **Logan** via sub-agent: `@logan claim <id>` to claim the task
+2. **Phase 1 — Pick Task (Pecking Order):**
+   - **Step 1 — Resume in-progress work first:** Run `bd list --json` and check for any task in `in_progress` status. If one exists, it takes absolute priority — skip claiming and determine where it left off:
+     - If implemented but not reviewed → resume from Phase 3 (Review)
+     - If not implemented → resume from Phase 2 (Implement)
+   - **Step 2 — Bugs before features:** If no in-progress task exists, invoke **Logan** via sub-agent: `@logan ready` to get all unblocked tasks. From the ready list, select the highest-priority **bug** (`type: bug`) first. Only when no open bugs remain, select the highest-priority non-bug task (feature, task, chore, etc.)
+   - If no ready tasks remain for the epic → output Epic Summary, exit loop
+   - Invoke **Logan** via sub-agent: `@logan claim <id>` to claim the selected task
    - Record the claimed task ID and title
 
 3. **Phase 2 — Implement:**

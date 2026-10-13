@@ -61,10 +61,17 @@ html, body {
 
 html, body, #app {
   margin: 0;
-  height: 100%;
-  max-width: 100vw;
+  min-height: 100%;
+  max-width: 100%;
   background: #16171d;
   color: #e2e8f0;
+}
+
+#app-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 100svh;
 }
 
 button, input, select, textarea {
@@ -179,7 +186,6 @@ code {
   width: 100%;
   max-width: 100%;
   margin: 0 auto;
-  text-align: center;
   min-height: 100svh;
   display: flex;
   flex-direction: column;
@@ -283,13 +289,22 @@ code {
   }
 }
 
-nav a.active {
+.top-nav a.active {
   font-weight: 600;
   border-bottom: 2px solid currentColor;
   opacity: 1;
 }
 
-nav {
+.top-nav a.nav-game-active {
+  color: #a5f3a3;
+  &.active {
+    color: #a5f3a3;
+    border-bottom-color: #a5f3a3;
+  }
+}
+
+
+.top-nav {
   display: flex;
   flex-wrap: wrap;
   gap: 0;
@@ -384,6 +399,7 @@ nav {
   max-width: 1200px;
   margin: 0 auto;
   text-align: left;
+  box-sizing: border-box;
 }
 
 .data-view h1.dv-title {
@@ -419,6 +435,11 @@ nav {
 }
 .dv-btn:active {
   transform: scale(0.97);
+}
+.dv-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 .dv-btn-primary {
   background: #7c3aed;
@@ -497,6 +518,7 @@ nav {
 .data-view .hand-details-row td {
   background: #16171d;
   padding: 1rem 1.25rem;
+  overflow-x: auto;
 }
 
 .data-view .action-bar {
@@ -689,4 +711,283 @@ nav {
   color: #64748b;
   margin: 0 0 0.75rem;
   line-height: 1.4;
+}
+
+/* ==========================================================================
+   Hand cards — mobile alternative to hand-table (hidden on desktop)
+   ========================================================================== */
+
+.data-view .hand-cards {
+  display: none;
+}
+
+.data-view .hand-card {
+  background: #1a1b28;
+  border: 1px solid #2e303a;
+  border-radius: 8px;
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.data-view .hand-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.4rem;
+}
+
+.data-view .hand-card-num {
+  color: #c084fc;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.data-view .hand-card-actions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.data-view .hand-card-community {
+  color: #94a3b8;
+  font-size: 0.78rem;
+  margin-bottom: 0.4rem;
+  line-height: 1.5;
+}
+
+.data-view .hand-card-label {
+  color: #64748b;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.data-view .hand-card-player {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.2rem 0;
+  font-size: 0.78rem;
+  color: #cbd5e1;
+  border-top: 1px solid rgba(46,48,58,0.4);
+}
+
+.data-view .hand-card-player:first-of-type {
+  border-top: none;
+}
+
+.data-view .hand-card-player-name {
+  color: #c084fc;
+  font-weight: 500;
+  min-width: 60px;
+}
+
+.data-view .hand-card-player-cards {
+  font-family: monospace;
+  color: #e2e8f0;
+}
+
+.data-view .hand-card-player-result {
+  color: #64748b;
+  font-size: 0.72rem;
+  text-transform: capitalize;
+}
+
+/* ==========================================================================
+   Data View — Mobile Responsive
+   ========================================================================== */
+
+@media (max-width: 768px) {
+  .data-view {
+    padding: 1rem 0.75rem;
+  }
+
+  .data-view h1.dv-title {
+    font-size: 1.2rem;
+  }
+
+  /* Session table: tighter cells */
+  .data-view .session-table thead th {
+    padding: 0.5rem 0.5rem;
+    font-size: 0.68rem;
+  }
+  .data-view .session-table tbody td {
+    padding: 0.5rem 0.5rem;
+    font-size: 0.8rem;
+  }
+
+  /* Hand details: contained within viewport */
+  .data-view .hand-details-row td {
+    padding: 0.75rem 0.5rem;
+  }
+
+  /* Hide the wide table on mobile, show cards instead */
+  .data-view .hand-table {
+    display: none;
+  }
+  .data-view .hand-cards {
+    display: block;
+  }
+
+  /* Action bar: compact buttons that wrap */
+  .data-view .action-bar {
+    gap: 0.35rem;
+  }
+  .data-view .action-bar .dv-btn-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.7rem;
+  }
+
+  /* Modal: fill the screen on mobile */
+  .modal-overlay .modal {
+    min-width: unset;
+    width: calc(100vw - 2rem);
+    max-width: calc(100vw - 2rem);
+    max-height: calc(100vh - 2rem);
+    padding: 1.25rem;
+    border-radius: 10px;
+  }
+
+  .modal-overlay .modal fieldset {
+    padding: 0.5rem 0.5rem;
+  }
+
+  .modal-overlay .modal .player-row {
+    gap: 0.3rem;
+  }
+  .modal-overlay .modal .player-row strong {
+    min-width: 60px;
+    font-size: 0.78rem;
+  }
+  .modal-overlay .modal .player-row input[type="text"] {
+    width: 50px !important;
+  }
+}
+
+.nav-spacer {
+  flex: 1;
+}
+
+.nav-profile {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.nav-profile-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.35rem 0;
+  padding: 0.3rem 0.75rem 0.3rem 0.35rem;
+  background: #252540;
+  color: #e2e8f0;
+  border: 1px solid #3730a3;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-family: system-ui, sans-serif;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.nav-profile-btn:hover,
+.nav-profile-btn:focus-visible {
+  border-color: #c084fc;
+  background: #2d2d50;
+}
+
+.nav-profile-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.nav-profile-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
+.nav-profile-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 180px;
+  background: #1e1b4b;
+  border: 1px solid #3730a3;
+  border-radius: 10px;
+  padding: 0.35rem 0;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  z-index: 200;
+  animation: profileMenuIn 0.12s ease-out;
+}
+
+@keyframes profileMenuIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.nav-profile-menu-heading {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.nav-profile-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  background: none;
+  border: none;
+  color: #c7d2fe;
+  font-size: 0.85rem;
+  font-family: system-ui, sans-serif;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+}
+
+.nav-profile-menu-item:hover {
+  background: rgba(99, 102, 241, 0.15);
+}
+
+.nav-profile-menu-item.active {
+  color: #c084fc;
+  font-weight: 600;
+}
+
+.nav-profile-divider {
+  height: 1px;
+  background: #3730a3;
+  margin: 0.25rem 0.5rem;
+}
+
+@media (max-width: 480px) {
+  .nav-profile-btn {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem 0.25rem 0.25rem;
+  }
+  .nav-profile-avatar {
+    width: 1.4rem;
+    height: 1.4rem;
+    font-size: 0.65rem;
+  }
+  .nav-profile-label {
+    max-width: 80px;
+  }
 }

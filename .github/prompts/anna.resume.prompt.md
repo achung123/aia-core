@@ -38,11 +38,11 @@ Resume the orchestration loop after a user-initiated pause (5-cycle checkpoint) 
    - Estimate `cycle_count` from the number of closed tasks
    - Set `window_crit_high = 0` and `window_history = []` (fresh start after explicit user decision to resume)
 
-2. **Handle in-progress tasks:**
-   - If a task is in_progress, check if it has been implemented (look for recent commits or test results)
+2. **Handle in-progress tasks (highest priority):**
+   - If a task is in_progress, it takes absolute priority — check if it has been implemented (look for recent commits or test results)
    - If implemented but not reviewed → resume from Phase 3 (Review)
    - If not implemented → resume from Phase 2 (Implement)
-   - If no task is in_progress → resume from Phase 1 (Pick Task)
+   - If no task is in_progress → resume from Phase 1 (Pick Task), following the pecking order: open bugs by priority first, then all other open tasks by priority
 
 3. **Present reconstruction summary:**
    - Show the reconstructed state to the user

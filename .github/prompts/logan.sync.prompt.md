@@ -45,8 +45,13 @@ Beads uses hash-based IDs (e.g., `bd-a1b2`) and supports hierarchical sub-tasks,
    ```bash
    bd dep add <child-beads-id> <parent-beads-id>
    ```
-9. **Verify the graph.** Run `bd ready --json` to confirm that only tasks with no dependencies appear as ready.
-10. **Output the sync summary** as a table mapping Jean IDs → beads IDs → titles → priorities → dependencies.
+9. **Explicitly block dependent tasks.** After all dependencies are linked, for every task that has at least one open (unclosed) dependency, explicitly set its status to `blocked`:
+   ```bash
+   bd update <child-beads-id> --status blocked
+   ```
+   This ensures the kanban board shows blocked tasks in the correct column — do NOT rely on dependency relationships alone.
+10. **Verify the graph.** Run `bd ready --json` to confirm that only tasks with no dependencies appear as ready. Confirm that all other tasks with open deps show status `blocked`.
+11. **Output the sync summary** as a table mapping Jean IDs → beads IDs → titles → priorities → dependencies.
 
 ---
 
@@ -104,6 +109,7 @@ Beads uses hash-based IDs (e.g., `bd-a1b2`) and supports hierarchical sub-tasks,
 - **Do NOT create duplicate issues.** Always check `bd list --json` for existing tasks from the same project before syncing.
 - **Do NOT use `bd edit`** — it opens an interactive editor. Use `bd update` with flags.
 - **Do NOT guess priorities.** Derive them from the task category as specified above.
+- **Do NOT leave dependent tasks in `open` status.** Every task with at least one unresolved dependency MUST be explicitly set to `blocked` via `bd update <id> --status blocked`. Kanban boards rely on explicit status, not implicit dependency inference.
 - **Do NOT skip dependency linking.** The dependency graph is critical for `bd ready` to work correctly.
 - **Do NOT create all tasks in a flat list.** Respect the dependency order — create parents before children.
 - **Do NOT hardcode beads IDs.** Always capture them from `bd create --json` output dynamically.
