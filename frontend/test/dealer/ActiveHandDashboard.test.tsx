@@ -764,3 +764,53 @@ describe('ActiveHandDashboard — street buttons call onStreetCapture', () => {
     expect(panel.textContent).not.toContain('All players all-in');
   });
 });
+
+describe('ActiveHandDashboard — 3D view follows the live street', () => {
+  const withFlop: CommunityCards = {
+    ...emptyCommunity,
+    flop1: 'Ah', flop2: 'Kd', flop3: '9c', flopRecorded: true,
+  };
+  const withTurn: CommunityCards = { ...withFlop, turn: '4s', turnRecorded: true };
+
+  const street = () => screen.getByTestId('table-view-3d').getAttribute('data-street');
+
+  async function openThreeD(props: ActiveHandDashboardProps) {
+    const view = render(<ActiveHandDashboard {...props} />);
+    fireEvent.click(screen.getByTestId('view-toggle-btn'));
+    await screen.findByTestId('table-view-3d');
+    return view;
+  }
+
+  it('opens on the street the hand has reached', async () => {
+    await openThreeD({ ...defaultProps, handNumber: 1, community: withFlop });
+    await waitFor(() => expect(street()).toBe('Flop'));
+  });
+
+  it('moves along as cards are dealt', async () => {
+    const props = { ...defaultProps, handNumber: 1 };
+    const view = await openThreeD(props);
+    expect(street()).toBe('Pre-Flop');
+
+    view.rerender(<ActiveHandDashboard {...props} community={withFlop} />);
+    await waitFor(() => expect(street()).toBe('Flop'));
+
+    view.rerender(<ActiveHandDashboard {...props} community={withTurn} />);
+    await waitFor(() => expect(street()).toBe('Turn'));
+  });
+
+  it('stays where the dealer scrubbed to, until they return to the latest street', async () => {
+    const props = { ...defaultProps, handNumber: 1, community: withFlop };
+    const view = await openThreeD(props);
+    await waitFor(() => expect(street()).toBe('Flop'));
+
+    // Look back at the preflop; the turn is then dealt
+    fireEvent.click(screen.getByText('Pre-Flop'));
+    expect(street()).toBe('Pre-Flop');
+    view.rerender(<ActiveHandDashboard {...props} community={withTurn} />);
+    await waitFor(() => expect(street()).toBe('Pre-Flop'));
+
+    // Back on the newest street: following resumes
+    fireEvent.click(screen.getByText('Turn'));
+    expect(street()).toBe('Turn');
+  });
+});

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { CommunityCards, Player } from '../stores/dealerStore.ts';
 import { fetchHands, fetchEquity, type EquityStreet } from '../api/client.ts';
 import { TableView3D } from './TableView3D.tsx';
@@ -126,10 +126,38 @@ export function ActiveHandDashboard({
   const [streetScrub3D, setStreetScrub3D] = useState<Street>('Pre-Flop');
   const [equityEntries, setEquityEntries] = useState<PlayerEquityEntry[]>([]);
 
+  // The street the hand has actually reached, from the cards on the board.
+  // The 3D view follows it as cards are dealt, so the dealer sees the flop
+  // appear without touching the scrubber. Scrubbing back to look at an
+  // earlier street stops the following until they return to the latest.
+  const liveStreet: Street = community.river
+    ? 'River'
+    : community.turn
+      ? 'Turn'
+      : community.flop1
+        ? 'Flop'
+        : 'Pre-Flop';
+  const followingLiveRef = useRef(true);
+
   useEffect(() => {
     if (viewMode !== '3d') return;
-    setStreetScrub3D('Pre-Flop');
+    followingLiveRef.current = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setStreetScrub3D(liveStreet);
+    // Reset only when the hand or the view changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handNumber, viewMode]);
+
+  useEffect(() => {
+    if (viewMode !== '3d' || !followingLiveRef.current) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setStreetScrub3D(liveStreet);
+  }, [liveStreet, viewMode]);
+
+  const handleStreetScrub = (street: string) => {
+    followingLiveRef.current = street === liveStreet;
+    setStreetScrub3D(street as Street);
+  };
 
   useEffect(() => {
     const mql = window.matchMedia('(min-width: 600px)');
@@ -185,7 +213,7 @@ export function ActiveHandDashboard({
                 turn: latest3DHand.turn,
                 river: latest3DHand.river,
               }}
-              onStreetChange={setStreetScrub3D}
+              onStreetChange={handleStreetScrub}
             />
           )}
           {dealerEquityEntries.length > 0 && (
@@ -388,7 +416,7 @@ export function ActiveHandDashboard({
         <button
           data-testid="view-toggle-btn"
           onClick={() => {
-            setStreetScrub3D('Pre-Flop');
+            setStreetScrub3D(liveStreet);
             setViewMode('3d');
             fetchHands(gameId).then(setHands3D).catch(() => {});
           }}
