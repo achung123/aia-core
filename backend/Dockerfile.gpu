@@ -30,10 +30,15 @@ RUN mkdir -p src/app src/pydantic_models && \
     touch src/app/__init__.py src/pydantic_models/__init__.py && \
     uv sync --frozen --group test
 
-# Install ultralytics with CUDA-enabled torch
+# Swap in CUDA-enabled torch. `uv sync` above installs the CPU-only wheels the
+# lock file pins, which already satisfy a plain `torch` requirement — so
+# without --reinstall-package this step is a no-op and the "GPU" image never
+# touches the GPU. The check at the end fails the build if that regresses.
 RUN uv pip install --python .venv/bin/python \
+    --reinstall-package torch --reinstall-package torchvision \
     torch torchvision --index-url https://download.pytorch.org/whl/cu121 && \
-    uv pip install --python .venv/bin/python ultralytics
+    uv pip install --python .venv/bin/python ultralytics && \
+    .venv/bin/python -c "import torch; assert torch.version.cuda, f'CPU-only torch installed: {torch.__version__}'; print('torch', torch.__version__, 'cuda', torch.version.cuda)"
 
 COPY scripts/docker/docker-entrypoint.sh /app/docker-entrypoint.sh
 COPY backend/alembic.ini /app/alembic.ini
