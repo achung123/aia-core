@@ -15,6 +15,7 @@ export interface PlayerStatusEntry {
   last_action: string | null;
   current_chips: number | null;
   pot_contribution: number;
+  is_all_in?: boolean;
 }
 
 export interface HandStatusResponse {
@@ -30,6 +31,7 @@ export interface HandStatusResponse {
   side_pots: unknown[];
   street_complete: boolean;
   phase: string;
+  action_index?: number;
 }
 
 // --- Blinds ---
@@ -81,6 +83,8 @@ export interface PlayerActionCreate {
   action: ActionEnum;
   amount?: number | null;
   is_all_in?: boolean;
+  /** The action_index last seen; the server answers 409 if the hand has moved on. */
+  expected_action_index?: number | null;
 }
 
 export interface PlayerActionResponse {
@@ -98,4 +102,24 @@ export interface HandActionResponse {
   action: string;
   amount: number | null;
   created_at: string;
+}
+
+// --- Dealer overrides ---
+
+export interface HandStateResponse {
+  phase: string;
+  current_seat: number | null;
+  current_player_name: string | null;
+  action_index: number;
+}
+
+export interface ChipsUpdate {
+  current_chips: number;
+  reason?: string | null;
+}
+
+export interface ChipsResponse {
+  player_name: string;
+  current_chips: number;
+  delta: number;
 }

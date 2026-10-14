@@ -61,6 +61,7 @@ export function useHandPolling({
     intervalMs: 10000,
     fetchFn,
     enabled: gameId !== null,
+    gameId,
   });
 
   const dismissNewHand = useCallback(() => {

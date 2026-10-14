@@ -26,12 +26,17 @@ import type {
   TurnUpdate,
   RiverUpdate,
   PlayerResultUpdate,
+  SettleRequest,
+  SettlementResponse,
   CompleteGameRequest,
   BlindsResponse,
   BlindsUpdate,
   AddPlayerToGameResponse,
   PlayerStatusResponse,
   PlayerActionCreate,
+  HandStateResponse,
+  ChipsUpdate,
+  ChipsResponse,
   PlayerActionResponse,
   HandActionResponse,
   PlayerInfo,
@@ -50,8 +55,29 @@ interface RequestOptions extends RequestInit {
   signal?: AbortSignal;
 }
 
+/** Extra attempts for a read that fails before reaching the server. */
+const READ_RETRIES = 2;
+const RETRY_DELAY_MS = 300;
+
+function isAbort(err: unknown): boolean {
+  return (err instanceof DOMException || err instanceof Error) && err.name === 'AbortError';
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const response = await fetch(`${BASE_URL}${path}`, { signal: options.signal, ...options });
+  // Reads are safe to repeat, so a blip on the Wi-Fi does not surface as an
+  // error. Writes are never retried: the first attempt may have landed.
+  const method = (options.method ?? 'GET').toUpperCase();
+  const attempts = method === 'GET' ? READ_RETRIES + 1 : 1;
+  let response: Response | undefined;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      response = await fetch(`${BASE_URL}${path}`, { signal: options.signal, ...options });
+      break;
+    } catch (err) {
+      if (isAbort(err) || options.signal?.aborted || attempt >= attempts) throw err;
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS * attempt));
+    }
+  }
   if (!response.ok) {
     const text = await response.text();
     throw new Error(`HTTP ${response.status}: ${text}`);
@@ -175,6 +201,15 @@ export function patchPlayerResult(gameId: number, handNumber: number, playerName
   });
 }
 
+export function settleHand(gameId: number, handNumber: number, data: SettleRequest = {}, dryRun = false): Promise<SettlementResponse> {
+  const qs = dryRun ? '?dry_run=true' : '';
+  return request<SettlementResponse>(`/games/${gameId}/hands/${handNumber}/settle${qs}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+}
+
 export function completeGame(gameId: number, winners?: string[]): Promise<GameSessionResponse> {
   const body: CompleteGameRequest = { winners: winners || [] };
   return request<GameSessionResponse>(`/games/${gameId}/complete`, {
@@ -244,8 +279,15 @@ export function fetchCsvSchema(): Promise<CsvSchemaResponse> {
   return request<CsvSchemaResponse>('/upload/csv/schema');
 }
 
-export function fetchEquity(gameId: number, handNumber: number): Promise<EquityResponse> {
-  return request<EquityResponse>(`/games/${gameId}/hands/${handNumber}/equity`);
+export type EquityStreet = 'preflop' | 'flop' | 'turn' | 'river' | 'showdown';
+
+export function fetchEquity(gameId: number, handNumber: number, street?: EquityStreet): Promise<EquityResponse> {
+  const params = new URLSearchParams();
+  if (street) {
+    params.set('street', street === 'showdown' ? 'river' : street);
+  }
+  const query = params.toString();
+  return request<EquityResponse>(`/games/${gameId}/hands/${handNumber}/equity${query ? `?${query}` : ''}`);
 }
 
 export function fetchPlayerEquity(gameId: number, handNumber: number, playerName: string): Promise<EquityResponse> {
@@ -348,8 +390,8 @@ export function addPlayerToGame(gameId: number, playerName: string, buyIn?: numb
   });
 }
 
-export function startHand(gameId: number): Promise<HandResponse> {
-  return request<HandResponse>(`/games/${gameId}/hands/start`, {
+export function startHand(gameId: number, force = false): Promise<HandResponse> {
+  return request<HandResponse>(`/games/${gameId}/hands/start${force ? '?force=true' : ''}`, {
     method: 'POST',
   });
 }
@@ -357,6 +399,26 @@ export function startHand(gameId: number): Promise<HandResponse> {
 export function recordPlayerAction(gameId: number, handNumber: number, playerName: string, data: PlayerActionCreate): Promise<PlayerActionResponse> {
   return request<PlayerActionResponse>(`/games/${gameId}/hands/${handNumber}/players/${encodeURIComponent(playerName)}/actions`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+}
+
+export function undoLastAction(gameId: number, handNumber: number): Promise<HandStateResponse> {
+  return request<HandStateResponse>(`/games/${gameId}/hands/${handNumber}/actions/last`, { method: 'DELETE' });
+}
+
+export function setCurrentPlayer(gameId: number, handNumber: number, playerName: string): Promise<HandStateResponse> {
+  return request<HandStateResponse>(`/games/${gameId}/hands/${handNumber}/state`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ current_player_name: playerName }),
+  });
+}
+
+export function setPlayerChips(gameId: number, playerName: string, data: ChipsUpdate): Promise<ChipsResponse> {
+  return request<ChipsResponse>(`/games/${gameId}/players/${encodeURIComponent(playerName)}/chips`, {
+    method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });

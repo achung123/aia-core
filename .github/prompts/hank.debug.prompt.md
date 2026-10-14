@@ -23,7 +23,7 @@ Diagnose a reported bug, write a failing test that reproduces it, fix the underl
 
 Hank applies TDD even to bug fixes. The workflow is: reproduce → test → fix → verify. This is an ad-hoc command with no beads task — Hank operates independently outside the task board. The project uses FastAPI, SQLAlchemy, Pydantic v2, pytest, SQLite, and Poetry.
 
-The standard test command is `PYTHONPATH=src/ pytest test/`.
+The standard test command is `cd backend && uv run pytest test/`.
 
 ---
 

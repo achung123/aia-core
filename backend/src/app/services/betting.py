@@ -36,6 +36,11 @@ def get_legal_actions(
             contributions[player_id] = contributions.get(player_id, 0) + action_amount
 
     max_contribution = max(contributions.values()) if contributions else 0
+    if phase == 'preflop' and any(
+        action_record['action'] == 'blind' for action_record in actions_this_street
+    ):
+        # A short stack may post less than the big blind; the price is still the blind
+        max_contribution = max(max_contribution, big_blind)
     my_contribution = contributions.get(current_player_id, 0)
     amount_to_call = round(max_contribution - my_contribution, 2)
 
@@ -87,7 +92,9 @@ def _last_raise_increment(actions_this_street: list[dict], big_blind: float) -> 
             raiser_before = previous_contributions.get(action_record['player_id'], 0.0)
             call_needed = max_before - raiser_before
             increment = action_amount - call_needed
-            if increment > 0:
+            # Only a full raise re-opens the betting and sets a new minimum;
+            # a short all-in raise leaves it where it was.
+            if round(increment, 2) >= round(last_raise_increment, 2):
                 last_raise_increment = increment
     return round(last_raise_increment, 2)
 
@@ -239,7 +246,24 @@ def is_street_complete(
     # One acting player on a post-flop street has no opponent — auto-complete.
     # On preflop they may still need to respond to blinds or an all-in raise.
     if len(acting_players) == 1 and phase != 'preflop':
-        return True
+        # ...unless they still owe a call to someone who went all-in.
+        street_contributions: dict[int, float] = {}
+        for action_record in actions_this_street:
+            if action_record['action'] in ('blind', 'call', 'bet', 'raise'):
+                street_contributions[action_record['player_id']] = (
+                    street_contributions.get(action_record['player_id'], 0)
+                    + (action_record.get('amount') or 0)
+                )
+        lone_player_id = next(iter(acting_players))
+        highest = max(
+            (
+                street_contributions.get(player_id, 0)
+                for player_id in active_non_folded_ids
+            ),
+            default=0,
+        )
+        if round(highest - street_contributions.get(lone_player_id, 0), 2) <= 0:
+            return True
 
     if not actions_this_street:
         return False

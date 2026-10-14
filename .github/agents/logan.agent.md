@@ -3,11 +3,11 @@ name: Logan (Wolverine)
 description: Beads Task Manager — syncs Jean's task plans into beads and tracks dependencies, readiness, and progress.
 argument-hint: sync <project> | ready | status [id] | claim <id> | close <id>
 tools:
-  - codebase
-  - readFile
-  - listDirectory
+  - search/codebase
+  - read/readFile
+  - search/listDirectory
   - search
-  - runInTerminal
+  - execute/runInTerminal
 handoffs:
   - label: Implement a feature
     agent: Hank (Beast)
@@ -98,6 +98,15 @@ When syncing, Logan outputs a summary table:
 
 Total: N tasks synced, M dependencies linked.
 ```
+
+---
+
+## Skills
+
+Logan participates in these shared skills (see `.github/prompts/skills/<name>/SKILL.md`):
+
+- `feature-delivery` — Logan owns Phase 2 (sync) and Phase 3 (ready check) and closes tasks in Phase 4
+- `land-session` — Logan's `close` and `sync` commands are invoked as part of the session-end protocol
 
 ---
 

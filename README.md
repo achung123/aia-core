@@ -14,8 +14,9 @@ The project is split into two pieces that run side-by-side during development:
 - **Game session management** — create sessions, add players, record hands with community and hole cards, results, and P&L.
 - **Dealer interface** — mobile-first dealer view to manage the current hand: deal, capture cards via camera, record results.
 - **Player interface** — players join from their phones, capture their own hole cards via camera, and view live hand status.
-- **Card detection** — YOLO-based playing card recognition from camera photos, with detection review and correction.
-- **3D playback visualiser** — scrub through hands and streets on a rendered poker table with animated card dealing, chip stacks, fold/win indicators, and per-player equity badges that update live as the board is revealed.
+- **Live refresh** — dealer, player, and playback screens subscribe to `GET /games/{id}/events` (server-sent events) so board/cards/actions appear without page reloads.
+- **Card detection** — YOLO-based playing card recognition from camera photos, with detection review and correction. Uploaded photos live in the Docker `card-uploads` named volume.
+- **3D playback visualiser** — scrub through hands and streets on a rendered poker table with animated card dealing, chip stacks, fold/win indicators, bundled Lato nameplate text, and per-player equity badges that update live as the board is revealed.
 - **Equity engine** — client-side Texas Hold'em equity calculator (exhaustive on turn/river, Monte Carlo pre-flop) shows every player's win probability at each street.
 - **CSV import/export** — bulk-import entire games from a CSV file (validate first, then commit), or export any session to CSV.
 - **Stats & leaderboard** — per-player and per-game statistics, searchable hand history.
@@ -123,10 +124,18 @@ The frontend is now live at **http://localhost:5173**. It proxies API calls to t
 
 The `backend` and `backend-gpu` services are mutually exclusive via Docker Compose profiles — only one runs at a time.
 
+The shared compose path publishes only the nginx proxy on ports 80 and 443. Backend and frontend traffic stay on the internal compose network unless you opt into the dev-only override. The proxy has a dedicated SSE route for `GET /games/{id}/events` with buffering disabled (`X-Accel-Buffering: no` from the backend) and one-hour timeouts for live refresh.
+
 ### CPU (default)
 
 ```bash
 docker compose --profile cpu down && docker compose --profile cpu up --build
+```
+
+If you need direct backend access on `localhost:8000` with uvicorn hot reload or direct Vite HMR on `localhost:5173`, use the dev-only override. It publishes both ports on host loopback only, not on all interfaces:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile cpu up --build
 ```
 
 ### GPU-accelerated inference
@@ -143,28 +152,43 @@ This builds a CUDA-enabled backend image (~6GB) and passes the GPU through to th
 
 | Service | URL | Description |
 |---------|-----|-------------|
-| `backend` | http://localhost:8000 | FastAPI backend (CPU, hot-reload) |
-| `backend-gpu` | http://localhost:8000 | FastAPI backend (GPU, hot-reload) |
-| `frontend` | http://localhost:5173 | Vite dev server (hot-reload) |
+| `proxy` | https://localhost | nginx ingress for the frontend and backend API |
+| `backend` | internal only by default | FastAPI backend (CPU); direct `127.0.0.1:8000` only via `docker-compose.dev.yml` |
+| `backend-gpu` | internal only by default | FastAPI backend (GPU); direct `127.0.0.1:8000` only via `docker-compose.dev.yml` |
+| `frontend` | internal only by default | Vite dev server; direct `127.0.0.1:5173` only via `docker-compose.dev.yml` |
 
 ### Database Persistence
 
-The SQLite database is bind-mounted from the host at `./backend/poker.db`. Data survives `docker compose down`.
+The shared compose path stores SQLite in the named volume `poker-data`, mounted at `/app/data` inside the backend container. Data survives `docker compose down`; use `docker compose down -v` only when you intentionally want to discard the persisted database.
 
-When `SEED_DATA=0` (the default in docker-compose.yml), the database is preserved between restarts. To wipe and re-seed on every container start, set `SEED_DATA=1`:
+Backend and frontend containers now run as a dedicated non-root `app` user. By default the image user is built as `1000:1000`; on Linux or WSL hosts with a different primary UID/GID, you can export `AIA_UID` and `AIA_GID` before `docker compose up --build` to change it. Card photos are stored in the named volume `card-uploads`, so uploads no longer depend on the host user owning a folder. The runtime image pre-creates `/app/data` as `app:app`, so the named SQLite volume stays writable without a host-side DB bind mount.
+
+Source, config, script, and model bind mounts are read-only inside the containers. Only the `poker-data` and `card-uploads` volumes stay writable at runtime. The shared frontend sets `AIA_DISABLE_HMR=1` by default to avoid Vite websocket reconnects reloading active phones; `docker-compose.dev.yml` turns HMR back on for localhost development.
+
+When `SEED_DATA=0` (the default in docker-compose.yml), the database is preserved between restarts. To boot with a throwaway demo database on every container start without mutating the persisted `poker-data` volume, set `SEED_DATA=1`:
 
 ```yaml
 environment:
   - SEED_DATA=1
 ```
 
+That mode switches the backend to `/tmp/demo.db` on the container's writable tmpfs, deletes any previous scratch DB on startup, and then seeds the demo data there.
+
 ### Local Network Play
 
-Connect devices directly to the host:
+Connect devices through the proxy-only HTTPS entrypoint:
 
 ```
-http://<host-ip>:5173
+https://aia.local
 ```
+
+If a client cannot resolve `aia.local`, use `https://<host-ip>` only when your
+local TLS certificate includes the current LAN IP as a SAN. `http://aia.local`
+still reaches the stack, but nginx immediately redirects it to HTTPS.
+
+For the supported WSL2 sharing flow, run `./scripts/docker/share.sh` and follow
+`docs/local-network-setup.md` for certificate, device-trust setup, SSE proxy
+behaviour, and the shared-stack HMR setting.
 
 The backend CORS config includes a regex that auto-allows private IP ranges (192.168.x.x, 10.x.x.x, 172.16-31.x.x) and `*.trycloudflare.com`, so no `ALLOWED_ORIGINS` change is needed for LAN play.
 

@@ -15,6 +15,8 @@ export interface PlayerActionButtonsProps {
   minimumRaise?: number | null;
   pot?: number;
   currentStack?: number | null;
+  /** When set, the server rejects the action if the hand has moved on since. */
+  expectedActionIndex?: number | null;
   onActionConfirmed?: () => void;
 }
 
@@ -35,6 +37,7 @@ export function PlayerActionButtons({
   gameId, handNumber, playerName, communityCardCount,
   legalActions = [], amountToCall = 0, minimumBet = null, minimumRaise = null, pot = 0,
   currentStack = null,
+  expectedActionIndex = null,
   onActionConfirmed,
 }: PlayerActionButtonsProps) {
   const [actedOnCount, setActedOnCount] = useState(-1);
@@ -75,14 +78,23 @@ export function PlayerActionButtons({
         action,
         amount: amount ?? null,
         ...(isAllIn ? { is_all_in: true } : {}),
+        ...(expectedActionIndex != null ? { expected_action_index: expectedActionIndex } : {}),
       });
       setActedOnCount(communityCardCount);
       setChipAction(null);
       onActionConfirmed?.();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Action failed';
-      setError(message);
       setChipAction(null);
+      if (message.startsWith('HTTP 409')) {
+        // The hand moved on while this screen was showing old information
+        // (someone else acted, or the dealer corrected something). Nothing
+        // was recorded; show the current state instead of acting on a stale one.
+        setError('The hand just changed — updating. Check the table and try again.');
+        onActionConfirmed?.();
+        return;
+      }
+      setError(message);
     }
   }
 

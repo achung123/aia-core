@@ -5,6 +5,7 @@ import { act } from 'react';
 
 vi.mock('../../src/api/client.ts', () => ({
   patchPlayerResult: vi.fn(() => Promise.resolve({})),
+  settleHand: vi.fn(() => Promise.resolve({ pot: 0, pots: [], players: [] })),
   updateCommunityCards: vi.fn(() => Promise.resolve({})),
   updateHolecards: vi.fn(() => Promise.resolve({})),
   fetchEquity: vi.fn(() => Promise.resolve({ equities: [] })),
@@ -12,7 +13,7 @@ vi.mock('../../src/api/client.ts', () => ({
   fetchHandActions: vi.fn(() => Promise.resolve([])),
 }));
 
-import { patchPlayerResult, updateCommunityCards, updateHolecards, fetchEquity } from '../../src/api/client.ts';
+import { patchPlayerResult, settleHand, updateCommunityCards, updateHolecards, fetchEquity, fetchHand } from '../../src/api/client.ts';
 import { ReviewScreen } from '../../src/../src/dealer/ReviewScreen.tsx';
 import type { ReviewScreenProps } from '../../src/../src/dealer/ReviewScreen.tsx';
 import type { Player, CommunityCards } from '../../src/stores/dealerStore.ts';
@@ -676,5 +677,159 @@ describe('ReviewScreen — winning hand descriptions', () => {
     });
     expect(container.querySelector('[data-testid="review-player-Alice-hand-desc"]')).toBeNull();
     expect(container.querySelector('[data-testid="review-player-Bob-hand-desc"]')).toBeNull();
+  });
+});
+
+/** Calls that actually pay out, as opposed to the dry-run preview. */
+function realPayouts() {
+  return (settleHand as ReturnType<typeof vi.fn>).mock.calls.filter((call) => !call[3]);
+}
+
+describe('ReviewScreen — server settlement', () => {
+  const withPot = () =>
+    (fetchHand as ReturnType<typeof vi.fn>).mockResolvedValue({ pot: 12.5, player_hands: [] });
+
+  it('asks the server to pay the winners instead of sending computed P&L', async () => {
+    withPot();
+    const onSaved = vi.fn();
+    render(<ReviewScreen {...makeProps({ onSaved })} />);
+    await waitFor(() => expect(fetchHand).toHaveBeenCalled());
+
+    await clickFinishAndConfirm();
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    // One real payout (the preview is a separate dry run)
+    expect(realPayouts()).toHaveLength(1);
+    expect(settleHand).toHaveBeenCalledWith(42, 3, { ranking: [['Alice']] });
+    expect(patchPlayerResult).not.toHaveBeenCalled();
+  });
+
+  it('settles after result changes are saved, using the edited winners', async () => {
+    withPot();
+    const onSaved = vi.fn();
+    const { container } = render(<ReviewScreen {...makeProps({ onSaved })} />);
+    await waitFor(() => expect(fetchHand).toHaveBeenCalled());
+
+    fireEvent.click(container.querySelector('[data-testid="review-player-Alice-result-lost"]')!);
+    fireEvent.click(container.querySelector('[data-testid="review-player-Bob-result-won"]')!);
+    await clickFinishAndConfirm();
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(patchPlayerResult).toHaveBeenCalledWith(42, 3, 'Bob', {
+      result: 'won',
+      profit_loss: null,
+      outcome_street: 'river',
+    });
+    expect(settleHand).toHaveBeenCalledWith(42, 3, { ranking: [['Bob']] });
+  });
+
+  it('shows the server error and stays on the screen when the payout fails', async () => {
+    withPot();
+    (settleHand as ReturnType<typeof vi.fn>).mockImplementation(
+      (_game: number, _hand: number, _body: unknown, dryRun?: boolean) =>
+        dryRun
+          ? Promise.resolve({ pot: 0, pots: [], players: [] })
+          : Promise.reject(
+              new Error('Cannot decide a pot between Bob, Charlie — rank them or record their cards'),
+            ),
+    );
+    const onSaved = vi.fn();
+    render(<ReviewScreen {...makeProps({ onSaved })} />);
+    await waitFor(() => expect(fetchHand).toHaveBeenCalled());
+
+    await clickFinishAndConfirm();
+
+    await waitFor(() => expect(screen.getByText(/Could not pay out the hand/)).toBeDefined());
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  it('skips settlement when no betting was tracked', async () => {
+    (fetchHand as ReturnType<typeof vi.fn>).mockResolvedValue({ pot: 0, player_hands: [] });
+    const onSaved = vi.fn();
+    render(<ReviewScreen {...makeProps({ onSaved })} />);
+    await waitFor(() => expect(fetchHand).toHaveBeenCalled());
+
+    await clickFinishAndConfirm();
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(settleHand).not.toHaveBeenCalled();
+  });
+});
+
+describe('ReviewScreen — payout preview', () => {
+  const previewResponse = {
+    pot: 12.5,
+    pots: [
+      { amount: 7.5, eligible_players: ['Alice', 'Bob', 'Charlie'], winners: ['Alice'] },
+      { amount: 5, eligible_players: ['Bob', 'Charlie'], winners: ['Bob'] },
+    ],
+    players: [
+      { player_name: 'Alice', result: 'won', contribution: 2.5, payout: 7.5, profit_loss: 5, current_chips: 25 },
+      { player_name: 'Bob', result: 'lost', contribution: 5, payout: 5, profit_loss: 0, current_chips: 20 },
+      { player_name: 'Charlie', result: 'folded', contribution: 5, payout: 0, profit_loss: -5, current_chips: 15 },
+    ],
+  };
+
+  function givenPot(amount = 12.5) {
+    (fetchHand as ReturnType<typeof vi.fn>).mockResolvedValue({ pot: amount, player_hands: [] });
+  }
+
+  it('shows what each player would net before anything is saved', async () => {
+    givenPot();
+    (settleHand as ReturnType<typeof vi.fn>).mockResolvedValue(previewResponse);
+    render(<ReviewScreen {...makeProps()} />);
+
+    await waitFor(() => expect(screen.getByTestId('payout-row-Alice')).toBeDefined());
+    expect(settleHand).toHaveBeenCalledWith(42, 3, { ranking: [['Alice']] }, true);
+    expect(screen.getByTestId('payout-row-Alice').textContent).toContain('+$5.00');
+    expect(screen.getByTestId('payout-row-Charlie').textContent).toContain('−$5.00');
+    // Nothing has been paid by looking
+    expect(realPayouts()).toHaveLength(0);
+  });
+
+  it('lists each pot and who takes it when there is a side pot', async () => {
+    givenPot();
+    (settleHand as ReturnType<typeof vi.fn>).mockResolvedValue(previewResponse);
+    render(<ReviewScreen {...makeProps()} />);
+
+    await waitFor(() => expect(screen.getByTestId('payout-pot-0')).toBeDefined());
+    expect(screen.getByTestId('payout-pot-0').textContent).toContain('Main pot');
+    expect(screen.getByTestId('payout-pot-1').textContent).toContain('Side pot 1');
+    expect(screen.getByTestId('payout-pot-1').textContent).toContain('Bob');
+  });
+
+  it('updates when the dealer changes the winner', async () => {
+    givenPot();
+    (settleHand as ReturnType<typeof vi.fn>).mockResolvedValue(previewResponse);
+    const { container } = render(<ReviewScreen {...makeProps()} />);
+    await waitFor(() => expect(screen.getByTestId('payout-row-Alice')).toBeDefined());
+
+    fireEvent.click(container.querySelector('[data-testid="review-player-Alice-result-lost"]')!);
+    fireEvent.click(container.querySelector('[data-testid="review-player-Bob-result-won"]')!);
+
+    await waitFor(() =>
+      expect(settleHand).toHaveBeenCalledWith(42, 3, { ranking: [['Bob']] }, true),
+    );
+  });
+
+  it('explains in the dealer\'s terms when the server needs more information', async () => {
+    givenPot();
+    (settleHand as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error('HTTP 400: {"detail":"Cannot decide a pot between Bob, Charlie — rank them or record their cards"}'),
+    );
+    render(<ReviewScreen {...makeProps()} />);
+
+    await waitFor(() => expect(screen.getByTestId('payout-preview-error')).toBeDefined());
+    expect(screen.getByTestId('payout-preview-error').textContent).toBe(
+      'Cannot decide a pot between Bob, Charlie — rank them or record their cards',
+    );
+  });
+
+  it('is not shown when no betting was tracked', async () => {
+    givenPot(0);
+    render(<ReviewScreen {...makeProps()} />);
+    await waitFor(() => expect(fetchHand).toHaveBeenCalled());
+    expect(screen.queryByTestId('payout-preview')).toBeNull();
+    expect(settleHand).not.toHaveBeenCalled();
   });
 });

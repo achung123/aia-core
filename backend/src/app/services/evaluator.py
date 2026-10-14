@@ -122,25 +122,120 @@ def evaluate_five_cards(
 # ---------------------------------------------------------------------------
 # Best-of-N evaluators
 # ---------------------------------------------------------------------------
+#
+# The best five of up to seven cards is read straight off rank and suit
+# counts. The previous approach classified all 21 five-card subsets, which
+# made a single equity simulation take seconds.
+
+
+def _build_straight_table() -> list[int]:
+    """Rank-bitmask → rank of the highest straight's top card, or -1."""
+    table = [-1] * (1 << 13)
+    for mask in range(1 << 13):
+        # Bit 0 is the ace playing low; bit r+1 is rank r.
+        extended = (mask << 1) | (mask >> 12)
+        for high in range(12, 2, -1):
+            window = 0b11111 << (high - 3)
+            if extended & window == window:
+                table[mask] = high
+                break
+    return table
+
+
+_STRAIGHT_HIGH = _build_straight_table()
+
+
+def best_hand(cards: list[tuple[int, int]]) -> tuple[int, list[int]]:
+    """Best five-card hand from 5-7 cards → (category, kickers).
+
+    Categories and kicker order match `classify_five_cards`, so scores from
+    `compute_hand_score` are identical to the brute-force result.
+    """
+    counts = [0] * 13
+    suit_counts = [0, 0, 0, 0]
+    suit_masks = [0, 0, 0, 0]
+    mask = 0
+    for rank, suit in cards:
+        counts[rank] += 1
+        suit_counts[suit] += 1
+        suit_masks[suit] |= 1 << rank
+        mask |= 1 << rank
+
+    flush_mask = 0
+    for suit in range(4):
+        if suit_counts[suit] >= 5:
+            flush_mask = suit_masks[suit]
+            straight_flush_high = _STRAIGHT_HIGH[flush_mask]
+            if straight_flush_high >= 0:
+                return (8, [straight_flush_high])
+            break
+
+    quads = -1
+    trips: list[int] = []
+    pairs: list[int] = []
+    singles: list[int] = []
+    for rank in range(12, -1, -1):
+        count = counts[rank]
+        if count == 0:
+            continue
+        if count == 4:
+            quads = rank
+        elif count == 3:
+            trips.append(rank)
+        elif count == 2:
+            pairs.append(rank)
+        else:
+            singles.append(rank)
+
+    if quads >= 0:
+        kicker = max(rank for rank in range(13) if counts[rank] and rank != quads)
+        return (7, [quads, kicker])
+
+    if trips and (len(trips) > 1 or pairs):
+        second_trips = trips[1] if len(trips) > 1 else -1
+        best_pair = pairs[0] if pairs else -1
+        return (6, [trips[0], max(second_trips, best_pair)])
+
+    if flush_mask:
+        flush_ranks = [rank for rank in range(12, -1, -1) if flush_mask >> rank & 1]
+        return (5, flush_ranks[:5])
+
+    straight_high = _STRAIGHT_HIGH[mask]
+    if straight_high >= 0:
+        return (4, [straight_high])
+
+    if trips:
+        return (3, [trips[0], *sorted(pairs + singles, reverse=True)[:2]])
+
+    if len(pairs) >= 2:
+        kicker = max(pairs[2:] + singles)
+        return (2, [pairs[0], pairs[1], kicker])
+
+    if pairs:
+        return (1, [pairs[0], *singles[:3]])
+
+    return (0, singles[:5])
 
 
 def find_best_five_card_hand(
     cards: list[tuple[int, int]],
 ) -> tuple[int, list[int]]:
     """Find the best 5-card hand from 5-7 cards → (category, group_ranks)."""
-    best_score_value = -1
-    best_result = (0, [0])
-    for combo in combinations(cards, 5):
-        category, ranks = classify_five_cards(*combo)
-        current_score = compute_hand_score(category, ranks)
-        if current_score > best_score_value:
-            best_score_value = current_score
-            best_result = (category, ranks)
-    return best_result
+    if len(cards) < 5:
+        return (0, [0])
+    return best_hand(cards)
 
 
 def find_best_five_card_score(cards: list[tuple[int, int]]) -> int:
     """Numeric score of the best 5-card hand from 5-7 cards."""
+    if len(cards) < 5:
+        return -1
+    category, kickers = best_hand(cards)
+    return compute_hand_score(category, kickers)
+
+
+def brute_force_best_score(cards: list[tuple[int, int]]) -> int:
+    """Reference implementation: score every five-card subset. Tests only."""
     best = -1
     for combo in combinations(cards, 5):
         current_score = evaluate_five_cards(*combo)

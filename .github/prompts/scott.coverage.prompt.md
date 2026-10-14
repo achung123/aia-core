@@ -19,7 +19,7 @@ Execute test coverage analysis, identify untested code paths, classify gaps by r
 
 The project uses:
 - **Stack**: Python 3.12, FastAPI, SQLAlchemy 2.x, Pydantic v2, SQLite, pytest
-- **Test command**: `PYTHONPATH=src/ pytest test/ --cov=app --cov-report=term-missing --cov-report=json`
+- **Test command**: `cd backend && uv run pytest test/ --cov=app --cov-report=term-missing --cov-report=json`
 - **Test location**: `test/` directory
 - **Source location**: `src/app/`
 
@@ -27,7 +27,7 @@ Coverage percentage is a starting point, not the goal. The real value is identif
 
 # Instructions
 
-1. Run `PYTHONPATH=src/ pytest test/ --cov=app --cov-report=term-missing --cov-report=json` to collect coverage data
+1. Run `cd backend && uv run pytest test/ --cov=app --cov-report=term-missing --cov-report=json` to collect coverage data
 2. Parse the terminal output and/or `coverage.json` for:
    - Per-file line coverage percentage
    - Specific uncovered line ranges per file
@@ -67,4 +67,4 @@ A markdown report following `scott.coverage-report.template.md` placed in `specs
 - Do NOT skip reading the uncovered source code — line numbers alone don't tell you the risk
 - Do NOT treat all uncovered lines equally — business logic gaps are more important than utility helpers
 - Do NOT recommend writing tests for dead code — recommend removing it instead
-- Do NOT run coverage without `PYTHONPATH=src/` — imports will fail
+- Do NOT run coverage with bare `pytest` or `PYTHONPATH=src/` — always use `uv run` from the `backend/` directory

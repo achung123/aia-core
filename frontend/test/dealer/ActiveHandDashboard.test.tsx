@@ -16,6 +16,7 @@ vi.mock('../../src/api/client.ts', () => ({
   updateBlinds: vi.fn(),
   recordPlayerAction: vi.fn(),
   fetchHands: vi.fn(() => Promise.resolve([])),
+  fetchEquity: vi.fn(() => Promise.resolve({ equities: [] })),
 }));
 
 vi.mock('../../src/../src/dealer/BlindTimer.tsx', () => ({
@@ -24,11 +25,11 @@ vi.mock('../../src/../src/dealer/BlindTimer.tsx', () => ({
 }));
 
 vi.mock('../../src/../src/dealer/TableView3D.tsx', () => ({
-  TableView3D: (props: { hands: unknown[] }) =>
-    <div data-testid="table-view-3d">3D:{(props.hands || []).length}</div>,
+  TableView3D: (props: { gameId: number; street?: string }) =>
+    <div data-testid="table-view-3d" data-street={props.street ?? ''}>3D:{props.gameId}</div>,
 }));
 
-import { fetchBlinds, recordPlayerAction, fetchHands } from '../../src/api/client.ts';
+import { fetchBlinds, recordPlayerAction, fetchHands, fetchEquity } from '../../src/api/client.ts';
 import { ActiveHandDashboard } from '../../src/../src/dealer/ActiveHandDashboard.tsx';
 import type { ActiveHandDashboardProps } from '../../src/../src/dealer/ActiveHandDashboard.tsx';
 import type { CommunityCards, Player } from '../../src/stores/dealerStore.ts';
@@ -521,6 +522,52 @@ describe('ActiveHandDashboard — 3D view has street scrubber', () => {
       expect(screen.getByTestId('table-view-3d')).toBeTruthy();
     });
     expect(screen.getByTestId('street-scrubber')).toBeTruthy();
+    expect(screen.getByTestId('table-view-3d').getAttribute('data-street')).toBe('Pre-Flop');
+  });
+
+  it('forwards the selected 3D street into TableView3D', async () => {
+    mockedFetchHands.mockResolvedValue(handData);
+    render(<ActiveHandDashboard {...defaultProps} />);
+    fireEvent.click(screen.getByTestId('view-toggle-btn'));
+    await waitFor(() => {
+      expect(screen.getByTestId('table-view-3d')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByTestId('street-showdown'));
+    await waitFor(() => {
+      expect(screen.getByTestId('table-view-3d').getAttribute('data-street')).toBe('Showdown');
+    });
+  });
+
+  it('keeps folded players in the dealer equity row with 0.0% when omitted by the endpoint', async () => {
+    mockedFetchHands.mockResolvedValue(handData);
+    (fetchEquity as ReturnType<typeof vi.fn>).mockResolvedValue({
+      equities: [
+        { player_name: 'Alice', equity: 0.72, winning_hand_description: null },
+      ],
+    });
+
+    render(
+      <ActiveHandDashboard
+        {...defaultProps}
+        handNumber={1}
+        players={[
+          { name: 'Alice', card1: 'Ah', card2: 'Kd', recorded: true, status: 'playing', outcomeStreet: null },
+          { name: 'Bob', card1: '7s', card2: '8s', recorded: true, status: 'folded', outcomeStreet: 'flop' },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('view-toggle-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('dealer-equity-row')).toBeTruthy();
+    });
+
+    expect(screen.getByText('Alice')).toBeTruthy();
+    expect(screen.getByText('72.0%')).toBeTruthy();
+    expect(screen.getByText('Bob')).toBeTruthy();
+    expect(screen.getByText('0.0%')).toBeTruthy();
   });
 });
 
@@ -671,49 +718,134 @@ describe('ActiveHandDashboard — street buttons call onStreetCapture', () => {
     expect(onTileSelect).toHaveBeenCalledWith('flop');
   });
 
-  // Bug fix: All-in message when no current player and street is complete
-  it('shows all-in message when no current player, street complete, and phase is active', () => {
-    render(
-      <ActiveHandDashboard
-        {...defaultProps}
-        handNumber={1}
-        currentPlayerName={null}
-        legalActions={[]}
-        streetComplete={true}
-        handPhase="flop"
-      />,
-    );
-    const panel = screen.getByTestId('bet-verify-panel');
-    expect(panel.textContent).toContain('All players all-in');
+  // The banner shown once betting on a street has finished and nobody is up
+  // to act. After everyone checks or calls that is the ordinary case, so it
+  // must not claim an all-in unless players are really all-in.
+  describe('betting-closed banner', () => {
+    const panelText = (props: Partial<ActiveHandDashboardProps>) => {
+      render(
+        <ActiveHandDashboard
+          {...defaultProps}
+          handNumber={1}
+          currentPlayerName={null}
+          legalActions={[]}
+          streetComplete={true}
+          handPhase="preflop"
+          {...props}
+        />,
+      );
+      return screen.getByTestId('bet-verify-panel').textContent ?? '';
+    };
+
+    it('says betting is complete and what to deal when players are simply still in', () => {
+      const text = panelText({ handPhase: 'preflop' });
+      expect(text).toContain('Betting complete');
+      expect(text).toContain('deal the flop');
+      expect(text).not.toMatch(/all-in/i);
+    });
+
+    it('names the right next street from the board', () => {
+      const flop: CommunityCards = {
+        ...emptyCommunity, flop1: 'Ah', flop2: 'Kd', flop3: '9c', flopRecorded: true,
+      };
+      expect(panelText({ community: flop, handPhase: 'flop' })).toContain('deal the turn');
+      cleanup();
+      const turn: CommunityCards = { ...flop, turn: '4s', turnRecorded: true };
+      expect(panelText({ community: turn, handPhase: 'turn' })).toContain('deal the river');
+    });
+
+    it('tells the dealer to finish the hand once the river is down', () => {
+      const river: CommunityCards = {
+        ...emptyCommunity, flop1: 'Ah', flop2: 'Kd', flop3: '9c', flopRecorded: true,
+        turn: '4s', turnRecorded: true, river: '2h', riverRecorded: true,
+      };
+      const text = panelText({ community: river, handPhase: 'river' });
+      expect(text).toContain('finish the hand');
+      expect(text).not.toMatch(/all-in/i);
+    });
+
+    it('says all players are all-in only when every remaining player is', () => {
+      const text = panelText({ allInPlayers: defaultPlayers.map((player) => player.name) });
+      expect(text).toContain('All players are all-in');
+    });
+
+    it('says how many are all-in when one player still has chips', () => {
+      const names = defaultPlayers.map((player) => player.name);
+      const text = panelText({ allInPlayers: names.slice(0, names.length - 1) });
+      expect(text).not.toContain('All players');
+      expect(text).toMatch(/all-in, no more betting/);
+    });
+
+    it('ignores an all-in player who has folded', () => {
+      const folded = defaultPlayers.map((player, index) =>
+        index === 0 ? { ...player, status: 'folded' } : player,
+      );
+      const text = panelText({ players: folded, allInPlayers: [defaultPlayers[0].name] });
+      expect(text).not.toMatch(/all-in/i);
+      expect(text).toContain('Betting complete');
+    });
+
+    it('is not shown while waiting for cards or when a player has the turn', () => {
+      expect(panelText({ handPhase: 'awaiting_cards' })).toContain('Waiting for cards');
+      cleanup();
+      const text = panelText({
+        currentPlayerName: 'Alice',
+        legalActions: ['call', 'raise', 'fold'],
+        streetComplete: false,
+        handPhase: 'flop',
+      });
+      expect(text).toContain('Turn: Alice');
+      expect(text).not.toMatch(/all-in|Betting complete/i);
+    });
+  });
+});
+
+describe('ActiveHandDashboard — 3D view follows the live street', () => {
+  const withFlop: CommunityCards = {
+    ...emptyCommunity,
+    flop1: 'Ah', flop2: 'Kd', flop3: '9c', flopRecorded: true,
+  };
+  const withTurn: CommunityCards = { ...withFlop, turn: '4s', turnRecorded: true };
+
+  const street = () => screen.getByTestId('table-view-3d').getAttribute('data-street');
+
+  async function openThreeD(props: ActiveHandDashboardProps) {
+    const view = render(<ActiveHandDashboard {...props} />);
+    fireEvent.click(screen.getByTestId('view-toggle-btn'));
+    await screen.findByTestId('table-view-3d');
+    return view;
+  }
+
+  it('opens on the street the hand has reached', async () => {
+    await openThreeD({ ...defaultProps, handNumber: 1, community: withFlop });
+    await waitFor(() => expect(street()).toBe('Flop'));
   });
 
-  it('does not show all-in message during awaiting_cards phase', () => {
-    render(
-      <ActiveHandDashboard
-        {...defaultProps}
-        handNumber={1}
-        currentPlayerName={null}
-        legalActions={[]}
-        streetComplete={true}
-        handPhase="awaiting_cards"
-      />,
-    );
-    const panel = screen.getByTestId('bet-verify-panel');
-    expect(panel.textContent).not.toContain('All players all-in');
+  it('moves along as cards are dealt', async () => {
+    const props = { ...defaultProps, handNumber: 1 };
+    const view = await openThreeD(props);
+    expect(street()).toBe('Pre-Flop');
+
+    view.rerender(<ActiveHandDashboard {...props} community={withFlop} />);
+    await waitFor(() => expect(street()).toBe('Flop'));
+
+    view.rerender(<ActiveHandDashboard {...props} community={withTurn} />);
+    await waitFor(() => expect(street()).toBe('Turn'));
   });
 
-  it('does not show all-in message when a player has a turn', () => {
-    render(
-      <ActiveHandDashboard
-        {...defaultProps}
-        handNumber={1}
-        currentPlayerName="Alice"
-        legalActions={['call', 'raise', 'fold']}
-        streetComplete={false}
-        handPhase="flop"
-      />,
-    );
-    const panel = screen.getByTestId('bet-verify-panel');
-    expect(panel.textContent).not.toContain('All players all-in');
+  it('stays where the dealer scrubbed to, until they return to the latest street', async () => {
+    const props = { ...defaultProps, handNumber: 1, community: withFlop };
+    const view = await openThreeD(props);
+    await waitFor(() => expect(street()).toBe('Flop'));
+
+    // Look back at the preflop; the turn is then dealt
+    fireEvent.click(screen.getByText('Pre-Flop'));
+    expect(street()).toBe('Pre-Flop');
+    view.rerender(<ActiveHandDashboard {...props} community={withTurn} />);
+    await waitFor(() => expect(street()).toBe('Pre-Flop'));
+
+    // Back on the newest street: following resumes
+    fireEvent.click(screen.getByText('Turn'));
+    expect(street()).toBe('Turn');
   });
 });

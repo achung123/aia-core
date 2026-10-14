@@ -1,477 +1,264 @@
-import { useState, useEffect, useRef } from 'react';
+// T-031 — Full-page playback route, migrated from the imperative scene to
+// `<PokerCanvas>` + `<PokerTable>` wrapped by `<SessionReplayShell>` which
+// owns cross-hand auto-advance and speed controls.
+//
+// Viewer policy is `spectator` and `equityOverlay={true}` — playback runs
+// the equity overlay against the server `/equity` endpoint; the legacy
+// legacy client-side equity evaluator path is gone (see tasks.md T-031 AC-5).
+//
+// Entry point: [DataView.tsx](../views/DataView.tsx) "▶ Playback" button
+// navigates to `#/playback?gameId=<id>`.
+
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { fetchSessions, fetchHands } from '../api/client.ts';
-import type { GameSessionListItem, HandResponse } from '../api/types';
-import { createPokerScene } from '../scenes/pokerScene.ts';
-import { calculateEquity } from '../poker/evaluator.ts';
-import { SessionScrubber } from '../components/SessionScrubber.tsx';
-import { StreetScrubber } from '../components/StreetScrubber.tsx';
-import { gameSelectorStyles as selectorStyles, playbackLayoutStyles as mobileStyles, equityRowStyles as eqStyles } from '../styles/playbackStyles';
+import { useQuery } from '@tanstack/react-query';
 
-/* ── Card-parsing helpers ─────────────────────────────────────── */
+import { fetchSessions, fetchGame, fetchHands, fetchHandActions } from '../api/client.ts';
+import type { GameSessionListItem, HandResponse } from '../api/types/game.ts';
+import { PokerCanvas } from '../scenes3d/PokerCanvas.tsx';
+import { PokerTable } from '../scenes3d/PokerTable.tsx';
+import { SessionReplayShell } from '../scenes3d/SessionReplayShell.tsx';
+import { QualityToast } from '../scenes3d/components/QualityToast.tsx';
+import { SceneErrorOverlay } from '../scenes3d/components/SceneErrorBoundary.tsx';
+import { useTableStore } from '../scenes3d/state/tableStore.ts';
+import { useSessionReplayContext } from '../scenes3d/SessionReplayShell.tsx';
+import type { ViewerContext } from '../scenes3d/types';
+import { playbackLayoutStyles as mobileStyles, gameSelectorStyles as selectorStyles } from '../styles/playbackStyles';
+import { useGameEvents } from '../hooks/useGameEvents.ts';
+import { ConnectionNotice } from '../components/ConnectionNotice.tsx';
 
-const SUIT_SYMBOL: Record<string, string> = {
-  h: '♥', d: '♦', c: '♣', s: '♠',
-  H: '♥', D: '♦', C: '♣', S: '♠',
-};
+// Stable reference — `<PokerTable>` memoizes on `viewer` identity.
+const SPECTATOR_VIEWER: ViewerContext = { policy: 'spectator' };
 
-interface ParsedCard {
-  rank: string;
-  suit: string;
+const ACTIVE_POLL_INTERVAL_MS = 10_000;
+const EMPTY_HANDS: HandResponse[] = [];
+
+function countLabel(count: number, singular: string): string {
+  return `${count} ${singular}${count === 1 ? '' : 's'}`;
 }
 
-interface PlayerHandData {
-  player_name: string;
-  hole_cards: [ParsedCard, ParsedCard] | null;
-  result: string;
-  profit_loss: number | null;
+function sortedPlaybackSessions(
+  sessions: GameSessionListItem[],
+): GameSessionListItem[] {
+  return [...sessions].sort((left, right) => {
+    const playableDiff = Number(right.hand_count > 0) - Number(left.hand_count > 0);
+    if (playableDiff !== 0) return playableDiff;
+    return right.game_date.localeCompare(left.game_date) || right.game_id - left.game_id;
+  });
 }
 
-interface CardData {
-  flop: (ParsedCard | null)[];
-  turn: ParsedCard | null;
-  river: ParsedCard | null;
-  player_hands: PlayerHandData[];
-}
-
-function parseCard(cardStr: string | null | undefined): ParsedCard | null {
-  if (!cardStr) return null;
-  const rank = cardStr.slice(0, -1);
-  const suitChar = cardStr.slice(-1);
-  return { rank, suit: SUIT_SYMBOL[suitChar] || suitChar };
-}
-
-const RESULT_MAP: Record<string, string> = { won: 'win', folded: 'fold', lost: 'loss' };
-
-function handToCardData(hand: HandResponse): CardData {
-  return {
-    flop: [parseCard(hand.flop_1), parseCard(hand.flop_2), parseCard(hand.flop_3)],
-    turn: parseCard(hand.turn),
-    river: parseCard(hand.river),
-    player_hands: (hand.player_hands || []).map(playerHand => ({
-      player_name: playerHand.player_name,
-      hole_cards:
-        playerHand.card_1 && playerHand.card_2
-          ? ([parseCard(playerHand.card_1)!, parseCard(playerHand.card_2)!] as [ParsedCard, ParsedCard])
-          : null,
-      result: RESULT_MAP[playerHand.result ?? ''] || playerHand.result || '',
-      profit_loss: playerHand.profit_loss ?? null,
-    })),
-  };
-}
-
-function communityForStreet(cardData: CardData, streetName: string): ParsedCard[] {
-  const cards: ParsedCard[] = [];
-  if (streetName !== 'Pre-Flop' && cardData.flop) {
-    cards.push(...cardData.flop.filter((c): c is ParsedCard => c !== null));
-  }
-  if (['Turn', 'River', 'Showdown'].includes(streetName) && cardData.turn) {
-    cards.push(cardData.turn);
-  }
-  if (['River', 'Showdown'].includes(streetName) && cardData.river) {
-    cards.push(cardData.river);
-  }
-  return cards;
-}
-
-/* ── Inline EquityRow component ───────────────────────────────── */
-
-interface EquityRowProps {
-  equityMap: Record<string, number> | null;
-  loading: boolean;
-}
-
-function equityColor(eq: number): string {
-  if (eq >= 0.5) return '#4ade80';
-  if (eq >= 0.25) return '#facc15';
-  return '#f87171';
-}
-
-function EquityRow({ equityMap, loading }: EquityRowProps) {
-  if (loading) {
-    return (
-      <div data-testid="equity-row" style={eqStyles.row}>
-        <div
-          data-testid="equity-loading"
-          style={{ color: '#aaa', padding: 8, textAlign: 'center', width: '100%', fontSize: 14 }}
-        >
-          Loading equity…
-        </div>
-      </div>
-    );
-  }
-  if (!equityMap) return null;
+function PlaybackGameSelector({
+  sessions,
+  isLoading,
+  error,
+  onSelect,
+}: {
+  sessions: GameSessionListItem[];
+  isLoading: boolean;
+  error: unknown;
+  onSelect: (gameId: number) => void;
+}) {
   return (
-    <div data-testid="equity-row" style={eqStyles.row}>
-      {Object.entries(equityMap).map(([name, eq]) => (
-        <div key={name} data-testid="equity-card" style={eqStyles.card}>
-          <div style={eqStyles.name}>{name}</div>
-          <div style={{ ...eqStyles.equity, color: equityColor(eq) }}>
-            {(eq * 100).toFixed(1)}%
-          </div>
+    <div data-testid="playback-game-selector" style={selectorStyles.container}>
+      <h2 style={selectorStyles.heading}>Playback Visualizer</h2>
+      {isLoading && <div style={selectorStyles.loading}>Loading sessions...</div>}
+      {error && (
+        <div style={selectorStyles.error}>{errorMessage(error)}</div>
+      )}
+      {!isLoading && !error && sessions.length === 0 && (
+        <div style={selectorStyles.empty}>No sessions available.</div>
+      )}
+      {!isLoading && !error && sessions.length > 0 && (
+        <div style={selectorStyles.list}>
+          {sessions.map((session) => {
+            const canReplay = session.hand_count > 0;
+            return (
+              <button
+                key={session.game_id}
+                type="button"
+                data-testid={`playback-session-${session.game_id}`}
+                disabled={!canReplay}
+                onClick={() => onSelect(session.game_id)}
+                style={{
+                  ...selectorStyles.card,
+                  ...(canReplay ? selectorStyles.cardActive : selectorStyles.cardComplete),
+                  ...(!canReplay ? selectorStyles.cardDisabled : undefined),
+                }}
+              >
+                <span style={selectorStyles.cardDate}>
+                  {session.game_date || `Game ${session.game_id}`}
+                  <span style={selectorStyles.gameId}> Game {session.game_id}</span>
+                </span>
+                <span style={selectorStyles.cardDetails}>
+                  <span>{session.status || 'active'}</span>
+                  <span>{countLabel(session.hand_count, 'hand')}</span>
+                  <span>{countLabel(session.player_count, 'player')}</span>
+                </span>
+                <span style={selectorStyles.cardAction}>
+                  {canReplay ? 'Open Visualizer' : 'No hands to replay'}
+                </span>
+              </button>
+            );
+          })}
         </div>
-      ))}
+      )}
     </div>
   );
 }
 
-/* ── Street index map ─────────────────────────────────────────── */
+/** Bridge from the replay context into `<PokerTable>`. The shell publishes
+ * a derived `TableState` whose `phase`/`streetIndex` tracks the replay
+ * slice, so we simply forward it into the canvas.
+ */
+function ReplayCanvas() {
+  const theme = useTableStore((s) => s.theme);
+  const qualityTier = useTableStore((s) => s.qualityTier);
+  const { tableState, viewer } = useSessionReplayContext();
 
-const STREET_INDEX: Record<string, number> = {
-  'Pre-Flop': 0,
-  Flop: 1,
-  Turn: 2,
-  River: 3,
-  Showdown: 4,
-};
+  // The wrapper is always mounted so the canvas area keeps its size while
+  // the first hand loads; the scene itself appears once there is state.
+  return (
+    <div style={{ position: 'absolute', inset: 0 }}>
+      <PokerCanvas>
+        {tableState ? (
+          <PokerTable
+            state={tableState}
+            viewer={viewer}
+            theme={theme}
+            qualityTier={qualityTier}
+            equityOverlay={true}
+            cameraPreset="topDown"
+          />
+        ) : null}
+      </PokerCanvas>
+    </div>
+  );
+}
 
-/* ── Main component ───────────────────────────────────────────── */
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  return 'Unable to load replay data.';
+}
+
+function PlaybackStatus({ title, detail }: { title: string; detail?: string }) {
+  return (
+    <div data-testid="playback-status" style={mobileStyles.statusShell}>
+      <div style={mobileStyles.statusTitle}>{title}</div>
+      {detail && <div style={mobileStyles.statusDetail}>{detail}</div>}
+    </div>
+  );
+}
 
 export function PlaybackView() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const wrapperRef = useRef<HTMLDivElement>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sceneRef = useRef<any>(null);
-  const labelsRef = useRef<HTMLDivElement[]>([]);
+  // The view sits below the nav bar, so "full height" is the viewport minus
+  // wherever the wrapper actually starts — otherwise the bottom row of
+  // controls is pushed off screen by the nav bar's height.
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const [topOffset, setTopOffset] = useState(0);
+  useLayoutEffect(() => {
+    const measure = () => {
+      const top = wrapperRef.current?.getBoundingClientRect().top ?? 0;
+      setTopOffset(Math.max(0, Math.round(top + window.scrollY)));
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  });
 
-  const [sessions, setSessions] = useState<GameSessionListItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [activeGameId, setActiveGameId] = useState<number | null>(null);
-  const [activeGameStatus, setActiveGameStatus] = useState<string | null>(null);
-  const [hands, setHands] = useState<HandResponse[]>([]);
-  const [handIndex, setHandIndex] = useState(0);
-  const [currentStreet, setCurrentStreet] = useState('Pre-Flop');
-  const [equityMap, setEquityMap] = useState<Record<string, number> | null>(null);
-  const [equityLoading, setEquityLoading] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const gameIdParam = searchParams.get('gameId');
+  const gameId = gameIdParam ? Number(gameIdParam) : null;
+  const needsSessionMenu = gameId === null || Number.isNaN(gameId);
 
-  /* Fetch sessions on mount */
-  useEffect(() => {
-    fetchSessions()
-      .then(data => {
-        const sorted = [...data].sort((a, b) => b.game_date.localeCompare(a.game_date));
-        setSessions(sorted);
-      })
-      .catch((err: Error) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, []);
+  const sessionsQuery = useQuery({
+    queryKey: ['sessions'],
+    queryFn: fetchSessions,
+    enabled: needsSessionMenu,
+  });
 
-  /* Auto-select game from ?gameId= query param */
-  useEffect(() => {
-    const paramId = searchParams.get('gameId');
-    if (paramId && sessions.length > 0 && !activeGameId) {
-      const id = Number(paramId);
-      if (sessions.some(s => s.game_id === id)) {
-        selectGame(id);
-      }
-    }
-  }, [sessions, searchParams]);  // eslint-disable-line react-hooks/exhaustive-deps
+  const gameQuery = useQuery({
+    queryKey: ['game', gameId],
+    queryFn: () => fetchGame(gameId as number),
+    enabled: gameId !== null && !Number.isNaN(gameId),
+  });
 
-  /* Three.js scene lifecycle — re-runs when activeGameId changes so the
-     canvas (only rendered for the playback screen) is in the DOM. */
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const wrapper = wrapperRef.current;
-    if (!canvas || !wrapper) return;
+  const isActive = gameQuery.data?.status === 'active';
+  const handsQuery = useQuery({
+    queryKey: ['hands', gameId],
+    queryFn: () => fetchHands(gameId as number),
+    enabled: gameId !== null && !Number.isNaN(gameId),
+    refetchInterval: isActive ? ACTIVE_POLL_INTERVAL_MS : false,
+  });
 
-    let cancelled = false;
-    let ro: ResizeObserver | null = null;
+  const hands = handsQuery.data ?? EMPTY_HANDS;
 
-    function init(): void {
-      if (cancelled) return;
+  // Bets and actions for the hand being viewed (not just the newest), so
+  // scrubbing back through a session shows real chip stacks and badges.
+  const viewedIndex = useTableStore((state) => state.replay.handIndex);
+  const selectedActionHand =
+    hands.length > 0 ? hands[Math.min(Math.max(viewedIndex, 0), hands.length - 1)] : null;
+  const viewingNewestHand =
+    selectedActionHand !== null && selectedActionHand === hands[hands.length - 1];
+  const selectedActionQuery = useQuery({
+    queryKey: ['hand-actions', gameId, selectedActionHand?.hand_number ?? null],
+    queryFn: () => fetchHandActions(gameId as number, selectedActionHand!.hand_number),
+    enabled:
+      gameId !== null &&
+      !Number.isNaN(gameId) &&
+      selectedActionHand !== null,
+    // A finished hand's actions never change; the newest hand of a live
+    // game is refreshed by the change signal below.
+    staleTime: isActive && viewingNewestHand ? 0 : Infinity,
+    retry: 1,
+  });
+  const actionsByHandId = useMemo(() => {
+    if (!selectedActionHand || !selectedActionQuery.data) return {};
+    return { [selectedActionHand.hand_id]: selectedActionQuery.data };
+  }, [selectedActionHand, selectedActionQuery.data]);
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const scene: any = createPokerScene(canvas, {
-        width: canvas!.clientWidth || canvas!.parentElement?.clientWidth || 800,
-        height: canvas!.clientHeight || canvas!.parentElement?.clientHeight || 600,
-      });
-      sceneRef.current = scene;
-      scene.camera.position.set(0, 18, 6);
-      scene.camera.lookAt(0, 0, 0);
-      scene.camera.updateProjectionMatrix();
-      if (scene.controls) {
-        scene.controls.saveState();
-      }
+  // A live game refreshes the moment something happens; the interval above
+  // is only the fallback.
+  const { refetch: refetchHands } = handsQuery;
+  const { refetch: refetchGame } = gameQuery;
+  const { refetch: refetchActions } = selectedActionQuery;
+  useGameEvents(isActive ? gameId : null, () => {
+    void refetchHands();
+    void refetchGame();
+    if (viewingNewestHand) void refetchActions();
+  });
 
-      // ResizeObserver to re-bound canvas when container changes
-      const canvasArea = canvas!.parentElement;
-      if (canvasArea) {
-        ro = new ResizeObserver((entries) => {
-          for (const entry of entries) {
-            const { width, height } = entry.contentRect;
-            if (width > 0 && height > 0) {
-              scene.renderer.setSize(width, height);
-              scene.camera.aspect = width / height;
-              scene.camera.updateProjectionMatrix();
-            }
-          }
-        });
-        ro.observe(canvasArea);
-      }
-    }
-    init();
+  const handleBack = useCallback(() => navigate('/data'), [navigate]);
+  const handleSelectGame = useCallback(
+    (selectedGameId: number) => navigate(`/playback?gameId=${selectedGameId}`),
+    [navigate],
+  );
 
-    return () => {
-      cancelled = true;
-      if (ro) ro.disconnect();
-      labelsRef.current.forEach(el => el.remove());
-      labelsRef.current = [];
-      if (sceneRef.current) {
-        sceneRef.current.dispose();
-        sceneRef.current = null;
-      }
-    };
-  }, [activeGameId]);
-
-  /* Label position updates */
-  function updateLabelPositions(): void {
-    if (!sceneRef.current) return;
-    const { seatPositions, camera, renderer } = sceneRef.current;
-    const domEl = renderer.domElement as HTMLCanvasElement | undefined;
-    if (!domEl || !seatPositions) return;
-    const cw = domEl.clientWidth || 1;
-    const ch = domEl.clientHeight || 1;
-    labelsRef.current.forEach((label, i: number) => {
-      if (seatPositions[i] && seatPositions[i].clone) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const p = (seatPositions[i] as any).clone().project(camera);
-        if (p.z > 1) {
-          label.style.display = 'none';
-          return;
-        }
-        label.style.display = '';
-        const x = (p.x * 0.5 + 0.5) * cw;
-        const y = (1 - (p.y * 0.5 + 0.5)) * ch;
-        label.style.left = `${x}px`;
-        label.style.top = `${y}px`;
-        label.style.transform = 'translate(-50%, -50%)';
-      }
-    });
-  }
-
-  function createSeatLabelsForPlayers(playerNames: string[]): void {
-    const wrapper = wrapperRef.current;
-    if (!wrapper) return;
-
-    labelsRef.current.forEach(el => el.remove());
-    labelsRef.current = [];
-
-    if (sceneRef.current?.controls) {
-      sceneRef.current.controls.removeEventListener('change', updateLabelPositions);
-    }
-
-    const labels: HTMLDivElement[] = [];
-    playerNames.forEach((name, i) => {
-      const div = document.createElement('div');
-      div.className = 'seat-label';
-      div.setAttribute('data-testid', `seat-label-${i}`);
-      div.style.cssText =
-        'position:absolute;pointer-events:none;color:#fff;font-size:12px;font-weight:600;white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,0.8);z-index:4;';
-      div.textContent = name;
-      wrapper.appendChild(div);
-      labels.push(div);
-    });
-    labelsRef.current = labels;
-
-    if (sceneRef.current?.controls) {
-      sceneRef.current.controls.addEventListener('change', updateLabelPositions);
-    }
-
-    updateLabelPositions();
-  }
-
-  function showHand(index: number, handsList?: HandResponse[]): void {
-    const list = handsList ?? hands;
-    if (!list.length) return;
-    const cardData = handToCardData(list[index]);
-    const seatPlayerMap: Record<number, string> = {};
-    const seen = new Set<string>();
-    const playerNames: string[] = [];
-    list.forEach(hand => {
-      (hand.player_hands || []).forEach(playerHand => {
-        if (playerHand.player_name && !seen.has(playerHand.player_name)) {
-          seen.add(playerHand.player_name);
-          playerNames.push(playerHand.player_name);
-        }
-      });
-    });
-    playerNames.forEach((name, i) => {
-      seatPlayerMap[i] = name;
-    });
-
-    setCurrentStreet('Pre-Flop');
-    createSeatLabelsForPlayers(playerNames);
-
-    if (sceneRef.current) {
-      const scene = sceneRef.current;
-      requestAnimationFrame(() => {
-        scene.update({
-          cardData,
-          seatPlayerMap,
-          plMap: {},
-          streetIndex: STREET_INDEX['Pre-Flop'],
-        });
-      });
-    }
-  }
-
-  function handleStreetChange(streetName: string): void {
-    setCurrentStreet(streetName);
-    if (!hands.length) return;
-    const cardData = handToCardData(hands[handIndex]);
-
-    if (sceneRef.current) {
-      const seatPlayerMap: Record<number, string> = {};
-      const seen = new Set<string>();
-      const playerNames: string[] = [];
-      hands.forEach(hand => {
-        (hand.player_hands || []).forEach(playerHand => {
-          if (playerHand.player_name && !seen.has(playerHand.player_name)) {
-            seen.add(playerHand.player_name);
-            playerNames.push(playerHand.player_name);
-          }
-        });
-      });
-      playerNames.forEach((name, i) => {
-        seatPlayerMap[i] = name;
-      });
-
-      const scene = sceneRef.current;
-      requestAnimationFrame(() => {
-        scene.update({
-          cardData,
-          seatPlayerMap,
-          plMap: {},
-          streetIndex: STREET_INDEX[streetName] ?? 0,
-        });
-      });
-    }
-  }
-
-  async function selectGame(gameId: number): Promise<void> {
-    const session = sessions.find(s => s.game_id === gameId);
-    setActiveGameId(gameId);
-    setActiveGameStatus(session?.status ?? null);
-
-    try {
-      const fetchedHands = await fetchHands(gameId);
-      setHands(fetchedHands);
-      setHandIndex(0);
-      if (fetchedHands.length) {
-        showHand(0, fetchedHands);
-      }
-
-      // Start polling if game is active
-      if (session?.status === 'active') {
-        pollRef.current = setInterval(async () => {
-          try {
-            const updated = await fetchHands(gameId);
-            setHands(updated);
-          } catch {
-            // Silently ignore poll errors
-          }
-        }, 10_000);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  function handleBack(): void {
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-    labelsRef.current.forEach(el => el.remove());
-    labelsRef.current = [];
-    navigate('/data');
-  }
-
-  /* Clean up polling on unmount */
-  useEffect(() => {
-    return () => {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-      }
-    };
-  }, []);
-
-  function handleSessionChange(newHandNumber: number): void {
-    setHandIndex(newHandNumber - 1);
-    showHand(newHandNumber - 1);
-  }
-
-  /* Equity computation */
-  useEffect(() => {
-    if (!activeGameId || !hands.length) {
-      setEquityMap(null);
-      return;
-    }
-    const hand = hands[handIndex];
-    if (!hand) {
-      setEquityMap(null);
-      return;
-    }
-
-    const cardData = handToCardData(hand);
-    const playersWithCards = (cardData.player_hands || []).filter(
-      playerHand => playerHand.hole_cards && playerHand.hole_cards.length === 2 && playerHand.hole_cards[0] && playerHand.hole_cards[1],
-    );
-
-    if (playersWithCards.length < 2) {
-      setEquityMap(null);
-      return;
-    }
-
-    const communityCards = communityForStreet(cardData, currentStreet);
-    const holeCards = playersWithCards.map(playerHand => playerHand.hole_cards!);
-
-    try {
-      setEquityLoading(true);
-      const results = calculateEquity(holeCards, communityCards);
-      const equities: Record<string, number> = {};
-      playersWithCards.forEach((playerHand, i) => {
-        equities[playerHand.player_name] = results[i].equity;
-      });
-      setEquityMap(Object.keys(equities).length > 0 ? equities : null);
-    } catch {
-      setEquityMap(null);
-    } finally {
-      setEquityLoading(false);
-    }
-  }, [activeGameId, handIndex, hands, currentStreet]);
-
-  /* ── No game selected — prompt user to pick from Game Sessions ── */
-  if (!activeGameId) {
+  if (needsSessionMenu) {
+    const sessions = sortedPlaybackSessions(sessionsQuery.data ?? []);
     return (
-      <div data-testid="playback-game-selector" style={selectorStyles.container}>
-        <h2 style={selectorStyles.heading}>Playback</h2>
-
-        {loading && <p style={selectorStyles.loading}>Loading game…</p>}
-        {error && <p style={selectorStyles.error}>{error}</p>}
-
-        {!loading && !error && (
-          <p style={{ color: '#94a3b8', textAlign: 'center' as const, marginTop: '2rem' }}>
-            Select a game from{' '}
-            <a href="#/data" style={{ color: '#c084fc' }}>Game Sessions</a>
-            {' '}and click <strong>▶ Playback</strong> to watch it here.
-          </p>
-        )}
-      </div>
+      <PlaybackGameSelector
+        sessions={sessions}
+        isLoading={sessionsQuery.status === 'pending'}
+        error={sessionsQuery.error}
+        onSelect={handleSelectGame}
+      />
     );
   }
 
-  /* ── Playback screen ────────────────────────────────────────── */
+  const game = gameQuery.data;
+  const hasHands = hands.length > 0;
+  const replayError = gameQuery.error ?? handsQuery.error;
+  const isReplayLoading =
+    gameQuery.status === 'pending' || handsQuery.status === 'pending';
+
   return (
     <div
-      ref={wrapperRef}
       data-testid="mobile-canvas"
-      style={mobileStyles.wrapper}
+      ref={wrapperRef}
+      style={{ ...mobileStyles.wrapper, height: `calc(100dvh - ${topOffset}px)`, minHeight: 0 }}
     >
-      {/* Back button (overlay on canvas) */}
       <button
         data-testid="back-button"
         onClick={handleBack}
@@ -479,34 +266,48 @@ export function PlaybackView() {
       >
         ← Back
       </button>
-
-      {/* Canvas area — flex:1 fills space between HUD */}
-      <div data-testid="canvas-area" style={mobileStyles.canvasArea}>
-        <canvas ref={canvasRef} style={mobileStyles.canvas} />
-      </div>
-
-      {/* Scrubber controls — below the canvas, not overlaid */}
-      <div data-testid="scrubber-mount" style={mobileStyles.scrubberMount}>
-        {hands.length > 0 && (
-          <div>
-            <SessionScrubber
-              handCount={hands.length}
-              currentHand={handIndex + 1}
-              onChange={handleSessionChange}
-            />
-            {hands[handIndex] && (
-              <StreetScrubber
-                currentStreet={currentStreet}
-                handData={{ turn: hands[handIndex].turn, river: hands[handIndex].river }}
-                onStreetChange={handleStreetChange}
-              />
-            )}
-            {(equityLoading || equityMap) && (
-              <EquityRow equityMap={equityMap} loading={equityLoading} />
-            )}
+      <QualityToast />
+      <ConnectionNotice gameId={isActive ? gameId : null} />
+      <SceneErrorOverlay />
+      {replayError && (
+        <PlaybackStatus
+          title="Playback unavailable"
+          detail={errorMessage(replayError)}
+        />
+      )}
+      {!replayError && isReplayLoading && (
+        <PlaybackStatus title="Loading replay" />
+      )}
+      {!replayError && !isReplayLoading && game && !hasHands && (
+        <PlaybackStatus
+          title="No recorded hands yet"
+          detail={`Game ${game.game_id} has no hands to replay.`}
+        />
+      )}
+      {game && hasHands && (
+        <SessionReplayShell
+          gameId={gameId}
+          game={game}
+          hands={hands}
+          actionsByHandId={actionsByHandId}
+          initialHandIndex={hands.length - 1}
+          initialSpeed={1}
+          live={isActive}
+          viewer={SPECTATOR_VIEWER}
+          style={shellStyle}
+        >
+          <div data-testid="canvas-area" style={mobileStyles.canvasArea}>
+            <ReplayCanvas />
           </div>
-        )}
-      </div>
+        </SessionReplayShell>
+      )}
     </div>
   );
 }
+
+const shellStyle: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  flex: 1,
+  minHeight: 0,
+};

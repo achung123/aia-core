@@ -54,7 +54,7 @@ def _seed_game(client):
     assert r.status_code == 201
     game_id = r.json()['game_id']
 
-    r = client.post(f'/games/{game_id}/hands/start')
+    r = client.post(f'/games/{game_id}/hands/start?force=true')
     assert r.status_code == 201
     hand_number = r.json()['hand_number']
 
@@ -65,7 +65,7 @@ def _seed_full_game(client):
     """Create a game with 2 hands for richer cascade testing."""
     game_id, hn1 = _seed_game(client)
 
-    r = client.post(f'/games/{game_id}/hands/start')
+    r = client.post(f'/games/{game_id}/hands/start?force=true')
     assert r.status_code == 201
     hn2 = r.json()['hand_number']
 

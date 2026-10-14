@@ -22,6 +22,7 @@ export function BlindPositionDisplay({
 
   usePolling({
     intervalMs: POLL_INTERVAL_MS,
+    gameId,
     fetchFn: (signal) =>
       fetchBlinds(gameId)
         .then(data => {

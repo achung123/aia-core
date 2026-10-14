@@ -101,6 +101,40 @@ class PlayerResultUpdate(BaseModel):
     outcome_street: StreetEnum | None = None
 
 
+class HandTurnUpdate(BaseModel):
+    current_player_name: PlayerName
+
+
+class SettleRequest(BaseModel):
+    """Who beat whom, best first; players in the same tier split.
+
+    Optional — pots the ranking does not decide are decided by the cards.
+    """
+
+    ranking: list[list[PlayerName]] | None = None
+
+
+class SettledPot(BaseModel):
+    amount: float
+    eligible_players: list[str]
+    winners: list[str]
+
+
+class SettledPlayer(BaseModel):
+    player_name: str
+    result: str | None = None
+    contribution: float
+    payout: float
+    profit_loss: float | None = None
+    current_chips: float | None = None
+
+
+class SettlementResponse(BaseModel):
+    pot: float
+    pots: list[SettledPot]
+    players: list[SettledPlayer]
+
+
 class CommunityCardsUpdate(BaseModel):
     model_config = ConfigDict(use_enum_values=True)
 
@@ -145,6 +179,8 @@ class PlayerActionCreate(BaseModel):
     action: ActionEnum
     amount: float | None = Field(default=None, ge=0)
     is_all_in: bool = False
+    # The action_index the client last saw; a mismatch means the hand moved on
+    expected_action_index: int | None = None
 
 
 class PlayerActionResponse(BaseModel):
@@ -179,6 +215,8 @@ class PlayerStatusEntry(BaseModel):
     last_action: str | None = None
     current_chips: float | None = None
     pot_contribution: float = 0
+    # Has put their whole stack in; they take no further actions this hand
+    is_all_in: bool = False
 
 
 class HandStatusResponse(BaseModel):
@@ -194,6 +232,7 @@ class HandStatusResponse(BaseModel):
     side_pots: list = []
     street_complete: bool = False
     phase: str = 'preflop'
+    action_index: int = 0
 
 
 class HandStateResponse(BaseModel):

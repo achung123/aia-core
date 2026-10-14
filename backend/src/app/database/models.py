@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy import (
     Boolean,
@@ -9,12 +10,38 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    TypeDecorator,
     UniqueConstraint,
     text,
 )
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
+
+
+class Money(TypeDecorator):
+    """Dollars in Python, whole cents in the database.
+
+    Money was stored as a float, so sums drifted (a pot of 0.30000000000000004)
+    and two equal amounts could compare unequal. Stored as an integer number
+    of cents it is exact and sums add up. Python code and the API keep
+    working in dollars: values are rounded to the cent on the way in and
+    divided by 100 on the way out.
+    """
+
+    impl = Integer
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        cents = Decimal(str(value)) * 100
+        return int(cents.to_integral_value(rounding=ROUND_HALF_UP))
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        return round(value / 100, 2)
 
 
 class Player(Base):
@@ -37,13 +64,13 @@ class GameSession(Base):
     game_date = Column(Date, nullable=False)
     status = Column(String, nullable=False, default='active')
     winners = Column(String, nullable=True)
-    small_blind = Column(Float, nullable=False, default=0.10)
-    big_blind = Column(Float, nullable=False, default=0.20)
+    small_blind = Column(Money, nullable=False, default=0.10)
+    big_blind = Column(Money, nullable=False, default=0.20)
     blind_timer_minutes = Column(Integer, nullable=False, default=15)
     blind_timer_paused = Column(Boolean, nullable=False, default=False)
     blind_timer_started_at = Column(DateTime, nullable=True)
     blind_timer_remaining_seconds = Column(Integer, nullable=True)
-    default_buy_in = Column(Float, nullable=True)
+    default_buy_in = Column(Money, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     players = relationship('Player', secondary='game_players', back_populates='games')
@@ -64,8 +91,8 @@ class GamePlayer(Base):
     )
     is_active = Column(Boolean, default=True, nullable=False)
     seat_number = Column(Integer, nullable=True)
-    buy_in = Column(Float, nullable=True)
-    current_chips = Column(Float, nullable=True)
+    buy_in = Column(Money, nullable=True)
+    current_chips = Column(Money, nullable=True)
 
 
 class Hand(Base):
@@ -89,8 +116,11 @@ class Hand(Base):
     source_upload_id = Column(
         Integer, ForeignKey('image_uploads.upload_id'), nullable=True
     )
-    pot = Column(Float, nullable=False, default=0)
+    pot = Column(Money, nullable=False, default=0)
     side_pots = Column(String, nullable=False, default='[]')
+    # Blinds in force when the hand started; a mid-hand blind change does not apply
+    small_blind = Column(Money, nullable=True)
+    big_blind = Column(Money, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     game_session = relationship('GameSession', back_populates='hands')
@@ -114,9 +144,10 @@ class PlayerHand(Base):
     card_1 = Column(String, nullable=True)
     card_2 = Column(String, nullable=True)
     result = Column(String, nullable=True)
-    profit_loss = Column(Float, nullable=True)
+    profit_loss = Column(Money, nullable=True)
     outcome_street = Column(String, nullable=True)
     is_all_in = Column(Boolean, nullable=False, default=False)
+    chips_credited = Column(Money, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     hand = relationship('Hand', back_populates='player_hands')
@@ -135,7 +166,7 @@ class PlayerHandAction(Base):
     )
     street = Column(String, nullable=False)
     action = Column(String, nullable=False)
-    amount = Column(Float, nullable=True)
+    amount = Column(Money, nullable=True)
     created_at = Column(
         DateTime,
         default=lambda: datetime.now(timezone.utc),
@@ -225,7 +256,27 @@ class Rebuy(Base):
     player_id = Column(
         Integer, ForeignKey('players.player_id'), nullable=False, index=True
     )
-    amount = Column(Float, nullable=False)
+    amount = Column(Money, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    player = relationship('Player')
+
+
+class ChipAdjustment(Base):
+    """A dealer correction to a player's stack, kept as an audit trail."""
+
+    __tablename__ = 'chip_adjustments'
+
+    adjustment_id = Column(Integer, primary_key=True, autoincrement=True)
+    game_id = Column(
+        Integer, ForeignKey('game_sessions.game_id'), nullable=False, index=True
+    )
+    player_id = Column(
+        Integer, ForeignKey('players.player_id'), nullable=False, index=True
+    )
+    delta = Column(Money, nullable=False)
+    chips_after = Column(Money, nullable=False)
+    reason = Column(String, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     player = relationship('Player')

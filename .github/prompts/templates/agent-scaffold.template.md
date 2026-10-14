@@ -8,7 +8,18 @@ Xavier reads this file before generating any new agent.
 FULL SCAFFOLD = three layers, always generated together:
   Layer 1 → .github/agents/<slug>.agent.md          (this file)
   Layer 2 → .github/prompts/<slug>.<task>.prompt.md  (one per distinct task/quick command)
-  Layer 3 → .github/templates/<slug>.<type>.template.md (one per structured output type)
+  Layer 3 → .github/prompts/templates/<slug>.<type>.template.md (one per structured output type)
+
+OPTIONAL Layer 4 → .github/prompts/skills/<skill-name>/SKILL.md
+  Cross-agent reusable recipes, per the GitHub Copilot agent skills spec:
+  https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-skills
+  Each skill lives in its own directory under .github/prompts/skills/ named
+  after the skill (kebab-case, no `skill.` prefix). The file MUST be named
+  `SKILL.md`. Frontmatter contains only `name` and `description` (and optional
+  `allowed-tools`, `license`) — never `mode`, `agent`, or `tools`. Create a
+  skill when a workflow is consumed by more than one agent or is a named
+  recipe callable directly by the user. Agents that consume a skill must list
+  it in a dedicated `## Skills` section.
 
 Copy this scaffold, replace every {{PLACEHOLDER}}, delete this comment block.
 
@@ -35,8 +46,8 @@ PLACEHOLDER LEGEND
 {{PROMPT_FILES}}        Required. List of every companion .prompt.md file and its task.
                         Format: `<slug>.<task>.prompt.md` — description
 {{TEMPLATE_FILES?}}     Optional. List of every companion .template.md file and its output type.
-                        Format: `<slug>.<type>.template.md` — description
--->
+                        Format: `<slug>.<type>.template.md` — description{{SKILL_FILES?}}          Optional. List of shared skills this agent consumes.
+                        Format: `skill.<name>.prompt.md` — role the skill plays for this agent-->
 
 ---
 name: {{AGENT_NAME}}
@@ -86,10 +97,16 @@ handoffs:
 
 ---
 
+## Skills
+
+{{SKILL_FILES?}}
+
+---
+
 ## Companion Files
 
 **Prompts** — one per task, located in `.github/prompts/`:
 {{PROMPT_FILES}}
 
-**Templates** — one per structured output type, located in `.github/templates/`:
+**Templates** — one per structured output type, located in `.github/prompts/templates/`:
 {{TEMPLATE_FILES?}}

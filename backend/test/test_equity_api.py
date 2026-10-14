@@ -157,6 +157,44 @@ class TestEquityEndpointHappyPath:
         total = sum(e['equity'] for e in data['equities'])
         assert abs(total - 1.0) < 0.02
 
+    def test_street_query_truncates_board_for_equity_calculation(
+        self, client, game_with_players
+    ):
+        hand_number = _create_hand(
+            client,
+            game_with_players,
+            community={
+                'flop_1': {'rank': '2', 'suit': 'C'},
+                'flop_2': {'rank': '7', 'suit': 'D'},
+                'flop_3': {'rank': 'J', 'suit': 'S'},
+                'turn': {'rank': 'Q', 'suit': 'H'},
+                'river': {'rank': 'A', 'suit': 'D'},
+            },
+            player_entries=[
+                {
+                    'player_name': 'Alice',
+                    'card_1': {'rank': 'A', 'suit': 'S'},
+                    'card_2': {'rank': 'K', 'suit': 'S'},
+                },
+                {
+                    'player_name': 'Bob',
+                    'card_1': {'rank': 'Q', 'suit': 'S'},
+                    'card_2': {'rank': 'Q', 'suit': 'D'},
+                },
+            ],
+        )
+
+        flop_resp = client.get(
+            f'/games/{game_with_players}/hands/{hand_number}/equity?street=flop'
+        )
+        river_resp = client.get(
+            f'/games/{game_with_players}/hands/{hand_number}/equity?street=river'
+        )
+
+        assert flop_resp.status_code == 200
+        assert river_resp.status_code == 200
+        assert flop_resp.json()['equities'] != river_resp.json()['equities']
+
 
 class TestEquityEndpointTooFewPlayers:
     """AC-2: Returns empty equities list if <2 players have cards."""
@@ -167,7 +205,7 @@ class TestEquityEndpointTooFewPlayers:
 
         resp = client.get(f'/games/{game_with_players}/hands/{hand_number}/equity')
         assert resp.status_code == 200
-        assert resp.json() == {'equities': []}
+        assert resp.json()['equities'] == []
 
     def test_one_player_with_cards(self, client, game_with_players):
         """Only one player has hole cards → empty equities."""
@@ -185,7 +223,7 @@ class TestEquityEndpointTooFewPlayers:
 
         resp = client.get(f'/games/{game_with_players}/hands/{hand_number}/equity')
         assert resp.status_code == 200
-        assert resp.json() == {'equities': []}
+        assert resp.json()['equities'] == []
 
 
 class TestEquityEndpoint404:
@@ -366,4 +404,4 @@ class TestPlayerPerspectiveEquity:
             f'/games/{game_with_players}/hands/{hand_number}/equity?player=ZZZ'
         )
         assert resp.status_code == 200
-        assert resp.json() == {'equities': []}
+        assert resp.json()['equities'] == []

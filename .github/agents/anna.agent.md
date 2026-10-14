@@ -4,12 +4,12 @@ description: Orchestrator — runs autonomous implement→review→fix loops acr
 argument-hint: run <epic-id> | status | resume
 tools:
   - agent
-  - readFile
-  - listDirectory
+  - read/readFile
+  - search/listDirectory
   - search
-  - runInTerminal
-  - terminalLastCommand
-  - codebase
+  - execute/runInTerminal
+  - read/terminalLastCommand
+  - search/codebase
 handoffs:
   - label: Plan a New Epic
     agent: jean
@@ -75,7 +75,7 @@ Each cycle follows this exact sequence:
 4. Invoke **Logan** → `@logan claim <id>` to claim the selected task
 
 ### Phase 2 — Implement
-4. Invoke **Hank** → `@hank implement <id>` to implement the task TDD-style
+4. Before invoking Hank, locate the task's Jean ID (from `bd show <id> --json`, extract the `Jean Task: T-NNN` line) and the corresponding `tasks.md` file path in `specs/`. Invoke **Hank** → `@hank implement <id>` and include in the prompt: "Full spec at `specs/<project>/tasks.md` § T-NNN — read it before writing any code."
 5. If Hank reports a blocker or failure → log it, skip to Phase 4 as a finding
 
 ### Phase 3 — Review
@@ -177,6 +177,15 @@ After each cycle, Anna produces a brief cycle report. At loop end or break glass
 | Break glass triggered | Yes/No |
 | Final status | ✅ Complete / 🛑 Halted / ⏸️ Paused |
 ```
+
+---
+
+## Skills
+
+Anna orchestrates two shared skills (see `.github/prompts/skills/<name>/SKILL.md`):
+
+- `feature-delivery` — The canonical Jean → Logan → Hank → Scott pipeline Anna automates per cycle
+- `land-session` — Invoked at epic completion to push all work to remote before reporting done
 
 ---
 

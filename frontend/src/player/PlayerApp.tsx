@@ -120,6 +120,9 @@ export function PlayerApp() {
   const [minimumBet, setMinimumBet] = useState<number | null>(null);
   const [minimumRaise, setMinimumRaise] = useState<number | null>(null);
   const [pot, setPot] = useState(0);
+  // How many actions the server had recorded when this screen last heard.
+  // Sent with every action so a stale screen cannot act twice.
+  const [actionIndex, setActionIndex] = useState<number | null>(null);
   const [runningTotal, setRunningTotal] = useState<number | null>(null);
 
   useEffect(() => {
@@ -249,6 +252,7 @@ export function PlayerApp() {
   const { isReconnecting: playerReconnecting, triggerNow: triggerPlayerPoll } = usePolling({
     intervalMs: 5000,
     enabled: step === 'playing' && !!gameId && !!playerName,
+    gameId,
     fetchFn: (signal) =>
       fetchLatestHand(gameId!, { signal })
         .then(latest => {
@@ -283,6 +287,7 @@ export function PlayerApp() {
               setMinimumBet(result.data.minimum_bet ?? null);
               setMinimumRaise(result.data.minimum_raise ?? null);
               setPot(result.data.pot ?? 0);
+              setActionIndex(result.data.action_index ?? null);
               const me = result.data.players.find(p => p.name === playerName);
               if (me) {
                 setPlayerStatus(me.participation_status as ParticipationStatus);
@@ -362,6 +367,7 @@ export function PlayerApp() {
             />
             {playerStatus === 'joined' && handNumber && isMyTurn && (
               <PlayerActionButtons
+                expectedActionIndex={actionIndex}
                 gameId={gameId!}
                 handNumber={handNumber}
                 playerName={playerName}
@@ -423,8 +429,8 @@ export function PlayerApp() {
 
   return (
     <div style={styles.container}>
-      <h1>Game Mode</h1>
-      <h2 style={styles.heading}>Select a Game</h2>
+      <h1 style={styles.heading}>Join a game</h1>
+      <p style={{ color: '#94a3b8', margin: '0 0 1rem' }}>Pick the game the dealer started.</p>
 
       {loading && <p>Loading games…</p>}
       {error && <p style={styles.error}>{error}</p>}
@@ -465,6 +471,7 @@ const styles: Record<string, CSSProperties> = {
   heading: {
     fontSize: '1.4rem',
     marginBottom: '0.75rem',
+    color: '#e2e8f0',
   },
   playerName: {
     fontSize: '1.6rem',

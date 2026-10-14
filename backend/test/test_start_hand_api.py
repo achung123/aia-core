@@ -1,4 +1,6 @@
 """Tests for aia-core-5wiv: Start-all hand endpoint with SB/BB rotation."""
+# These tests start hands back to back to check numbering and blind rotation, not
+# the unsettled-hand guard (see test_start_hand_guard.py), so they pass force=true.
 
 import pytest
 from fastapi.testclient import TestClient
@@ -77,19 +79,19 @@ class TestStartHandCreation:
     def test_returns_201(self, client, db):
         game_id = _create_game(client, ['Alice', 'Bob', 'Charlie'])
         _assign_seats(db, game_id)
-        resp = client.post(f'/games/{game_id}/hands/start')
+        resp = client.post(f'/games/{game_id}/hands/start?force=true')
         assert resp.status_code == 201
 
     def test_creates_hand_number_1(self, client, db):
         game_id = _create_game(client, ['Alice', 'Bob', 'Charlie'])
         _assign_seats(db, game_id)
-        resp = client.post(f'/games/{game_id}/hands/start')
+        resp = client.post(f'/games/{game_id}/hands/start?force=true')
         assert resp.json()['hand_number'] == 1
 
     def test_creates_player_hands_for_all_active(self, client, db):
         game_id = _create_game(client, ['Alice', 'Bob', 'Charlie'])
         _assign_seats(db, game_id)
-        resp = client.post(f'/games/{game_id}/hands/start')
+        resp = client.post(f'/games/{game_id}/hands/start?force=true')
         data = resp.json()
         assert len(data['player_hands']) == 3
         names = {ph['player_name'] for ph in data['player_hands']}
@@ -98,17 +100,17 @@ class TestStartHandCreation:
     def test_increments_hand_number(self, client, db):
         game_id = _create_game(client, ['Alice', 'Bob', 'Charlie'])
         _assign_seats(db, game_id)
-        resp1 = client.post(f'/games/{game_id}/hands/start')
+        resp1 = client.post(f'/games/{game_id}/hands/start?force=true')
         assert resp1.json()['hand_number'] == 1
-        resp2 = client.post(f'/games/{game_id}/hands/start')
+        resp2 = client.post(f'/games/{game_id}/hands/start?force=true')
         assert resp2.json()['hand_number'] == 2
-        resp3 = client.post(f'/games/{game_id}/hands/start')
+        resp3 = client.post(f'/games/{game_id}/hands/start?force=true')
         assert resp3.json()['hand_number'] == 3
 
     def test_player_hands_have_null_cards(self, client, db):
         game_id = _create_game(client, ['Alice', 'Bob'])
         _assign_seats(db, game_id)
-        resp = client.post(f'/games/{game_id}/hands/start')
+        resp = client.post(f'/games/{game_id}/hands/start?force=true')
         for ph in resp.json()['player_hands']:
             assert ph['card_1'] is None
             assert ph['card_2'] is None
@@ -120,14 +122,14 @@ class TestStartHandSBBBFirstHand:
     def test_first_hand_sb_is_first_by_seat(self, client, db):
         game_id = _create_game(client, ['Alice', 'Bob', 'Charlie'])
         _assign_seats(db, game_id)
-        resp = client.post(f'/games/{game_id}/hands/start')
+        resp = client.post(f'/games/{game_id}/hands/start?force=true')
         data = resp.json()
         assert data['sb_player_name'] == 'Alice'
 
     def test_first_hand_bb_is_second_by_seat(self, client, db):
         game_id = _create_game(client, ['Alice', 'Bob', 'Charlie'])
         _assign_seats(db, game_id)
-        resp = client.post(f'/games/{game_id}/hands/start')
+        resp = client.post(f'/games/{game_id}/hands/start?force=true')
         data = resp.json()
         assert data['bb_player_name'] == 'Bob'
 
@@ -138,8 +140,8 @@ class TestStartHandSBBBRotation:
     def test_second_hand_sb_advances(self, client, db):
         game_id = _create_game(client, ['Alice', 'Bob', 'Charlie'])
         _assign_seats(db, game_id)
-        client.post(f'/games/{game_id}/hands/start')
-        resp = client.post(f'/games/{game_id}/hands/start')
+        client.post(f'/games/{game_id}/hands/start?force=true')
+        resp = client.post(f'/games/{game_id}/hands/start?force=true')
         data = resp.json()
         assert data['sb_player_name'] == 'Bob'
         assert data['bb_player_name'] == 'Charlie'
@@ -147,9 +149,9 @@ class TestStartHandSBBBRotation:
     def test_third_hand_sb_advances_again(self, client, db):
         game_id = _create_game(client, ['Alice', 'Bob', 'Charlie'])
         _assign_seats(db, game_id)
-        client.post(f'/games/{game_id}/hands/start')
-        client.post(f'/games/{game_id}/hands/start')
-        resp = client.post(f'/games/{game_id}/hands/start')
+        client.post(f'/games/{game_id}/hands/start?force=true')
+        client.post(f'/games/{game_id}/hands/start?force=true')
+        resp = client.post(f'/games/{game_id}/hands/start?force=true')
         data = resp.json()
         assert data['sb_player_name'] == 'Charlie'
         assert data['bb_player_name'] == 'Alice'
@@ -159,9 +161,9 @@ class TestStartHandSBBBRotation:
         _assign_seats(db, game_id)
         # Hands 1-3
         for _ in range(3):
-            client.post(f'/games/{game_id}/hands/start')
+            client.post(f'/games/{game_id}/hands/start?force=true')
         # Hand 4 should wrap back
-        resp = client.post(f'/games/{game_id}/hands/start')
+        resp = client.post(f'/games/{game_id}/hands/start?force=true')
         data = resp.json()
         assert data['sb_player_name'] == 'Alice'
         assert data['bb_player_name'] == 'Bob'
@@ -169,13 +171,13 @@ class TestStartHandSBBBRotation:
     def test_heads_up_rotation(self, client, db):
         game_id = _create_game(client, ['Alice', 'Bob'])
         _assign_seats(db, game_id)
-        resp1 = client.post(f'/games/{game_id}/hands/start')
+        resp1 = client.post(f'/games/{game_id}/hands/start?force=true')
         assert resp1.json()['sb_player_name'] == 'Alice'
         assert resp1.json()['bb_player_name'] == 'Bob'
-        resp2 = client.post(f'/games/{game_id}/hands/start')
+        resp2 = client.post(f'/games/{game_id}/hands/start?force=true')
         assert resp2.json()['sb_player_name'] == 'Bob'
         assert resp2.json()['bb_player_name'] == 'Alice'
-        resp3 = client.post(f'/games/{game_id}/hands/start')
+        resp3 = client.post(f'/games/{game_id}/hands/start?force=true')
         assert resp3.json()['sb_player_name'] == 'Alice'
         assert resp3.json()['bb_player_name'] == 'Bob'
 
@@ -190,7 +192,7 @@ class TestStartHandInactivePlayers:
             f'/games/{game_id}/players/Charlie/status',
             json={'is_active': False},
         )
-        resp = client.post(f'/games/{game_id}/hands/start')
+        resp = client.post(f'/games/{game_id}/hands/start?force=true')
         data = resp.json()
         names = {ph['player_name'] for ph in data['player_hands']}
         assert 'Charlie' not in names
@@ -200,7 +202,7 @@ class TestStartHandInactivePlayers:
         game_id = _create_game(client, ['Alice', 'Bob', 'Charlie', 'Dave'])
         _assign_seats(db, game_id)
         # Hand 1: SB=Alice, BB=Bob (all active)
-        resp1 = client.post(f'/games/{game_id}/hands/start')
+        resp1 = client.post(f'/games/{game_id}/hands/start?force=true')
         assert resp1.json()['sb_player_name'] == 'Alice'
         assert resp1.json()['bb_player_name'] == 'Bob'
         # Make Bob inactive before hand 2
@@ -211,7 +213,7 @@ class TestStartHandInactivePlayers:
         # Hand 2: SB was Alice (prev), rotate forward.
         # Active sorted: Alice(1), Charlie(3), Dave(4)
         # Prev SB was Alice at idx 0, so new SB = idx 1 = Charlie
-        resp2 = client.post(f'/games/{game_id}/hands/start')
+        resp2 = client.post(f'/games/{game_id}/hands/start?force=true')
         assert resp2.json()['sb_player_name'] == 'Charlie'
         assert resp2.json()['bb_player_name'] == 'Dave'
 
@@ -220,7 +222,7 @@ class TestStartHandInactivePlayers:
         game_id = _create_game(client, ['Alice', 'Bob', 'Charlie', 'Dave'])
         _assign_seats(db, game_id)
         # Hand 1: SB=Alice, BB=Bob
-        client.post(f'/games/{game_id}/hands/start')
+        client.post(f'/games/{game_id}/hands/start?force=true')
         # Make Alice (prev SB) inactive
         client.patch(
             f'/games/{game_id}/players/Alice/status',
@@ -229,7 +231,7 @@ class TestStartHandInactivePlayers:
         # Hand 2: Prev SB was Alice (seat 1, now inactive).
         # Active sorted: Bob(2), Charlie(3), Dave(4)
         # Advance from Alice's seat → next active is Bob, so SB=Bob, BB=Charlie
-        resp2 = client.post(f'/games/{game_id}/hands/start')
+        resp2 = client.post(f'/games/{game_id}/hands/start?force=true')
         assert resp2.json()['sb_player_name'] == 'Bob'
         assert resp2.json()['bb_player_name'] == 'Charlie'
 
@@ -240,21 +242,21 @@ class TestStartHandResponse:
     def test_response_has_sb_player_name(self, client, db):
         game_id = _create_game(client, ['Alice', 'Bob'])
         _assign_seats(db, game_id)
-        resp = client.post(f'/games/{game_id}/hands/start')
+        resp = client.post(f'/games/{game_id}/hands/start?force=true')
         assert 'sb_player_name' in resp.json()
         assert resp.json()['sb_player_name'] is not None
 
     def test_response_has_bb_player_name(self, client, db):
         game_id = _create_game(client, ['Alice', 'Bob'])
         _assign_seats(db, game_id)
-        resp = client.post(f'/games/{game_id}/hands/start')
+        resp = client.post(f'/games/{game_id}/hands/start?force=true')
         assert 'bb_player_name' in resp.json()
         assert resp.json()['bb_player_name'] is not None
 
     def test_response_has_hand_fields(self, client, db):
         game_id = _create_game(client, ['Alice', 'Bob'])
         _assign_seats(db, game_id)
-        resp = client.post(f'/games/{game_id}/hands/start')
+        resp = client.post(f'/games/{game_id}/hands/start?force=true')
         data = resp.json()
         assert 'hand_id' in data
         assert 'game_id' in data
@@ -265,7 +267,7 @@ class TestStartHandResponse:
     def test_response_community_cards_null(self, client, db):
         game_id = _create_game(client, ['Alice', 'Bob'])
         _assign_seats(db, game_id)
-        resp = client.post(f'/games/{game_id}/hands/start')
+        resp = client.post(f'/games/{game_id}/hands/start?force=true')
         data = resp.json()
         assert data['flop_1'] is None
         assert data['flop_2'] is None
@@ -288,7 +290,7 @@ class TestStartHandErrorCases:
             f'/games/{game_id}/players/Bob/status',
             json={'is_active': False},
         )
-        resp = client.post(f'/games/{game_id}/hands/start')
+        resp = client.post(f'/games/{game_id}/hands/start?force=true')
         assert resp.status_code == 400
 
     def test_zero_active_players_returns_400(self, client, db):
@@ -302,7 +304,7 @@ class TestStartHandErrorCases:
             f'/games/{game_id}/players/Bob/status',
             json={'is_active': False},
         )
-        resp = client.post(f'/games/{game_id}/hands/start')
+        resp = client.post(f'/games/{game_id}/hands/start?force=true')
         assert resp.status_code == 400
 
     def test_error_message_for_too_few_players(self, client, db):
@@ -312,7 +314,7 @@ class TestStartHandErrorCases:
             f'/games/{game_id}/players/Bob/status',
             json={'is_active': False},
         )
-        resp = client.post(f'/games/{game_id}/hands/start')
+        resp = client.post(f'/games/{game_id}/hands/start?force=true')
         assert 'active players' in resp.json()['detail'].lower()
 
 
@@ -323,7 +325,7 @@ class TestStartHandWithNullSeatNumbers:
         """Players from create_game have null seat_number; should use player_id order."""
         game_id = _create_game(client, ['Alice', 'Bob', 'Charlie'])
         # Don't assign seats — they'll be null
-        resp = client.post(f'/games/{game_id}/hands/start')
+        resp = client.post(f'/games/{game_id}/hands/start?force=true')
         assert resp.status_code == 201
         data = resp.json()
         # Should still assign SB/BB based on deterministic order

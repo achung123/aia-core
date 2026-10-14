@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import type React from 'react';
 import { CardPicker } from './CardPicker.tsx';
-import { patchPlayerResult, updateCommunityCards, updateHolecards, fetchEquity, fetchHand, fetchHandActions } from '../api/client.ts';
+import { patchPlayerResult, settleHand, updateCommunityCards, updateHolecards, fetchEquity, fetchHand } from '../api/client.ts';
 import type { Player, CommunityCards } from '../stores/dealerStore.ts';
-import type { ResultEnum, StreetEnum, PlayerEquityEntry, HandActionResponse } from '../api/types';
-import { inferOutcomeStreet, mapEquityToOutcomes } from './showdownHelpers.ts';
+import type { ResultEnum, StreetEnum, PlayerEquityEntry, SettlementResponse } from '../api/types';
+import { mapEquityToOutcomes } from './showdownHelpers.ts';
 import { PlayingCard } from '../components/PlayingCard.tsx';
 
 type CommunityField = 'flop1' | 'flop2' | 'flop3' | 'turn' | 'river';
@@ -99,10 +99,10 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
   const [showFinishConfirm, setShowFinishConfirm] = useState(false);
   const [equityData, setEquityData] = useState<PlayerEquityEntry[]>([]);
   const [handPot, setHandPot] = useState<number>(0);
-  const [playerContributions, setPlayerContributions] = useState<Record<string, number>>({});
+  const [payoutPreview, setPayoutPreview] = useState<PayoutPreview>({ status: 'idle' });
   const [handDescriptions, setHandDescriptions] = useState<Record<string, string>>({});
 
-  // Fetch hand data for pot, hand descriptions, and actions for contributions
+  // Fetch hand data for pot and hand descriptions
   useEffect(() => {
     fetchHand(gameId, handId).then((hand) => {
       setHandPot(hand.pot ?? 0);
@@ -115,17 +115,35 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
       }
       setHandDescriptions(descs);
     }).catch(() => {});
-
-    fetchHandActions(gameId, handId).then((actions: HandActionResponse[]) => {
-      const contribs: Record<string, number> = {};
-      for (const a of actions) {
-        if (a.action in { call: 1, bet: 1, raise: 1, blind: 1 } && a.amount) {
-          contribs[a.player_name] = (contribs[a.player_name] ?? 0) + a.amount;
-        }
-      }
-      setPlayerContributions(contribs);
-    }).catch(() => {});
   }, [gameId, handId]);
+
+  // Show what the chosen winners would be paid before anything is saved, so
+  // a wrong tap is caught here rather than after the stacks have moved. The
+  // server does the arithmetic (side pots included); this only displays it.
+  const chosenWinners = editPlayers
+    .filter((player) => player.result === 'won')
+    .map((player) => player.name)
+    .sort();
+  const winnersKey = chosenWinners.join('|');
+  useEffect(() => {
+    if (handPot <= 0 || winnersKey === '') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPayoutPreview({ status: 'idle' });
+      return;
+    }
+    let cancelled = false;
+    setPayoutPreview({ status: 'loading' });
+    settleHand(gameId, handId, { ranking: [winnersKey.split('|')] }, true)
+      .then((data) => {
+        if (!cancelled) setPayoutPreview({ status: 'ready', data });
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setPayoutPreview({ status: 'error', message: payoutErrorMessage(err) });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [gameId, handId, handPot, winnersKey]);
 
   useEffect(() => {
     fetchEquity(gameId, handId)
@@ -208,27 +226,6 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
     setSaving(true);
     setError(null);
 
-    // Compute profit_loss for each player based on pot and contributions
-    const winners = editPlayers.filter((player) => player.result === 'won');
-    const numWinners = winners.length || 1;
-    const pot = handPot;
-
-    function computeProfitLoss(player: EditablePlayer): number | null {
-      if (pot <= 0) return null; // no pot tracked — skip P&L
-      const contribution = playerContributions[player.name] ?? 0;
-      if (player.result === 'won') {
-        return round2(pot / numWinners - contribution);
-      }
-      if (player.result === 'lost' || player.result === 'folded') {
-        return round2(-contribution);
-      }
-      return null;
-    }
-
-    function round2(n: number): number {
-      return Math.round(n * 100) / 100;
-    }
-
     interface LabeledMutation {
       label: string;
       promise: Promise<unknown>;
@@ -240,14 +237,14 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
 
     // Patch only dirty player results not already saved
     for (const player of editPlayers) {
-      const pl = computeProfitLoss(player);
-      const isDirty = player.result !== player.origResult || player.outcomeStreet !== player.origOutcomeStreet || pl !== null;
+      const isDirty = player.result !== player.origResult || player.outcomeStreet !== player.origOutcomeStreet;
       if (isDirty && !savedResults.has(player.name)) {
         mutations.push({
           label: `${player.name} result`,
           promise: patchPlayerResult(gameId, handId, player.name, {
             result: player.result as ResultEnum,
-            profit_loss: pl,
+            // P&L and chip payouts are computed by the server at settlement
+            profit_loss: null,
             outcome_street: (player.outcomeStreet || null) as StreetEnum | null,
           }),
           type: 'result',
@@ -294,9 +291,24 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
       });
     }
 
+    // The server builds the pots (side pots, folded money, uncalled bets) and
+    // pays the winners. Safe to repeat, so a retry or a correction never pays twice.
+    async function settle(): Promise<boolean> {
+      const winners = editPlayers.filter((player) => player.result === 'won').map((player) => player.name);
+      if (handPot <= 0 || winners.length === 0) return true; // no betting tracked
+      try {
+        await settleHand(gameId, handId, { ranking: [winners] });
+        return true;
+      } catch (err: unknown) {
+        setError(`Could not pay out the hand: ${err instanceof Error ? err.message : 'unknown error'}`);
+        return false;
+      }
+    }
+
     if (mutations.length === 0) {
+      const settled = await settle();
       setSaving(false);
-      onSaved();
+      if (settled) onSaved();
       return;
     }
 
@@ -322,13 +334,16 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
     setSavedResults(newSavedResults);
     setSavedHolecards(newSavedHolecards);
     setCommunitySaved(newCommunitySaved);
-    setSaving(false);
 
     if (failed.length > 0) {
+      setSaving(false);
       setError(`Save failed for: ${failed.join(', ')}. Retry will only re-submit failed changes.`);
-    } else {
-      onSaved();
+      return;
     }
+
+    const settled = await settle();
+    setSaving(false);
+    if (settled) onSaved();
   }
 
   return (
@@ -439,6 +454,8 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
         ))}
       </div>
 
+      <PayoutPreviewPanel preview={payoutPreview} />
+
       {error && (
         <div data-testid="review-error" style={styles.error}>
           {error}
@@ -486,7 +503,96 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
   );
 }
 
+type PayoutPreview =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'ready'; data: SettlementResponse }
+  | { status: 'error'; message: string };
+
+/** Pull the server's explanation out of an `HTTP 400: {"detail": ...}` error. */
+export function payoutErrorMessage(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err);
+  const body = raw.replace(/^HTTP \d+:\s*/, '');
+  try {
+    const parsed = JSON.parse(body) as { detail?: unknown };
+    if (typeof parsed.detail === 'string') return parsed.detail;
+  } catch {
+    // not JSON — show it as it is
+  }
+  return body || 'Could not work out the payout';
+}
+
+function formatMoney(amount: number): string {
+  return `$${Math.abs(amount).toFixed(2)}`;
+}
+
+function PayoutPreviewPanel({ preview }: { preview: PayoutPreview }) {
+  if (preview.status === 'idle') return null;
+  if (preview.status === 'loading') {
+    return (
+      <div data-testid="payout-preview" style={styles.previewBox}>
+        <div style={styles.previewTitle}>Payout preview</div>
+        <div style={styles.previewMuted}>Working it out…</div>
+      </div>
+    );
+  }
+  if (preview.status === 'error') {
+    return (
+      <div data-testid="payout-preview" style={{ ...styles.previewBox, ...styles.previewWarn }}>
+        <div style={styles.previewTitle}>Payout preview</div>
+        <div data-testid="payout-preview-error">{preview.message}</div>
+      </div>
+    );
+  }
+  const { pots, players } = preview.data;
+  return (
+    <div data-testid="payout-preview" style={styles.previewBox}>
+      <div style={styles.previewTitle}>Payout preview</div>
+      {pots.length > 1 && (
+        <div style={styles.previewPots}>
+          {pots.map((pot, index) => (
+            <div key={index} data-testid={`payout-pot-${index}`}>
+              {index === 0 ? 'Main pot' : `Side pot ${index}`} {formatMoney(pot.amount)} →{' '}
+              {pot.winners.length > 0 ? pot.winners.join(', ') : '—'}
+            </div>
+          ))}
+        </div>
+      )}
+      {players.map((player) => {
+        const net = player.profit_loss ?? player.payout - player.contribution;
+        return (
+          <div
+            key={player.player_name}
+            data-testid={`payout-row-${player.player_name}`}
+            style={styles.previewRow}
+          >
+            <span>{player.player_name}</span>
+            <span style={{ color: net > 0 ? '#4ade80' : net < 0 ? '#f87171' : '#94a3b8' }}>
+              {net > 0 ? '+' : net < 0 ? '−' : ''}{formatMoney(net)}
+            </span>
+          </div>
+        );
+      })}
+      <div style={styles.previewMuted}>Based on the saved hand. Nothing is paid until you finish.</div>
+    </div>
+  );
+}
+
 const styles: Record<string, React.CSSProperties> = {
+  previewBox: {
+    margin: '0 0 1rem',
+    padding: '0.75rem',
+    borderRadius: 8,
+    background: '#1e1b4b',
+    border: '1px solid #312e81',
+    color: '#e2e8f0',
+    fontSize: '0.9rem',
+  },
+  previewWarn: { background: '#422006', borderColor: '#a16207', color: '#fde68a' },
+  previewTitle: { fontWeight: 700, marginBottom: '0.4rem', color: '#c7d2fe' },
+  previewMuted: { color: '#94a3b8', fontSize: '0.8rem', marginTop: '0.4rem' },
+  previewPots: { marginBottom: '0.4rem', color: '#cbd5e1' },
+  previewRow: { display: 'flex', justifyContent: 'space-between', padding: '2px 0' },
   container: {
     maxWidth: '480px',
     margin: '0 auto',

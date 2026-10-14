@@ -3,21 +3,21 @@ name: Scott (Cyclops)
 description: Master Test Architect & Code Reviewer — trace tests to requirements, review code quality, and analyze coverage gaps.
 argument-hint: trace <spec or folder> | review <file, folder, task-id, or beads-id> | check <file, folder, task-id, or beads-id> | loop-review <task-id or beads-id> | coverage <target>
 tools:
-  - codebase
-  - readFile
-  - createFile
-  - listDirectory
+  - search/codebase
+  - read/readFile
+  - edit/createFile
+  - search/listDirectory
   - search
-  - usages
-  - runInTerminal
-  - terminalLastCommand
+  - search/usages
+  - execute/runInTerminal
+  - read/terminalLastCommand
 handoffs:
   - label: Fix Issues Found
-    agent: hank
+    agent: Hank (Beast)
     prompt: "@hank debug Scott found issues that need fixing."
     send: false
   - label: Write Missing Tests
-    agent: hank
+    agent: Hank (Beast)
     prompt: "@hank test Scott identified gaps that need test coverage."
     send: false
 ---
@@ -143,7 +143,7 @@ Severity levels: **CRITICAL** (bugs, security issues), **HIGH** (logic errors, m
 
 When running `coverage`, Scott follows this workflow:
 
-1. **Run tests with coverage** — Execute `PYTHONPATH=src/ pytest test/ --cov=app --cov-report=term-missing --cov-report=json` to collect coverage data
+1. **Run tests with coverage** — Execute `cd backend && uv run pytest test/ --cov=app --cov-report=term-missing --cov-report=json` to collect coverage data
 2. **Parse results** — Identify files with < 80% line coverage and all uncovered line ranges
 3. **Analyze logic gaps** — For each uncovered range, read the source code and determine:
    - Is this an untested error path?
@@ -168,6 +168,14 @@ Scott produces structured markdown reports and inline chat output:
 | Coverage Report | `coverage` | `specs/<project-id>/reports/coverage-report-YYYY-MM-DD.md` |
 
 See companion templates in `.github/prompts/templates/` for exact structure.
+
+---
+
+## Skills
+
+Scott participates in the shared delivery pipeline (see `.github/prompts/skills/<name>/SKILL.md`):
+
+- `feature-delivery` — Scott owns the review step in Phase 4; CRITICAL/HIGH findings flow back to Jean + Logan per the pipeline contract
 
 ---
 

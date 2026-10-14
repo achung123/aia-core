@@ -335,8 +335,15 @@ class TestCardDetectorDependencyInjection:
         monkeypatch.setattr(
             'app.routes.images._WEIGHTS_PATH_FALLBACK', '/nonexistent/best.pt'
         )
-        detector = get_card_detector()
-        assert isinstance(detector, MockCardDetector)
+        # The detector is cached per process; start from a clean slate
+        from app.routes import images
+
+        images._load_card_detector.cache_clear()
+        try:
+            detector = get_card_detector()
+            assert isinstance(detector, MockCardDetector)
+        finally:
+            images._load_card_detector.cache_clear()
 
     def test_override_card_detector_in_test(self, game_id):
         """Tests can inject a custom detector via dependency_overrides."""
@@ -674,3 +681,28 @@ class TestConcurrentDetectionRaceCondition:
             assert data['status'] == 'detected'
         finally:
             app.dependency_overrides.clear()
+
+
+class TestDetectorIsLoadedOnce:
+    """Loading model weights is slow; it must not happen on every photo."""
+
+    def test_the_same_detector_is_reused(self, monkeypatch):
+        from app.routes import images
+
+        monkeypatch.setattr(images.os.path, 'exists', lambda _path: False)
+        images._load_card_detector.cache_clear()
+        try:
+            first = images.get_card_detector()
+            assert images.get_card_detector() is first
+        finally:
+            images._load_card_detector.cache_clear()
+
+    def test_warm_up_is_a_no_op_without_model_weights(self, monkeypatch):
+        from app.routes import images
+
+        monkeypatch.setattr(images.os.path, 'exists', lambda _path: False)
+        images._load_card_detector.cache_clear()
+        try:
+            images.warm_card_detector()  # must not raise or try to load a model
+        finally:
+            images._load_card_detector.cache_clear()

@@ -38,9 +38,9 @@ class TestGetHandActionsOrdering:
             f'/games/{game_id}/hands/{hand_number}/players/Bob/actions',
             json={'street': 'preflop', 'action': 'check'},
         )
-        # Post-flop: SB (Alice) acts first
+        # Post-flop heads-up: the big blind (Bob) acts first
         client.post(
-            f'/games/{game_id}/hands/{hand_number}/players/Alice/actions',
+            f'/games/{game_id}/hands/{hand_number}/players/Bob/actions',
             json={'street': 'flop', 'action': 'bet', 'amount': 1.00},
         )
 

@@ -3,13 +3,13 @@ name: Xavier (Professor x)
 description: Master Prompt Engineer — describe an agent and get the full scaffold in one shot.
 argument-hint: create agent <description> | design workflow <description> | audit <path> | list
 tools:
-  - createFile
-  - editFiles
-  - codebase
-  - fetch
+  - edit/createFile
+  - edit/editFiles
+  - search/codebase
+  - web/fetch
   - search
-  - readFile
-  - listDirectory
+  - read/readFile
+  - search/listDirectory
 handoffs:
   - label: Test the New Agent
     agent: agent
@@ -106,6 +106,40 @@ Required for any agent task that produces structured output. One template per di
 - `code-reviewer.refactor-plan.template.md`
 
 Use `{{PLACEHOLDER}}` for required fields, `{{PLACEHOLDER?}}` for optional. Include a commented legend at the top.
+
+### Layer 4 — Shared Skills (`.github/prompts/skills/<skill-name>/SKILL.md`)
+
+Skills are **cross-agent reusable recipes** that follow the [GitHub Copilot agent skills spec](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-skills). Each skill lives in its own directory under `.github/prompts/skills/` containing a `SKILL.md` file (and optionally supporting scripts/resources). Copilot auto-loads a skill when its `description` matches the user's intent, or when the user invokes it by name (e.g. `/tdd-cycle`).
+
+**When to create a skill instead of an agent prompt:**
+- The workflow is invoked by **more than one agent** (e.g. TDD cycle, session landing)
+- The workflow is a **reusable recipe** rather than a single agent's responsibility
+- The workflow needs to be callable directly by the user outside any agent context
+
+**Directory + file layout** (kebab-case, **not** prefixed with `skill.`):
+```
+.github/prompts/skills/
+  tdd-cycle/
+    SKILL.md
+  land-session/
+    SKILL.md
+```
+The file MUST be named `SKILL.md` exactly. The directory name MUST match the `name:` field inside the frontmatter.
+
+**SKILL.md frontmatter — minimal spec:**
+```yaml
+---
+name: <skill-name>              # required, lowercase, hyphens, matches directory
+description: <one sentence>     # required, must include "Use when ..." so Copilot can route
+allowed-tools: shell            # optional, only if the skill pre-approves terminal commands
+license: <spdx>                 # optional
+---
+```
+Do **not** include `mode`, `agent`, or `tools` keys — those are agent/prompt fields, not skill fields.
+
+**SKILL.md body structure:** H1 title, then `## When to use`, `## Context`, `## Instructions` (numbered), `## Output format`, `## Anti-patterns`.
+
+**Reference skills from agents** in a dedicated `## Skills` section listing each consumed skill by its bare `name` (no `skill.` prefix, no `.prompt.md` suffix) and the role it plays for that agent.
 
 ---
 

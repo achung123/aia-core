@@ -22,7 +22,7 @@ Improve code quality of a specified target (module, function, pattern) while ens
 
 Hank refactors with a safety net: the existing test suite. No behavior changes, no new features — only structural improvements (extract helpers, rename, reduce duplication, improve typing, simplify logic). This is an ad-hoc command with no beads task. The project uses FastAPI, SQLAlchemy, Pydantic v2, pytest, SQLite, and Poetry.
 
-The standard test command is `PYTHONPATH=src/ pytest test/`.
+The standard test command is `cd backend && uv run pytest test/`.
 
 ---
 
@@ -30,7 +30,7 @@ The standard test command is `PYTHONPATH=src/ pytest test/`.
 
 1. **Identify the target.** Parse the user's request — a file, function, module, or pattern to refactor.
 2. **Read the target code.** Read the file(s) to understand the current structure.
-3. **Baseline tests.** Run `PYTHONPATH=src/ pytest test/ -v`. Confirm all tests pass. If any fail, report them and stop — do not refactor broken code.
+3. **Baseline tests.** Run `cd backend && uv run pytest test/ -v`. Confirm all tests pass. If any fail, report them and stop — do not refactor broken code.
 4. **Plan the refactor.** Briefly state what will change and why (e.g., "Extract card validation into a shared utility to remove duplication across 3 files"). Get user confirmation if the scope is large.
 5. **Apply changes incrementally.** Make changes in small steps. After each step, run relevant tests.
 6. **Final verification.** Run the full test suite. Confirm everything passes.

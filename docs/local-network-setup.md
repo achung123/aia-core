@@ -1,7 +1,7 @@
 # Local Network Setup - Native Linux/macOS vs WSL2 on Windows
 
 This guide explains how to make All In Analytics reachable on a home LAN at
-`http://aia.local`, and how that setup differs between a native Unix host and
+`https://aia.local`, and how that setup differs between a native Unix host and
 WSL2 on Windows.
 
 ---
@@ -10,13 +10,22 @@ WSL2 on Windows.
 
 | Environment | Need `share.sh`? | What clients connect to | Why |
 |---|---|---|---|
-| Native Linux host | No | `http://aia.local` or the host LAN IP | No Windows NAT layer |
-| Native macOS host | No | `http://aia.local` or the host LAN IP | No Windows NAT layer; Bonjour is built in |
-| WSL2 on Windows | Yes, for phones/tablets on the LAN | `http://aia.local` after `./scripts/docker/share.sh` | WSL2 NAT prevents container-side mDNS from reaching the physical LAN |
+| Native Linux host | No | `https://aia.local` | No Windows NAT layer |
+| Native macOS host | No | `https://aia.local` | No Windows NAT layer; Bonjour is built in |
+| WSL2 on Windows | Yes, for phones/tablets on the LAN | `https://aia.local` after `./scripts/docker/share.sh` | WSL2 NAT prevents container-side mDNS from reaching the physical LAN |
 
 On WSL2, Windows desktop browsers may still resolve `aia.local` without extra
 help, but iPhone/iPad/other physical LAN clients usually cannot. The helper
-scripts bridge both port 80 and the `aia.local` name onto the Windows host.
+scripts bridge ports 80 and 443 plus the `aia.local` name onto the Windows
+host.
+
+One important limitation: Windows `netsh interface portproxy` does not preserve
+distinct LAN client source IPs when it forwards TCP traffic into WSL. On that
+shared path, nginx sees the Windows forwarder hop rather than each originating
+client, so `$binary_remote_addr` rate limiting becomes a coarse per-Windows-
+host guard instead of true per-client throttling. If meaningful IP-based rate
+limiting matters, use the native Linux/macOS path or another ingress that
+preserves source addresses.
 
 ---
 
@@ -24,17 +33,80 @@ scripts bridge both port 80 and the `aia.local` name onto the Windows host.
 
 | Component | Where it runs | Purpose |
 |---|---|---|
-| `mdns` (`flungo/avahi`) | Docker | Advertises `aia.local` inside the host-visible Docker/WSL network |
-| `proxy` (`nginx:alpine`) | Docker | Listens on port 80 and forwards traffic to `frontend:5173` |
-| Backend | Docker | FastAPI API; `ALLOWED_ORIGINS` includes `http://aia.local` |
-| Frontend | Docker | Vite dev server; proxies `/games`, `/players`, `/stats`, etc. to `backend:8000` |
-| `scripts/docker/share.sh` | WSL2 -> Windows | Creates the Windows port proxy/firewall rule and starts a Windows-side mDNS broadcaster |
+| `mdns` (`ydkn/avahi:366`) | Docker | Advertises `aia.local` inside the host-visible Docker/WSL network via the checked-in Avahi service definition |
+| `proxy` (`nginx:1.30.0-alpine`) | Docker | Bridges the `edge` and `internal` compose networks, redirects port 80 to HTTPS, terminates TLS on 443, sends app traffic to `frontend:5173`, and forwards API paths to the internal backend |
+| Backend | Docker | FastAPI API on the `internal` network; `ALLOWED_ORIGINS` keeps the shared-edge browser origin on `https://aia.local`, and uvicorn trusts forwarded headers only from nginx's reserved proxy IP `172.29.0.2` |
+| Frontend | Docker | Vite dev server for the SPA UI on the `edge` network |
+| `scripts/docker/share.sh` | WSL2 -> Windows | Creates Windows port-proxy/firewall rules for 80/443 and starts a Windows-side mDNS broadcaster |
 | `scripts/docker/aia_mdns_broadcaster.py` | Windows | Publishes `aia.local -> <Windows LAN IP>` on the physical LAN using Python `zeroconf` |
 | `scripts/docker/unshare.sh` | WSL2 -> Windows | Removes the Windows-side bridge and stops the broadcaster |
+
+Only nginx is allowed to present forwarded client metadata to uvicorn on the
+shared path. The backend defaults `UVICORN_FORWARDED_ALLOW_IPS` to `172.29.0.2`
+so direct clients and other containers do not get to spoof
+`X-Forwarded-For`/`X-Forwarded-Proto`.
+
+The shared compose topology keeps `proxy` on both segments, `frontend` on
+`edge` only, and `backend` / `backend-gpu` on `internal` only so the SPA and
+API no longer share a flat east-west network.
+
+Live dealer/player/playback screens subscribe to `GET /games/{id}/events` using
+server-sent events. `scripts/docker/proxy.conf` has a dedicated location for
+that stream with `proxy_buffering off`, no cache, no API rate limit, and
+one-hour proxy timeouts; the backend response sets `X-Accel-Buffering: no` so
+nginx does not buffer change notifications.
+
+---
+
+## TLS Certificate Flow
+
+The shared compose path now expects local TLS material at these host paths:
+
+- `scripts/docker/certs/aia.local.pem`
+- `scripts/docker/certs/aia.local-key.pem`
+
+For development on machines you control, generate them with `mkcert`:
+
+```bash
+mkdir -p scripts/docker/certs
+mkcert -install
+mkcert -key-file scripts/docker/certs/aia.local-key.pem -cert-file scripts/docker/certs/aia.local.pem aia.local localhost 127.0.0.1 ::1
+```
+
+If you need `https://<host-lan-ip>` as a fallback, add the current LAN IP to
+the `mkcert` command and regenerate the certificate. That IP-based fallback is
+fragile on DHCP-managed networks because the certificate has to be regenerated
+whenever the LAN IP changes.
+
+**Trusting the certificate on a phone (one time per phone).** While the stack is
+running, open `http://aia.local/aia-local-ca.crt` on the phone (plain `http://`
+— the phone does not trust the site yet). Then:
+
+- **iPhone / iPad:** allow the download, open *Settings → Profile Downloaded*
+  and install it, then *Settings → General → About → Certificate Trust
+  Settings* and switch the certificate on.
+- **Android:** open the downloaded file (or *Settings → Security → Encryption
+  & credentials → Install a certificate → CA certificate*) and confirm.
+
+Only the public certificate is served on that address; the private key never
+leaves `scripts/docker/certs/`. The certificate has to be installed again if
+it is regenerated (for example to add a new LAN IP).
+
+To avoid browser warnings on phones or tablets, install the mkcert root CA on each client device
+you control before using the local certificate flow. If you
+cannot install the local root on a device, the connection will still be
+encrypted but the browser will treat it as untrusted; that is not a good steady
+state for real play.
+
+For a real shared deployment, replace the mkcert-mounted files with an ACME-
+managed certificate pair such as Let's Encrypt `fullchain.pem` and
+`privkey.pem`, and use a DNS name you control instead of `.local`.
 
 ---
 
 ## Start the Stack
+
+Generate the local certificate first if you are using the default mkcert path.
 
 ```bash
 # CPU build
@@ -44,8 +116,63 @@ docker compose --profile cpu up -d
 docker compose --profile gpu up -d
 ```
 
+The shared compose file publishes only the nginx proxy on ports 80 and 443.
+Port 80 only redirects to HTTPS. If you need direct backend access with uvicorn
+reload or direct Vite access for local HMR debugging, layer in the dev-only
+override. It binds `127.0.0.1:8000` and `127.0.0.1:5173` on the host only:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile cpu up -d
+```
+
+If you need multiple stacks on the same host, give each one a distinct project
+name:
+
+```bash
+docker compose -p aia-lab --profile cpu up -d
+```
+
+Docker Compose prefixes runtime container names with the project name
+automatically, so separate stacks avoid collisions in Compose-managed runtime
+names. Internal routing still uses service names such as `frontend` and
+`backend`, so the checked-in proxy config and the GPU service alias keep
+working unchanged. That naming does not make the whole shared stack safe to run
+multiple times on one host: published host ports 80/443 and the host-network
+`mdns` service are still singleton host resources unless you override those
+bindings.
+
 The reverse proxy configuration is version-controlled in
 `scripts/docker/proxy.conf`, so there is no manual proxy-manager UI step.
+That same file also carries the shared edge policy for browser security
+headers, API request throttling, request timeouts, HTTP-to-HTTPS redirects,
+SSE live-refresh timeouts, and the TLS certificate paths.
+
+The shared frontend disables Vite HMR by default with `AIA_DISABLE_HMR=1` so a
+lost hot-reload websocket cannot reload phones mid-hand. Use
+`docker-compose.dev.yml` for localhost development when you want HMR enabled.
+Uploaded card photos are stored in the `card-uploads` named volume, and the 3D
+labels use the bundled `frontend/public/fonts/Lato-Bold.ttf` font so table
+nameplates do not depend on Google Fonts during LAN play.
+
+### Why `mdns` still uses host networking
+
+We evaluated publishing UDP 5353 instead of keeping `network_mode: host` on
+the `mdns` service. That does not replace host networking in this stack:
+
+1. Docker's published UDP ports forward unicast datagrams to the container, but
+   mDNS depends on direct membership in the link-local multicast group at
+   `224.0.0.251:5353`.
+2. On native Linux and macOS, the daemon still needs host-network access to
+   participate directly on the LAN multicast domain.
+3. On WSL2, published UDP 5353 still does not bridge container multicast onto
+   the physical LAN, so phones and tablets still rely on the Windows-side
+   `aia_mdns_broadcaster.py` helper started by `share.sh`.
+
+To keep that exception bounded, the shared compose file now pins the Avahi
+image by digest, drops all Linux capabilities, adds back only `SETUID` and
+`SETGID` so the daemon can switch to its unprivileged `avahi` user, sets
+`no-new-privileges`, uses a read-only root filesystem, and mounts only the
+checked-in service definition that advertises the AIA hostname.
 
 ---
 
@@ -55,8 +182,8 @@ If you are running the app directly on a Linux or macOS host, there is no
 Windows tunneling layer.
 
 1. Start the stack.
-2. Open `http://aia.local` if your host/network is already advertising that name via Avahi/Bonjour.
-3. If you do not have host-side mDNS set up, use the host LAN IP instead: `http://<host-lan-ip>`.
+2. Open `https://aia.local` if your host/network is already advertising that name via Avahi/Bonjour.
+3. If you must use the host LAN IP directly, add that current IP to the mkcert certificate SAN list first and then use `https://<host-lan-ip>`.
 
 `share.sh` and `unshare.sh` are WSL2-only helpers. They are not needed on a
 native Linux or macOS host.
@@ -78,15 +205,28 @@ app through the Windows host.
 What `share.sh` does:
 
 1. Detects the current WSL IP and the Windows LAN IP.
-2. Prompts for Windows elevation and runs `netsh interface portproxy` so Windows listens on port 80 and forwards traffic into WSL port 80.
-3. Adds a Windows Firewall rule named `AIA-HTTP` for inbound TCP port 80.
+2. Prompts for Windows elevation and runs `netsh interface portproxy` so Windows listens on ports 80 and 443 and forwards traffic into WSL ports 80 and 443.
+3. Adds Windows Firewall rules named `AIA-HTTP` and `AIA-HTTPS` for inbound TCP ports 80 and 443.
 4. Installs Python `zeroconf` on the Windows side if it is missing.
 5. Starts `scripts/docker/aia_mdns_broadcaster.py` as a background Windows process so phones can resolve `aia.local` to the Windows LAN IP.
 
-After `share.sh` succeeds, LAN clients can use either:
+After `share.sh` succeeds, LAN clients should use:
 
-- `http://aia.local`
-- `http://<windows-lan-ip>` as a fallback
+- `https://aia.local`
+
+If you also added the current Windows LAN IP to the mkcert certificate SAN
+list, then `https://<windows-lan-ip>` also works as a fallback. Without that
+IP SAN, the HTTPS fallback will fail hostname validation even though the port
+forwarding is correct.
+
+This improves reachability, but it does not make the WSL2 shared path security-
+equivalent to native Linux/macOS ingress for IP-based throttling because all
+clients arrive at nginx through the same Windows forwarder hop.
+
+Because Windows `portproxy` is a TCP forwarder rather than an HTTP proxy, it
+does not add a trustworthy `X-Forwarded-For` header. On that path nginx still
+sees the Windows hop as the client address, normalizes that value, and forwards
+only that sanitized address upstream.
 
 ### Turn sharing off
 
@@ -94,8 +234,8 @@ After `share.sh` succeeds, LAN clients can use either:
 ./scripts/docker/unshare.sh
 ```
 
-`unshare.sh` stops the Windows-side broadcaster, removes the `AIA-HTTP`
-firewall rule, and clears the Windows port proxy configuration.
+`unshare.sh` stops the Windows-side broadcaster, removes the `AIA-HTTP` and
+`AIA-HTTPS` firewall rules, and clears the Windows port proxy configuration.
 
 ---
 
@@ -104,13 +244,13 @@ firewall rule, and clears the Windows port proxy configuration.
 From a client on the same network:
 
 ```text
-http://aia.local
+https://aia.local
 ```
 
-Fallback:
+Fallback if the current LAN IP is included in the certificate SANs:
 
 ```text
-http://<windows-lan-ip>
+https://<windows-lan-ip>
 ```
 
 Useful checks:
@@ -139,6 +279,13 @@ You are probably on WSL2 and skipped `./scripts/docker/share.sh`, or the UAC
 prompt was denied. Run `share.sh` again and verify the Windows port proxy and
 the background broadcaster process are present.
 
+### HTTPS loads but the browser says the certificate is not trusted
+
+Install the mkcert root CA on that client device and then retry. The local
+certificate flow is only a clean fit for devices you control. If you cannot
+install a local root CA on the client, plan on an ACME-issued certificate and a
+real DNS name instead of bypassing browser warnings.
+
 ### `share.sh` says it cannot detect a Windows LAN IP
 
 The script currently looks for an active Wi-Fi IPv4 address. If the Windows box
@@ -150,18 +297,20 @@ IP manually.
 Rerun `./scripts/docker/share.sh`. The script refreshes the Windows port proxy
 to point at the new WSL IP.
 
-### Port 80 is already in use
+### Port 80 or 443 is already in use
 
-Something on the Docker/WSL side is already bound to port 80. Check:
+Something on the Docker/WSL side is already bound to one of the proxy ports.
+Check:
 
 ```bash
-sudo lsof -i :80
+sudo lsof -i :80 -i :443
 ```
 
 ### `mdns` container exits immediately
 
-The `flungo/avahi` image requires `network_mode: host`. Confirm your Docker
-environment supports that mode.
+The pinned `ydkn/avahi` image still requires `network_mode: host`. Confirm your
+Docker environment supports that mode and that
+`scripts/docker/avahi/aia.service` is present.
 
 ---
 
@@ -170,6 +319,8 @@ environment supports that mode.
 ```text
 docker-compose.yml                  # mdns + nginx reverse proxy services
 scripts/docker/proxy.conf           # nginx reverse-proxy config
+scripts/docker/certs/.gitignore     # keeps local mkcert artifacts out of git
+scripts/docker/avahi/aia.service    # Avahi service definition for aia.local
 scripts/docker/share.sh             # WSL2 -> Windows LAN bridge helper
 scripts/docker/unshare.sh           # cleanup helper
 scripts/docker/aia_mdns_broadcaster.py
