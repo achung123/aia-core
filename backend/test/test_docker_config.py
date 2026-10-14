@@ -699,7 +699,10 @@ class TestContainerUserHardening:
 
         assert './backend/poker.db' not in mounts
         assert mounts['poker-data'] is None
-        assert mounts['./backend/uploads'] is None
+        # Uploads are a named volume too: a host bind mount is owned by the
+        # host user and the non-root container cannot write to it.
+        assert './backend/uploads' not in mounts
+        assert mounts['card-uploads'] is None
 
 
 class TestSqlitePersistenceStrategy:

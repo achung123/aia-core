@@ -160,9 +160,9 @@ This builds a CUDA-enabled backend image (~6GB) and passes the GPU through to th
 
 The shared compose path stores SQLite in the named volume `poker-data`, mounted at `/app/data` inside the backend container. Data survives `docker compose down`; use `docker compose down -v` only when you intentionally want to discard the persisted database.
 
-Backend and frontend containers now run as a dedicated non-root `app` user. By default the image user is built as `1000:1000`; on Linux or WSL hosts with a different primary UID/GID, export `AIA_UID` and `AIA_GID` before `docker compose up --build` so the container user matches the host-owned `uploads` path. The runtime image pre-creates `/app/data` as `app:app`, so the named SQLite volume stays writable without a host-side DB bind mount.
+Backend and frontend containers now run as a dedicated non-root `app` user. By default the image user is built as `1000:1000`; on Linux or WSL hosts with a different primary UID/GID, you can export `AIA_UID` and `AIA_GID` before `docker compose up --build` to change it. Card photos are stored in the named volume `card-uploads`, so uploads no longer depend on the host user owning a folder. The runtime image pre-creates `/app/data` as `app:app`, so the named SQLite volume stays writable without a host-side DB bind mount.
 
-Source, config, script, and model bind mounts are read-only inside the containers. Only the `poker-data` volume and `./backend/uploads` stay writable at runtime.
+Source, config, script, and model bind mounts are read-only inside the containers. Only the `poker-data` and `card-uploads` volumes stay writable at runtime.
 
 When `SEED_DATA=0` (the default in docker-compose.yml), the database is preserved between restarts. To boot with a throwaway demo database on every container start without mutating the persisted `poker-data` volume, set `SEED_DATA=1`:
 

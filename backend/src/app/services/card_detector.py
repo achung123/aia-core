@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import threading
 import random
 from typing import Protocol, runtime_checkable
 
@@ -70,6 +71,9 @@ class YoloCardDetector:
         from ultralytics import YOLO
 
         self._model = YOLO(weights_path)
+        # One model is shared by every request; inference is not safe to run
+        # from two threads at once, so photos are processed one at a time.
+        self._lock = threading.Lock()
         self._confidence_threshold = confidence_threshold
         self._scales = scales or self._DEFAULT_SCALES
 
@@ -79,12 +83,13 @@ class YoloCardDetector:
 
         raw_detections: list[dict] = []
         for scale in self._scales:
-            results = self._model(
-                image_path,
-                conf=self._confidence_threshold,
-                imgsz=scale,
-                verbose=False,
-            )
+            with self._lock:
+                results = self._model(
+                    image_path,
+                    conf=self._confidence_threshold,
+                    imgsz=scale,
+                    verbose=False,
+                )
             for r in results:
                 for box in r.boxes:
                     cls_id = int(box.cls[0])

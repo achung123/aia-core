@@ -210,7 +210,7 @@ Additional private-network origins (`192.168.*`, `10.*`, etc.) are handled by a 
 
 ## Container User Mapping
 
-Backend and frontend images run as a non-root `app` user. The compose build passes `AIA_UID` and `AIA_GID` through to the Dockerfiles so the runtime UID/GID can match the host user that owns `./backend/uploads`.
+Backend and frontend images run as a non-root `app` user. The compose build passes `AIA_UID` and `AIA_GID` through to the Dockerfiles so the runtime UID/GID can be changed. Uploaded card photos live in the named volume `card-uploads`, which takes its ownership from the image, so they do not depend on which host user runs Docker.
 
 SQLite no longer depends on a host-owned bind-mounted file. The runtime image pre-creates `/app/data` as `app:app` before Docker attaches the named volume so the first-run write path stays compatible with the hardened non-root runtime.
 
@@ -241,7 +241,7 @@ Source and config paths are bind-mounted read-only for live-reload. Runtime data
 | `./scripts` | `/app/scripts` | `ro` | Utility scripts (seed, etc.) |
 | `./backend/models` | `/app/models` | `ro` | YOLO model weights |
 | `poker-data` | `/app/data` | `rw` | Named volume containing `/app/data/poker.db` |
-| `./backend/uploads` | `/app/uploads` | `rw` | Uploaded images for card detection |
+| `card-uploads` | `/app/uploads` | `rw` | Named volume of uploaded images for card detection |
 
 ### Frontend Volumes
 

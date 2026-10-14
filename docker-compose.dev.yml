@@ -26,3 +26,6 @@ services:
   frontend:
     ports:
       - "127.0.0.1:5173:5173"
+    environment:
+      # Developing locally: keep hot reload
+      - AIA_DISABLE_HMR=0

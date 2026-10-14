@@ -14,6 +14,12 @@ export default defineConfig({
   server: {
     port: 5173,
     host: '0.0.0.0',
+    // Hot reload is for editing code. Behind the shared proxy it is a
+    // liability: whenever its websocket drops (idle timeout, phone asleep,
+    // Wi-Fi blip) the Vite client reloads the page, which throws away
+    // whatever the player was doing — a card photo mid-upload, for one.
+    // The shared stack sets AIA_DISABLE_HMR=1; local `npm run dev` keeps it.
+    hmr: process.env.AIA_DISABLE_HMR === '1' ? false : undefined,
     allowedHosts: ['frontend', 'localhost', '127.0.0.1'],
     fs: {
       strict: true,

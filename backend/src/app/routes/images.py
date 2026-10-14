@@ -1,6 +1,8 @@
 """Images router - handles image upload and card detection endpoints."""
 
 import os
+import tempfile
+from functools import lru_cache
 import uuid
 from typing import Annotated
 
@@ -42,12 +44,37 @@ _UPLOAD_DIR = os.path.normpath(
 )
 
 
-def get_card_detector() -> CardDetector:
+@lru_cache(maxsize=1)
+def _load_card_detector() -> CardDetector:
     if os.path.exists(_WEIGHTS_PATH):
         return YoloCardDetector(_WEIGHTS_PATH)
     if os.path.exists(_WEIGHTS_PATH_FALLBACK):
         return YoloCardDetector(_WEIGHTS_PATH_FALLBACK)
     return MockCardDetector()
+
+
+def get_card_detector() -> CardDetector:
+    """The process-wide detector. Loading the model weights is slow, so it
+    happens once rather than on every photo."""
+    return _load_card_detector()
+
+
+def warm_card_detector() -> None:
+    """Load the model and run one throwaway detection.
+
+    The first inference pays for loading weights and starting the GPU —
+    about twenty seconds. Doing it at startup means the first player to
+    photograph their cards does not sit through that.
+    """
+    detector = get_card_detector()
+    if isinstance(detector, MockCardDetector):
+        return
+    from PIL import Image
+
+    with tempfile.TemporaryDirectory() as folder:
+        blank = os.path.join(folder, 'warmup.png')
+        Image.new('RGB', (64, 64), (0, 90, 0)).save(blank)
+        detector.detect(blank)
 
 
 def _has_valid_image_magic(data: bytes) -> bool:

@@ -131,7 +131,11 @@ services:
       - ./scripts:/app/scripts:ro
       - ./backend/models:/app/models:ro
       - poker-data:/app/data
-      - ./backend/uploads:/app/uploads
+      # A named volume, like the database: it takes its ownership from the
+      # image's `app` user, so uploads work whichever host user runs Docker.
+      # A host bind mount here is owned by the host user (root under WSL)
+      # and the non-root container cannot write card photos into it.
+      - card-uploads:/app/uploads
     environment: &backend-env
       - PYTHONPATH=/app/src
       - DATABASE_URL=${AIA_DATABASE_URL:-sqlite:////app/data/poker.db}
@@ -218,6 +222,9 @@ services:
     environment:
       - HOME=/tmp
       - XDG_CACHE_HOME=/tmp/.cache
+      # No hot-reload websocket on the shared stack: a dropped socket makes
+      # the Vite client reload the page under whoever is using it.
+      - AIA_DISABLE_HMR=${AIA_DISABLE_HMR:-1}
       - npm_config_cache=/tmp/.npm
     networks:
       - edge
@@ -236,6 +243,7 @@ services:
 
 volumes:
   poker-data:
+  card-uploads:
 
 networks:
   edge:

@@ -1,4 +1,7 @@
+import logging
 import os
+import threading
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,7 +9,29 @@ from fastapi.middleware.cors import CORSMiddleware
 from .middleware import GameChangeNotifier, RequestIdMiddleware
 from .routes import events, games, hands, images, players, upload, stats, search
 
-app = FastAPI(title='All In Analytics Core Backend', version='1.0.0')
+logger = logging.getLogger('app.main')
+
+
+def _warm_detector() -> None:
+    try:
+        images.warm_card_detector()
+        logger.info('Card detector is warm')
+    except Exception:  # noqa: BLE001 - a cold detector still works, just slowly
+        logger.warning('Card detector warm-up failed', exc_info=True)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # Load the card-recognition model in the background so the server is
+    # ready to answer immediately and the first photo is not the slow one.
+    if os.getenv('AIA_WARM_DETECTOR', '1') == '1':
+        threading.Thread(
+            target=_warm_detector, name='detector-warmup', daemon=True
+        ).start()
+    yield
+
+
+app = FastAPI(title='All In Analytics Core Backend', version='1.0.0', lifespan=lifespan)
 
 _raw_allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:5173')
 _allowed_origins = [origin.strip() for origin in _raw_allowed_origins.split(',')]
