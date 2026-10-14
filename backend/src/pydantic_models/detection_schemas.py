@@ -30,9 +30,18 @@ class ConfirmDetectionRequest(BaseModel):
 
 class PlayerEquityEntry(BaseModel):
     player_name: str
+    # Expected share of the pot (ties split). win + tie-share adds up to this.
     equity: float
+    # Probability of winning outright / of splitting. None when not computed
+    # (the single-player "versus random hands" view).
+    win: float | None = None
+    tie: float | None = None
     winning_hand_description: str | None = None
 
 
 class EquityResponse(BaseModel):
     equities: list[PlayerEquityEntry] = []
+    # 'exact' when every remaining board was enumerated, 'monte_carlo' when
+    # simulated (preflop). None when there was nothing to compute.
+    method: str | None = None
+    samples: int | None = None

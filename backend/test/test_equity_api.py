@@ -205,7 +205,7 @@ class TestEquityEndpointTooFewPlayers:
 
         resp = client.get(f'/games/{game_with_players}/hands/{hand_number}/equity')
         assert resp.status_code == 200
-        assert resp.json() == {'equities': []}
+        assert resp.json()['equities'] == []
 
     def test_one_player_with_cards(self, client, game_with_players):
         """Only one player has hole cards → empty equities."""
@@ -223,7 +223,7 @@ class TestEquityEndpointTooFewPlayers:
 
         resp = client.get(f'/games/{game_with_players}/hands/{hand_number}/equity')
         assert resp.status_code == 200
-        assert resp.json() == {'equities': []}
+        assert resp.json()['equities'] == []
 
 
 class TestEquityEndpoint404:
@@ -404,4 +404,4 @@ class TestPlayerPerspectiveEquity:
             f'/games/{game_with_players}/hands/{hand_number}/equity?player=ZZZ'
         )
         assert resp.status_code == 200
-        assert resp.json() == {'equities': []}
+        assert resp.json()['equities'] == []

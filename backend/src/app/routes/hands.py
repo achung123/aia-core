@@ -30,7 +30,7 @@ from app.services.betting import (
     is_street_complete,
     validate_action,
 )
-from app.services.equity import calculate_equity, calculate_player_equity
+from app.services.equity import analyze_equity, calculate_player_equity
 from app.services.hand_ranking import describe_hand
 from app.services.hand_state import (
     activate_preflop,
@@ -688,10 +688,14 @@ def get_hand_equity(
         if player_hand.result == 'folded'
     }
     players_with_cards: list[tuple[str, list[tuple[str, str]], list[str]]] = []
+    # A folded hand's cards are out of the deck for everyone still in
+    dead_cards: list[tuple[str, str]] = []
     for player_hand in hand.player_hands:
         if player_hand.card_1 is None or player_hand.card_2 is None:
             continue
         if player_hand.player_id in folded_player_ids:
+            dead_cards.append(_db_card_to_tuple(player_hand.card_1))
+            dead_cards.append(_db_card_to_tuple(player_hand.card_2))
             continue
         player_row = (
             db.query(Player).filter(Player.player_id == player_hand.player_id).first()
@@ -736,19 +740,21 @@ def get_hand_equity(
         return EquityResponse(equities=[])
 
     player_hole_cards = [hc for _, hc, _ in players_with_cards]
-    equities = calculate_equity(player_hole_cards, community_cards)
+    result = analyze_equity(player_hole_cards, community_cards, dead_cards)
 
     return EquityResponse(
         equities=[
             {
                 'player_name': name,
-                'equity': round(equity_value, 4),
+                'equity': round(result.equities[index], 4),
+                'win': round(result.wins[index], 4),
+                'tie': round(result.ties[index], 4),
                 'winning_hand_description': describe_hand(raw, raw_community),
             }
-            for (name, _, raw), equity_value in zip(
-                players_with_cards, equities, strict=False
-            )
-        ]
+            for index, (name, _, raw) in enumerate(players_with_cards)
+        ],
+        method=result.method,
+        samples=result.samples,
     )
 
 
