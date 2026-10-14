@@ -50,6 +50,12 @@ The shared compose topology keeps `proxy` on both segments, `frontend` on
 `edge` only, and `backend` / `backend-gpu` on `internal` only so the SPA and
 API no longer share a flat east-west network.
 
+Live dealer/player/playback screens subscribe to `GET /games/{id}/events` using
+server-sent events. `scripts/docker/proxy.conf` has a dedicated location for
+that stream with `proxy_buffering off`, no cache, no API rate limit, and
+one-hour proxy timeouts; the backend response sets `X-Accel-Buffering: no` so
+nginx does not buffer change notifications.
+
 ---
 
 ## TLS Certificate Flow
@@ -124,8 +130,15 @@ bindings.
 The reverse proxy configuration is version-controlled in
 `scripts/docker/proxy.conf`, so there is no manual proxy-manager UI step.
 That same file also carries the shared edge policy for browser security
-headers, API request throttling, request timeouts, HTTP-to-HTTPS redirects, and
-the TLS certificate paths.
+headers, API request throttling, request timeouts, HTTP-to-HTTPS redirects,
+SSE live-refresh timeouts, and the TLS certificate paths.
+
+The shared frontend disables Vite HMR by default with `AIA_DISABLE_HMR=1` so a
+lost hot-reload websocket cannot reload phones mid-hand. Use
+`docker-compose.dev.yml` for localhost development when you want HMR enabled.
+Uploaded card photos are stored in the `card-uploads` named volume, and the 3D
+labels use the bundled `frontend/public/fonts/Lato-Bold.ttf` font so table
+nameplates do not depend on Google Fonts during LAN play.
 
 ### Why `mdns` still uses host networking
 

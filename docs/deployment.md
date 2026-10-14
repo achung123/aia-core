@@ -64,7 +64,13 @@ Segmented container flows:
 
 `internal` network: nginx <-> backend:8000
 
-`backend -> /app/data/poker.db / models`
+`backend -> /app/data/poker.db / models / uploads`
+
+Live table/player/dealer refresh uses a server-sent events stream at
+`GET /games/{id}/events`. nginx routes that path directly to the backend with
+buffering and cache disabled, a one-hour read/send timeout, and no API rate
+limit; the FastAPI response also sets `X-Accel-Buffering: no` so updates are
+flushed promptly through the proxy.
 
 Direct publication of `5173` and `8000` is no longer part of the shared compose
 path. The dev-only override restores `127.0.0.1:8000` and `127.0.0.1:5173` for
@@ -185,6 +191,7 @@ nginx. That avoids trusting spoofable forwarded headers on the bypass path.
 | `RUN_DB_MIGRATIONS` | `${AIA_RUN_DB_MIGRATIONS:-0}` | Opt-in startup migration gate; set to `1` only when you intentionally want the container start path to run `alembic upgrade head` |
 | `ALLOWED_ORIGINS` | `https://aia.local` | Comma-separated CORS origins injected into the backend container |
 | `UVICORN_FORWARDED_ALLOW_IPS` | `172.29.0.2` | Shared-path trust boundary for proxy headers; only nginx's reserved bridge IP is trusted by default |
+| `AIA_DISABLE_HMR` | `1` in shared compose, `0` in `docker-compose.dev.yml` | Disables the Vite hot-reload websocket on the shared proxy so dropped dev sockets do not reload active player/dealer screens; the dev override turns HMR back on for localhost development |
 
 The shared compose path sets `ALLOWED_ORIGINS` from `${AIA_SHARED_ALLOWED_ORIGINS:-https://aia.local}` so the shared HTTPS edge stays explicit once TLS is enabled.
 
@@ -249,7 +256,7 @@ Source and config paths are bind-mounted read-only for live-reload. Runtime data
 |---|---|---|---|
 | `./frontend/src` | `/app/src` | `ro` | React/TypeScript source (HMR) |
 | `./frontend/index.html` | `/app/index.html` | `ro` | Entry HTML |
-| `./frontend/public` | `/app/public` | `ro` | Static assets |
+| `./frontend/public` | `/app/public` | `ro` | Static assets, including the bundled 3D label font (`fonts/Lato-Bold.ttf`, SIL Open Font License) |
 | `./frontend/vite.config.ts` | `/app/vite.config.ts` | `ro` | Vite configuration |
 | `./frontend/tsconfig.json` | `/app/tsconfig.json` | `ro` | TypeScript configuration |
 
