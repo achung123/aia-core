@@ -268,9 +268,29 @@ The shared compose path now stores SQLite in the named volume `poker-data`, moun
 
 The backend runtime image pre-creates `/app/data` as `app:app` before Docker first attaches the named volume. That keeps the volume writable for the non-root runtime user without weakening the read-only root filesystem posture.
 
-### Backup recipe
+### Automatic backups
 
-Take a quiesced backup so SQLite is not being written while you copy the file:
+The backend takes a snapshot of the database on its own while it runs — no need to stop anything. SQLite's online backup copies a consistent image even with writers active, and each copy is integrity-checked before it is kept.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `AIA_BACKUP_DIR` | `/app/backups` (volume `db-backups`) | Where snapshots go. Unset disables backups. |
+| `AIA_BACKUP_INTERVAL_SECONDS` | `3600` | How often to check. A snapshot is skipped when nothing changed. |
+
+Retention: the 48 most recent snapshots, plus the last one of each of the previous 14 days. Files are named `poker-YYYYMMDD-HHMMSS.db` (UTC).
+
+The snapshots live in their own named volume, `db-backups`, so replacing or damaging the `poker-data` volume leaves them intact. They do **not** survive `docker compose down -v`, which removes every volume — copy them off the machine before anything drastic:
+
+```bash
+mkdir -p backups
+docker run --rm -v aia-core-table_db-backups:/from:ro -v "$PWD/backups:/to" alpine cp -a /from/. /to/
+```
+
+(The volume name is `<project>_db-backups`; `docker volume ls | grep db-backups` shows it.)
+
+### Manual one-off copy
+
+To take a copy by hand (for example before an experiment), stop the writers and copy the file out:
 
 ```bash
 docker compose stop backend backend-gpu proxy
@@ -279,19 +299,29 @@ docker compose run --rm -T --entrypoint python -v "$PWD/backups:/backup" backend
    -c "from pathlib import Path; Path('/backup/poker.db').write_bytes(Path('/app/data/poker.db').read_bytes())"
 ```
 
-If the GPU profile owns the database, substitute `backend-gpu` for `backend` in the one-off backup command. Rename `backups/poker.db` after each run if you want to retain multiple snapshots.
+If the GPU profile owns the database, substitute `backend-gpu` for `backend`. The automatic snapshots above make this rarely necessary.
 
 ### Restore a backup
 
-To restore a backup, stop the stack, then reverse the copy into `/app/data/poker.db` before bringing the proxy and backend back up:
+Stop the backend, replace the database with the snapshot you want, **remove the old write-ahead log files**, and start again:
 
 ```bash
-docker compose stop backend backend-gpu proxy
-docker compose run --rm -T --entrypoint python -v "$PWD/backups:/backup" backend \
-   -c "from pathlib import Path; Path('/app/data/poker.db').write_bytes(Path('/backup/poker.db').read_bytes())"
+docker compose --profile gpu stop backend-gpu          # or --profile cpu / backend
+docker run --rm -v aia-core-table_poker-data:/data -v aia-core-table_db-backups:/backups:ro alpine sh -c '
+  ls -1 /backups | tail -5
+  cp /backups/poker-YYYYMMDD-HHMMSS.db /data/poker.db   # choose a file from the list
+  rm -f /data/poker.db-wal /data/poker.db-shm
+  chown 1000:1000 /data/poker.db'
+docker compose --profile gpu start backend-gpu
 ```
 
-Keep the backend stopped until the restore completes, then restart the profile you normally run.
+If the snapshot is from before a schema change, the backend migrates it (see below) the next time it starts.
+
+### Schema migrations at startup
+
+The backend compares the database's schema revision with the one the code expects each time it starts. If the database is behind, it **takes a backup first** (into `AIA_BACKUP_DIR`), then migrates. Some migrations change how stored values are read — money moved from float dollars to whole cents — so serving an old database with new code would silently show wrong amounts; this removes the need to remember a flag. Set `AIA_AUTO_MIGRATE=0` to turn it off (the entrypoint's `AIA_RUN_DB_MIGRATIONS=1` still works for first-time setup).
+
+Money is stored as integer cents in the database and exposed as dollars by the API.
 
 ---
 

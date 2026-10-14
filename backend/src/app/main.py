@@ -21,6 +21,17 @@ def _warm_detector() -> None:
         logger.warning('Card detector warm-up failed', exc_info=True)
 
 
+def _migrate_database() -> None:
+    """Never serve with a schema older than this code expects."""
+    if os.getenv('AIA_AUTO_MIGRATE', '1') != '1':
+        return
+    from .database.migrate import ensure_database_is_current
+    from .database.session import DATABASE_URL
+
+    backup_dir = os.getenv('AIA_BACKUP_DIR')
+    ensure_database_is_current(DATABASE_URL, Path(backup_dir) if backup_dir else None)
+
+
 def _start_backups() -> threading.Event | None:
     """Begin rolling database backups when a backup folder is configured."""
     backup_dir = os.getenv('AIA_BACKUP_DIR')
@@ -56,6 +67,7 @@ async def lifespan(_app: FastAPI):
         threading.Thread(
             target=_warm_detector, name='detector-warmup', daemon=True
         ).start()
+    _migrate_database()
     stop_backups = _start_backups()
     try:
         yield

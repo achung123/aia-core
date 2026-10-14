@@ -25,6 +25,7 @@ import { useSessionReplayContext } from '../scenes3d/SessionReplayShell.tsx';
 import type { ViewerContext } from '../scenes3d/types';
 import { playbackLayoutStyles as mobileStyles, gameSelectorStyles as selectorStyles } from '../styles/playbackStyles';
 import { useGameEvents } from '../hooks/useGameEvents.ts';
+import { ConnectionNotice } from '../components/ConnectionNotice.tsx';
 
 // Stable reference — `<PokerTable>` memoizes on `viewer` identity.
 const SPECTATOR_VIEWER: ViewerContext = { policy: 'spectator' };
@@ -266,6 +267,7 @@ export function PlaybackView() {
         ← Back
       </button>
       <QualityToast />
+      <ConnectionNotice gameId={isActive ? gameId : null} />
       <SceneErrorOverlay />
       {replayError && (
         <PlaybackStatus

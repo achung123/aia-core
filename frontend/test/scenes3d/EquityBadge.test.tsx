@@ -486,3 +486,21 @@ describe('<PokerTable equityOverlay>', () => {
     ).toBe(0);
   });
 });
+
+describe('formatEquityPercent — estimated figures', () => {
+  it('marks a simulated figure with a leading ~', async () => {
+    const { formatEquityPercent } = await import('../../src/scenes3d/components/EquityBadge');
+    expect(formatEquityPercent(0.7234, true)).toBe('~72.3%');
+  });
+
+  it('leaves an exact figure unmarked', async () => {
+    const { formatEquityPercent } = await import('../../src/scenes3d/components/EquityBadge');
+    expect(formatEquityPercent(0.7234)).toBe('72.3%');
+    expect(formatEquityPercent(0.7234, false)).toBe('72.3%');
+  });
+
+  it('still shows a dash for a number it cannot show', async () => {
+    const { formatEquityPercent } = await import('../../src/scenes3d/components/EquityBadge');
+    expect(formatEquityPercent(Number.NaN, true)).toBe('—');
+  });
+});

@@ -78,6 +78,18 @@ from pydantic_models.common import StreetEnum
 router = APIRouter(prefix='/games', tags=['hands'])
 
 
+def _hand_is_open(hand: Hand) -> bool:
+    """A dealt hand whose players have not all been given a result yet.
+
+    Hands entered after the fact (no hand state) are never open.
+    """
+    if hand.state is None or not hand.player_hands:
+        return False
+    return any(
+        player_hand.result in (None, 'handed_back') for player_hand in hand.player_hands
+    )
+
+
 def _touch_hand_state(db: Session, hand_id: int) -> None:
     """Update HandState.updated_at to invalidate status ETags."""
     hand_state = db.query(HandState).filter(HandState.hand_id == hand_id).first()
@@ -466,9 +478,30 @@ def get_hand_actions(
 def start_hand(
     game_id: int,
     db: Annotated[Session, Depends(get_db)],
+    force: bool = Query(default=False),
 ):
-    """Create a new hand, add all active players, and auto-assign SB/BB."""
+    """Create a new hand, add all active players, and auto-assign SB/BB.
+
+    Refuses while the previous hand is still unsettled (a second hand would
+    leave its bets and results hanging); `force=true` overrides.
+    """
     game = get_game_or_404(db, game_id)
+
+    if not force:
+        latest = (
+            db.query(Hand)
+            .filter(Hand.game_id == game_id)
+            .order_by(Hand.hand_number.desc())
+            .first()
+        )
+        if latest is not None and _hand_is_open(latest):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f'Hand {latest.hand_number} is still in progress — finish it '
+                    f'or delete it before starting the next one'
+                ),
+            )
 
     # Get active players sorted by seat_number (nulls last), then player_id
     active_gps = (

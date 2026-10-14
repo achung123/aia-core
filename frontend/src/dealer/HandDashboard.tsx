@@ -35,6 +35,18 @@ export interface HandDashboardProps {
   onBack: () => void;
 }
 
+/** The server's explanation from an `HTTP 409: {"detail": "..."}` error. */
+function readDetail(message: string): string {
+  const body = message.replace(/^HTTP \d+:\s*/, '');
+  try {
+    const parsed = JSON.parse(body) as { detail?: unknown };
+    if (typeof parsed.detail === 'string') return parsed.detail;
+  } catch {
+    // not JSON
+  }
+  return body;
+}
+
 export function HandDashboard({ gameId, players: playerNames, onSelectHand, onBack }: HandDashboardProps) {
   const [hands, setHands] = useState<HandResponse[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +57,7 @@ export function HandDashboard({ gameId, players: playerNames, onSelectHand, onBa
   const [showQR, setShowQR] = useState(false);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
+  const [handInProgress, setHandInProgress] = useState(false);
   const [seatPlayers, setSeatPlayers] = useState<PlayerInfo[]>([]);
   const [showSeatManager, setShowSeatManager] = useState(false);
   const [seatReassigning, setSeatReassigning] = useState<string | null>(null);
@@ -92,14 +105,23 @@ export function HandDashboard({ gameId, players: playerNames, onSelectHand, onBa
   if (lastHandIncomplete) warnings.push('Complete the current hand before starting a new one');
   if (tooFewPlayers) warnings.push('Need at least 2 active players to start a hand');
 
-  async function handleStartHand() {
+  async function handleStartHand(force = false) {
     setStarting(true);
     setStartError(null);
+    setHandInProgress(false);
     try {
-      const result = await startHand(gameId);
+      const result = await startHand(gameId, force);
       onSelectHand(result.hand_number);
     } catch (err) {
-      setStartError((err as Error).message || 'Failed to start hand');
+      const message = (err as Error).message || 'Failed to start hand';
+      if (message.startsWith('HTTP 409')) {
+        // The previous hand is not finished. Say so plainly and let the
+        // dealer carry on anyway if they know better.
+        setHandInProgress(true);
+        setStartError(readDetail(message));
+      } else {
+        setStartError(message);
+      }
     } finally {
       setStarting(false);
     }
@@ -167,7 +189,7 @@ export function HandDashboard({ gameId, players: playerNames, onSelectHand, onBa
             </div>
           ))}
         </div>
-      <button data-testid="start-hand-btn" onClick={handleStartHand} disabled={startHandDisabled} style={{
+      <button data-testid="start-hand-btn" onClick={() => handleStartHand()} disabled={startHandDisabled} style={{
         ...styles.button,
         ...(startHandDisabled && !starting ? styles.buttonDisabled : {}),
       }}>
@@ -180,6 +202,16 @@ export function HandDashboard({ gameId, players: playerNames, onSelectHand, onBa
       )}
       {startError && (
         <div data-testid="start-hand-error" style={styles.startError}>{startError}</div>
+      )}
+      {handInProgress && (
+        <button
+          data-testid="start-hand-anyway-btn"
+          onClick={() => handleStartHand(true)}
+          disabled={starting}
+          style={{ ...styles.button, marginTop: '0.5rem' }}
+        >
+          Start a new hand anyway
+        </button>
       )}
       <button
         data-testid="manage-seats-btn"

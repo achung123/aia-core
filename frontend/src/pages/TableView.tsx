@@ -22,6 +22,7 @@ import { PokerTable } from '../scenes3d/PokerTable.tsx';
 import { handsToTableState, resolveSeatMap } from '../scenes3d/data/handsToTableState.ts';
 import type { ViewerContext } from '../scenes3d/types';
 import { SessionScrubber } from '../components/SessionScrubber.tsx';
+import { ConnectionNotice } from '../components/ConnectionNotice.tsx';
 
 export function TableView() {
   const navigate = useNavigate();
@@ -159,13 +160,19 @@ export function TableView() {
         {loading && <p style={styles.loadingText}>Loading table…</p>}
         {noHands && <p style={styles.error}>No hands found for this game.</p>}
         {tableState && (
-          <span data-testid="player-table-street" style={styles.srOnly}>
-            {tableState.phase}
+          <span
+            data-testid="player-table-street"
+            role="status"
+            aria-live="polite"
+            style={styles.srOnly}
+          >
+            Street: {tableState.phase}
           </span>
         )}
       </div>
 
       <div data-testid="canvas-area" style={styles.canvasArea}>
+        <ConnectionNotice gameId={gameId} />
         {tableState && (
           <PokerCanvas>
             <PokerTable

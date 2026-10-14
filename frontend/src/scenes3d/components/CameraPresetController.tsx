@@ -75,6 +75,9 @@ export function CameraPresetController({
   // along its viewing direction so the whole table fits whatever shape the
   // canvas is — portrait phone, landscape tablet or wide desktop.
   const [aspect, setAspect] = useState<number | null>(null);
+  // Whether a preset change is still tweening. Tracked as state (updated in
+  // the frame loop) so rendering never has to read the machine's ref.
+  const [transitioning, setTransitioning] = useState(false);
   const fov = getCameraRigConfig(viewer).fov;
 
   useFrame((frameState, dt) => {
@@ -85,6 +88,7 @@ export function CameraPresetController({
       const next = Math.round((size.width / size.height) * 100) / 100;
       setAspect((prev) => (prev === next ? prev : next));
     }
+    setTransitioning((prev) => (prev === machine.isTransitioning ? prev : machine.isTransitioning));
     const p = machine.position;
     const t = machine.target;
     setPose((prev) => {
@@ -111,7 +115,7 @@ export function CameraPresetController({
   }, [onInteract]);
 
   const poseForFit =
-    typeof preset === 'string' || machineRef.current?.isTransitioning
+    typeof preset === 'string' || transitioning
       ? pose
       : steepenSeatPoseForAspect(pose, aspect);
   const fitted = fitPoseToAspect(poseForFit, aspect, fov);

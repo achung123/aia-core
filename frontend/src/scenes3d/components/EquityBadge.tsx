@@ -73,10 +73,12 @@ export const EQUITY_BADGE_COLOR = '#fbbf24';
  * Out-of-range inputs are clamped so we never render `NaN%` or negative
  * numbers, even if the backend misbehaves.
  */
-export function formatEquityPercent(e: number): string {
+export function formatEquityPercent(e: number, estimated = false): string {
   if (!Number.isFinite(e)) return '—';
   const pct = Math.max(0, Math.min(100, e * 100));
-  return `${pct.toFixed(1)}%`;
+  // Before the flop the figure comes from a simulation, not an exact count;
+  // a leading "~" says so without taking any room.
+  return `${estimated ? '~' : ''}${pct.toFixed(1)}%`;
 }
 
 /** World position of the badge for a given seat. */
@@ -103,6 +105,8 @@ export function countSeatsWithHoleCards(state: TableState): number {
 // ---------------------------------------------------------------------------
 
 export interface EquityBadgeProps {
+  /** The number came from a simulation (preflop), not an exact count. */
+  estimated?: boolean;
   seatIndex: number;
   seatCount: number;
   /** 0..1 — fraction of the pot this seat is expected to win. */
@@ -110,7 +114,12 @@ export interface EquityBadgeProps {
 }
 
 /* eslint-disable react/no-unknown-property -- R3F JSX intrinsics */
-export function EquityBadge({ seatIndex, seatCount, equity }: EquityBadgeProps) {
+export function EquityBadge({
+  seatIndex,
+  seatCount,
+  equity,
+  estimated = false,
+}: EquityBadgeProps) {
   const worldPosition = useMemo<Vec3>(
     () => computeEquityBadgeWorldPosition(seatIndex, seatCount),
     [seatIndex, seatCount],
@@ -123,7 +132,7 @@ export function EquityBadge({ seatIndex, seatCount, equity }: EquityBadgeProps) 
   const screenOffsetY = NAMEPLATE_HEIGHT / 2 + ACTION_BADGE_HEIGHT + EQUITY_BADGE_HEIGHT / 2 + 0.06;
   const groupRef = useRef<RotationTarget | null>(null);
   const rotationYRef = useRef<number>(0);
-  const label = formatEquityPercent(equity);
+  const label = formatEquityPercent(equity, estimated);
 
   useFrame((frameState: unknown) => {
     const fs = frameState as {
@@ -234,6 +243,7 @@ export function EquityBadges({ state, viewer, equityOverlay }: EquityBadgesProps
             seatIndex={seat.seatIndex}
             seatCount={seatCount}
             equity={eq}
+            estimated={data.method === 'monte_carlo'}
           />
         );
       })}

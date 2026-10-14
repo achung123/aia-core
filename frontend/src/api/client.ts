@@ -390,8 +390,8 @@ export function addPlayerToGame(gameId: number, playerName: string, buyIn?: numb
   });
 }
 
-export function startHand(gameId: number): Promise<HandResponse> {
-  return request<HandResponse>(`/games/${gameId}/hands/start`, {
+export function startHand(gameId: number, force = false): Promise<HandResponse> {
+  return request<HandResponse>(`/games/${gameId}/hands/start${force ? '?force=true' : ''}`, {
     method: 'POST',
   });
 }

@@ -1,4 +1,4 @@
-from sqlalchemy import Float
+from sqlalchemy import Integer
 
 from app.database.models import GamePlayer
 
@@ -8,10 +8,11 @@ def test_game_player_has_buy_in_attribute():
     assert hasattr(GamePlayer, 'buy_in')
 
 
-def test_buy_in_column_is_float():
-    """buy_in column is a Float type."""
+def test_buy_in_column_is_money():
+    """buy_in is money: whole cents in the database, dollars in Python."""
     col = GamePlayer.__table__.columns['buy_in']
-    assert isinstance(col.type, Float)
+    assert type(col.type).__name__ == 'Money'
+    assert isinstance(col.type.impl, Integer)
 
 
 def test_buy_in_column_is_nullable():

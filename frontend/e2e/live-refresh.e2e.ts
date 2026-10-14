@@ -25,7 +25,7 @@ test('player table sees a dealer-dealt flop without reloading', async ({ browser
     alicePhone.on('load', () => { reloads += 1; });
 
     await table.dealStreet('flop', ['3c', '8d', '9s']);
-    await expect(alicePhone.getByTestId('player-table-street')).toHaveText('flop');
+    await expect(alicePhone.getByTestId('player-table-street')).toHaveText('Street: flop');
     await alicePhone.waitForTimeout(500);
 
     expect(reloads).toBe(0);

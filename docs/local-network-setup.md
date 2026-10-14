@@ -78,6 +78,20 @@ the `mkcert` command and regenerate the certificate. That IP-based fallback is
 fragile on DHCP-managed networks because the certificate has to be regenerated
 whenever the LAN IP changes.
 
+**Trusting the certificate on a phone (one time per phone).** While the stack is
+running, open `http://aia.local/aia-local-ca.crt` on the phone (plain `http://`
+— the phone does not trust the site yet). Then:
+
+- **iPhone / iPad:** allow the download, open *Settings → Profile Downloaded*
+  and install it, then *Settings → General → About → Certificate Trust
+  Settings* and switch the certificate on.
+- **Android:** open the downloaded file (or *Settings → Security → Encryption
+  & credentials → Install a certificate → CA certificate*) and confirm.
+
+Only the public certificate is served on that address; the private key never
+leaves `scripts/docker/certs/`. The certificate has to be installed again if
+it is regenerated (for example to add a new LAN IP).
+
 To avoid browser warnings on phones or tablets, install the mkcert root CA on each client device
 you control before using the local certificate flow. If you
 cannot install the local root on a device, the connection will still be

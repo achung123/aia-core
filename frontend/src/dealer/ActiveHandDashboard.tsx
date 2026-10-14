@@ -162,6 +162,7 @@ export function ActiveHandDashboard({
   const [hands3D, setHands3D] = useState<HandResponse[]>([]);
   const [streetScrub3D, setStreetScrub3D] = useState<Street>('Pre-Flop');
   const [equityEntries, setEquityEntries] = useState<PlayerEquityEntry[]>([]);
+  const [equityEstimated, setEquityEstimated] = useState(false);
 
   // The street the hand has actually reached, from the cards on the board.
   // The 3D view follows it as cards are dealt, so the dealer sees the flop
@@ -216,7 +217,10 @@ export function ActiveHandDashboard({
       return;
     }
     fetchEquity(gameId, handNumber, equityStreetFromScrubber(streetScrub3D))
-      .then((res) => setEquityEntries(res.equities))
+      .then((res) => {
+        setEquityEntries(res.equities);
+        setEquityEstimated(res.method === 'monte_carlo');
+      })
       .catch(() => setEquityEntries([]));
   }, [viewMode, gameId, handNumber, community, streetScrub3D, equityRefresh]);
 
@@ -233,6 +237,8 @@ export function ActiveHandDashboard({
     return {
       player_name: playerName,
       equity: matched?.equity ?? 0,
+      win: matched?.win ?? null,
+      tie: matched?.tie ?? null,
       winning_hand_description: matched?.winning_hand_description ?? null,
     };
   });
@@ -259,8 +265,16 @@ export function ActiveHandDashboard({
                 <div key={e.player_name} style={{ minWidth: 70, padding: '6px 10px', borderRadius: 8, background: '#1e1b4b', border: '1px solid #312e81', textAlign: 'center', flexShrink: 0 }}>
                   <div style={{ color: '#c7d2fe', fontSize: 11, fontWeight: 600, marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.player_name}</div>
                   <div style={{ fontSize: 14, fontWeight: 700, color: e.equity >= 0.5 ? '#4ade80' : e.equity >= 0.25 ? '#facc15' : '#f87171' }}>
-                    {(e.equity * 100).toFixed(1)}%
+                    {equityEstimated ? '~' : ''}{(e.equity * 100).toFixed(1)}%
                   </div>
+                  {e.win != null && e.tie != null && (
+                    <div
+                      data-testid={`equity-detail-${e.player_name}`}
+                      style={{ fontSize: 10, color: '#94a3b8', marginTop: 2, whiteSpace: 'nowrap' }}
+                    >
+                      win {(e.win * 100).toFixed(0)}%{e.tie > 0.0005 ? ` · tie ${(e.tie * 100).toFixed(0)}%` : ''}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

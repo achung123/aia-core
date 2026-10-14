@@ -155,9 +155,42 @@ describe('HandDashboard', () => {
     screen.getByTestId('start-hand-btn').click();
 
     await waitFor(() => {
-      expect(mockedStartHand).toHaveBeenCalledWith(42);
+      expect(mockedStartHand).toHaveBeenCalledWith(42, false);
       expect(onSelectHand).toHaveBeenCalledWith(3);
     });
+  });
+
+  it('explains when the previous hand is unfinished and offers to start anyway', async () => {
+    mockedFetchHands.mockResolvedValue(HANDS);
+    mockedStartHand.mockRejectedValueOnce(
+      new Error('HTTP 409: {"detail":"Hand 2 is still in progress — finish it or delete it before starting the next one"}'),
+    );
+    mockedStartHand.mockResolvedValueOnce({ hand_number: 3 });
+    const onSelectHand = vi.fn();
+    render(<HandDashboard gameId={42} onSelectHand={onSelectHand} onBack={() => {}} />);
+    await waitFor(() => expect(screen.getByText('2 Hands')).toBeTruthy());
+
+    screen.getByTestId('start-hand-btn').click();
+
+    await waitFor(() => expect(screen.getByTestId('start-hand-error')).toBeTruthy());
+    const message = screen.getByTestId('start-hand-error').textContent ?? '';
+    expect(message).toContain('Hand 2 is still in progress');
+    expect(message).not.toContain('HTTP 409');
+    expect(onSelectHand).not.toHaveBeenCalled();
+
+    screen.getByTestId('start-hand-anyway-btn').click();
+    await waitFor(() => expect(mockedStartHand).toHaveBeenLastCalledWith(42, true));
+    await waitFor(() => expect(onSelectHand).toHaveBeenCalledWith(3));
+  });
+
+  it('does not offer to start anyway after an unrelated failure', async () => {
+    mockedFetchHands.mockResolvedValue(HANDS);
+    mockedStartHand.mockRejectedValueOnce(new Error('HTTP 500: boom'));
+    render(<HandDashboard gameId={42} onSelectHand={() => {}} onBack={() => {}} />);
+    await waitFor(() => expect(screen.getByText('2 Hands')).toBeTruthy());
+    screen.getByTestId('start-hand-btn').click();
+    await waitFor(() => expect(screen.getByTestId('start-hand-error')).toBeTruthy());
+    expect(screen.queryByTestId('start-hand-anyway-btn')).toBeNull();
   });
 
   it('Start Hand button shows loading state during API call', async () => {

@@ -67,20 +67,22 @@ class TestBlindFieldsExist:
 class TestBlindFieldTypes:
     """Columns have correct SQLAlchemy types."""
 
-    def test_small_blind_is_float(self):
+    def test_small_blind_is_money(self):
         from app.database.models import GameSession
 
         mapper = inspect(GameSession)
         col = next(c for c in mapper.columns if c.key == 'small_blind')
-        assert isinstance(col.type, type(col.type))  # exists
-        assert 'FLOAT' in str(col.type).upper() or 'NUMERIC' in str(col.type).upper()
+        # Money is held as whole cents; the column is an integer underneath
+        assert type(col.type).__name__ == 'Money'
+        assert 'INTEGER' in str(col.type).upper()
 
-    def test_big_blind_is_float(self):
+    def test_big_blind_is_money(self):
         from app.database.models import GameSession
 
         mapper = inspect(GameSession)
         col = next(c for c in mapper.columns if c.key == 'big_blind')
-        assert 'FLOAT' in str(col.type).upper() or 'NUMERIC' in str(col.type).upper()
+        assert type(col.type).__name__ == 'Money'
+        assert 'INTEGER' in str(col.type).upper()
 
     def test_blind_timer_minutes_is_integer(self):
         from app.database.models import GameSession

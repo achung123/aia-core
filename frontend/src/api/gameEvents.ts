@@ -20,11 +20,27 @@ export const CHANGE_COALESCE_MS = 100;
 
 type Listener = () => void;
 
+export type ConnectionState = 'connecting' | 'open' | 'reconnecting';
+
 interface Channel {
   source: EventSource;
   listeners: Set<Listener>;
   lastToken: string | null;
   timer: ReturnType<typeof setTimeout> | null;
+  state: ConnectionState;
+  stateListeners: Set<(state: ConnectionState) => void>;
+}
+
+function setState(channel: Channel, state: ConnectionState): void {
+  if (channel.state === state) return;
+  channel.state = state;
+  for (const listener of [...channel.stateListeners]) {
+    try {
+      listener(state);
+    } catch {
+      // A listener failing must not affect the connection
+    }
+  }
 }
 
 const channels = new Map<number, Channel>();
@@ -64,7 +80,15 @@ function installWakeListeners(): void {
 
 function openChannel(gameId: number): Channel {
   const source = new EventSource(`${BASE_URL}/games/${gameId}/events`);
-  const channel: Channel = { source, listeners: new Set(), lastToken: null, timer: null };
+  const channel: Channel = {
+    source,
+    listeners: new Set(),
+    lastToken: null,
+    timer: null,
+    state: 'connecting',
+    stateListeners: new Set(),
+  };
+  source.addEventListener('open', () => setState(channel, 'open'));
   source.addEventListener('change', (event) => {
     const token = (event as MessageEvent<string>).data;
     const previous = channel.lastToken;
@@ -74,7 +98,8 @@ function openChannel(gameId: number): Channel {
     // a different token means something was missed.
     if (previous !== null && previous !== token) notify(channel);
   });
-  // EventSource reconnects by itself; nothing to do on error.
+  // EventSource reconnects by itself; this only records that it is trying.
+  source.addEventListener('error', () => setState(channel, 'reconnecting'));
   return channel;
 }
 
@@ -100,6 +125,30 @@ export function subscribeToGame(gameId: number, listener: Listener): () => void 
     if (subscribed.timer !== null) clearTimeout(subscribed.timer);
     subscribed.source.close();
     if (channels.get(gameId) === subscribed) channels.delete(gameId);
+  };
+}
+
+/**
+ * Follow the connection's state for a game (the stream it is subscribed to).
+ * The callback receives the current state immediately. Opening the watcher
+ * keeps the stream open for as long as it is held.
+ */
+export function watchConnection(
+  gameId: number,
+  onState: (state: ConnectionState) => void,
+): () => void {
+  if (typeof EventSource === 'undefined') {
+    onState('connecting');
+    return () => {};
+  }
+  const stopListening = subscribeToGame(gameId, () => {});
+  const channel = channels.get(gameId);
+  if (!channel) return stopListening;
+  channel.stateListeners.add(onState);
+  onState(channel.state);
+  return () => {
+    channel.stateListeners.delete(onState);
+    stopListening();
   };
 }
 

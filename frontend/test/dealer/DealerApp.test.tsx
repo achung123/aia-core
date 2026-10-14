@@ -275,7 +275,7 @@ describe('DealerApp per-player card collection', () => {
     });
 
     await vi.waitFor(() => {
-      expect(startHandApi).toHaveBeenCalledWith(42);
+      expect(startHandApi).toHaveBeenCalledWith(42, false);
     });
   });
 

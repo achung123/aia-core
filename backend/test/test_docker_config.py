@@ -145,7 +145,12 @@ class TestProxyTlsTermination:
         assert 'install the mkcert root CA on each client device' in self.network_docs
 
     def test_docs_no_longer_advertise_a_plaintext_aia_local_origin(self):
-        assert 'http://aia.local' not in self.network_docs
+        # The one plain-HTTP address is the certificate download, which has
+        # to be reachable before a phone trusts the site.
+        plain = re.findall(r'http://aia\.local\S*', self.network_docs)
+        assert all(
+            address.startswith('http://aia.local/aia-local-ca.crt') for address in plain
+        ), plain
 
     def test_wsl_sharing_forwards_https_and_cleans_up_firewall_rules(self):
         assert (
@@ -1054,3 +1059,23 @@ class TestServicesRestartOnTheirOwn:
     )
     def test_service_restarts_unless_stopped(self, service_name):
         assert self.services[service_name].get('restart') == 'unless-stopped'
+
+
+class TestCertificateDownloadForPhones:
+    """Phones can fetch the public certificate over HTTP, and only that."""
+
+    def setup_method(self):
+        text = (ROOT / 'scripts' / 'docker' / 'proxy.conf').read_text()
+        # the plain-HTTP server block is the first one
+        self.http_block = text.split('listen 443')[0]
+
+    def test_certificate_is_offered_on_the_http_port(self):
+        assert 'location = /aia-local-ca.crt' in self.http_block
+        assert 'alias /etc/nginx/certs/aia.local.pem;' in self.http_block
+
+    def test_the_private_key_is_never_served(self):
+        assert 'aia.local-key.pem' not in self.http_block
+        assert 'key.pem' not in self.http_block
+
+    def test_everything_else_still_redirects_to_https(self):
+        assert 'return 301 https://$host$request_uri;' in self.http_block
