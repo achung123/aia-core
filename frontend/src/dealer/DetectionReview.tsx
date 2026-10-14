@@ -185,6 +185,7 @@ const styles: Record<string, React.CSSProperties> = {
   heading: {
     fontSize: '1.4rem',
     marginBottom: '0.25rem',
+    color: '#e2e8f0',
   },
   target: {
     fontSize: '1rem',

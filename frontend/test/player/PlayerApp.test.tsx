@@ -1148,7 +1148,7 @@ describe('PlayerApp — session pinning (sessionStorage)', () => {
     });
 
     // Should show game selector normally
-    expect(container.textContent).toContain('Select a Game');
+    expect(container.textContent).toContain('Join a game');
   });
 
   it('URL game param takes precedence over sessionStorage', async () => {

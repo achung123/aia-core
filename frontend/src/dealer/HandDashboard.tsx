@@ -289,7 +289,7 @@ export function HandDashboard({ gameId, players: playerNames, onSelectHand, onBa
       {showEndConfirm && (
         <div data-testid="end-game-confirm" style={styles.dialogOverlay}>
           <div style={styles.dialog}>
-            <p style={{ marginBottom: '0.5rem', fontWeight: 600 }}>Select the winner(s):</p>
+            <p style={{ marginBottom: '0.5rem', fontWeight: 600, color: '#111827' }}>Select the winner(s):</p>
             <p style={{ marginBottom: '0.75rem', fontSize: '0.85rem', color: '#6b7280' }}>Choose 1 or 2 players who won the game.</p>
             <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '0.5rem', marginBottom: '1rem' }}>
               {(playerNames || []).map((name) => {

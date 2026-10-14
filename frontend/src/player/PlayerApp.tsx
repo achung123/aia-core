@@ -429,8 +429,8 @@ export function PlayerApp() {
 
   return (
     <div style={styles.container}>
-      <h1>Game Mode</h1>
-      <h2 style={styles.heading}>Select a Game</h2>
+      <h1 style={styles.heading}>Join a game</h1>
+      <p style={{ color: '#94a3b8', margin: '0 0 1rem' }}>Pick the game the dealer started.</p>
 
       {loading && <p>Loading games…</p>}
       {error && <p style={styles.error}>{error}</p>}
@@ -471,6 +471,7 @@ const styles: Record<string, CSSProperties> = {
   heading: {
     fontSize: '1.4rem',
     marginBottom: '0.75rem',
+    color: '#e2e8f0',
   },
   playerName: {
     fontSize: '1.6rem',
