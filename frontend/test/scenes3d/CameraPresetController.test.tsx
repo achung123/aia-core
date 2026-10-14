@@ -64,15 +64,24 @@ function latestCameraProps() {
   return cameraPropsSpy.mock.calls.at(-1)![0];
 }
 
-function stepFrames(totalMs: number, stepMs = 16) {
+function stepFrames(totalMs: number, stepMs = 16, frameState: unknown = {}) {
   act(() => {
     let elapsed = 0;
     while (elapsed < totalMs) {
       const step = Math.min(stepMs, totalMs - elapsed);
-      for (const cb of frameCallbacks) cb({}, step / 1000);
+      for (const cb of frameCallbacks) cb(frameState, step / 1000);
       elapsed += step;
     }
   });
+}
+
+function cameraPitchDegrees(
+  position: readonly [number, number, number],
+  target: readonly [number, number, number],
+): number {
+  const rise = position[1] - target[1];
+  const run = Math.hypot(position[0] - target[0], position[2] - target[2]);
+  return (Math.atan2(rise, run) * 180) / Math.PI;
 }
 
 describe('<CameraPresetController>', () => {
@@ -177,6 +186,21 @@ describe('<CameraPresetController>', () => {
     const props = latestOrbitProps();
     expect(props.minAzimuthAngle).toBeCloseTo(yaw - Math.PI / 6, 6);
     expect(props.maxAzimuthAngle).toBeCloseTo(yaw + Math.PI / 6, 6);
+  });
+
+  it('uses a steeper fitted seat-POV camera on portrait phones', () => {
+    render(
+      <CameraPresetController
+        preset={{ kind: 'seat', seat: 0, seatCount: 6 }}
+        viewer={{ policy: 'player', seat: 0 }}
+      />,
+    );
+
+    stepFrames(16, 16, { size: { width: 393, height: 851 } });
+
+    const position = latestCameraProps().position as [number, number, number];
+    const target = latestOrbitProps().target as [number, number, number];
+    expect(cameraPitchDegrees(position, target)).toBeGreaterThan(32);
   });
 
   it('tweens the camera pose when the preset switches to seat-POV (AC 1)', () => {

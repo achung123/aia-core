@@ -226,6 +226,10 @@ export function fitPoseToAspect(
 export const SEAT_POV_BACK_OFFSET = 2.6;
 /** Camera eye height above the felt, in world units. */
 export const SEAT_POV_CAM_HEIGHT = 3.2;
+/** Portrait phones need a steeper seat view so the table fills the tall canvas. */
+export const SEAT_POV_PORTRAIT_CAM_HEIGHT = 5.0;
+/** Portrait phone variant sits less far behind the player while keeping cards private. */
+export const SEAT_POV_PORTRAIT_BACK_OFFSET = 1.5;
 /** Look-at target height above the felt (raises aim a touch above board level). */
 export const SEAT_POV_TARGET_HEIGHT = 0.3;
 /** Azimuth half-width of the seat-POV orbit clamp (±π/6 = ±30°). */
@@ -254,6 +258,42 @@ export function computeSeatPresetPose(
       sz + oz * SEAT_POV_BACK_OFFSET,
     ],
     target: [0, SEAT_POV_TARGET_HEIGHT, 0],
+  };
+}
+
+/**
+ * Seat-POV is intentionally low on landscape screens, but that same low
+ * angle makes the oval fit by width on portrait phones and leaves a large
+ * empty column above the table. For a portrait player canvas, keep the same
+ * radial and target but lift the eye and move it closer to the seat so the
+ * fitted camera is steeper without changing privacy policy or orbit clamps.
+ */
+export function steepenSeatPoseForAspect(
+  pose: CameraPresetPose,
+  aspect: number | null | undefined,
+): CameraPresetPose {
+  if (!aspect || !Number.isFinite(aspect) || aspect >= PORTRAIT_ASPECT) return pose;
+  const [px, py, pz] = pose.position;
+  const [tx, , tz] = pose.target;
+  const dx = px - tx;
+  const dz = pz - tz;
+  const horizontal = Math.hypot(dx, dz);
+  if (horizontal === 0) {
+    return {
+      position: [px, Math.max(py, SEAT_POV_PORTRAIT_CAM_HEIGHT), pz],
+      target: pose.target,
+    };
+  }
+  const backOffsetDelta = SEAT_POV_BACK_OFFSET - SEAT_POV_PORTRAIT_BACK_OFFSET;
+  const adjustedHorizontal = Math.max(0, horizontal - backOffsetDelta);
+  const scale = adjustedHorizontal / horizontal;
+  return {
+    position: [
+      tx + dx * scale,
+      Math.max(py, SEAT_POV_PORTRAIT_CAM_HEIGHT),
+      tz + dz * scale,
+    ],
+    target: pose.target,
   };
 }
 

@@ -7,6 +7,7 @@ import {
   createCameraPresetState,
   fitPoseToAspect,
   resolveCameraPresetPose,
+  steepenSeatPoseForAspect,
   type CameraPreset,
   type CameraPresetState,
 } from '../animations/cameraPresets';
@@ -109,7 +110,11 @@ export function CameraPresetController({
     }
   }, [onInteract]);
 
-  const fitted = fitPoseToAspect(pose, aspect, fov);
+  const poseForFit =
+    typeof preset === 'string' || machineRef.current?.isTransitioning
+      ? pose
+      : steepenSeatPoseForAspect(pose, aspect);
+  const fitted = fitPoseToAspect(poseForFit, aspect, fov);
   const fitDistance =
     aspect == null
       ? undefined
