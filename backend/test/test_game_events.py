@@ -50,13 +50,13 @@ class TestChangeStream:
     def test_sends_current_state_then_each_change_then_cleans_up(self):
         async def scenario():
             stream = change_stream(990001, heartbeat_seconds=5)
-            assert (await anext(stream)).startswith('retry:')
-            first = await anext(stream)
+            assert (await stream.__anext__()).startswith('retry:')
+            first = await stream.__anext__()
             assert first == f'event: change\ndata: {game_events.token(990001)}\n\n'
             assert game_events.subscriber_count(990001) == 1
 
             token = game_events.publish(990001)
-            assert await anext(stream) == f'event: change\ndata: {token}\n\n'
+            assert await stream.__anext__() == f'event: change\ndata: {token}\n\n'
 
             await stream.aclose()
             assert game_events.subscriber_count(990001) == 0
@@ -66,9 +66,9 @@ class TestChangeStream:
     def test_sends_a_keep_alive_when_nothing_changes(self):
         async def scenario():
             stream = change_stream(990002, heartbeat_seconds=0.01)
-            await anext(stream)
-            await anext(stream)
-            assert await anext(stream) == ': keep-alive\n\n'
+            await stream.__anext__()
+            await stream.__anext__()
+            assert await stream.__anext__() == ': keep-alive\n\n'
             await stream.aclose()
 
         asyncio.run(scenario())
