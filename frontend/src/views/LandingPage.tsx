@@ -1,4 +1,5 @@
 import { type CSSProperties } from 'react';
+import { theme } from '../theme';
 
 export function LandingPage() {
   return (
@@ -25,17 +26,17 @@ const styles: Record<string, CSSProperties> = {
     minHeight: '80vh',
     padding: '2rem',
     fontFamily: 'system-ui, sans-serif',
-    color: '#e2e8f0',
+    color: theme.text,
   },
   title: {
     fontSize: '2.5rem',
     fontWeight: 700,
     marginBottom: '0.5rem',
-    color: '#f1f5f9',
+    color: theme.text,
   },
   subtitle: {
     fontSize: '1.1rem',
-    color: '#94a3b8',
+    color: theme.muted,
     marginBottom: '2.5rem',
   },
   links: {
@@ -50,12 +51,12 @@ const styles: Record<string, CSSProperties> = {
     flexDirection: 'column',
     alignItems: 'center',
     padding: '1.75rem 1.25rem',
-    background: 'linear-gradient(135deg, #1e1b4b, #252250)',
-    border: '1px solid #3730a3',
+    background: theme.accentSurface,
+    border: `1px solid ${theme.accentBorder}`,
     borderRadius: '14px',
     textDecoration: 'none',
     textAlign: 'center',
-    color: '#c7d2fe',
+    color: theme.accentSoft,
     transition: 'transform 0.15s, box-shadow 0.15s, border-color 0.15s',
     cursor: 'pointer',
   },
@@ -67,11 +68,11 @@ const styles: Record<string, CSSProperties> = {
     fontSize: '1.15rem',
     fontWeight: 600,
     marginBottom: '0.25rem',
-    color: '#e0e7ff',
+    color: theme.accentSoft,
   },
   cardDesc: {
     fontSize: '0.82rem',
-    color: '#94a3b8',
+    color: theme.muted,
     lineHeight: 1.4,
   },
 };

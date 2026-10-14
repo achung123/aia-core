@@ -1,4 +1,5 @@
 import type React from 'react';
+import { theme } from '../theme';
 
 export interface SessionScrubberProps {
   current: number;
@@ -12,7 +13,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: '8px',
     padding: '8px 12px',
-    background: '#1a1a2e',
+    background: theme.surface,
     fontFamily: 'system-ui, sans-serif',
   },
   button: {
@@ -21,7 +22,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '8px 14px',
     border: 'none',
     borderRadius: '8px',
-    background: '#4f46e5',
+    background: theme.accent,
     color: '#fff',
     fontSize: '18px',
     cursor: 'pointer',
@@ -34,7 +35,7 @@ const styles: Record<string, React.CSSProperties> = {
   label: {
     flex: 1,
     textAlign: 'center',
-    color: '#e0e7ff',
+    color: theme.accentSoft,
     fontSize: '15px',
     fontWeight: 600,
     fontFamily: 'system-ui, sans-serif',

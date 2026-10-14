@@ -4,6 +4,7 @@ import { QRCodeDisplay } from './QRCodeDisplay.tsx';
 import { GamePlayerManagement } from './GamePlayerManagement.tsx';
 import { SeatPicker } from '../components/SeatPicker.tsx';
 import type { HandResponse, PlayerHandResponse, PlayerInfo } from '../api/types';
+import { theme } from '../theme';
 
 const resultColors: Record<string, string> = {
   won: '#16a34a',
@@ -17,7 +18,7 @@ interface ResultBadgeProps {
 
 function ResultBadge({ playerHand }: ResultBadgeProps) {
   if (!playerHand.result) return <span>{playerHand.player_name} </span>;
-  const color = resultColors[playerHand.result] || '#6b7280';
+  const color = resultColors[playerHand.result] || theme.faint;
   const icon = playerHand.result === 'won' ? '\ud83c\udfc6 ' : '';
   const street = playerHand.outcome_street ? ` (${playerHand.outcome_street})` : '';
   const handDesc = playerHand.winning_hand_description ? ` — ${playerHand.winning_hand_description}` : '';
@@ -222,7 +223,7 @@ export function HandDashboard({ gameId, players: playerNames, onSelectHand, onBa
       </button>
       {showSeatManager && !seatReassigning && (
         <div data-testid="seat-manager-panel" style={styles.seatPanel}>
-          <p style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.5rem', color: '#312e81' }}>Select a player to assign a seat</p>
+          <p style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.5rem', color: theme.text }}>Select a player to assign a seat</p>
           <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: '0.5rem', marginBottom: '0.5rem' }}>
             {seatPlayers.filter((player) => player.is_active).map((player) => (
               <button
@@ -239,7 +240,7 @@ export function HandDashboard({ gameId, players: playerNames, onSelectHand, onBa
       )}
       {seatReassigning && (
         <div data-testid="seat-reassign-panel" style={styles.seatPanel}>
-          <p style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.25rem', color: '#312e81' }}>Assign seat for {seatReassigning}</p>
+          <p style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.25rem', color: theme.text }}>Assign seat for {seatReassigning}</p>
           <SeatPicker
             seats={seatPlayers.filter((player) => player.seat_number !== null).map((player) => ({ seatNumber: player.seat_number!, playerName: player.name }))}
             currentPlayerSeat={seatPlayers.find((player) => player.name === seatReassigning)?.seat_number ?? null}
@@ -265,7 +266,7 @@ export function HandDashboard({ gameId, players: playerNames, onSelectHand, onBa
             onSkip={() => setSeatReassigning(null)}
             allowSwap
           />
-          {seatError && <div style={{ color: '#991b1b', fontSize: '0.85rem', marginTop: '0.25rem' }}>{seatError}</div>}
+          {seatError && <div style={{ color: theme.dangerText, fontSize: '0.85rem', marginTop: '0.25rem' }}>{seatError}</div>}
         </div>
       )}
       <button
@@ -290,7 +291,7 @@ export function HandDashboard({ gameId, players: playerNames, onSelectHand, onBa
         <div data-testid="end-game-confirm" style={styles.dialogOverlay}>
           <div style={styles.dialog}>
             <p style={{ marginBottom: '0.5rem', fontWeight: 600 }}>Select the winner(s):</p>
-            <p style={{ marginBottom: '0.75rem', fontSize: '0.85rem', color: '#6b7280' }}>Choose 1 or 2 players who won the game.</p>
+            <p style={{ marginBottom: '0.75rem', fontSize: '0.85rem', color: theme.faint }}>Choose 1 or 2 players who won the game.</p>
             <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '0.5rem', marginBottom: '1rem' }}>
               {(playerNames || []).map((name) => {
                 const selected = selectedWinners.includes(name);
@@ -303,9 +304,9 @@ export function HandDashboard({ gameId, players: playerNames, onSelectHand, onBa
                       alignItems: 'center',
                       gap: '0.5rem',
                       padding: '0.5rem 0.75rem',
-                      border: selected ? '2px solid #16a34a' : '2px solid #d1d5db',
+                      border: selected ? '2px solid #16a34a' : `2px solid ${theme.textSecondary}`,
                       borderRadius: '8px',
-                      background: selected ? '#dcfce7' : '#fff',
+                      background: selected ? 'rgba(34, 197, 94, 0.14)' : '#fff',
                       cursor: 'pointer',
                       fontSize: '1rem',
                     }}
@@ -316,8 +317,8 @@ export function HandDashboard({ gameId, players: playerNames, onSelectHand, onBa
                 );
               })}
             </div>
-            {winnerError && <div style={{ color: '#991b1b', marginBottom: '0.5rem', fontSize: '0.9rem' }}>{winnerError}</div>}
-            {error && <div style={{ color: '#991b1b', marginBottom: '0.5rem' }}>{error}</div>}
+            {winnerError && <div style={{ color: theme.dangerText, marginBottom: '0.5rem', fontSize: '0.9rem' }}>{winnerError}</div>}
+            {error && <div style={{ color: theme.dangerText, marginBottom: '0.5rem' }}>{error}</div>}
             <div style={styles.dialogButtons}>
               <button data-testid="end-game-confirm-no" onClick={() => { setShowEndConfirm(false); setSelectedWinners([]); setWinnerError(null); }} disabled={ending}>
                 Cancel
@@ -342,7 +343,7 @@ const styles: Record<string, React.CSSProperties> = {
   heading: {
     fontSize: '1.4rem',
     marginBottom: '1rem',
-    color: '#e2e8f0',
+    color: theme.text,
   },
   backButton: {
     marginBottom: '0.75rem',
@@ -371,18 +372,18 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 'bold',
     border: 'none',
     borderRadius: '8px',
-    background: '#4f46e5',
+    background: theme.accent,
     color: '#fff',
     cursor: 'pointer',
     marginTop: '1rem',
   },
   buttonDisabled: {
-    background: '#9ca3af',
+    background: theme.muted,
     cursor: 'not-allowed',
   },
   startWarning: {
-    color: '#92400e',
-    background: '#fef3c7',
+    color: theme.warningText,
+    background: 'rgba(245, 158, 11, 0.14)',
     border: '1px solid #fbbf24',
     borderRadius: '8px',
     padding: '0.5rem 0.75rem',
@@ -403,7 +404,7 @@ const styles: Record<string, React.CSSProperties> = {
     marginTop: '0.5rem',
   },
   startError: {
-    color: '#991b1b',
+    color: theme.dangerText,
     fontSize: '0.9rem',
     marginTop: '0.5rem',
   },
@@ -412,9 +413,9 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '0.5rem',
     minHeight: '40px',
     fontSize: '0.95rem',
-    border: '1px solid #d1d5db',
+    border: `1px solid ${theme.borderStrong}`,
     borderRadius: '8px',
-    background: '#f9fafb',
+    background: theme.surface,
     cursor: 'pointer',
     marginTop: '0.5rem',
   },
@@ -431,7 +432,7 @@ const styles: Record<string, React.CSSProperties> = {
     zIndex: 300,
   },
   dialog: {
-    background: '#fff',
+    background: theme.surface,
     borderRadius: '12px',
     padding: '1.5rem',
     maxWidth: '400px',
@@ -448,28 +449,28 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: '40px',
     fontSize: '0.95rem',
     fontWeight: 600,
-    border: '1px solid #c7d2fe',
+    border: `1px solid ${theme.accentBorder}`,
     borderRadius: '8px',
-    background: '#eef2ff',
-    color: '#4f46e5',
+    background: theme.accentTint,
+    color: theme.accent,
     cursor: 'pointer',
     marginTop: '0.5rem',
   },
   seatPanel: {
     padding: '0.75rem',
     marginTop: '0.5rem',
-    border: '1px solid #c7d2fe',
+    border: `1px solid ${theme.accentBorder}`,
     borderRadius: '8px',
-    background: '#f5f3ff',
+    background: theme.accentTint,
   },
   seatPlayerBtn: {
     padding: '0.4rem 0.75rem',
     fontSize: '0.85rem',
     fontWeight: 600,
-    border: '1px solid #c7d2fe',
+    border: `1px solid ${theme.accentBorder}`,
     borderRadius: '8px',
-    background: '#fff',
+    background: theme.surface,
     cursor: 'pointer',
-    color: '#4f46e5',
+    color: theme.accent,
   },
 };

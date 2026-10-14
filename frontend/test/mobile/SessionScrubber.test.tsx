@@ -3,6 +3,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, cleanup } from '@testing-library/react';
 import { act } from 'react';
 import { SessionScrubber } from '../../src/../src/mobile/SessionScrubber.tsx';
+import { theme } from '../../src/theme';
 
 function renderToContainer(element: React.ReactElement): HTMLElement {
   const { container } = render(element);
@@ -91,7 +92,7 @@ describe('SessionScrubber', () => {
       <SessionScrubber current={2} total={5} onchange={() => {}} />
     );
     const prev = c.querySelector('[data-testid="session-prev"]') as HTMLElement;
-    expect(prev.style.background).toBe('#4f46e5');
+    expect(prev.style.background).toBe(theme.accent);
     expect(prev.style.borderRadius).toBe('8px');
   });
 });

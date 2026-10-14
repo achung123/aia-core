@@ -4,6 +4,7 @@ import type { PlayerInfo } from '../api/types';
 import { SeatPicker } from '../components/SeatPicker.tsx';
 import type { SeatData } from '../components/SeatPicker.tsx';
 import { useDealerStore } from '../stores/dealerStore.ts';
+import { theme } from '../theme';
 
 export interface GamePlayerManagementProps {
   gameId: number;
@@ -281,18 +282,18 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     padding: '0.5rem 0.75rem',
     borderRadius: '8px',
-    border: '1px solid #e5e7eb',
+    border: `1px solid ${theme.borderStrong}`,
   },
   rowInactive: {
     opacity: 0.45,
-    background: '#f3f4f6',
+    background: theme.surface,
   },
   nameActive: {
     fontWeight: 600,
   },
   nameInactive: {
     fontWeight: 400,
-    color: '#9ca3af',
+    color: theme.muted,
   },
   toggleLabel: {
     display: 'flex',
@@ -305,7 +306,7 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
   },
   error: {
-    color: '#991b1b',
+    color: theme.dangerText,
     fontSize: '0.9rem',
     marginBottom: '0.5rem',
   },
@@ -318,7 +319,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '0.5rem 0.75rem',
     fontSize: '1rem',
     borderRadius: '8px',
-    border: '1px solid #d1d5db',
+    border: `1px solid ${theme.borderStrong}`,
   },
   addButton: {
     padding: '0.5rem 1rem',
@@ -326,14 +327,14 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     borderRadius: '8px',
     border: 'none',
-    background: '#4f46e5',
+    background: theme.accent,
     color: '#fff',
     cursor: 'pointer',
     minHeight: '44px',
   },
   seatBadge: {
     fontSize: '0.8rem',
-    color: '#6b7280',
+    color: theme.faint,
     minWidth: '55px',
     textAlign: 'center' as const,
   },
@@ -347,24 +348,24 @@ const styles: Record<string, React.CSSProperties> = {
   reassignBtn: {
     padding: '0.2rem 0.5rem',
     fontSize: '0.75rem',
-    border: '1px solid #c7d2fe',
+    border: `1px solid ${theme.accentBorder}`,
     borderRadius: '6px',
-    background: '#eef2ff',
+    background: theme.accentTint,
     cursor: 'pointer',
-    color: '#4f46e5',
+    color: theme.accent,
     fontWeight: 600,
   },
   reassignPanel: {
     padding: '0.75rem',
     marginBottom: '0.75rem',
-    border: '1px solid #c7d2fe',
+    border: `1px solid ${theme.accentBorder}`,
     borderRadius: '8px',
-    background: '#f5f3ff',
+    background: theme.accentTint,
   },
   reassignLabel: {
     fontSize: '0.9rem',
     fontWeight: 600,
     marginBottom: '0.25rem',
-    color: '#312e81',
+    color: theme.text,
   },
 };

@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect } from 'react';
 import { uploadImage, getDetectionResults } from '../api/client.ts';
 import type { CardDetectionEntry } from '../api/types';
+import { theme } from '../theme';
 
 export interface CameraCaptureProps {
   gameId: number;
@@ -163,7 +164,7 @@ const styles: Record<string, React.CSSProperties> = {
     zIndex: 100,
   },
   card: {
-    background: '#fff',
+    background: theme.surface,
     borderRadius: '12px',
     padding: '2rem',
     textAlign: 'center' as const,
@@ -171,7 +172,7 @@ const styles: Record<string, React.CSSProperties> = {
     width: '90%',
   },
   previewCard: {
-    background: '#fff',
+    background: theme.surface,
     borderRadius: '12px',
     padding: '1rem',
     textAlign: 'center' as const,
@@ -197,20 +198,20 @@ const styles: Record<string, React.CSSProperties> = {
   },
   infoText: {
     fontSize: '0.85rem',
-    color: '#6b7280',
+    color: theme.faint,
   },
   spinner: {
     width: '40px',
     height: '40px',
     margin: '0 auto 1rem',
-    border: '4px solid #e5e7eb',
-    borderTop: '4px solid #4f46e5',
+    border: `4px solid ${theme.borderStrong}`,
+    borderTop: `4px solid ${theme.accent}`,
     borderRadius: '50%',
     animation: 'spin 0.8s linear infinite',
   },
   text: {
     fontSize: '1rem',
-    color: '#374151',
+    color: theme.textSecondary,
   },
   errorText: {
     fontSize: '1rem',
@@ -230,7 +231,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 'bold',
     border: 'none',
     borderRadius: '8px',
-    background: '#4f46e5',
+    background: theme.accent,
     color: '#fff',
     cursor: 'pointer',
   },
@@ -240,10 +241,10 @@ const styles: Record<string, React.CSSProperties> = {
     minWidth: '48px',
     fontSize: '1rem',
     fontWeight: 'bold',
-    border: '2px solid #d1d5db',
+    border: `2px solid ${theme.borderStrong}`,
     borderRadius: '8px',
-    background: '#fff',
-    color: '#374151',
+    background: theme.surface,
+    color: theme.textSecondary,
     cursor: 'pointer',
   },
 };

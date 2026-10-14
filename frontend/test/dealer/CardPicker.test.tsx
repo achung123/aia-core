@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { CardPicker } from '../../src/../src/dealer/CardPicker.tsx';
 import type { CardPickerProps } from '../../src/../src/dealer/CardPicker.tsx';
+import { theme } from '../../src/theme';
 
 afterEach(cleanup);
 
@@ -62,7 +63,7 @@ describe('CardPicker', () => {
   it('spade buttons have dark color', () => {
     render(<CardPicker {...defaultProps} />);
     const btn = screen.getByText('A♠');
-    expect(btn.style.color).toBe('#1e293b');
+    expect(btn.style.color).toBe(theme.text);
   });
 
   it('heart buttons have red color', () => {

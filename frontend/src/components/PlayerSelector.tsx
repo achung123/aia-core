@@ -1,3 +1,4 @@
+import { theme } from '../theme';
 import { useState, useEffect, useRef } from 'react';
 import { fetchPlayers } from '../api/client';
 import type { PlayerResponse } from '../api/types';
@@ -76,7 +77,7 @@ export function PlayerSelector({ onSelect, value, placeholder }: PlayerSelectorP
             margin: 0,
             padding: 0,
             listStyle: 'none',
-            background: '#fff',
+            background: theme.surface,
             border: '1px solid #ccc',
             maxHeight: '240px',
             overflowY: 'auto',

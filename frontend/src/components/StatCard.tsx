@@ -1,4 +1,5 @@
 import type React from 'react';
+import { theme } from '../theme';
 
 export interface StatCardProps {
   label: string;
@@ -9,7 +10,7 @@ export interface StatCardProps {
 const TREND_INDICATORS: Record<string, { symbol: string; color: string }> = {
   up: { symbol: '▲', color: '#22c55e' },
   down: { symbol: '▼', color: '#ef4444' },
-  neutral: { symbol: '●', color: '#9ca3af' },
+  neutral: { symbol: '●', color: theme.muted },
 };
 
 export function StatCard({ label, value, trend }: StatCardProps) {
@@ -45,7 +46,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   label: {
     fontSize: '0.75rem',
-    color: '#9ca3af',
+    color: theme.muted,
     textTransform: 'uppercase' as const,
     letterSpacing: '0.05em',
     marginBottom: '4px',
@@ -59,7 +60,7 @@ const styles: Record<string, React.CSSProperties> = {
   valueMuted: {
     fontSize: '1.5rem',
     fontWeight: 700,
-    color: '#9ca3af',
+    color: theme.muted,
     lineHeight: 1.2,
   },
   trend: {

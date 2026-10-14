@@ -1,4 +1,5 @@
 import type React from 'react';
+import { theme } from '../theme';
 
 export const STREETS = ['Pre-Flop', 'Flop', 'Turn', 'River', 'Showdown'] as const;
 export type Street = (typeof STREETS)[number];
@@ -18,7 +19,7 @@ export interface StreetScrubberProps {
 const styles: Record<string, React.CSSProperties> = {
   wrapper: {
     padding: '6px 12px',
-    background: '#0d0d1a',
+    background: theme.bg,
     display: 'flex',
     alignItems: 'center',
     gap: '6px',

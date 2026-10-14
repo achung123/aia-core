@@ -4,6 +4,7 @@ import { render, screen, cleanup } from '@testing-library/react';
 import { PlayerGrid } from '../../src/../src/dealer/PlayerGrid.tsx';
 import type { PlayerGridProps } from '../../src/../src/dealer/PlayerGrid.tsx';
 import type { CommunityCards, Player } from '../../src/stores/dealerStore.ts';
+import { theme } from '../../src/theme';
 
 const emptyCommunity: CommunityCards = {
   flop1: null, flop2: null, flop3: null, flopRecorded: false,
@@ -61,10 +62,10 @@ describe('PlayerGrid', () => {
     const rows = screen.getAllByTestId(/^player-row-/);
 
     expect(rows[0].style.backgroundColor).toBe('#ffffff'); // playing = white
-    expect(rows[1].style.backgroundColor).toBe('#bbf7d0'); // won = green
-    expect(rows[2].style.backgroundColor).toBe('#fecaca'); // folded = red
-    expect(rows[3].style.backgroundColor).toBe('#fed7aa'); // lost = orange
-    expect(rows[4].style.backgroundColor).toBe('#e5e7eb'); // not_playing = gray
+    expect(rows[1].style.backgroundColor).toBe('rgba(34, 197, 94, 0.18)'); // won = green
+    expect(rows[2].style.backgroundColor).toBe('rgba(220, 38, 38, 0.2)'); // folded = red
+    expect(rows[3].style.backgroundColor).toBe('rgba(234, 88, 12, 0.18)'); // lost = orange
+    expect(rows[4].style.backgroundColor).toBe(theme.textSecondary); // not_playing = gray
   });
 
   it('renders player rows with adequate min-height', () => {
@@ -157,7 +158,7 @@ describe('PlayerGrid', () => {
     ];
     render(<PlayerGrid {...defaultProps} players={players} />);
     const row = screen.getByTestId('player-row-Zara');
-    expect(row.style.backgroundColor).toBe('#fef08a');
+    expect(row.style.backgroundColor).toBe('rgba(250, 204, 21, 0.14)');
   });
 
   it('sets background color for joined participation status', () => {
@@ -166,7 +167,7 @@ describe('PlayerGrid', () => {
     ];
     render(<PlayerGrid {...defaultProps} players={players} />);
     const row = screen.getByTestId('player-row-Zara');
-    expect(row.style.backgroundColor).toBe('#bbf7d0');
+    expect(row.style.backgroundColor).toBe('rgba(34, 197, 94, 0.18)');
   });
 
   it('sets background color for handed_back participation status', () => {
@@ -175,7 +176,7 @@ describe('PlayerGrid', () => {
     ];
     render(<PlayerGrid {...defaultProps} players={players} />);
     const row = screen.getByTestId('player-row-Zara');
-    expect(row.style.backgroundColor).toBe('#fef08a');
+    expect(row.style.backgroundColor).toBe('rgba(250, 204, 21, 0.14)');
   });
 
   it('formats pending status text as "pending"', () => {
@@ -209,10 +210,10 @@ describe('PlayerGrid', () => {
     render(<PlayerGrid {...defaultProps} />);
     const rows = screen.getAllByTestId(/^player-row-/);
     expect(rows[0].style.backgroundColor).toBe('#ffffff'); // playing
-    expect(rows[1].style.backgroundColor).toBe('#bbf7d0'); // won
-    expect(rows[2].style.backgroundColor).toBe('#fecaca'); // folded
-    expect(rows[3].style.backgroundColor).toBe('#fed7aa'); // lost
-    expect(rows[4].style.backgroundColor).toBe('#e5e7eb'); // not_playing
+    expect(rows[1].style.backgroundColor).toBe('rgba(34, 197, 94, 0.18)'); // won
+    expect(rows[2].style.backgroundColor).toBe('rgba(220, 38, 38, 0.2)'); // folded
+    expect(rows[3].style.backgroundColor).toBe('rgba(234, 88, 12, 0.18)'); // lost
+    expect(rows[4].style.backgroundColor).toBe(theme.textSecondary); // not_playing
   });
 
   describe('participation mode — sit-out button', () => {

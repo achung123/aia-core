@@ -91,6 +91,7 @@ import {
   computeBillboardYRotation,
 } from '../../src/scenes3d/components/Nameplate';
 import { seatAnchorLocalToWorld } from '../../src/scenes3d/components/tableLayout';
+import { theme } from '../../src/theme';
 
 afterEach(() => {
   cleanup();
@@ -322,7 +323,7 @@ describe('<Nameplate> rendering', () => {
     expect(props.fontSize).toBe(NAMEPLATE_FONT_SIZE);
     expect(props.anchorX).toBe('center');
     expect(props.anchorY).toBe('middle');
-    expect(props.color).toBe('#f8fafc');
+    expect(props.color).toBe(theme.text);
   });
 
   it('consolidation: no legacy data-* test hooks on the group (userData only)', () => {

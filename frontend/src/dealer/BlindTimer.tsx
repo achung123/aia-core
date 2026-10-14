@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { fetchBlinds, updateBlinds } from '../api/client.ts';
 import type { BlindsResponse } from '../api/types';
+import { theme } from '../theme';
 
 export interface BlindTimerProps {
   gameId: number;
@@ -274,8 +275,8 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: '0.75rem',
     padding: '0.5rem 0.75rem',
-    background: '#1e1b4b',
-    color: '#e0e7ff',
+    background: theme.accentSurface,
+    color: theme.accentSoft,
     borderRadius: '10px',
     fontSize: '0.9rem',
     fontWeight: 600,
@@ -293,7 +294,7 @@ const styles: Record<string, React.CSSProperties> = {
   settingsPanel: {
     marginTop: '0.4rem',
     padding: '0.75rem',
-    background: '#1e1b4b',
+    background: theme.accentSurface,
     borderRadius: '10px',
   },
   startRow: {
@@ -305,8 +306,8 @@ const styles: Record<string, React.CSSProperties> = {
   startBtn: {
     width: '100%',
     padding: '0.5rem',
-    background: '#4f46e5',
-    color: '#e0e7ff',
+    background: theme.accent,
+    color: theme.accentSoft,
     border: 'none',
     borderRadius: '6px',
     cursor: 'pointer',
@@ -322,7 +323,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   controlBtn: {
     background: 'rgba(255,255,255,0.15)',
-    color: '#e0e7ff',
+    color: theme.accentSoft,
     border: '1px solid rgba(255,255,255,0.3)',
     borderRadius: '6px',
     padding: '0.35rem 0.75rem',
@@ -337,17 +338,17 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
   },
   fieldLabel: {
-    color: '#c7d2fe',
+    color: theme.accentSoft,
     fontSize: '0.8rem',
     fontWeight: 600,
   },
   fieldInput: {
     padding: '0.3rem 0.5rem',
     borderRadius: '6px',
-    border: '1px solid #4f46e5',
+    border: `1px solid ${theme.accent}`,
     fontSize: '0.9rem',
-    background: '#312e81',
-    color: '#e0e7ff',
+    background: theme.accentSurfaceStrong,
+    color: theme.accentSoft,
     width: '100%',
   },
   settingsError: {
@@ -367,7 +368,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '6px',
     border: '1px solid rgba(255,255,255,0.3)',
     background: 'transparent',
-    color: '#c7d2fe',
+    color: theme.accentSoft,
     cursor: 'pointer',
     fontSize: '0.85rem',
   },
@@ -375,7 +376,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '0.35rem 0.75rem',
     borderRadius: '6px',
     border: 'none',
-    background: '#4f46e5',
+    background: theme.accent,
     color: '#fff',
     cursor: 'pointer',
     fontSize: '0.85rem',
@@ -403,7 +404,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   advanceBtn: {
     background: '#f59e0b',
-    color: '#1e1b4b',
+    color: theme.text,
     border: 'none',
     borderRadius: '6px',
     padding: '0.3rem 0.75rem',

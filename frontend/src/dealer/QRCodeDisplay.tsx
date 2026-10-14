@@ -1,5 +1,6 @@
 import { useState, useEffect, type CSSProperties } from 'react';
 import QRCode from 'qrcode';
+import { theme } from '../theme';
 
 export interface QRCodeDisplayProps {
   gameId: number;
@@ -43,7 +44,7 @@ const styles: Record<string, CSSProperties> = {
   },
   label: {
     fontSize: '0.8rem',
-    color: '#94a3b8',
+    color: theme.muted,
     marginTop: '0.5rem',
     wordBreak: 'break-all',
     textAlign: 'center',

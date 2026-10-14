@@ -1,4 +1,5 @@
 import { Component, type CSSProperties, type ErrorInfo, type ReactNode } from 'react';
+import { theme } from '../theme';
 
 interface Props {
   children: ReactNode;
@@ -68,13 +69,13 @@ const box: CSSProperties = {
   margin: '3rem auto',
   padding: '1.25rem',
   borderRadius: 12,
-  background: '#1e1b4b',
-  border: '1px solid #4338ca',
-  color: '#e0e7ff',
+  background: theme.accentSurface,
+  border: `1px solid ${theme.accentPressed}`,
+  color: theme.accentSoft,
   fontFamily: 'system-ui, sans-serif',
 };
 const title: CSSProperties = { margin: '0 0 0.5rem', fontSize: '1.15rem' };
-const text: CSSProperties = { margin: '0 0 1rem', color: '#c7d2fe', lineHeight: 1.45 };
+const text: CSSProperties = { margin: '0 0 1rem', color: theme.accentSoft, lineHeight: 1.45 };
 const buttons: CSSProperties = { display: 'flex', gap: 8, flexWrap: 'wrap' };
 const button: CSSProperties = {
   minHeight: 44,
@@ -82,12 +83,12 @@ const button: CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
   borderRadius: 8,
-  border: '1px solid #6366f1',
-  background: '#312e81',
+  border: `1px solid ${theme.accent}`,
+  background: theme.accentSurfaceStrong,
   color: '#fff',
   fontWeight: 600,
   cursor: 'pointer',
   fontSize: '0.95rem',
 };
-const details: CSSProperties = { marginTop: '1rem', color: '#a5b4fc', fontSize: '0.85rem' };
+const details: CSSProperties = { marginTop: '1rem', color: theme.accentText, fontSize: '0.85rem' };
 const pre: CSSProperties = { whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: '0.5rem 0 0' };

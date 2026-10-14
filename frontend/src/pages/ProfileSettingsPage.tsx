@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { usePlayerStore } from '../stores/playerStore';
 import { useAwards } from '../hooks/useAnalytics';
 import type React from 'react';
+import { theme } from '../theme';
 
 export function ProfileSettingsPage() {
   const playerName = usePlayerStore((state) => state.playerName);
@@ -163,7 +164,7 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: '1.5rem',
   },
   noProfile: {
-    color: '#94a3b8',
+    color: theme.muted,
     fontSize: '1rem',
   },
   section: {
@@ -173,15 +174,15 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'block',
     fontSize: '0.85rem',
     fontWeight: 600,
-    color: '#e2e8f0',
+    color: theme.text,
     marginBottom: '0.4rem',
   },
   input: {
     width: '100%',
     padding: '0.6rem 0.75rem',
-    background: '#252540',
-    color: '#e2e8f0',
-    border: '1px solid #3730a3',
+    background: theme.raised,
+    color: theme.text,
+    border: `1px solid ${theme.accentBorder}`,
     borderRadius: '8px',
     fontSize: '0.95rem',
     fontFamily: 'system-ui, sans-serif',
@@ -189,7 +190,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   hint: {
     fontSize: '0.75rem',
-    color: '#64748b',
+    color: theme.faint,
     marginTop: '0.3rem',
   },
   avatarRow: {
@@ -201,7 +202,7 @@ const styles: Record<string, React.CSSProperties> = {
     width: 64,
     height: 64,
     borderRadius: '50%',
-    background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+    background: theme.accent,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -220,9 +221,9 @@ const styles: Record<string, React.CSSProperties> = {
   },
   uploadBtn: {
     padding: '0.5rem 1rem',
-    background: '#252540',
-    color: '#c7d2fe',
-    border: '1px solid #3730a3',
+    background: theme.raised,
+    color: theme.accentSoft,
+    border: `1px solid ${theme.accentBorder}`,
     borderRadius: '8px',
     fontSize: '0.85rem',
     cursor: 'pointer',
@@ -235,7 +236,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   saveBtn: {
     padding: '0.6rem 1.5rem',
-    background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+    background: theme.accent,
     color: '#fff',
     border: 'none',
     borderRadius: '8px',
@@ -247,8 +248,8 @@ const styles: Record<string, React.CSSProperties> = {
   backBtn: {
     padding: '0.6rem 1.5rem',
     background: 'transparent',
-    color: '#94a3b8',
-    border: '1px solid #3730a3',
+    color: theme.muted,
+    border: `1px solid ${theme.accentBorder}`,
     borderRadius: '8px',
     fontSize: '0.9rem',
     cursor: 'pointer',
@@ -261,9 +262,9 @@ const styles: Record<string, React.CSSProperties> = {
   },
   titleBtn: {
     padding: '0.5rem 1rem',
-    background: '#252540',
-    color: '#c7d2fe',
-    border: '1px solid #3730a3',
+    background: theme.raised,
+    color: theme.accentSoft,
+    border: `1px solid ${theme.accentBorder}`,
     borderRadius: '8px',
     fontSize: '0.85rem',
     cursor: 'pointer',
@@ -271,8 +272,8 @@ const styles: Record<string, React.CSSProperties> = {
     transition: 'border-color 0.15s, background 0.15s',
   },
   titleBtnActive: {
-    background: '#3730a3',
-    borderColor: '#818cf8',
+    background: theme.accentBorder,
+    borderColor: theme.accentText,
     color: '#fff',
   },
 };

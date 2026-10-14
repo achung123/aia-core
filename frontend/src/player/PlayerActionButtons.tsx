@@ -3,6 +3,7 @@ import type React from 'react';
 import { recordPlayerAction } from '../api/client.ts';
 import { ChipPicker } from '../dealer/ChipPicker.tsx';
 import type { StreetEnum, ActionEnum } from '../api/types';
+import { theme } from '../theme';
 
 export interface PlayerActionButtonsProps {
   gameId: number;
@@ -201,7 +202,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '1rem',
     marginBottom: '0.5rem',
     fontSize: '0.95rem',
-    color: '#e2e8f0',
+    color: theme.text,
   },
   potLabel: {
     fontWeight: 'bold',
@@ -232,7 +233,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '8px',
     cursor: 'pointer',
     color: '#ffffff',
-    backgroundColor: '#4b5563',
+    backgroundColor: theme.faint,
     WebkitTapHighlightColor: 'transparent',
   },
   foldBtn: {
@@ -242,6 +243,6 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: '#2563eb',
   },
   raiseBtn: {
-    backgroundColor: '#7c3aed',
+    backgroundColor: theme.accent,
   },
 };

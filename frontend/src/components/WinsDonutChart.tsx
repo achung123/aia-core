@@ -7,6 +7,7 @@ import {
   Legend,
 } from 'recharts';
 import type { LeaderboardEntry } from '../api/types';
+import { theme } from '../theme';
 
 export interface WinsDonutChartProps {
   leaderboard: LeaderboardEntry[];
@@ -18,8 +19,8 @@ interface SlicePayload {
 }
 
 const COLORS = [
-  '#8b5cf6', '#3b82f6', '#22c55e', '#f59e0b', '#ef4444',
-  '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#a855f7',
+  theme.accentHover, '#3b82f6', '#22c55e', '#f59e0b', '#ef4444',
+  '#ec4899', '#14b8a6', '#f97316', theme.accent, '#a855f7',
 ];
 
 function ChartTooltip({
@@ -43,8 +44,8 @@ function ChartTooltip({
 }
 
 const tooltipStyle: React.CSSProperties = {
-  background: '#1f2937',
-  color: '#f9fafb',
+  background: theme.raised,
+  color: theme.text,
   padding: '0.5rem 0.75rem',
   borderRadius: 6,
   fontSize: '0.85rem',
@@ -95,7 +96,7 @@ export function WinsDonutChart({ leaderboard }: WinsDonutChartProps) {
 
 const summaryStyle: React.CSSProperties = {
   textAlign: 'center',
-  color: '#94a3b8',
+  color: theme.muted,
   fontSize: '0.85rem',
   marginTop: '0.25rem',
 };

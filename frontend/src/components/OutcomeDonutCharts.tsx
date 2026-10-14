@@ -7,13 +7,14 @@ import {
   Legend,
 } from 'recharts';
 import type { PlayerStatsResponse } from '../api/types';
+import { theme } from '../theme';
 
 interface OutcomeDonutChartsProps {
   stats: PlayerStatsResponse;
 }
 
-const OUTCOME_COLORS = ['#22c55e', '#ef4444', '#9ca3af'];
-const STREET_COLORS = ['#3b82f6', '#f59e0b', '#8b5cf6'];
+const OUTCOME_COLORS = ['#22c55e', '#ef4444', theme.muted];
+const STREET_COLORS = ['#3b82f6', '#f59e0b', theme.accentHover];
 
 interface SlicePayload {
   name: string;
@@ -41,8 +42,8 @@ function DonutTooltip({
 }
 
 const tooltipStyle: React.CSSProperties = {
-  background: '#1f2937',
-  color: '#f9fafb',
+  background: theme.raised,
+  color: theme.text,
   padding: '0.5rem 0.75rem',
   borderRadius: 6,
   fontSize: '0.85rem',
@@ -137,5 +138,5 @@ const chartTitle: React.CSSProperties = {
   fontWeight: 600,
   textAlign: 'center',
   marginBottom: '0.5rem',
-  color: '#d1d5db',
+  color: theme.textSecondary,
 };

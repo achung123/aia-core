@@ -1,4 +1,5 @@
 import type React from 'react';
+import { theme } from '../theme';
 
 export interface SessionScrubberProps {
   handCount: number;
@@ -53,14 +54,14 @@ export function SessionScrubber({ handCount, currentHand, onChange }: SessionScr
       width: 48px;
       height: 48px;
       border-radius: 50%;
-      background: #4f46e5;
+      background: ${theme.accent};
       cursor: pointer;
     }
     .session-range::-moz-range-thumb {
       width: 48px;
       height: 48px;
       border-radius: 50%;
-      background: #4f46e5;
+      background: ${theme.accent};
       cursor: pointer;
       border: none;
     }

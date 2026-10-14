@@ -2,6 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/react';
 import { CardIcon } from '../../src/components/CardIcon.tsx';
+import { theme } from '../../src/theme';
 
 describe('CardIcon', () => {
   it('renders rank and suit for a hearts card', () => {
@@ -49,13 +50,13 @@ describe('CardIcon', () => {
   it('uses dark color for spades', () => {
     const { container } = render(<CardIcon card="AS" />);
     const el = container.firstElementChild as HTMLElement;
-    expect(el.style.color).toBe('#1e293b');
+    expect(el.style.color).toBe(theme.raised);
   });
 
   it('uses dark color for clubs', () => {
     const { container } = render(<CardIcon card="AC" />);
     const el = container.firstElementChild as HTMLElement;
-    expect(el.style.color).toBe('#1e293b');
+    expect(el.style.color).toBe(theme.raised);
   });
 
   it('renders nothing for null card', () => {

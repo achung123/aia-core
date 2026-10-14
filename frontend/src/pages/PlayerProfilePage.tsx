@@ -7,6 +7,7 @@ import { WinRateTrendChart } from '../components/WinRateTrendChart';
 import { OutcomeDonutCharts } from '../components/OutcomeDonutCharts';
 import { SessionHistoryTable } from '../components/SessionHistoryTable';
 import { PnLCandlestickChart } from '../components/PnLCandlestickChart';
+import { theme } from '../theme';
 
 export function PlayerProfilePage() {
   const { playerName } = useParams<{ playerName: string }>();
@@ -141,7 +142,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '1rem',
     fontWeight: 600,
     marginBottom: '0.5rem',
-    color: '#9ca3af',
+    color: theme.muted,
     textTransform: 'uppercase' as const,
     letterSpacing: '0.05em',
   },

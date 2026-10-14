@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { ChipPicker } from '../../src/../src/dealer/ChipPicker.tsx';
+import { theme } from '../../src/theme';
 
 afterEach(cleanup);
 
@@ -39,7 +40,7 @@ describe('ChipPicker', () => {
     expect(screen.getByTestId('chip-0.20').style.backgroundColor).toBe('#dc2626');
     expect(screen.getByTestId('chip-0.30').style.backgroundColor).toBe('#16a34a');
     expect(screen.getByTestId('chip-0.40').style.backgroundColor).toBe('#2563eb');
-    expect(screen.getByTestId('chip-0.50').style.backgroundColor).toBe('#1a1a2e');
+    expect(screen.getByTestId('chip-0.50').style.backgroundColor).toBe(theme.surface);
     expect(screen.getByTestId('chip-1.00').style.backgroundColor).toBe('#f97316');
     expect(screen.getByTestId('chip-2.00').style.backgroundColor).toBe('#38bdf8');
     expect(screen.getByTestId('chip-3.00').style.backgroundColor).toBe('#facc15');
@@ -126,7 +127,7 @@ describe('ChipPicker', () => {
 
   it('white chip has dark text for contrast', () => {
     render(<ChipPicker {...defaultProps} />);
-    expect(screen.getByTestId('chip-0.10').style.color).toBe('#111827');
+    expect(screen.getByTestId('chip-0.10').style.color).toBe(theme.surface);
   });
 
   it('non-white chips have white text for contrast', () => {
@@ -140,8 +141,8 @@ describe('ChipPicker', () => {
 
   it('light-colored chips have dark text for contrast', () => {
     render(<ChipPicker {...defaultProps} />);
-    expect(screen.getByTestId('chip-2.00').style.color).toBe('#111827');
-    expect(screen.getByTestId('chip-3.00').style.color).toBe('#111827');
+    expect(screen.getByTestId('chip-2.00').style.color).toBe(theme.surface);
+    expect(screen.getByTestId('chip-3.00').style.color).toBe(theme.surface);
   });
 
   it('tapping $1.00 chip adds to total', () => {

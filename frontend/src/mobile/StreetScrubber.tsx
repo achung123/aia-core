@@ -1,4 +1,5 @@
 import type React from 'react';
+import { theme } from '../theme';
 
 export const STREETS = ['Pre-Flop', 'Flop', 'Turn', 'River', 'Showdown'] as const;
 export type Street = (typeof STREETS)[number];
@@ -22,7 +23,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: '4px',
     padding: '6px 8px',
-    background: '#0d0d1a',
+    background: theme.bg,
     fontFamily: 'system-ui, sans-serif',
     overflowX: 'auto',
     // Never wider than the screen: let the buttons share the row instead
@@ -36,8 +37,8 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '6px 2px',
     border: '2px solid transparent',
     borderRadius: '8px',
-    background: '#1e1b4b',
-    color: '#c7d2fe',
+    background: theme.accentSurface,
+    color: theme.accentSoft,
     fontSize: 'clamp(9px, 2.5vw, 13px)',
     fontWeight: 600,
     cursor: 'pointer',
@@ -47,9 +48,9 @@ const styles: Record<string, React.CSSProperties> = {
     fontFamily: 'system-ui, sans-serif',
   },
   buttonActive: {
-    background: '#4f46e5',
+    background: theme.accent,
     color: '#fff',
-    border: '2px solid #818cf8',
+    border: `2px solid ${theme.accentText}`,
   },
   buttonDisabled: {
     opacity: 0.3,

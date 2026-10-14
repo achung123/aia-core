@@ -13,6 +13,7 @@ import {
   type ReplaySpeed,
   type StreetIdx,
 } from '../state/tableStore';
+import { theme } from '../../theme';
 
 /**
  * Per-hand street scrubber with play/pause (T-023).
@@ -105,9 +106,9 @@ export function streetIndexFromOutcomePhase(
 
 /** Shared look for the replay controls — matches the app's dark theme. */
 export const CONTROL_BUTTON_STYLE: React.CSSProperties = {
-  background: '#1e1b4b',
-  color: '#e0e7ff',
-  border: '1px solid #3730a3',
+  background: theme.accentSurface,
+  color: theme.accentSoft,
+  border: `1px solid ${theme.accentBorder}`,
   borderRadius: 8,
   fontSize: 'clamp(10px, 2.7vw, 13px)',
   letterSpacing: '-0.01em',
@@ -117,8 +118,8 @@ export const CONTROL_BUTTON_STYLE: React.CSSProperties = {
   textOverflow: 'ellipsis',
 };
 export const ACTIVE_CONTROL_BUTTON_STYLE: React.CSSProperties = {
-  background: '#4f46e5',
-  borderColor: '#818cf8',
+  background: theme.accent,
+  borderColor: theme.accentText,
   color: '#ffffff',
 };
 

@@ -1,5 +1,6 @@
 import type React from 'react';
 import type { GameHighlight } from '../api/types';
+import { theme } from '../theme';
 
 export interface KeyMomentsSectionProps {
   highlights: GameHighlight[];
@@ -54,8 +55,8 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '0.4rem',
     padding: '0.4rem 0.75rem',
     borderRadius: 16,
-    border: '1px solid #e2e8f0',
-    background: '#f8fafc',
+    border: `1px solid ${theme.border}`,
+    background: theme.surface,
     cursor: 'pointer',
     fontSize: '0.85rem',
     lineHeight: 1.3,

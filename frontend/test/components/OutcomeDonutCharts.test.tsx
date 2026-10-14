@@ -55,6 +55,7 @@ vi.mock('recharts', () => {
 });
 
 import { OutcomeDonutCharts } from '../../src/components/OutcomeDonutCharts';
+import { theme } from '../../src/theme';
 
 function makeStats(overrides: Partial<PlayerStatsResponse> = {}): PlayerStatsResponse {
   return {
@@ -114,7 +115,7 @@ describe('OutcomeDonutCharts', () => {
     // First 3 cells are outcome: green, red, grey
     expect(fills[0]).toBe('#22c55e');
     expect(fills[1]).toBe('#ef4444');
-    expect(fills[2]).toBe('#9ca3af');
+    expect(fills[2]).toBe(theme.muted);
   });
 
   it('renders tooltips for both charts', () => {

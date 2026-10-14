@@ -6,6 +6,7 @@ import { useAwards } from '../hooks/useAnalytics';
 import { AwardCard } from '../components/AwardCard';
 import { fetchSessions } from '../api/client';
 import type { GameSessionListItem } from '../api/types';
+import { theme } from '../theme';
 
 export function AwardsGridPage() {
   const [selectedGameId, setSelectedGameId] = useState<number | undefined>(undefined);
@@ -118,7 +119,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'block',
   },
   empty: {
-    color: '#9ca3af',
+    color: theme.muted,
     textAlign: 'center',
     padding: '3rem 1rem',
     fontSize: '1rem',

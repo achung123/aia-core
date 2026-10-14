@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { PlayerSessionTrend } from '../api/types';
+import { theme } from '../theme';
 
 type SortKey = 'game_date' | 'hands_played' | 'hands_won' | 'losses' | 'win_rate' | 'profit_loss';
 type SortDir = 'asc' | 'desc';
@@ -58,13 +59,13 @@ export function SessionHistoryTable({ data }: Props) {
   }
 
   if (data.length === 0) {
-    return <p style={{ color: '#9ca3af' }}>No session history available.</p>;
+    return <p style={{ color: theme.muted }}>No session history available.</p>;
   }
 
   const stickyStyle: React.CSSProperties = {
     position: 'sticky',
     left: 0,
-    background: '#1f2937',
+    background: theme.raised,
     zIndex: 1,
   };
 
@@ -84,12 +85,12 @@ export function SessionHistoryTable({ data }: Props) {
                     cursor: 'pointer',
                     padding: '0.5rem 0.75rem',
                     textAlign: 'left',
-                    borderBottom: '1px solid #374151',
+                    borderBottom: `1px solid ${theme.borderStrong}`,
                     userSelect: 'none',
                     whiteSpace: 'nowrap',
                     fontSize: '0.75rem',
                     fontWeight: 600,
-                    color: '#9ca3af',
+                    color: theme.muted,
                     textTransform: 'uppercase',
                     letterSpacing: '0.05em',
                   }}
@@ -107,7 +108,7 @@ export function SessionHistoryTable({ data }: Props) {
                 <tr
                   key={row.game_id}
                   onClick={() => navigate(`/games/${row.game_id}/recap`)}
-                  style={{ cursor: 'pointer', borderBottom: '1px solid #374151' }}
+                  style={{ cursor: 'pointer', borderBottom: `1px solid ${theme.borderStrong}` }}
                 >
                   <td style={{ ...stickyStyle, padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
                     {row.game_date}
@@ -141,7 +142,7 @@ export function SessionHistoryTable({ data }: Props) {
           >
             Prev
           </button>
-          <span style={{ fontSize: '0.875rem', color: '#9ca3af' }}>
+          <span style={{ fontSize: '0.875rem', color: theme.muted }}>
             Page {page + 1} of {totalPages}
           </span>
           <button

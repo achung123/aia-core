@@ -9,6 +9,7 @@ vi.mock('../../src/api/client.ts', () => ({
 }));
 
 import { fetchSessions } from '../../src/api/client.ts';
+import { theme } from '../../src/theme';
 
 const mockedFetchSessions = fetchSessions as ReturnType<typeof vi.fn>;
 
@@ -72,9 +73,9 @@ describe('GameSelector', () => {
 
     const cards = screen.getAllByTestId('game-card');
     // Sorted by game_id desc: 3 (complete), 2 (active), 1 (complete)
-    expect((cards[0] as HTMLElement).style.borderColor).not.toContain('#6366f1');
-    expect((cards[1] as HTMLElement).style.borderColor).toContain('#6366f1');
-    expect((cards[2] as HTMLElement).style.borderColor).not.toContain('#6366f1');
+    expect((cards[0] as HTMLElement).style.borderColor).not.toContain(theme.accent);
+    expect((cards[1] as HTMLElement).style.borderColor).toContain(theme.accent);
+    expect((cards[2] as HTMLElement).style.borderColor).not.toContain(theme.accent);
   });
 
   it('calls onSelectGame when a game card is tapped', async () => {

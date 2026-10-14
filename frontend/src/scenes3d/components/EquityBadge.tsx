@@ -37,6 +37,7 @@ import { useEquityQuery } from '../data/useEquityQuery';
 import { resolveEquityOverlay } from '../state/equityGuard';
 import type { TableState, ViewerContext } from '../types';
 import type { Vec3 } from '../animations/tweens';
+import { theme } from '../../theme';
 
 // ---------------------------------------------------------------------------
 // Layout constants
@@ -167,7 +168,7 @@ export function EquityBadge({
     >
       <mesh name="equity-badge-card">
         <planeGeometry args={[EQUITY_BADGE_WIDTH, EQUITY_BADGE_HEIGHT]} />
-        <meshBasicMaterial color="#0f172a" transparent opacity={0.7} />
+        <meshBasicMaterial color={theme.bg} transparent opacity={0.7} />
       </mesh>
       <Text
         font={LABEL_FONT_URL}

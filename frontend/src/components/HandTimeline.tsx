@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type React from 'react';
 import { CardIcon } from './CardIcon';
 import type { HandResponse } from '../api/types';
+import { theme } from '../theme';
 
 export interface HandTimelineProps {
   hands: HandResponse[];
@@ -101,7 +102,7 @@ export function HandTimeline({ hands }: HandTimelineProps) {
                       {ph.result && (
                         <span style={{
                           ...styles.resultBadge,
-                          background: ph.result === 'won' ? '#dcfce7' : ph.result === 'folded' ? '#fef3c7' : '#fee2e2',
+                          background: ph.result === 'won' ? 'rgba(34, 197, 94, 0.14)' : ph.result === 'folded' ? 'rgba(245, 158, 11, 0.14)' : 'rgba(220, 38, 38, 0.16)',
                           color: ph.result === 'won' ? '#166534' : ph.result === 'folded' ? '#92400e' : '#991b1b',
                         }}>
                           {ph.result}
@@ -137,17 +138,17 @@ const styles: Record<string, React.CSSProperties> = {
   connector: {
     width: 2,
     height: 16,
-    background: '#cbd5e1',
+    background: theme.raisedHover,
     margin: '0 auto',
   },
   card: {
     borderWidth: 1,
     borderStyle: 'solid',
-    borderColor: '#e2e8f0',
+    borderColor: theme.text,
     borderRadius: 8,
     padding: '0.75rem 1rem',
     cursor: 'pointer',
-    background: '#ffffff',
+    background: theme.surface,
     transition: 'box-shadow 0.15s, border-color 0.15s',
     width: '100%',
     maxWidth: 480,
@@ -169,7 +170,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   pot: {
     fontSize: '0.85rem',
-    color: '#64748b',
+    color: theme.faint,
     fontWeight: 500,
   },
   communityCards: {
@@ -181,17 +182,17 @@ const styles: Record<string, React.CSSProperties> = {
   winner: {
     marginTop: '0.35rem',
     fontSize: '0.85rem',
-    color: '#166534',
+    color: theme.successText,
     fontWeight: 500,
   },
   details: {
-    borderLeft: '1px solid #e2e8f0',
-    borderRight: '1px solid #e2e8f0',
-    borderBottom: '1px solid #e2e8f0',
+    borderLeft: `1px solid ${theme.border}`,
+    borderRight: `1px solid ${theme.border}`,
+    borderBottom: `1px solid ${theme.border}`,
     borderTop: 'none',
     borderRadius: '0 0 8px 8px',
     padding: '0.5rem 1rem',
-    background: '#f8fafc',
+    background: theme.surface,
     width: '100%',
     maxWidth: 480,
     margin: '0 auto',
@@ -201,7 +202,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: '0.5rem',
     padding: '0.35rem 0',
-    borderBottom: '1px solid #f1f5f9',
+    borderBottom: `1px solid ${theme.border}`,
     flexWrap: 'wrap' as const,
   },
   playerName: {
@@ -224,11 +225,11 @@ const styles: Record<string, React.CSSProperties> = {
   },
   outcomeStreet: {
     fontSize: '0.75rem',
-    color: '#64748b',
+    color: theme.faint,
   },
   handDescription: {
     fontSize: '0.75rem',
-    color: '#475569',
+    color: theme.muted,
     fontStyle: 'italic',
   },
 };

@@ -1,3 +1,4 @@
+import { theme } from '../theme';
 import {
   ResponsiveContainer,
   BarChart,
@@ -38,7 +39,7 @@ function CustomTooltip({
   return (
     <div
       style={{
-        background: '#fff',
+        background: theme.surface,
         border: '1px solid #ccc',
         borderRadius: 4,
         padding: '8px 12px',
@@ -46,7 +47,7 @@ function CustomTooltip({
       }}
     >
       <p style={{ margin: 0, fontWeight: 600 }}>{label}</p>
-      <p style={{ margin: '4px 0 0', color: '#666' }}>Hands: {total}</p>
+      <p style={{ margin: '4px 0 0', color: theme.muted }}>Hands: {total}</p>
       {payload.map((entry) => (
         <p key={entry.name} style={{ margin: '2px 0 0', color: entry.color }}>
           {entry.name}: {entry.value}

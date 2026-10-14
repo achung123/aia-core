@@ -18,6 +18,7 @@ import { DetectionReview } from '../dealer/DetectionReview.tsx';
 import { PlayerActionButtons } from './PlayerActionButtons.tsx';
 import { usePolling } from '../hooks/usePolling.ts';
 import { usePlayerStore } from '../stores/playerStore';
+import { theme } from '../theme';
 
 export const PLAYER_SESSION_KEY = 'aia-player-session';
 
@@ -69,7 +70,7 @@ function PlayerStatusView({ status, onCapture }: PlayerStatusViewProps) {
     case 'pending':
       return (
         <div>
-          <p style={{ color: '#ca8a04' }}>Your turn! Capture your cards.</p>
+          <p style={{ color: theme.warningText }}>Your turn! Capture your cards.</p>
           <button
             data-testid="capture-cards-btn"
             style={styles.captureBtn}
@@ -92,9 +93,9 @@ function PlayerStatusView({ status, onCapture }: PlayerStatusViewProps) {
     case 'won':
       return <p style={{ color: '#4ade80' }}>You won! 🏆</p>;
     case 'lost':
-      return <p style={{ color: '#94a3b8' }}>You lost.</p>;
+      return <p style={{ color: theme.muted }}>You lost.</p>;
     default:
-      return <p style={{ color: '#94a3b8' }}>Waiting for hand…</p>;
+      return <p style={{ color: theme.muted }}>Waiting for hand…</p>;
   }
 }
 
@@ -302,7 +303,7 @@ export function PlayerApp() {
     if (!playerName) {
       return (
         <div style={styles.container}>
-          <p style={{ color: '#94a3b8', margin: '0 0 0.25rem', fontSize: '0.85rem' }}>Game #{gameId}</p>
+          <p style={{ color: theme.muted, margin: '0 0 0.25rem', fontSize: '0.85rem' }}>Game #{gameId}</p>
           <p data-testid="no-player-selected">Select your name from the dropdown above.</p>
           <button
             data-testid="leave-game-btn"
@@ -315,11 +316,11 @@ export function PlayerApp() {
       );
     }
 
-    const stackColor = runningTotal === null ? '#94a3b8' : runningTotal > 0 ? '#4ade80' : runningTotal < 0 ? '#f87171' : '#e2e8f0';
+    const stackColor = runningTotal === null ? theme.muted : runningTotal > 0 ? '#4ade80' : runningTotal < 0 ? '#f87171' : theme.text;
 
     return (
       <div style={styles.container}>
-        <p style={{ color: '#94a3b8', margin: '0 0 0.25rem', fontSize: '0.85rem' }}>Game #{gameId}</p>
+        <p style={{ color: theme.muted, margin: '0 0 0.25rem', fontSize: '0.85rem' }}>Game #{gameId}</p>
         <h2 style={styles.playerName}>{playerName}</h2>
         {runningTotal !== null && (
           <p
@@ -329,7 +330,7 @@ export function PlayerApp() {
             Stack: {runningTotal < 0 ? `-$${Math.abs(runningTotal).toFixed(2)}` : `$${runningTotal.toFixed(2)}`}
           </p>
         )}
-        {handNumber && <p style={{ color: '#64748b', margin: '0 0 0.75rem', fontSize: '0.85rem' }}>Hand #{handNumber}</p>}
+        {handNumber && <p style={{ color: theme.faint, margin: '0 0 0.75rem', fontSize: '0.85rem' }}>Hand #{handNumber}</p>}
 
         {captureStep === 'camera' && gameId && (
           <CameraCapture
@@ -354,10 +355,10 @@ export function PlayerApp() {
         {!captureStep && (
           <>
             {noActiveHand && (
-              <p data-testid="no-active-hand" style={{ color: '#94a3b8' }}>No hands yet — waiting for dealer</p>
+              <p data-testid="no-active-hand" style={{ color: theme.muted }}>No hands yet — waiting for dealer</p>
             )}
             {playerReconnecting && (
-              <p data-testid="player-reconnecting" style={{ color: '#ca8a04', fontSize: '0.85rem' }}>Reconnecting…</p>
+              <p data-testid="player-reconnecting" style={{ color: theme.warningText, fontSize: '0.85rem' }}>Reconnecting…</p>
             )}
             {!noActiveHand && (
               <>
@@ -385,7 +386,7 @@ export function PlayerApp() {
               />
             )}
             {playerStatus === 'joined' && handNumber && !isMyTurn && (
-              <p data-testid="waiting-turn" style={{ color: '#ca8a04' }}>Waiting for your turn…</p>
+              <p data-testid="waiting-turn" style={{ color: theme.warningText }}>Waiting for your turn…</p>
             )}
             {captureError && (
               <div style={styles.error}>
@@ -476,7 +477,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: '1.6rem',
     fontWeight: 700,
     margin: '0 0 0.25rem',
-    color: '#f1f5f9',
+    color: theme.text,
   },
   error: {
     color: '#f87171',
@@ -493,9 +494,9 @@ const styles: Record<string, CSSProperties> = {
     gap: '0.4rem',
     padding: '1rem',
     borderRadius: '12px',
-    border: '2px solid #6366f1',
-    background: 'rgba(99, 102, 241, 0.12)',
-    color: '#c7d2fe',
+    border: `2px solid ${theme.accent}`,
+    background: theme.accentTint,
+    color: theme.accentSoft,
     cursor: 'pointer',
     textAlign: 'left',
     width: '100%',
@@ -509,7 +510,7 @@ const styles: Record<string, CSSProperties> = {
   gameId: {
     fontWeight: 'normal',
     fontSize: '0.85rem',
-    color: '#94a3b8',
+    color: theme.muted,
   },
   cardDetails: {
     display: 'flex',
@@ -521,9 +522,9 @@ const styles: Record<string, CSSProperties> = {
     padding: '0.6rem 1rem',
     minHeight: '44px',
     borderRadius: '8px',
-    border: '1px solid #2e303a',
-    background: '#1e1f2b',
-    color: '#94a3b8',
+    border: `1px solid ${theme.border}`,
+    background: theme.surface,
+    color: theme.muted,
     cursor: 'pointer',
     fontSize: '0.9rem',
   },
@@ -537,7 +538,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 'bold',
     border: 'none',
     borderRadius: '8px',
-    background: '#4f46e5',
+    background: theme.accent,
     color: '#fff',
     cursor: 'pointer',
   },
@@ -548,10 +549,10 @@ const styles: Record<string, CSSProperties> = {
     width: '100%',
     fontSize: '1rem',
     fontWeight: 'bold',
-    border: '2px solid #6366f1',
+    border: `2px solid ${theme.accent}`,
     borderRadius: '8px',
-    background: 'rgba(99, 102, 241, 0.15)',
-    color: '#a5b4fc',
+    background: theme.accentTint,
+    color: theme.accentText,
     cursor: 'pointer',
   },
 };

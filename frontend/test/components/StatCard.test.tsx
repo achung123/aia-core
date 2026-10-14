@@ -2,6 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { StatCard } from '../../src/components/StatCard.tsx';
+import { theme } from '../../src/theme';
 
 describe('StatCard', () => {
   it('renders label and value', () => {
@@ -26,7 +27,7 @@ describe('StatCard', () => {
     const { container } = render(<StatCard label="Wins" value={0} />);
     const valueEl = screen.getByText('0');
     expect(valueEl).toBeTruthy();
-    expect((valueEl as HTMLElement).style.color).toBe('#9ca3af');
+    expect((valueEl as HTMLElement).style.color).toBe(theme.muted);
   });
 
   it('renders up trend indicator', () => {
@@ -55,6 +56,6 @@ describe('StatCard', () => {
     const spans = container.querySelectorAll('span');
     const valueSpan = spans[1] as HTMLElement;
     expect(valueSpan.textContent).toBe('—');
-    expect(valueSpan.style.color).toBe('#9ca3af');
+    expect(valueSpan.style.color).toBe(theme.muted);
   });
 });

@@ -1,4 +1,5 @@
 import type React from 'react';
+import { theme } from '../theme';
 
 export interface EquityRowProps {
   equityMap: Record<string, number> | null;
@@ -10,7 +11,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     gap: '6px',
     padding: '8px 12px',
-    background: '#1a1a2e',
+    background: theme.surface,
     overflowX: 'auto',
     fontFamily: 'system-ui, sans-serif',
   },
@@ -18,13 +19,13 @@ const styles: Record<string, React.CSSProperties> = {
     minWidth: '80px',
     padding: '8px 12px',
     borderRadius: '8px',
-    background: '#1e1b4b',
-    border: '1px solid #312e81',
+    background: theme.accentSurface,
+    border: `1px solid ${theme.accentSurfaceStrong}`,
     textAlign: 'center',
     flexShrink: 0,
   },
   name: {
-    color: '#c7d2fe',
+    color: theme.accentSoft,
     fontSize: '12px',
     fontWeight: 600,
     marginBottom: '4px',

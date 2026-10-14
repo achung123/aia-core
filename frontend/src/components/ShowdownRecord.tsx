@@ -1,3 +1,4 @@
+import { theme } from '../theme';
 interface ShowdownRecordProps {
   player1Name: string;
   player2Name: string;
@@ -29,7 +30,7 @@ export function ShowdownRecord({
           justifyContent: 'space-between',
           alignItems: 'center',
           padding: '1rem',
-          background: '#f9fafb',
+          background: theme.surface,
           borderRadius: 8,
         }}
       >
@@ -61,7 +62,7 @@ export function ShowdownRecord({
           borderRadius: 6,
           overflow: 'hidden',
           margin: '0.75rem 0',
-          background: '#e5e7eb',
+          background: theme.raisedHover,
         }}
       >
         <div
@@ -91,7 +92,7 @@ export function ShowdownRecord({
             padding: '0.5rem',
             fontWeight: 600,
             color: '#b45309',
-            background: '#fef3c7',
+            background: 'rgba(245, 158, 11, 0.14)',
             borderRadius: 6,
           }}
         >

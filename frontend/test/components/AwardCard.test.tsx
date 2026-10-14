@@ -2,6 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { AwardCard } from '../../src/components/AwardCard.tsx';
+import { theme } from '../../src/theme';
 
 describe('AwardCard', () => {
   it('renders emoji, award name, winner name, stat value, and stat label', () => {
@@ -59,7 +60,7 @@ describe('AwardCard', () => {
     );
     const valueEl = screen.getByText('0');
     expect(valueEl).toBeTruthy();
-    expect((valueEl as HTMLElement).style.color).toBe('#9ca3af');
+    expect((valueEl as HTMLElement).style.color).toBe(theme.muted);
   });
 
   it('applies muted style for null statValue', () => {
@@ -75,7 +76,7 @@ describe('AwardCard', () => {
     const spans = container.querySelectorAll('span');
     const valueSpan = Array.from(spans).find(s => s.textContent === '—') as HTMLElement;
     expect(valueSpan).toBeTruthy();
-    expect(valueSpan.style.color).toBe('#9ca3af');
+    expect(valueSpan.style.color).toBe(theme.muted);
   });
 
   it('renders all required fields when provided', () => {

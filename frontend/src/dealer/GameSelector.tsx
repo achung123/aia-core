@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { fetchSessions } from '../api/client.ts';
 import type { GameSessionListItem } from '../api/types';
+import { theme } from '../theme';
 
 export interface GameSelectorProps {
   onSelectGame: (gameId: number) => void;
@@ -84,7 +85,7 @@ const styles: Record<string, React.CSSProperties> = {
   heading: {
     fontSize: '1.4rem',
     marginBottom: '0.75rem',
-    color: '#e2e8f0',
+    color: theme.text,
   },
   newGameButton: {
     width: '100%',
@@ -92,17 +93,17 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: '48px',
     fontSize: '1.1rem',
     fontWeight: 'bold',
-    border: '2px dashed #6366f1',
+    border: `2px dashed ${theme.accent}`,
     borderRadius: '12px',
-    background: 'rgba(99, 102, 241, 0.15)',
-    color: '#a5b4fc',
+    background: theme.accentTint,
+    color: theme.accentText,
     cursor: 'pointer',
     marginBottom: '1rem',
     WebkitTapHighlightColor: 'transparent',
   },
   loading: {
     textAlign: 'center',
-    color: '#6b7280',
+    color: theme.faint,
     padding: '2rem 0',
   },
   error: {
@@ -112,7 +113,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   empty: {
     textAlign: 'center',
-    color: '#9ca3af',
+    color: theme.muted,
     padding: '2rem 0',
   },
   list: {
@@ -135,14 +136,14 @@ const styles: Record<string, React.CSSProperties> = {
     WebkitTapHighlightColor: 'transparent',
   },
   cardActive: {
-    borderColor: '#6366f1',
-    background: 'rgba(99, 102, 241, 0.12)',
-    color: '#c7d2fe',
+    borderColor: theme.accent,
+    background: theme.accentTint,
+    color: theme.accentSoft,
   },
   cardComplete: {
-    borderColor: '#2e303a',
-    background: '#1e1f2b',
-    color: '#94a3b8',
+    borderColor: theme.border,
+    background: theme.surface,
+    color: theme.muted,
   },
   cardDate: {
     fontWeight: 'bold',
@@ -151,7 +152,7 @@ const styles: Record<string, React.CSSProperties> = {
   gameId: {
     fontWeight: 'normal',
     fontSize: '0.85rem',
-    color: '#6b7280',
+    color: theme.faint,
   },
   cardDetails: {
     display: 'flex',

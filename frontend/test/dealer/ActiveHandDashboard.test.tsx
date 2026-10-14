@@ -105,9 +105,9 @@ describe('ActiveHandDashboard', () => {
     const rows = screen.getAllByTestId(/^player-row-/);
 
     expect(rows[0].style.backgroundColor).toBe('#ffffff'); // playing
-    expect(rows[1].style.backgroundColor).toBe('#fecaca'); // folded
-    expect(rows[2].style.backgroundColor).toBe('#bbf7d0'); // won
-    expect(rows[3].style.backgroundColor).toBe('#bbf7d0'); // joined
+    expect(rows[1].style.backgroundColor).toBe('rgba(220, 38, 38, 0.2)'); // folded
+    expect(rows[2].style.backgroundColor).toBe('rgba(34, 197, 94, 0.18)'); // won
+    expect(rows[3].style.backgroundColor).toBe('rgba(34, 197, 94, 0.18)'); // joined
   });
 
   // AC3: Board area shows 5 slots filled as captured

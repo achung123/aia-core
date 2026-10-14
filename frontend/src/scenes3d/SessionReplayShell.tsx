@@ -38,6 +38,7 @@ import {
 } from './state/tableStore';
 import { CHIP_SLIDE_DURATION_MS } from './animations/chipSlides';
 import type { TableState, TableStatePhase, ViewerContext } from './types';
+import { theme } from '../theme';
 
 // ---------------------------------------------------------------------------
 // Timing constants (plan.md § "Public API — <SessionReplayShell>")
@@ -503,8 +504,8 @@ const summaryStyle: CSSProperties = {
   alignItems: 'baseline',
   gap: 10,
   padding: '8px 12px 0',
-  background: '#0f0f1a',
-  color: '#c7d2fe',
+  background: theme.bg,
+  color: theme.accentSoft,
   fontSize: 'clamp(12px, 3.2vw, 14px)',
   minHeight: 22,
   overflow: 'hidden',
@@ -512,7 +513,7 @@ const summaryStyle: CSSProperties = {
   textOverflow: 'ellipsis',
 };
 
-const summaryHandStyle: CSSProperties = { fontWeight: 700, color: '#f8fafc' };
+const summaryHandStyle: CSSProperties = { fontWeight: 700, color: theme.text };
 
 const liveOnStyle: CSSProperties = {
   marginLeft: 'auto',
@@ -552,7 +553,7 @@ const controlsStyle: CSSProperties = {
   alignItems: 'center',
   gap: 8,
   padding: '4px 8px 8px',
-  background: '#0f0f1a',
+  background: theme.bg,
 };
 
 const playBtnStyle: CSSProperties = {
@@ -569,8 +570,8 @@ const speedGroupStyle: CSSProperties = {
   minWidth: 0,
 };
 const streetScrubberStyle: CSSProperties = {
-  background: '#0f0f1a',
-  borderTop: '1px solid #1e1b4b',
+  background: theme.bg,
+  borderTop: `1px solid ${theme.accentSurface}`,
   color: '#fff',
 };
 const speedBtnStyle: CSSProperties = {

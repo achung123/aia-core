@@ -1,7 +1,8 @@
 import type React from 'react';
+import { theme } from '../theme';
 
 const SUIT_MAP: Record<string, string> = { h: '♥', s: '♠', d: '♦', c: '♣' };
-const SUIT_COLORS: Record<string, string> = { h: '#dc2626', s: '#1e293b', d: '#dc2626', c: '#1e293b' };
+const SUIT_COLORS: Record<string, string> = { h: '#dc2626', s: theme.raised, d: '#dc2626', c: theme.raised };
 
 function formatCard(code: string): { rank: string; suitSymbol: string; suitCode: string } {
   const suitCode = code.slice(-1).toLowerCase();
@@ -26,7 +27,7 @@ export function PlayingCard({ code, onClick, testId }: PlayingCardProps) {
   }
 
   const { rank, suitSymbol, suitCode } = formatCard(code);
-  const color = SUIT_COLORS[suitCode] || '#1e293b';
+  const color = SUIT_COLORS[suitCode] || theme.raised;
 
   return (
     <button data-testid={testId} style={{ ...styles.card, color }} onClick={onClick}>
@@ -45,7 +46,7 @@ const styles: Record<string, React.CSSProperties> = {
     minWidth: '48px',
     minHeight: '64px',
     padding: '0.3rem 0.5rem',
-    border: '2px solid #c7d2fe',
+    border: `2px solid ${theme.accentSoft}`,
     borderRadius: '8px',
     background: '#ffffff',
     cursor: 'pointer',
@@ -68,10 +69,10 @@ const styles: Record<string, React.CSSProperties> = {
     minWidth: '48px',
     minHeight: '64px',
     padding: '0.3rem 0.5rem',
-    border: '2px dashed #4b5563',
+    border: `2px dashed ${theme.faint}`,
     borderRadius: '8px',
     background: 'transparent',
-    color: '#6b7280',
+    color: theme.faint,
     cursor: 'pointer',
     fontSize: '1.2rem',
     fontWeight: 'bold',

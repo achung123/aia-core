@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import { fetchBlinds } from '../api/client.ts';
 import { usePolling } from '../hooks/usePolling.ts';
+import { theme } from '../theme';
 
 export interface BlindPositionDisplayProps {
   gameId: number;
@@ -90,7 +91,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: '0.8rem',
   },
   posLabel: {
-    color: '#d1d5db',
+    color: theme.textSecondary,
     fontWeight: 'normal',
   },
   highlightLabel: {
@@ -99,6 +100,6 @@ const styles: Record<string, CSSProperties> = {
     textShadow: '0 0 6px rgba(52,211,153,0.5)',
   },
   separator: {
-    color: '#6b7280',
+    color: theme.faint,
   },
 };

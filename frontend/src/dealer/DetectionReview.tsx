@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { CardPicker } from './CardPicker.tsx';
 import type { CardDetectionEntry } from '../api/types';
+import { theme } from '../theme';
 
 const SUIT_MAP: Record<string, string> = { h: '♥', s: '♠', d: '♦', c: '♣' };
-const SUIT_COLORS: Record<string, string> = { '♥': '#dc2626', '♠': '#1e293b', '♦': '#dc2626', '♣': '#1e293b' };
+const SUIT_COLORS: Record<string, string> = { '♥': '#dc2626', '♠': theme.raised, '♦': '#dc2626', '♣': theme.raised };
 
 function formatCard(detectedValue: string): { rank: string; suit: string } {
   const suit = detectedValue.slice(-1).toLowerCase();
@@ -114,7 +115,7 @@ export function DetectionReview({ detections, imageUrl, mode, targetName, onConf
           const value = getCorrectedValue(i);
           const { rank, suit } = formatCard(value ?? '');
           const confidencePercent = Math.round(detection.confidence * 100);
-          const color = SUIT_COLORS[suit] || '#1e293b';
+          const color = SUIT_COLORS[suit] || theme.raised;
           const isCorrected = i in corrections;
           const labelStyle = isCorrected
             ? { ...styles.cardLabel, borderColor: '#ea580c' }
@@ -137,7 +138,7 @@ export function DetectionReview({ detections, imageUrl, mode, targetName, onConf
           <div style={styles.altScroll}>
             {cards[altIndex].alternatives!.map((alternative, i) => {
               const { rank, suit } = formatCard(alternative.value);
-              const color = SUIT_COLORS[suit] || '#1e293b';
+              const color = SUIT_COLORS[suit] || theme.raised;
               return (
                 <button
                   key={i}
@@ -188,7 +189,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   target: {
     fontSize: '1rem',
-    color: '#6b7280',
+    color: theme.faint,
     marginBottom: '1rem',
   },
   image: {
@@ -196,7 +197,7 @@ const styles: Record<string, React.CSSProperties> = {
     maxHeight: '300px',
     objectFit: 'contain' as const,
     borderRadius: '8px',
-    border: '1px solid #e5e7eb',
+    border: `1px solid ${theme.borderStrong}`,
     marginBottom: '1rem',
   },
   warning: {
@@ -217,9 +218,9 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column' as const,
     alignItems: 'center',
     padding: '0.75rem 1rem',
-    border: '2px solid #c7d2fe',
+    border: `2px solid ${theme.accentBorder}`,
     borderRadius: '10px',
-    background: '#f8fafc',
+    background: theme.surface,
     minWidth: '64px',
     minHeight: '48px',
     cursor: 'pointer',
@@ -232,13 +233,13 @@ const styles: Record<string, React.CSSProperties> = {
   },
   confidence: {
     fontSize: '0.75rem',
-    color: '#6b7280',
+    color: theme.faint,
     marginTop: '0.25rem',
   },
   positionLabel: {
     fontSize: '0.65rem',
     fontWeight: '700',
-    color: '#4f46e5',
+    color: theme.accent,
     textTransform: 'uppercase' as const,
     letterSpacing: '0.05em',
     marginBottom: '0.15rem',
@@ -254,10 +255,10 @@ const styles: Record<string, React.CSSProperties> = {
     minWidth: '48px',
     fontSize: '1rem',
     fontWeight: 'bold',
-    border: '2px solid #d1d5db',
+    border: `2px solid ${theme.borderStrong}`,
     borderRadius: '8px',
-    background: '#fff',
-    color: '#374151',
+    background: theme.surface,
+    color: theme.textSecondary,
     cursor: 'pointer',
   },
   confirmButton: {
@@ -268,7 +269,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 'bold',
     border: 'none',
     borderRadius: '8px',
-    background: '#4f46e5',
+    background: theme.accent,
     color: '#fff',
     cursor: 'pointer',
   },
@@ -295,9 +296,9 @@ const styles: Record<string, React.CSSProperties> = {
     minWidth: '48px',
     minHeight: '48px',
     padding: '0.5rem 0.75rem',
-    border: '2px solid #a5b4fc',
+    border: `2px solid ${theme.accentText}`,
     borderRadius: '8px',
-    background: '#eef2ff',
+    background: theme.accentTint,
     cursor: 'pointer',
     flexShrink: 0,
     WebkitTapHighlightColor: 'transparent',
@@ -309,17 +310,17 @@ const styles: Record<string, React.CSSProperties> = {
   },
   altConfidence: {
     fontSize: '0.7rem',
-    color: '#6b7280',
+    color: theme.faint,
     marginTop: '0.15rem',
   },
   allCardsButton: {
     padding: '0.5rem 1rem',
     fontSize: '0.85rem',
     fontWeight: '600',
-    border: '1px solid #d1d5db',
+    border: `1px solid ${theme.borderStrong}`,
     borderRadius: '6px',
-    background: '#fff',
-    color: '#4f46e5',
+    background: theme.surface,
+    color: theme.accent,
     cursor: 'pointer',
   },
 };

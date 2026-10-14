@@ -11,6 +11,7 @@ import {
   Cell,
 } from 'recharts';
 import type { PlayerSessionTrend } from '../api/types';
+import { theme } from '../theme';
 
 export interface PnLCandlestickChartProps {
   data: PlayerSessionTrend[];
@@ -77,18 +78,18 @@ function CandleTooltip({ active, payload }: CandleTooltipProps) {
 }
 
 const tooltipStyle: React.CSSProperties = {
-  background: '#1f2937',
-  color: '#f9fafb',
+  background: theme.raised,
+  color: theme.text,
   padding: '0.5rem 0.75rem',
   borderRadius: 6,
   fontSize: '0.85rem',
-  border: '1px solid #374151',
+  border: `1px solid ${theme.borderStrong}`,
 };
 
 export function PnLCandlestickChart({ data }: PnLCandlestickChartProps) {
   if (!data.length) {
     return (
-      <div data-testid="pnl-candlestick-chart" style={{ color: '#6b7280', textAlign: 'center', padding: '1rem 0' }}>
+      <div data-testid="pnl-candlestick-chart" style={{ color: theme.faint, textAlign: 'center', padding: '1rem 0' }}>
         No session data
       </div>
     );
@@ -100,21 +101,21 @@ export function PnLCandlestickChart({ data }: PnLCandlestickChartProps) {
     <div data-testid="pnl-candlestick-chart">
       <ResponsiveContainer width="100%" height={260}>
         <BarChart data={candles} margin={{ top: 10, right: 10, bottom: 4, left: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#2e303a" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke={theme.border} vertical={false} />
           <XAxis
             dataKey="date"
-            tick={{ fill: '#9ca3af', fontSize: 11 }}
+            tick={{ fill: theme.muted, fontSize: 11 }}
             tickLine={false}
-            axisLine={{ stroke: '#2e303a' }}
+            axisLine={{ stroke: theme.border }}
           />
           <YAxis
-            tick={{ fill: '#9ca3af', fontSize: 11 }}
+            tick={{ fill: theme.muted, fontSize: 11 }}
             tickLine={false}
             axisLine={false}
             tickFormatter={(v: number) => `$${v}`}
           />
           <Tooltip content={<CandleTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
-          <ReferenceLine y={0} stroke="#4b5563" strokeDasharray="3 3" />
+          <ReferenceLine y={0} stroke={theme.faint} strokeDasharray="3 3" />
           <Bar dataKey="range" shape={<CandleShape />} isAnimationActive={false}>
             {candles.map((c, i) => (
               <Cell key={i} fill={c.session_pl >= 0 ? '#22c55e' : '#ef4444'} />

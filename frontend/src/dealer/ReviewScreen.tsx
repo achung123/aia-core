@@ -6,6 +6,7 @@ import type { Player, CommunityCards } from '../stores/dealerStore.ts';
 import type { ResultEnum, StreetEnum, PlayerEquityEntry, SettlementResponse } from '../api/types';
 import { mapEquityToOutcomes } from './showdownHelpers.ts';
 import { PlayingCard } from '../components/PlayingCard.tsx';
+import { theme } from '../theme';
 
 type CommunityField = 'flop1' | 'flop2' | 'flop3' | 'turn' | 'river';
 
@@ -567,7 +568,7 @@ function PayoutPreviewPanel({ preview }: { preview: PayoutPreview }) {
             style={styles.previewRow}
           >
             <span>{player.player_name}</span>
-            <span style={{ color: net > 0 ? '#4ade80' : net < 0 ? '#f87171' : '#94a3b8' }}>
+            <span style={{ color: net > 0 ? '#4ade80' : net < 0 ? '#f87171' : theme.muted }}>
               {net > 0 ? '+' : net < 0 ? '−' : ''}{formatMoney(net)}
             </span>
           </div>
@@ -583,15 +584,15 @@ const styles: Record<string, React.CSSProperties> = {
     margin: '0 0 1rem',
     padding: '0.75rem',
     borderRadius: 8,
-    background: '#1e1b4b',
-    border: '1px solid #312e81',
-    color: '#e2e8f0',
+    background: theme.accentSurface,
+    border: `1px solid ${theme.accentSurfaceStrong}`,
+    color: theme.text,
     fontSize: '0.9rem',
   },
-  previewWarn: { background: '#422006', borderColor: '#a16207', color: '#fde68a' },
-  previewTitle: { fontWeight: 700, marginBottom: '0.4rem', color: '#c7d2fe' },
-  previewMuted: { color: '#94a3b8', fontSize: '0.8rem', marginTop: '0.4rem' },
-  previewPots: { marginBottom: '0.4rem', color: '#cbd5e1' },
+  previewWarn: { background: '#422006', borderColor: '#a16207', color: 'rgba(250, 204, 21, 0.14)' },
+  previewTitle: { fontWeight: 700, marginBottom: '0.4rem', color: theme.accentSoft },
+  previewMuted: { color: theme.muted, fontSize: '0.8rem', marginTop: '0.4rem' },
+  previewPots: { marginBottom: '0.4rem', color: theme.textSecondary },
   previewRow: { display: 'flex', justifyContent: 'space-between', padding: '2px 0' },
   container: {
     maxWidth: '480px',
@@ -602,11 +603,11 @@ const styles: Record<string, React.CSSProperties> = {
   heading: {
     fontSize: '1.4rem',
     fontWeight: 700,
-    color: '#e2e8f0',
+    color: theme.text,
     marginBottom: '0.25rem',
   },
   subheading: {
-    color: '#94a3b8',
+    color: theme.muted,
     marginBottom: '1rem',
   },
   section: {
@@ -615,7 +616,7 @@ const styles: Record<string, React.CSSProperties> = {
   sectionTitle: {
     fontSize: '1rem',
     fontWeight: 600,
-    color: '#cbd5e1',
+    color: theme.textSecondary,
     marginBottom: '0.5rem',
   },
   cardRow: {
@@ -625,14 +626,14 @@ const styles: Record<string, React.CSSProperties> = {
   },
   playerCard: {
     padding: '0.75rem',
-    background: '#1e1f2b',
+    background: theme.surface,
     borderRadius: '8px',
-    border: '1px solid #2e303a',
+    border: `1px solid ${theme.border}`,
     marginBottom: '0.75rem',
   },
   playerName: {
     fontWeight: 600,
-    color: '#e2e8f0',
+    color: theme.text,
     marginBottom: '0.5rem',
   },
   playerRow: {
@@ -642,7 +643,7 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: '0.4rem',
   },
   label: {
-    color: '#94a3b8',
+    color: theme.muted,
     fontSize: '0.85rem',
     minWidth: '50px',
   },
@@ -654,22 +655,22 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '0.3rem 0.6rem',
     fontSize: '0.85rem',
     fontWeight: 600,
-    border: '1px solid #4b5563',
+    border: `1px solid ${theme.faint}`,
     borderRadius: '6px',
     background: 'transparent',
-    color: '#94a3b8',
+    color: theme.muted,
     cursor: 'pointer',
   },
   resultButtonActive: {
-    background: '#4f46e5',
+    background: theme.accent,
     color: '#fff',
-    borderColor: '#4f46e5',
+    borderColor: theme.accent,
   },
   handDescBadge: {
     padding: '0.2rem 0.5rem',
     fontSize: '0.8rem',
-    color: '#a5b4fc',
-    background: 'rgba(79, 70, 229, 0.1)',
+    color: theme.accentText,
+    background: theme.accentTintSoft,
     borderRadius: '4px',
     marginBottom: '0.4rem',
   },
@@ -677,9 +678,9 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '0.3rem 0.5rem',
     fontSize: '0.85rem',
     borderRadius: '6px',
-    border: '1px solid #4b5563',
-    background: '#1e1f2b',
-    color: '#e2e8f0',
+    border: `1px solid ${theme.faint}`,
+    background: theme.surface,
+    color: theme.text,
   },
   error: {
     marginBottom: '1rem',
@@ -698,7 +699,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 'bold',
     border: 'none',
     borderRadius: '8px',
-    background: '#4f46e5',
+    background: theme.accent,
     color: '#fff',
     cursor: 'pointer',
     marginBottom: '0.5rem',
@@ -709,10 +710,10 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: '48px',
     fontSize: '1rem',
     fontWeight: 600,
-    border: '1px solid #2e303a',
+    border: `1px solid ${theme.border}`,
     borderRadius: '8px',
     background: 'transparent',
-    color: '#94a3b8',
+    color: theme.muted,
     cursor: 'pointer',
   },
   dialogOverlay: {
@@ -728,24 +729,24 @@ const styles: Record<string, React.CSSProperties> = {
     zIndex: 100,
   },
   dialog: {
-    background: '#1e1f2b',
+    background: theme.surface,
     borderRadius: '12px',
     padding: '1.5rem',
     maxWidth: '360px',
     width: '90%',
-    border: '1px solid #2e303a',
+    border: `1px solid ${theme.border}`,
   },
   dialogHeading: {
     fontSize: '1.1rem',
     fontWeight: 700,
-    color: '#e2e8f0',
+    color: theme.text,
     marginBottom: '0.75rem',
   },
   dialogList: {
     listStyle: 'none',
     padding: 0,
     margin: '0 0 1rem 0',
-    color: '#cbd5e1',
+    color: theme.textSecondary,
     fontSize: '0.95rem',
   },
   dialogButtons: {

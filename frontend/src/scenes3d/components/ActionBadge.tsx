@@ -40,6 +40,7 @@ import { faceScreen } from './screenFacing';
 import { seatAnchorLocalToWorld } from './tableLayout';
 import type { Vec3 } from '../animations/tweens';
 import type { SeatState, TableStatePhase } from '../types';
+import { theme } from '../../theme';
 
 // ---------------------------------------------------------------------------
 // Layout constants (exported for tests)
@@ -63,14 +64,14 @@ export const ACTION_BADGE_LOCAL_Y =
 /** Font size of the badge label (world units). */
 export const ACTION_BADGE_FONT_SIZE = 0.07;
 /** Background colour of the badge card. */
-export const ACTION_BADGE_BG_COLOR = '#1f2937';
+export const ACTION_BADGE_BG_COLOR = theme.raised;
 export const FOLD_BADGE_BG_COLOR = '#991b1b';
 export const LOSER_BADGE_BG_COLOR = '#9a3412';
 export const WINNER_BADGE_BG_COLOR = '#166534';
 /** Background opacity of the badge card. */
 export const ACTION_BADGE_BG_OPACITY = 0.85;
 /** Label colour of the badge text. */
-export const ACTION_BADGE_TEXT_COLOR = '#f8fafc';
+export const ACTION_BADGE_TEXT_COLOR = theme.text;
 
 interface BadgeDescriptor {
   label: string;

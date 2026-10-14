@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type React from 'react';
+import { theme } from '../theme';
 
 export interface ChipPickerProps {
   onConfirm: (amount: number) => void;
@@ -16,14 +17,14 @@ interface ChipDef {
 }
 
 const CHIPS: ChipDef[] = [
-  { value: 0.10, label: '$0.10', bg: '#ffffff', color: '#111827' },
+  { value: 0.10, label: '$0.10', bg: '#ffffff', color: theme.surface },
   { value: 0.20, label: '$0.20', bg: '#dc2626', color: '#ffffff' },
   { value: 0.30, label: '$0.30', bg: '#16a34a', color: '#ffffff' },
   { value: 0.40, label: '$0.40', bg: '#2563eb', color: '#ffffff' },
-  { value: 0.50, label: '$0.50', bg: '#1a1a2e', color: '#ffffff' },
+  { value: 0.50, label: '$0.50', bg: theme.surface, color: '#ffffff' },
   { value: 1.00, label: '$1.00', bg: '#f97316', color: '#ffffff' },
-  { value: 2.00, label: '$2.00', bg: '#38bdf8', color: '#111827' },
-  { value: 3.00, label: '$3.00', bg: '#facc15', color: '#111827' },
+  { value: 2.00, label: '$2.00', bg: '#38bdf8', color: theme.surface },
+  { value: 3.00, label: '$3.00', bg: '#facc15', color: theme.surface },
 ];
 
 export function ChipPicker({ onConfirm, onCancel, onAllIn, maxAmount }: ChipPickerProps) {
@@ -54,7 +55,7 @@ export function ChipPicker({ onConfirm, onCancel, onAllIn, maxAmount }: ChipPick
         ${total.toFixed(2)}
       </div>
       {hasMax && (
-        <div data-testid="chip-remaining" style={{ fontSize: '0.85rem', color: atMax ? '#f87171' : '#94a3b8', marginBottom: '0.5rem' }}>
+        <div data-testid="chip-remaining" style={{ fontSize: '0.85rem', color: atMax ? '#f87171' : theme.muted, marginBottom: '0.5rem' }}>
           {atMax ? 'Stack limit reached' : `$${(maxAmount - total).toFixed(2)} remaining`}
         </div>
       )}
@@ -128,7 +129,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '2rem',
     fontWeight: 'bold',
     marginBottom: '1rem',
-    color: '#e2e8f0',
+    color: theme.text,
   },
   chipRow: {
     display: 'flex',
@@ -161,11 +162,11 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '0.75rem 1.5rem',
     fontSize: '1rem',
     fontWeight: 'bold',
-    background: '#1e1f2b',
-    border: '1px solid #2e303a',
+    background: theme.surface,
+    border: `1px solid ${theme.border}`,
     borderRadius: '12px',
     cursor: 'pointer',
-    color: '#e2e8f0',
+    color: theme.text,
     minHeight: '48px',
   },
   confirmButton: {
@@ -194,10 +195,10 @@ const styles: Record<string, React.CSSProperties> = {
     marginTop: '1rem',
     padding: '0.75rem 1.5rem',
     fontSize: '1rem',
-    background: '#1e1f2b',
-    border: '1px solid #2e303a',
+    background: theme.surface,
+    border: `1px solid ${theme.border}`,
     borderRadius: '12px',
     cursor: 'pointer',
-    color: '#e2e8f0',
+    color: theme.text,
   },
 };

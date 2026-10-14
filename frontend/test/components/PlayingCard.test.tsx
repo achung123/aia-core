@@ -2,6 +2,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/react';
 import { PlayingCard } from '../../src/../src/components/PlayingCard.tsx';
+import { theme } from '../../src/theme';
 
 describe('PlayingCard', () => {
   it('renders rank and suit symbol for a hearts card', () => {
@@ -49,7 +50,7 @@ describe('PlayingCard', () => {
   it('uses dark color for spades and clubs', () => {
     const { container } = render(<PlayingCard code="As" />);
     const el = container.firstElementChild as HTMLElement;
-    expect(el.style.color).toBe('#1e293b');
+    expect(el.style.color).toBe(theme.raised);
   });
 
   it('passes through data-testid', () => {

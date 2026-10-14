@@ -1,4 +1,5 @@
 import type React from 'react';
+import { theme } from '../theme';
 
 interface Suit {
   code: string;
@@ -7,10 +8,10 @@ interface Suit {
 }
 
 const SUITS: Suit[] = [
-  { code: 's', symbol: '♠', color: '#1e293b' },
+  { code: 's', symbol: '♠', color: theme.text },
   { code: 'h', symbol: '♥', color: '#dc2626' },
   { code: 'd', symbol: '♦', color: '#dc2626' },
-  { code: 'c', symbol: '♣', color: '#1e293b' },
+  { code: 'c', symbol: '♣', color: theme.text },
 ];
 
 const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'] as const;
@@ -61,7 +62,7 @@ const styles: Record<string, React.CSSProperties> = {
     zIndex: 1000,
   },
   modal: {
-    background: '#fff',
+    background: theme.surface,
     borderRadius: '12px',
     padding: '1rem',
     maxWidth: '95vw',
@@ -85,9 +86,9 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: '48px',
     fontSize: '1rem',
     fontWeight: 'bold',
-    border: '1px solid #d1d5db',
+    border: `1px solid ${theme.borderStrong}`,
     borderRadius: '6px',
-    background: '#f8fafc',
+    background: theme.surface,
     cursor: 'pointer',
     padding: '0.35rem 0.5rem',
     WebkitTapHighlightColor: 'transparent',

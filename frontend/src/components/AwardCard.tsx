@@ -1,4 +1,5 @@
 import type React from 'react';
+import { theme } from '../theme';
 
 export interface AwardCardProps {
   emoji: string;
@@ -83,10 +84,10 @@ const styles: Record<string, React.CSSProperties> = {
   statValueMuted: {
     fontSize: '1.25rem',
     fontWeight: 700,
-    color: '#9ca3af',
+    color: theme.muted,
   },
   statLabel: {
     fontSize: '0.7rem',
-    color: '#9ca3af',
+    color: theme.muted,
   },
 };

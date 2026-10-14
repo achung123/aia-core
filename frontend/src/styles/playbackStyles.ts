@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { theme } from '../theme';
 
 export const gameSelectorStyles: Record<string, CSSProperties> = {
   container: {
@@ -9,11 +10,11 @@ export const gameSelectorStyles: Record<string, CSSProperties> = {
   heading: {
     fontSize: '1.4rem',
     marginBottom: '0.75rem',
-    color: '#e2e8f0',
+    color: theme.text,
   },
   loading: {
     textAlign: 'center',
-    color: '#6b7280',
+    color: theme.faint,
     padding: '2rem 0',
   },
   error: {
@@ -23,7 +24,7 @@ export const gameSelectorStyles: Record<string, CSSProperties> = {
   },
   empty: {
     textAlign: 'center',
-    color: '#9ca3af',
+    color: theme.muted,
     padding: '2rem 0',
   },
   list: {
@@ -46,14 +47,14 @@ export const gameSelectorStyles: Record<string, CSSProperties> = {
     WebkitTapHighlightColor: 'transparent',
   },
   cardActive: {
-    borderColor: '#6366f1',
-    background: 'rgba(99, 102, 241, 0.12)',
-    color: '#c7d2fe',
+    borderColor: theme.accent,
+    background: theme.accentTint,
+    color: theme.accentSoft,
   },
   cardComplete: {
-    borderColor: '#2e303a',
-    background: '#1e1f2b',
-    color: '#94a3b8',
+    borderColor: theme.border,
+    background: theme.surface,
+    color: theme.muted,
   },
   cardDisabled: {
     cursor: 'not-allowed',
@@ -66,7 +67,7 @@ export const gameSelectorStyles: Record<string, CSSProperties> = {
   gameId: {
     fontWeight: 'normal',
     fontSize: '0.85rem',
-    color: '#6b7280',
+    color: theme.faint,
   },
   cardDetails: {
     display: 'flex',
@@ -114,17 +115,17 @@ export const playbackLayoutStyles: Record<string, CSSProperties> = {
     gap: 8,
     padding: '72px 24px 24px',
     textAlign: 'center',
-    background: '#16171d',
-    color: '#e2e8f0',
+    background: theme.bg,
+    color: theme.text,
   },
   statusTitle: {
     fontSize: 18,
     fontWeight: 700,
-    color: '#f8fafc',
+    color: theme.text,
   },
   statusDetail: {
     maxWidth: 360,
-    color: '#94a3b8',
+    color: theme.muted,
     fontSize: 14,
     lineHeight: 1.4,
   },
@@ -138,7 +139,7 @@ export const playbackLayoutStyles: Record<string, CSSProperties> = {
     padding: '8px 14px',
     border: 'none',
     borderRadius: 8,
-    background: '#4f46e5',
+    background: theme.accent,
     color: '#fff',
     fontSize: 16,
     cursor: 'pointer',
@@ -152,7 +153,7 @@ export const equityRowStyles: Record<string, CSSProperties> = {
     display: 'flex',
     gap: 6,
     padding: '8px 12px',
-    background: '#1a1a2e',
+    background: theme.surface,
     overflowX: 'auto',
     fontFamily: 'system-ui, sans-serif',
   },
@@ -160,13 +161,13 @@ export const equityRowStyles: Record<string, CSSProperties> = {
     minWidth: 80,
     padding: '8px 12px',
     borderRadius: 8,
-    background: '#1e1b4b',
-    border: '1px solid #312e81',
+    background: theme.accentSurface,
+    border: `1px solid ${theme.accentSurfaceStrong}`,
     textAlign: 'center',
     flexShrink: 0,
   },
   name: {
-    color: '#c7d2fe',
+    color: theme.accentSoft,
     fontSize: 12,
     fontWeight: 600,
     marginBottom: 4,

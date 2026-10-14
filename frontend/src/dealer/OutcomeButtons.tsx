@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type React from 'react';
+import { theme } from '../theme';
 
 export type OutcomeResult = 'won' | 'folded' | 'lost' | 'not_playing';
 export type OutcomeStreet = 'preflop' | 'flop' | 'turn' | 'river';
@@ -51,7 +52,7 @@ export function OutcomeButtons({ playerName, onSelect, onCancel, error, submitti
             Lost
           </button>
           <button
-            style={{ ...styles.button, backgroundColor: '#6b7280' }}
+            style={{ ...styles.button, backgroundColor: theme.faint }}
             disabled={submitting}
             onClick={handleNotPlaying}
           >
@@ -78,7 +79,7 @@ export function OutcomeButtons({ playerName, onSelect, onCancel, error, submitti
             Flop
           </button>
           <button
-            style={{ ...styles.button, backgroundColor: '#7c3aed' }}
+            style={{ ...styles.button, backgroundColor: theme.accent }}
             disabled={submitting}
             onClick={() => handleStreetSelect('turn')}
           >
@@ -119,7 +120,7 @@ const styles: Record<string, React.CSSProperties> = {
   streetLabel: {
     fontSize: '1.1rem',
     fontWeight: '600',
-    color: '#c084fc',
+    color: theme.accentText,
     margin: '0 0 0.25rem 0',
   },
   buttonGroup: {
@@ -151,10 +152,10 @@ const styles: Record<string, React.CSSProperties> = {
     marginTop: '1rem',
     padding: '0.75rem 1.5rem',
     fontSize: '1rem',
-    background: '#1e1f2b',
-    border: '1px solid #2e303a',
+    background: theme.surface,
+    border: `1px solid ${theme.border}`,
     borderRadius: '8px',
     cursor: 'pointer',
-    color: '#e2e8f0',
+    color: theme.text,
   },
 };

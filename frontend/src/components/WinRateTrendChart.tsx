@@ -9,6 +9,7 @@ import {
   CartesianGrid,
 } from 'recharts';
 import type { PlayerSessionTrend } from '../api/types';
+import { theme } from '../theme';
 
 interface WinRateTrendChartProps {
   data: PlayerSessionTrend[];
@@ -38,8 +39,8 @@ function CustomTooltip({
 }
 
 const tooltipStyle: React.CSSProperties = {
-  background: '#1f2937',
-  color: '#f9fafb',
+  background: theme.raised,
+  color: theme.text,
   padding: '0.5rem 0.75rem',
   borderRadius: 6,
   fontSize: '0.85rem',
@@ -61,7 +62,7 @@ export function WinRateTrendChart({ data }: WinRateTrendChartProps) {
     <div style={needsScroll ? { width: chartWidth, minWidth: '100%' } : undefined}>
       <ResponsiveContainer width="100%" height={300}>
         <LineChart data={data} margin={{ top: 10, right: 20, bottom: 5, left: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+          <CartesianGrid strokeDasharray="3 3" stroke={theme.borderStrong} />
           <XAxis dataKey="game_date" tick={{ fontSize: 12 }} />
           <YAxis domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} />
           <Tooltip content={<CustomTooltip />} />

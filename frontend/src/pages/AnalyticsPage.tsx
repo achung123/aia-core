@@ -5,6 +5,7 @@ import { fetchLeaderboard } from '../api/client';
 import type { LeaderboardEntry } from '../api/types';
 import { usePlayerStore } from '../stores/playerStore';
 import { WinsDonutChart } from '../components/WinsDonutChart';
+import { theme } from '../theme';
 
 export function AnalyticsPage() {
   const playerName = usePlayerStore((state) => state.playerName);
@@ -129,12 +130,12 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 'clamp(1.5rem, 6vw, 2.5rem)',
     fontWeight: 700,
     marginBottom: '0.5rem',
-    color: '#f1f5f9',
+    color: theme.text,
     textAlign: 'center' as const,
   },
   subtitle: {
     fontSize: '1.1rem',
-    color: '#94a3b8',
+    color: theme.muted,
     marginBottom: '2rem',
     textAlign: 'center' as const,
   },
@@ -147,7 +148,7 @@ const styles: Record<string, React.CSSProperties> = {
   subheading: {
     fontSize: '1.25rem',
     fontWeight: 600,
-    color: '#e2e8f0',
+    color: theme.text,
     marginBottom: '0.75rem',
   },
   section: {
@@ -156,20 +157,20 @@ const styles: Record<string, React.CSSProperties> = {
   skeleton: {
     height: 80,
     borderRadius: 8,
-    background: 'linear-gradient(90deg, #1e1b4b 25%, #252250 50%, #1e1b4b 75%)',
+    background: `linear-gradient(90deg, ${theme.accentSurface} 25%, ${theme.raised} 50%, ${theme.accentSurface} 75%)`,
     animation: 'pulse 1.5s ease-in-out infinite',
   },
   table: {
     width: '100%',
     borderCollapse: 'collapse' as const,
-    background: '#16171d',
+    background: theme.bg,
     borderRadius: 12,
     overflow: 'hidden',
   },
   th: {
     textAlign: 'left' as const,
     padding: '0.75rem clamp(0.35rem, 2vw, 1rem)',
-    color: '#94a3b8',
+    color: theme.muted,
     fontSize: '0.8rem',
     fontWeight: 600,
     textTransform: 'uppercase' as const,
@@ -180,11 +181,11 @@ const styles: Record<string, React.CSSProperties> = {
   },
   td: {
     padding: '0.65rem clamp(0.35rem, 2vw, 1rem)',
-    color: '#e2e8f0',
+    color: theme.text,
     fontSize: 'clamp(0.8rem, 2.5vw, 0.95rem)',
   },
   playerLink: {
-    color: '#818cf8',
+    color: theme.accentText,
     textDecoration: 'none',
     fontWeight: 500,
   },
@@ -199,11 +200,11 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: '0.5rem',
     padding: '1.5rem 1rem',
-    background: 'linear-gradient(135deg, #1e1b4b, #252250)',
-    border: '1px solid #3730a3',
+    background: theme.accentSurface,
+    border: `1px solid ${theme.accentBorder}`,
     borderRadius: '14px',
     textDecoration: 'none',
-    color: '#f3f4f6',
+    color: theme.text,
     transition: 'transform 0.15s, box-shadow 0.15s',
   },
   cardEmoji: {
@@ -215,7 +216,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   cardDesc: {
     fontSize: '0.8rem',
-    color: '#94a3b8',
+    color: theme.muted,
     textAlign: 'center' as const,
   },
   leaderboardRow: {
@@ -236,7 +237,7 @@ const styles: Record<string, React.CSSProperties> = {
   donutHeading: {
     fontSize: '1rem',
     fontWeight: 600,
-    color: '#e2e8f0',
+    color: theme.text,
     marginBottom: '0.5rem',
     textAlign: 'center' as const,
   },

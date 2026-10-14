@@ -38,6 +38,7 @@ import {
   type TweenHandle,
   type Vec3,
 } from '../animations/tweens';
+import { theme } from '../../theme';
 
 // ---------------------------------------------------------------------------
 // Layout + animation constants
@@ -357,7 +358,7 @@ export function Nameplate({
       <mesh name="nameplate-card">
         <planeGeometry args={[NAMEPLATE_WIDTH, NAMEPLATE_HEIGHT]} />
         <meshBasicMaterial
-          color="#0f172a"
+          color={theme.bg}
           transparent
           opacity={folded ? FOLDED_NAMEPLATE_OPACITY : NAMEPLATE_BG_OPACITY}
         />
@@ -375,7 +376,7 @@ export function Nameplate({
         name="nameplate-text"
         position={[0, 0, 0.001]}
         fontSize={NAMEPLATE_FONT_SIZE}
-        color="#f8fafc"
+        color={theme.text}
         anchorX="center"
         anchorY="middle"
         maxWidth={NAMEPLATE_WIDTH * 0.9}

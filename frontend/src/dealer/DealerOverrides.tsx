@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type React from 'react';
 import { PlayerActionButtons } from '../player/PlayerActionButtons.tsx';
 import { setCurrentPlayer, setPlayerChips, undoLastAction } from '../api/client.ts';
+import { theme } from '../theme';
 
 export interface DealerOverridesProps {
   gameId: number;
@@ -199,9 +200,9 @@ const styles: Record<string, React.CSSProperties> = {
     marginTop: '0.75rem',
     maxWidth: '100%',
     boxSizing: 'border-box',
-    border: '1px solid #312e81',
+    border: `1px solid ${theme.accentSurfaceStrong}`,
     borderRadius: '8px',
-    background: '#1e1b4b',
+    background: theme.accentSurface,
   },
   toggle: {
     width: '100%',
@@ -210,14 +211,14 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: 'left',
     fontWeight: 600,
     fontSize: '0.95rem',
-    color: '#e0e7ff',
+    color: theme.accentSoft,
     background: 'transparent',
     border: 'none',
     cursor: 'pointer',
   },
   body: { padding: '0 0.75rem 0.75rem' },
   section: { marginTop: '0.75rem' },
-  sectionTitle: { display: 'block', fontWeight: 600, fontSize: '0.85rem', color: '#c7d2fe', marginBottom: '0.35rem' },
+  sectionTitle: { display: 'block', fontWeight: 600, fontSize: '0.85rem', color: theme.accentSoft, marginBottom: '0.35rem' },
   row: { display: 'flex', gap: '0.4rem' },
   input: {
     flex: 1,
@@ -225,10 +226,10 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: '44px',
     padding: '0.4rem 0.5rem',
     fontSize: '1rem',
-    border: '1px solid #4338ca',
+    border: `1px solid ${theme.accentPressed}`,
     borderRadius: '6px',
-    background: '#0f172a',
-    color: '#f1f5f9',
+    background: theme.bg,
+    color: theme.text,
   },
   button: {
     width: '100%',
@@ -237,9 +238,9 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '0.5rem 0.75rem',
     fontSize: '0.95rem',
     fontWeight: 600,
-    border: '1px solid #6366f1',
+    border: `1px solid ${theme.accent}`,
     borderRadius: '6px',
-    background: '#312e81',
+    background: theme.accentSurfaceStrong,
     color: '#ffffff',
     cursor: 'pointer',
   },

@@ -25,6 +25,7 @@ import type {
   PlayerHandResponse,
   ResultEnum,
 } from '../api/types';
+import { theme } from '../theme';
 
 /* ── Card formatting helpers ──────────────────────────── */
 
@@ -166,7 +167,7 @@ interface CsvUploadModalProps {
 function CsvUploadModal({ onClose, onDone }: CsvUploadModalProps) {
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState('');
-  const [statusColor, setStatusColor] = useState('#94a3b8');
+  const [statusColor, setStatusColor] = useState<string>(theme.muted);
   const [validated, setValidated] = useState(false);
   const [validating, setValidating] = useState(false);
   const [committing, setCommitting] = useState(false);
@@ -174,7 +175,7 @@ function CsvUploadModal({ onClose, onDone }: CsvUploadModalProps) {
   const runValidation = async (f: File) => {
     setValidating(true);
     setStatus('Validating…');
-    setStatusColor('#94a3b8');
+    setStatusColor(theme.muted);
     try {
       const result = await uploadCsvValidate(f);
       if (result.valid) {
@@ -204,7 +205,7 @@ function CsvUploadModal({ onClose, onDone }: CsvUploadModalProps) {
     if (!file) return;
     setCommitting(true);
     setStatus('Committing…');
-    setStatusColor('#94a3b8');
+    setStatusColor(theme.muted);
     try {
       const result = await uploadCsvCommit(file);
       setStatus(`✓ Committed — ${result.games_created} games, ${result.hands_created} hands, ${result.players_created} new players`);
@@ -250,7 +251,7 @@ interface ZipUploadModalProps {
 function ZipUploadModal({ onClose, onDone }: ZipUploadModalProps) {
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState('');
-  const [statusColor, setStatusColor] = useState('#94a3b8');
+  const [statusColor, setStatusColor] = useState(theme.muted);
   const [validated, setValidated] = useState(false);
   const [validating, setValidating] = useState(false);
   const [committing, setCommitting] = useState(false);
@@ -265,7 +266,7 @@ function ZipUploadModal({ onClose, onDone }: ZipUploadModalProps) {
     if (!file) return;
     setValidating(true);
     setStatus('Validating…');
-    setStatusColor('#94a3b8');
+    setStatusColor(theme.muted);
     try {
       const result = await uploadZipValidate(file);
       if (result.valid) {
@@ -286,7 +287,7 @@ function ZipUploadModal({ onClose, onDone }: ZipUploadModalProps) {
     if (!file) return;
     setCommitting(true);
     setStatus('Committing…');
-    setStatusColor('#94a3b8');
+    setStatusColor(theme.muted);
     try {
       const result = await uploadZipCommit(file);
       setStatus(
@@ -555,7 +556,7 @@ function EditHandModal({ gameId, hand, onClose, onDone }: EditHandModalProps) {
                   value={playerEdit.card1} onChange={e => updatePlayerEdit(i, 'card1', e.target.value)} />
                 <input type="text" style={{ width: '60px' }}
                   value={playerEdit.card2} onChange={e => updatePlayerEdit(i, 'card2', e.target.value)} />
-                <span style={{ color: '#64748b', marginLeft: '0.5rem', fontSize: '0.82rem' }}>
+                <span style={{ color: theme.faint, marginLeft: '0.5rem', fontSize: '0.82rem' }}>
                   {playerEdit.result || ''} {playerEdit.profitLoss ?? ''}
                 </span>
               </div>

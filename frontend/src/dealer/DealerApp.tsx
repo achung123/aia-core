@@ -14,6 +14,7 @@ import { ReviewScreen } from './ReviewScreen.tsx';
 import { addPlayerToHand, updateHolecards, updateFlop, updateTurn, updateRiver, patchPlayerResult, fetchGame, fetchHand, fetchHandStatus } from '../api/client.ts';
 import { inferOutcomeStreet } from './showdownHelpers.ts';
 import { usePolling } from '../hooks/usePolling.ts';
+import { theme } from '../theme';
 
 interface ReviewData {
   targetName: string;
@@ -421,7 +422,7 @@ export function DealerApp() {
       {currentStep === 'activeHand' && gameId && (
         <>
           {dealerReconnecting && (
-            <div data-testid="dealer-reconnecting" style={{ color: '#ca8a04', fontSize: '0.8rem', textAlign: 'center', padding: '0.25rem' }}>
+            <div data-testid="dealer-reconnecting" style={{ color: theme.warningText, fontSize: '0.8rem', textAlign: 'center', padding: '0.25rem' }}>
               Reconnecting…
             </div>
           )}
@@ -516,7 +517,7 @@ export function DealerApp() {
                 <li key={player.name}>{player.name}</li>
               ))}
             </ul>
-            {finishError && <div style={{ color: '#991b1b', marginBottom: '0.5rem' }}>{finishError}</div>}
+            {finishError && <div style={{ color: theme.dangerText, marginBottom: '0.5rem' }}>{finishError}</div>}
             <div style={dialogButtonRow}>
               <button onClick={() => setShowFinishConfirm(false)} disabled={finishing}>Cancel</button>
               <button
@@ -576,7 +577,7 @@ const bottomNavStyle: React.CSSProperties = {
   display: 'flex',
   justifyContent: 'space-around',
   background: '#0f1117',
-  borderTop: '1px solid #2e303a',
+  borderTop: `1px solid ${theme.border}`,
   borderBottom: 'none',
   padding: '0.5rem 0',
   zIndex: 100,
@@ -590,14 +591,14 @@ const navItemStyle: React.CSSProperties = {
   fontWeight: 600,
   border: 'none',
   background: 'transparent',
-  color: '#64748b',
+  color: theme.faint,
   cursor: 'pointer',
   textAlign: 'center',
 };
 
 const navItemActiveStyle: React.CSSProperties = {
-  color: '#818cf8',
-  borderTop: '2px solid #818cf8',
+  color: theme.accentText,
+  borderTop: `2px solid ${theme.accentText}`,
 };
 
 const dialogOverlayStyle: React.CSSProperties = {
@@ -614,13 +615,13 @@ const dialogOverlayStyle: React.CSSProperties = {
 };
 
 const dialogStyle: React.CSSProperties = {
-  background: '#1e1f2b',
+  background: theme.surface,
   borderRadius: '12px',
   padding: '1.5rem',
   maxWidth: '400px',
   width: '90%',
-  color: '#e2e8f0',
-  border: '1px solid #2e303a',
+  color: theme.text,
+  border: `1px solid ${theme.border}`,
 };
 
 const dialogButtonRow: React.CSSProperties = {

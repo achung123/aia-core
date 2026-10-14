@@ -92,6 +92,7 @@ vi.mock('../../src/../src/dealer/GamePlayerManagement.tsx', () => ({
 
 import { startHand as startHandApi, addPlayerToHand, updateHolecards, updateFlop, updateTurn, updateRiver, patchPlayerResult, fetchHands, fetchHand, fetchHandStatus, fetchSessions } from '../../src/api/client.ts';
 import { DealerApp } from '../../src/../src/dealer/DealerApp.tsx';
+import { theme } from '../../src/theme';
 
 const defaultTestPlayers: Player[] = [
   { name: 'Alice', card1: null, card2: null, recorded: false, status: 'playing', outcomeStreet: null },
@@ -158,7 +159,7 @@ describe('DealerApp 4-step shell', () => {
     useDealerStore.setState({ ...defaultTestState, currentStep: 'dashboard' });
     const container = renderToContainer(<DealerApp />);
     const dashBtn = container.querySelector('[data-testid="nav-dashboard"]') as HTMLElement;
-    expect(dashBtn.style.color).toBe('#818cf8');
+    expect(dashBtn.style.color).toBe(theme.accentText);
   });
 
   it('renders GameSelector on gameSelector step', () => {
@@ -1164,12 +1165,12 @@ describe('DealerApp hand status polling', () => {
 
     await vi.waitFor(() => {
       const aliceRow = container.querySelector('[data-testid="player-row-Alice"]') as HTMLElement;
-      expect(aliceRow.style.backgroundColor).toBe('#bbf7d0'); // joined
+      expect(aliceRow.style.backgroundColor).toBe('rgba(34, 197, 94, 0.18)'); // joined
     });
 
     await vi.waitFor(() => {
       const bobRow = container.querySelector('[data-testid="player-row-Bob"]') as HTMLElement;
-      expect(bobRow.style.backgroundColor).toBe('#fef08a'); // pending
+      expect(bobRow.style.backgroundColor).toBe('rgba(250, 204, 21, 0.14)'); // pending
     });
   });
 
@@ -1345,7 +1346,7 @@ describe('DealerApp hand status polling', () => {
 
     await vi.waitFor(() => {
       const aliceRow = container.querySelector('[data-testid="player-row-Alice"]') as HTMLElement;
-      expect(aliceRow.style.backgroundColor).toBe('#bbf7d0');
+      expect(aliceRow.style.backgroundColor).toBe('rgba(34, 197, 94, 0.18)');
     });
   });
 

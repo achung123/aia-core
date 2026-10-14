@@ -3,6 +3,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, cleanup } from '@testing-library/react';
 import { act } from 'react';
 import { StreetScrubber, STREETS } from '../../src/../src/mobile/StreetScrubber.tsx';
+import { theme } from '../../src/theme';
 
 function renderToContainer(element: React.ReactElement): HTMLElement {
   const { container } = render(element);
@@ -40,7 +41,7 @@ describe('StreetScrubber', () => {
       <StreetScrubber currentStreet="Flop" handData={FULL_HAND} onStreetChange={() => {}} />
     );
     const flopBtn = c.querySelector('[data-testid="street-flop"]') as HTMLElement;
-    expect(flopBtn.style.background).toBe('#4f46e5');
+    expect(flopBtn.style.background).toBe(theme.accent);
     expect(flopBtn.style.color).toBe('#fff');
   });
 
@@ -94,7 +95,7 @@ describe('StreetScrubber', () => {
       <StreetScrubber currentStreet="Pre-Flop" handData={FULL_HAND} onStreetChange={() => {}} />
     );
     const preflopBtn = c.querySelector('[data-testid="street-preflop"]') as HTMLElement;
-    expect(preflopBtn.style.background).toBe('#4f46e5');
+    expect(preflopBtn.style.background).toBe(theme.accent);
     expect(preflopBtn.style.borderRadius).toBe('8px');
   });
 

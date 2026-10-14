@@ -86,7 +86,7 @@ describe('SeatPicker', () => {
       <SeatPicker seats={SEATS} currentPlayerSeat={3} onSelect={vi.fn()} onSkip={vi.fn()} />,
     );
     const seat3 = screen.getByTestId('seat-3');
-    expect(seat3.style.border).toContain('4f46e5');
+    expect(seat3.style.border).toContain('e11d48');
   });
 
   it('calls onSkip when skip button is clicked', () => {

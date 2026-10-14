@@ -23,6 +23,7 @@ import { handsToTableState, resolveSeatMap } from '../scenes3d/data/handsToTable
 import type { ViewerContext } from '../scenes3d/types';
 import { SessionScrubber } from '../components/SessionScrubber.tsx';
 import { ConnectionNotice } from '../components/ConnectionNotice.tsx';
+import { theme } from '../theme';
 
 export function TableView() {
   const navigate = useNavigate();
@@ -227,7 +228,7 @@ const styles: Record<string, CSSProperties> = {
     width: '100%',
     height: '100dvh',
     overflow: 'hidden',
-    background: '#1a1a2e',
+    background: theme.surface,
   },
   hudBar: {
     display: 'flex',
@@ -252,12 +253,12 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 'bold',
     border: 'none',
     borderRadius: '8px',
-    background: '#4f46e5',
+    background: theme.accent,
     color: '#fff',
     cursor: 'pointer',
   },
   loadingText: {
-    color: '#c7d2fe',
+    color: theme.accentSoft,
     fontSize: '0.85rem',
     margin: 0,
   },

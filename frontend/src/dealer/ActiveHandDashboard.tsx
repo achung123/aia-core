@@ -8,18 +8,19 @@ import type { HandResponse, PlayerEquityEntry } from '../api/types';
 import { PlayingCard } from '../components/PlayingCard.tsx';
 import { DealerOverrides } from './DealerOverrides.tsx';
 import { useGameEvents } from '../hooks/useGameEvents.ts';
+import { theme } from '../theme';
 
 const BOARD_STREET = ['flop', 'flop', 'flop', 'turn', 'river'] as const;
 
 const statusColors: Record<string, string> = {
   playing: '#ffffff',
-  won: '#bbf7d0',
-  folded: '#fecaca',
-  lost: '#fed7aa',
-  not_playing: '#e5e7eb',
-  pending: '#fef08a',
-  joined: '#bbf7d0',
-  handed_back: '#fef08a',
+  won: 'rgba(34, 197, 94, 0.18)',
+  folded: 'rgba(220, 38, 38, 0.2)',
+  lost: 'rgba(234, 88, 12, 0.18)',
+  not_playing: theme.textSecondary,
+  pending: 'rgba(250, 204, 21, 0.14)',
+  joined: 'rgba(34, 197, 94, 0.18)',
+  handed_back: 'rgba(250, 204, 21, 0.14)',
 };
 
 function formatStatus(status: string, outcomeStreet: string | null): string {
@@ -260,17 +261,17 @@ export function ActiveHandDashboard({
             />
           )}
           {dealerEquityEntries.length > 0 && (
-            <div data-testid="dealer-equity-row" style={{ display: 'flex', gap: 6, padding: '8px 12px', background: '#1a1a2e', borderRadius: '8px', overflowX: 'auto' }}>
+            <div data-testid="dealer-equity-row" style={{ display: 'flex', gap: 6, padding: '8px 12px', background: theme.surface, borderRadius: '8px', overflowX: 'auto' }}>
               {dealerEquityEntries.map((e) => (
-                <div key={e.player_name} style={{ minWidth: 70, padding: '6px 10px', borderRadius: 8, background: '#1e1b4b', border: '1px solid #312e81', textAlign: 'center', flexShrink: 0 }}>
-                  <div style={{ color: '#c7d2fe', fontSize: 11, fontWeight: 600, marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.player_name}</div>
+                <div key={e.player_name} style={{ minWidth: 70, padding: '6px 10px', borderRadius: 8, background: theme.accentSurface, border: `1px solid ${theme.accentSurfaceStrong}`, textAlign: 'center', flexShrink: 0 }}>
+                  <div style={{ color: theme.accentSoft, fontSize: 11, fontWeight: 600, marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.player_name}</div>
                   <div style={{ fontSize: 14, fontWeight: 700, color: e.equity >= 0.5 ? '#4ade80' : e.equity >= 0.25 ? '#facc15' : '#f87171' }}>
                     {equityEstimated ? '~' : ''}{(e.equity * 100).toFixed(1)}%
                   </div>
                   {e.win != null && e.tie != null && (
                     <div
                       data-testid={`equity-detail-${e.player_name}`}
-                      style={{ fontSize: 10, color: '#94a3b8', marginTop: 2, whiteSpace: 'nowrap' }}
+                      style={{ fontSize: 10, color: theme.muted, marginTop: 2, whiteSpace: 'nowrap' }}
                     >
                       win {(e.win * 100).toFixed(0)}%{e.tie > 0.0005 ? ` · tie ${(e.tie * 100).toFixed(0)}%` : ''}
                     </div>
@@ -530,10 +531,10 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: '34px',
     fontSize: '0.85rem',
     fontWeight: 600,
-    border: '1px solid #4f46e5',
+    border: `1px solid ${theme.accent}`,
     borderRadius: '8px',
-    background: '#eef2ff',
-    color: '#4f46e5',
+    background: theme.accentTint,
+    color: theme.accent,
     cursor: 'pointer',
     marginBottom: '0.5rem',
   },
@@ -542,8 +543,8 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     alignItems: 'center',
     padding: '0.5rem 0.75rem',
-    background: '#1e1b4b',
-    color: '#e0e7ff',
+    background: theme.accentSurface,
+    color: theme.accentSoft,
     borderRadius: '10px',
     marginBottom: '0.75rem',
     fontSize: '0.9rem',
@@ -608,10 +609,10 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     fontSize: '0.95rem',
     fontWeight: 'bold',
-    border: '2px solid #c7d2fe',
+    border: `2px solid ${theme.accentBorder}`,
     borderRadius: '12px',
-    background: '#eef2ff',
-    color: '#312e81',
+    background: theme.accentTint,
+    color: theme.text,
     cursor: 'pointer',
     padding: '0.5rem 0.25rem',
     WebkitTapHighlightColor: 'transparent',
@@ -628,7 +629,7 @@ const styles: Record<string, React.CSSProperties> = {
   playerRow: {
     display: 'flex',
     alignItems: 'center',
-    border: '2px solid #c7d2fe',
+    border: `2px solid ${theme.accentBorder}`,
     borderRadius: '12px',
     overflow: 'hidden',
     minHeight: '56px',
@@ -643,7 +644,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 'bold',
     border: 'none',
     background: 'transparent',
-    color: '#312e81',
+    color: theme.text,
     cursor: 'pointer',
     WebkitTapHighlightColor: 'transparent',
     minHeight: '48px',
@@ -662,7 +663,7 @@ const styles: Record<string, React.CSSProperties> = {
   statusText: {
     fontSize: '0.85rem',
     fontWeight: '600',
-    color: '#555',
+    color: theme.muted,
     textTransform: 'capitalize',
   },
   inlineCheck: {
@@ -673,8 +674,8 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     padding: '2px 8px',
     borderRadius: '10px',
-    background: '#e0e7ff',
-    color: '#3730a3',
+    background: theme.accentTint,
+    color: theme.accentSoft,
     textTransform: 'uppercase',
     whiteSpace: 'nowrap',
   },
@@ -683,8 +684,8 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 700,
     padding: '2px 8px',
     borderRadius: '10px',
-    background: '#dcfce7',
-    color: '#166534',
+    background: 'rgba(34, 197, 94, 0.14)',
+    color: theme.successText,
     whiteSpace: 'nowrap',
   },
   check: {
@@ -698,17 +699,17 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '1.1rem',
     border: '1px solid #f59e0b',
     borderRadius: '8px',
-    background: '#fef3c7',
+    background: 'rgba(245, 158, 11, 0.14)',
     cursor: 'pointer',
   },
   sitOutButton: {
     padding: '0.2rem 0.5rem',
     fontSize: '0.75rem',
-    border: '1px solid #d1d5db',
+    border: `1px solid ${theme.borderStrong}`,
     borderRadius: '6px',
-    background: '#f3f4f6',
+    background: theme.surface,
     cursor: 'pointer',
-    color: '#6b7280',
+    color: theme.faint,
   },
   finishButton: {
     marginTop: '1rem',
@@ -718,15 +719,15 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 'bold',
     border: 'none',
     borderRadius: '12px',
-    background: '#4f46e5',
+    background: theme.accent,
     color: '#fff',
     cursor: 'pointer',
   },
   toast: {
     marginTop: '0.75rem',
     padding: '0.75rem',
-    background: '#fef2f2',
-    color: '#991b1b',
+    background: 'rgba(220, 38, 38, 0.14)',
+    color: theme.dangerText,
     border: '1px solid #fca5a5',
     borderRadius: '8px',
     fontSize: '0.85rem',
@@ -734,9 +735,9 @@ const styles: Record<string, React.CSSProperties> = {
   betVerifyPanel: {
     padding: '0.75rem',
     marginBottom: '0.75rem',
-    border: '2px solid #c7d2fe',
+    border: `2px solid ${theme.accentBorder}`,
     borderRadius: '12px',
-    background: '#f5f3ff',
+    background: theme.accentTint,
   },
   betVerifyHeader: {
     display: 'flex',
@@ -747,13 +748,13 @@ const styles: Record<string, React.CSSProperties> = {
   betVerifyLabel: {
     fontWeight: 700,
     fontSize: '1rem',
-    color: '#312e81',
+    color: theme.text,
   },
   potBadge: {
     fontSize: '0.85rem',
     fontWeight: 600,
-    color: '#4f46e5',
-    background: '#eef2ff',
+    color: theme.accent,
+    background: theme.accentTint,
     padding: '0.2rem 0.5rem',
     borderRadius: '6px',
   },
@@ -764,7 +765,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   legalActionsText: {
     fontSize: '0.85rem',
-    color: '#555',
+    color: theme.muted,
   },
   betVerifyBtnRow: {
     display: 'flex',
@@ -787,8 +788,8 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     borderRadius: '8px',
     border: '1px solid #f59e0b',
-    background: '#fef3c7',
-    color: '#92400e',
+    background: 'rgba(245, 158, 11, 0.14)',
+    color: theme.warningText,
     cursor: 'pointer',
     minHeight: '40px',
   },
@@ -803,14 +804,14 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '0.4rem 0.5rem',
     fontSize: '0.9rem',
     borderRadius: '6px',
-    border: '1px solid #d1d5db',
+    border: `1px solid ${theme.borderStrong}`,
     minHeight: '36px',
   },
   overrideInput: {
     padding: '0.4rem 0.5rem',
     fontSize: '0.9rem',
     borderRadius: '6px',
-    border: '1px solid #d1d5db',
+    border: `1px solid ${theme.borderStrong}`,
     width: '80px',
     minHeight: '36px',
   },
@@ -818,7 +819,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     gap: '0.35rem',
-    color: '#475569',
+    color: theme.muted,
     fontSize: '0.85rem',
   },
 };

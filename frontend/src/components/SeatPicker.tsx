@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { theme } from '../theme';
 
 export interface SeatData {
   seatNumber: number;
@@ -103,7 +104,7 @@ const styles: Record<string, CSSProperties> = {
     transform: 'translate(-50%, -50%)',
     fontSize: '1.2rem',
     fontWeight: 700,
-    color: '#64748b',
+    color: theme.faint,
     pointerEvents: 'none',
   },
   seat: {
@@ -118,31 +119,31 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: 'center',
     fontSize: '0.7rem',
     fontWeight: 600,
-    border: '2px solid #c7d2fe',
+    border: `2px solid ${theme.accentBorder}`,
     cursor: 'pointer',
     padding: '2px',
     WebkitTapHighlightColor: 'transparent',
   },
   seatOpen: {
-    background: '#eef2ff',
-    color: '#312e81',
+    background: theme.accentTint,
+    color: theme.text,
     cursor: 'pointer',
   },
   seatOccupied: {
-    background: '#e5e7eb',
-    color: '#6b7280',
+    background: theme.raisedHover,
+    color: theme.faint,
     cursor: 'not-allowed',
     opacity: 0.8,
   },
   seatSwappable: {
-    background: '#fef3c7',
-    color: '#92400e',
+    background: 'rgba(245, 158, 11, 0.14)',
+    color: theme.warningText,
     cursor: 'pointer',
     border: '2px solid #f59e0b',
   },
   seatCurrent: {
-    border: '3px solid #4f46e5',
-    boxShadow: '0 0 0 3px rgba(79, 70, 229, 0.3)',
+    border: `3px solid ${theme.accent}`,
+    boxShadow: '0 0 0 3px rgba(225, 29, 72, 0.3)',
   },
   seatNumber: {
     fontSize: '0.65rem',
@@ -162,9 +163,9 @@ const styles: Record<string, CSSProperties> = {
     fontSize: '0.95rem',
     fontWeight: 600,
     borderRadius: '8px',
-    border: '1px solid #2e303a',
-    background: '#1e1f2b',
-    color: '#94a3b8',
+    border: `1px solid ${theme.border}`,
+    background: theme.surface,
+    color: theme.muted,
     cursor: 'pointer',
   },
 };
