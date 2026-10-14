@@ -35,8 +35,8 @@ All In Analytics runs on a local network. The host starts the backend and fronte
 
 | What | URL |
 |------|-----|
-| Frontend (main UI) | `http://<host-ip>:5173` |
-| Backend API docs | `http://<host-ip>:8000/docs` |
+| Frontend (main UI) | `http://<host-ip>` |
+| Backend API docs | `http://<host-ip>/docs` |
 
 > **Tip:** If you're on the same Wi-Fi network, a cloudflare tunnel link will be given to you. The dealer can also share a QR code that takes you straight to the right page.
 

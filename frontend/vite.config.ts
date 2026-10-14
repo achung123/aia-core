@@ -1,5 +1,9 @@
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+
+const projectRoot = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   plugins: [react()],
@@ -10,7 +14,11 @@ export default defineConfig({
   server: {
     port: 5173,
     host: '0.0.0.0',
-    allowedHosts: true,
+    allowedHosts: ['frontend', 'localhost', '127.0.0.1'],
+    fs: {
+      strict: true,
+      allow: [projectRoot],
+    },
     proxy: {
       '/games': 'http://backend:8000',
       '/players': 'http://backend:8000',

@@ -50,6 +50,11 @@ app.include_router(stats.router)
 app.include_router(search.router)
 
 
+@app.get('/healthz')
+def healthz():
+    return {'status': 'ok'}
+
+
 @app.get('/')
 def home():
     return {'message': 'Welcome to the All In Analytics Core Backend!'}

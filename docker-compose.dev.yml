@@ -1,0 +1,28 @@
+services:
+  backend:
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      - PYTHONPATH=/app/src
+      - DATABASE_URL=${AIA_DATABASE_URL:-sqlite:////app/data/poker.db}
+      - SEED_DATA=0
+      - RUN_DB_MIGRATIONS=${AIA_RUN_DB_MIGRATIONS:-0}
+      - ALLOWED_ORIGINS=${AIA_DEV_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,https://aia.local}
+      - UVICORN_RELOAD=1
+      - UVICORN_PROXY_HEADERS=0
+
+  backend-gpu:
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      - PYTHONPATH=/app/src
+      - DATABASE_URL=${AIA_DATABASE_URL:-sqlite:////app/data/poker.db}
+      - SEED_DATA=0
+      - RUN_DB_MIGRATIONS=${AIA_RUN_DB_MIGRATIONS:-0}
+      - ALLOWED_ORIGINS=${AIA_DEV_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,https://aia.local}
+      - UVICORN_RELOAD=1
+      - UVICORN_PROXY_HEADERS=0
+
+  frontend:
+    ports:
+      - "127.0.0.1:5173:5173"
