@@ -7,7 +7,7 @@ export const LABEL_SCALE_PER_DISTANCE = 0.1;
 export const LABEL_MIN_SCALE = 1;
 export const LABEL_MAX_SCALE = 2;
 /** World units a label moves away from the table centre per unit of scale. */
-export const LABEL_OUTWARD_SHIFT = 0.3;
+export const LABEL_OUTWARD_SHIFT = 0.5;
 
 export function computeLabelScale(distance: number): number {
   return Math.min(

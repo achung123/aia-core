@@ -47,7 +47,7 @@ import {
 export const NAMEPLATE_STACK_ANIMATION_MS = 300;
 
 /** Vertical offset above the seat anchor (world units). */
-export const NAMEPLATE_LOCAL_Y = 0.6;
+export const NAMEPLATE_LOCAL_Y = 0.3;
 
 /**
  * Width / height (world units) of the nameplate card. Sized so a 6-char

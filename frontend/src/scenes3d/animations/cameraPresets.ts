@@ -84,7 +84,7 @@ export const CAMERA_PRESETS: Record<CameraPresetName, CameraPresetPose> = {
 // seat ring and nameplates — just fills the frame.
 
 /** How far past the seat ring the framed area extends (nameplates, badges). */
-export const FIT_OUTER_MARGIN = 0.75;
+export const FIT_OUTER_MARGIN = 1.0;
 /** Height of the tallest thing above the felt that must stay in frame. */
 export const FIT_TOP_HEIGHT = 0.95;
 /** Fraction of the frame the scene may occupy (leaves a little air). */
