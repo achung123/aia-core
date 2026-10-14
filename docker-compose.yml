@@ -107,6 +107,9 @@ services:
   backend:
     <<: *backend-resource-limits
     profiles: ["cpu"]
+    # Come back after a crash or a reboot. Without this the proxy (which
+    # already restarts) keeps answering while the app behind it is gone.
+    restart: unless-stopped
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -136,9 +139,14 @@ services:
       # A host bind mount here is owned by the host user (root under WSL)
       # and the non-root container cannot write card photos into it.
       - card-uploads:/app/uploads
+      # Rolling snapshots of the database (see AIA_BACKUP_DIR below). A volume
+      # of its own, so a damaged or replaced database volume leaves them intact.
+      - db-backups:/app/backups
     environment: &backend-env
       - PYTHONPATH=/app/src
       - DATABASE_URL=${AIA_DATABASE_URL:-sqlite:////app/data/poker.db}
+      - AIA_BACKUP_DIR=/app/backups
+      - AIA_BACKUP_INTERVAL_SECONDS=${AIA_BACKUP_INTERVAL_SECONDS:-3600}
       - HOME=/tmp
       - SEED_DATA=0
       # Startup skips migrations unless you opt in for a schema change or
@@ -169,6 +177,7 @@ services:
   backend-gpu:
     <<: *backend-gpu-resource-limits
     profiles: ["gpu"]
+    restart: unless-stopped
     build:
       context: .
       dockerfile: backend/Dockerfile.gpu
@@ -202,6 +211,7 @@ services:
 
   frontend:
     <<: *frontend-resource-limits
+    restart: unless-stopped
     build:
       context: .
       dockerfile: frontend/Dockerfile
@@ -244,6 +254,7 @@ services:
 volumes:
   poker-data:
   card-uploads:
+  db-backups:
 
 networks:
   edge:

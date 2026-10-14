@@ -3,7 +3,7 @@ import type React from 'react';
 import { CardPicker } from './CardPicker.tsx';
 import { patchPlayerResult, settleHand, updateCommunityCards, updateHolecards, fetchEquity, fetchHand } from '../api/client.ts';
 import type { Player, CommunityCards } from '../stores/dealerStore.ts';
-import type { ResultEnum, StreetEnum, PlayerEquityEntry } from '../api/types';
+import type { ResultEnum, StreetEnum, PlayerEquityEntry, SettlementResponse } from '../api/types';
 import { mapEquityToOutcomes } from './showdownHelpers.ts';
 import { PlayingCard } from '../components/PlayingCard.tsx';
 
@@ -99,6 +99,7 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
   const [showFinishConfirm, setShowFinishConfirm] = useState(false);
   const [equityData, setEquityData] = useState<PlayerEquityEntry[]>([]);
   const [handPot, setHandPot] = useState<number>(0);
+  const [payoutPreview, setPayoutPreview] = useState<PayoutPreview>({ status: 'idle' });
   const [handDescriptions, setHandDescriptions] = useState<Record<string, string>>({});
 
   // Fetch hand data for pot and hand descriptions
@@ -115,6 +116,34 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
       setHandDescriptions(descs);
     }).catch(() => {});
   }, [gameId, handId]);
+
+  // Show what the chosen winners would be paid before anything is saved, so
+  // a wrong tap is caught here rather than after the stacks have moved. The
+  // server does the arithmetic (side pots included); this only displays it.
+  const chosenWinners = editPlayers
+    .filter((player) => player.result === 'won')
+    .map((player) => player.name)
+    .sort();
+  const winnersKey = chosenWinners.join('|');
+  useEffect(() => {
+    if (handPot <= 0 || winnersKey === '') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPayoutPreview({ status: 'idle' });
+      return;
+    }
+    let cancelled = false;
+    setPayoutPreview({ status: 'loading' });
+    settleHand(gameId, handId, { ranking: [winnersKey.split('|')] }, true)
+      .then((data) => {
+        if (!cancelled) setPayoutPreview({ status: 'ready', data });
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setPayoutPreview({ status: 'error', message: payoutErrorMessage(err) });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [gameId, handId, handPot, winnersKey]);
 
   useEffect(() => {
     fetchEquity(gameId, handId)
@@ -425,6 +454,8 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
         ))}
       </div>
 
+      <PayoutPreviewPanel preview={payoutPreview} />
+
       {error && (
         <div data-testid="review-error" style={styles.error}>
           {error}
@@ -472,7 +503,96 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
   );
 }
 
+type PayoutPreview =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'ready'; data: SettlementResponse }
+  | { status: 'error'; message: string };
+
+/** Pull the server's explanation out of an `HTTP 400: {"detail": ...}` error. */
+export function payoutErrorMessage(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err);
+  const body = raw.replace(/^HTTP \d+:\s*/, '');
+  try {
+    const parsed = JSON.parse(body) as { detail?: unknown };
+    if (typeof parsed.detail === 'string') return parsed.detail;
+  } catch {
+    // not JSON — show it as it is
+  }
+  return body || 'Could not work out the payout';
+}
+
+function formatMoney(amount: number): string {
+  return `$${Math.abs(amount).toFixed(2)}`;
+}
+
+function PayoutPreviewPanel({ preview }: { preview: PayoutPreview }) {
+  if (preview.status === 'idle') return null;
+  if (preview.status === 'loading') {
+    return (
+      <div data-testid="payout-preview" style={styles.previewBox}>
+        <div style={styles.previewTitle}>Payout preview</div>
+        <div style={styles.previewMuted}>Working it out…</div>
+      </div>
+    );
+  }
+  if (preview.status === 'error') {
+    return (
+      <div data-testid="payout-preview" style={{ ...styles.previewBox, ...styles.previewWarn }}>
+        <div style={styles.previewTitle}>Payout preview</div>
+        <div data-testid="payout-preview-error">{preview.message}</div>
+      </div>
+    );
+  }
+  const { pots, players } = preview.data;
+  return (
+    <div data-testid="payout-preview" style={styles.previewBox}>
+      <div style={styles.previewTitle}>Payout preview</div>
+      {pots.length > 1 && (
+        <div style={styles.previewPots}>
+          {pots.map((pot, index) => (
+            <div key={index} data-testid={`payout-pot-${index}`}>
+              {index === 0 ? 'Main pot' : `Side pot ${index}`} {formatMoney(pot.amount)} →{' '}
+              {pot.winners.length > 0 ? pot.winners.join(', ') : '—'}
+            </div>
+          ))}
+        </div>
+      )}
+      {players.map((player) => {
+        const net = player.profit_loss ?? player.payout - player.contribution;
+        return (
+          <div
+            key={player.player_name}
+            data-testid={`payout-row-${player.player_name}`}
+            style={styles.previewRow}
+          >
+            <span>{player.player_name}</span>
+            <span style={{ color: net > 0 ? '#4ade80' : net < 0 ? '#f87171' : '#94a3b8' }}>
+              {net > 0 ? '+' : net < 0 ? '−' : ''}{formatMoney(net)}
+            </span>
+          </div>
+        );
+      })}
+      <div style={styles.previewMuted}>Based on the saved hand. Nothing is paid until you finish.</div>
+    </div>
+  );
+}
+
 const styles: Record<string, React.CSSProperties> = {
+  previewBox: {
+    margin: '0 0 1rem',
+    padding: '0.75rem',
+    borderRadius: 8,
+    background: '#1e1b4b',
+    border: '1px solid #312e81',
+    color: '#e2e8f0',
+    fontSize: '0.9rem',
+  },
+  previewWarn: { background: '#422006', borderColor: '#a16207', color: '#fde68a' },
+  previewTitle: { fontWeight: 700, marginBottom: '0.4rem', color: '#c7d2fe' },
+  previewMuted: { color: '#94a3b8', fontSize: '0.8rem', marginTop: '0.4rem' },
+  previewPots: { marginBottom: '0.4rem', color: '#cbd5e1' },
+  previewRow: { display: 'flex', justifyContent: 'space-between', padding: '2px 0' },
   container: {
     maxWidth: '480px',
     margin: '0 auto',

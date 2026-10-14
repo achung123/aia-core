@@ -718,50 +718,85 @@ describe('ActiveHandDashboard — street buttons call onStreetCapture', () => {
     expect(onTileSelect).toHaveBeenCalledWith('flop');
   });
 
-  // Bug fix: All-in message when no current player and street is complete
-  it('shows all-in message when no current player, street complete, and phase is active', () => {
-    render(
-      <ActiveHandDashboard
-        {...defaultProps}
-        handNumber={1}
-        currentPlayerName={null}
-        legalActions={[]}
-        streetComplete={true}
-        handPhase="flop"
-      />,
-    );
-    const panel = screen.getByTestId('bet-verify-panel');
-    expect(panel.textContent).toContain('All players all-in');
-  });
+  // The banner shown once betting on a street has finished and nobody is up
+  // to act. After everyone checks or calls that is the ordinary case, so it
+  // must not claim an all-in unless players are really all-in.
+  describe('betting-closed banner', () => {
+    const panelText = (props: Partial<ActiveHandDashboardProps>) => {
+      render(
+        <ActiveHandDashboard
+          {...defaultProps}
+          handNumber={1}
+          currentPlayerName={null}
+          legalActions={[]}
+          streetComplete={true}
+          handPhase="preflop"
+          {...props}
+        />,
+      );
+      return screen.getByTestId('bet-verify-panel').textContent ?? '';
+    };
 
-  it('does not show all-in message during awaiting_cards phase', () => {
-    render(
-      <ActiveHandDashboard
-        {...defaultProps}
-        handNumber={1}
-        currentPlayerName={null}
-        legalActions={[]}
-        streetComplete={true}
-        handPhase="awaiting_cards"
-      />,
-    );
-    const panel = screen.getByTestId('bet-verify-panel');
-    expect(panel.textContent).not.toContain('All players all-in');
-  });
+    it('says betting is complete and what to deal when players are simply still in', () => {
+      const text = panelText({ handPhase: 'preflop' });
+      expect(text).toContain('Betting complete');
+      expect(text).toContain('deal the flop');
+      expect(text).not.toMatch(/all-in/i);
+    });
 
-  it('does not show all-in message when a player has a turn', () => {
-    render(
-      <ActiveHandDashboard
-        {...defaultProps}
-        handNumber={1}
-        currentPlayerName="Alice"
-        legalActions={['call', 'raise', 'fold']}
-        streetComplete={false}
-        handPhase="flop"
-      />,
-    );
-    const panel = screen.getByTestId('bet-verify-panel');
-    expect(panel.textContent).not.toContain('All players all-in');
+    it('names the right next street from the board', () => {
+      const flop: CommunityCards = {
+        ...emptyCommunity, flop1: 'Ah', flop2: 'Kd', flop3: '9c', flopRecorded: true,
+      };
+      expect(panelText({ community: flop, handPhase: 'flop' })).toContain('deal the turn');
+      cleanup();
+      const turn: CommunityCards = { ...flop, turn: '4s', turnRecorded: true };
+      expect(panelText({ community: turn, handPhase: 'turn' })).toContain('deal the river');
+    });
+
+    it('tells the dealer to finish the hand once the river is down', () => {
+      const river: CommunityCards = {
+        ...emptyCommunity, flop1: 'Ah', flop2: 'Kd', flop3: '9c', flopRecorded: true,
+        turn: '4s', turnRecorded: true, river: '2h', riverRecorded: true,
+      };
+      const text = panelText({ community: river, handPhase: 'river' });
+      expect(text).toContain('finish the hand');
+      expect(text).not.toMatch(/all-in/i);
+    });
+
+    it('says all players are all-in only when every remaining player is', () => {
+      const text = panelText({ allInPlayers: defaultPlayers.map((player) => player.name) });
+      expect(text).toContain('All players are all-in');
+    });
+
+    it('says how many are all-in when one player still has chips', () => {
+      const names = defaultPlayers.map((player) => player.name);
+      const text = panelText({ allInPlayers: names.slice(0, names.length - 1) });
+      expect(text).not.toContain('All players');
+      expect(text).toMatch(/all-in, no more betting/);
+    });
+
+    it('ignores an all-in player who has folded', () => {
+      const folded = defaultPlayers.map((player, index) =>
+        index === 0 ? { ...player, status: 'folded' } : player,
+      );
+      const text = panelText({ players: folded, allInPlayers: [defaultPlayers[0].name] });
+      expect(text).not.toMatch(/all-in/i);
+      expect(text).toContain('Betting complete');
+    });
+
+    it('is not shown while waiting for cards or when a player has the turn', () => {
+      expect(panelText({ handPhase: 'awaiting_cards' })).toContain('Waiting for cards');
+      cleanup();
+      const text = panelText({
+        currentPlayerName: 'Alice',
+        legalActions: ['call', 'raise', 'fold'],
+        streetComplete: false,
+        handPhase: 'flop',
+      });
+      expect(text).toContain('Turn: Alice');
+      expect(text).not.toMatch(/all-in|Betting complete/i);
+    });
   });
 });
 

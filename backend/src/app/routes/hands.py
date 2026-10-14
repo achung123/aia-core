@@ -296,6 +296,7 @@ def get_hand_status(
                 ),
                 current_chips=chips_by_player_id.get(player.player_id),
                 pot_contribution=contribution_by_player_id.get(player.player_id, 0),
+                is_all_in=bool(player_hand.is_all_in) if player_hand else False,
             )
         )
 

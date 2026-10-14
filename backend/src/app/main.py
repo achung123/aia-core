@@ -2,6 +2,7 @@ import logging
 import os
 import threading
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,6 +21,33 @@ def _warm_detector() -> None:
         logger.warning('Card detector warm-up failed', exc_info=True)
 
 
+def _start_backups() -> threading.Event | None:
+    """Begin rolling database backups when a backup folder is configured."""
+    backup_dir = os.getenv('AIA_BACKUP_DIR')
+    if not backup_dir:
+        return None
+    from .database.session import DATABASE_URL
+    from .services import backup
+
+    source = backup.database_file_from_url(DATABASE_URL)
+    if source is None:
+        logger.info('Backups skipped: %s is not a SQLite file', DATABASE_URL)
+        return None
+    interval = float(
+        os.getenv('AIA_BACKUP_INTERVAL_SECONDS', backup.DEFAULT_INTERVAL_SECONDS)
+    )
+    logger.info('Backing up %s to %s every %.0fs', source, backup_dir, interval)
+    delay = float(
+        os.getenv('AIA_BACKUP_STARTUP_DELAY_SECONDS', backup.STARTUP_DELAY_SECONDS)
+    )
+    return backup.start_backup_thread(
+        source,
+        Path(backup_dir),
+        interval_seconds=interval,
+        startup_delay_seconds=delay,
+    )
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     # Load the card-recognition model in the background so the server is
@@ -28,7 +56,12 @@ async def lifespan(_app: FastAPI):
         threading.Thread(
             target=_warm_detector, name='detector-warmup', daemon=True
         ).start()
-    yield
+    stop_backups = _start_backups()
+    try:
+        yield
+    finally:
+        if stop_backups is not None:
+            stop_backups.set()
 
 
 app = FastAPI(title='All In Analytics Core Backend', version='1.0.0', lifespan=lifespan)

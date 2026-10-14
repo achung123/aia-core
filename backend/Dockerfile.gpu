@@ -49,7 +49,7 @@ COPY backend/alembic /app/alembic
 # is pre-created so a first-run named volume inherits app-owned permissions.
 RUN groupadd --gid "${APP_GID}" app && \
     useradd --uid "${APP_UID}" --gid "${APP_GID}" --create-home --home-dir /home/app --shell /bin/sh app && \
-    mkdir -p /app/uploads /app/data /home/app && \
+    mkdir -p /app/uploads /app/data /app/backups /home/app && \
     chmod 755 /app/docker-entrypoint.sh && \
     chown -R app:app /app /home/app
 

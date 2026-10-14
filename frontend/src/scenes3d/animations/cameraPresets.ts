@@ -147,13 +147,15 @@ export function orientPoseForAspect(
   };
 }
 
-export function fitPoseToAspect(
+/**
+ * Slide the camera along its current viewing direction until the framed area
+ * fits. The view axis keeps passing through the pose's target.
+ */
+export function fitAlongViewDirection(
   pose: CameraPresetPose,
-  aspect: number | null | undefined,
+  aspect: number,
   fovDegrees: number,
 ): CameraPresetPose {
-  if (!aspect || !Number.isFinite(aspect) || aspect <= 0) return pose;
-  pose = orientPoseForAspect(pose, aspect);
   const [px, py, pz] = pose.position;
   const [tx, ty, tz] = pose.target;
   let fx = tx - px;
@@ -213,6 +215,200 @@ export function fitPoseToAspect(
     position: [tx - fx * distance, ty - fy * distance, tz - fz * distance],
     target: pose.target,
   };
+}
+
+// Projected-extent helpers -----------------------------------------------------
+
+interface CameraBasis {
+  forward: Vec3;
+  right: Vec3;
+  up: Vec3;
+}
+
+function basisFor(position: Vec3, target: Vec3): CameraBasis | null {
+  let fx = target[0] - position[0];
+  let fy = target[1] - position[1];
+  let fz = target[2] - position[2];
+  const length = Math.hypot(fx, fy, fz);
+  if (length === 0) return null;
+  fx /= length;
+  fy /= length;
+  fz /= length;
+  let rx = -fz;
+  let rz = fx;
+  const rLength = Math.hypot(rx, rz);
+  if (rLength < 1e-9) {
+    rx = 1;
+    rz = 0;
+  } else {
+    rx /= rLength;
+    rz /= rLength;
+  }
+  return {
+    forward: [fx, fy, fz],
+    right: [rx, 0, rz],
+    up: [-rz * fy, rz * fx - rx * fz, rx * fy],
+  };
+}
+
+interface ProjectedExtent {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+}
+
+/** Where the framed points land in the camera's tangent plane (x/z, y/z). */
+function projectExtent(position: Vec3, basis: CameraBasis, points: Vec3[]): ProjectedExtent {
+  const extent = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+  for (const [x, y, z] of points) {
+    const dx = x - position[0];
+    const dy = y - position[1];
+    const dz = z - position[2];
+    // Points at or behind the camera are pinned just in front so they push
+    // the fit outward instead of flipping sign.
+    const depth = Math.max(
+      dx * basis.forward[0] + dy * basis.forward[1] + dz * basis.forward[2],
+      0.25,
+    );
+    const across = (dx * basis.right[0] + dz * basis.right[2]) / depth;
+    const up = (dx * basis.up[0] + dy * basis.up[1] + dz * basis.up[2]) / depth;
+    extent.minX = Math.min(extent.minX, across);
+    extent.maxX = Math.max(extent.maxX, across);
+    extent.minY = Math.min(extent.minY, up);
+    extent.maxY = Math.max(extent.maxY, up);
+  }
+  return extent;
+}
+
+/** How much of each dimension of the frame the framed area occupies (0–1+). */
+export interface FitMeasure {
+  fillX: number;
+  fillY: number;
+  /** Everything is inside the frame. */
+  inside: boolean;
+}
+
+/** Test and diagnostics helper: how well `pose` frames the table at `aspect`. */
+export function measureFit(
+  pose: CameraPresetPose,
+  aspect: number,
+  fovDegrees: number,
+): FitMeasure {
+  const basis = basisFor(pose.position, pose.target);
+  if (!basis) return { fillX: 0, fillY: 0, inside: false };
+  const distance = Math.hypot(
+    pose.position[0] - pose.target[0],
+    pose.position[1] - pose.target[1],
+    pose.position[2] - pose.target[2],
+  );
+  const extent = projectExtent(
+    pose.position,
+    basis,
+    fitSamplePoints(computeLabelScale(distance)),
+  );
+  const tanV = Math.tan((fovDegrees * Math.PI) / 360);
+  const tanH = tanV * aspect;
+  const fillX = Math.max(Math.abs(extent.minX), Math.abs(extent.maxX)) / tanH;
+  const fillY = Math.max(Math.abs(extent.minY), Math.abs(extent.maxY)) / tanV;
+  return { fillX, fillY, inside: fillX <= 1 && fillY <= 1 };
+}
+
+/** The look direction is kept inside this range of angles from straight down. */
+const CENTER_MIN_POLAR = (30 * Math.PI) / 180;
+const CENTER_MAX_POLAR = (78 * Math.PI) / 180;
+
+/**
+ * Re-aim the camera at the middle of what is on screen, then move it along
+ * the new axis until the framed area fills the frame.
+ *
+ * A camera low behind a seat sees the near seat large and the far side
+ * small. Fitting symmetrically around a fixed look-at point lets the near
+ * seat decide the distance and leaves the far side a small shape in the
+ * middle of an empty frame; centring on the actual extent uses the space.
+ */
+export function centerFit(
+  pose: CameraPresetPose,
+  aspect: number,
+  fovDegrees: number,
+): CameraPresetPose {
+  const tanV = Math.tan((fovDegrees * Math.PI) / 360) * FIT_FILL;
+  const tanH = tanV * aspect;
+  let position: Vec3 = [...pose.position];
+  let target: Vec3 = [...pose.target];
+
+  for (let round = 0; round < 8; round++) {
+    const basis = basisFor(position, target);
+    if (!basis) break;
+    const distance = Math.hypot(
+      position[0] - target[0],
+      position[1] - target[1],
+      position[2] - target[2],
+    );
+    const points = fitSamplePoints(computeLabelScale(distance));
+    const extent = projectExtent(position, basis, points);
+    const centerX = (extent.minX + extent.maxX) / 2;
+    const centerY = (extent.minY + extent.maxY) / 2;
+    const halfX = (extent.maxX - extent.minX) / 2;
+    const halfY = (extent.maxY - extent.minY) / 2;
+
+    // Aim at the middle of the extent (damped, so a nearby seat cannot
+    // fling the view around), keeping the pitch inside the orbit limits.
+    let dirX = basis.forward[0] + centerX * basis.right[0] + centerY * basis.up[0];
+    let dirY = basis.forward[1] + centerY * basis.up[1];
+    let dirZ = basis.forward[2] + centerX * basis.right[2] + centerY * basis.up[2];
+    const dirLength = Math.hypot(dirX, dirY, dirZ) || 1;
+    dirX /= dirLength;
+    dirY /= dirLength;
+    dirZ /= dirLength;
+    const horizontal = Math.hypot(dirX, dirZ);
+    const polar = Math.atan2(horizontal, -dirY);
+    const clamped = Math.min(Math.max(polar, CENTER_MIN_POLAR), CENTER_MAX_POLAR);
+    if (clamped !== polar && horizontal > 1e-9) {
+      const k = Math.sin(clamped) / horizontal;
+      dirX *= k;
+      dirZ *= k;
+      dirY = -Math.cos(clamped);
+    }
+
+    // Distance: scale so the larger of the two fills the allowance.
+    const needed = Math.max(halfX / tanH, halfY / tanV);
+    const nextDistance = distance * Math.min(Math.max(needed, 0.7), 1.4);
+
+    const nextTarget: Vec3 = [
+      position[0] + dirX * distance,
+      position[1] + dirY * distance,
+      position[2] + dirZ * distance,
+    ];
+    // Back off along the new axis from the (moved) target by the new distance.
+    position = [
+      nextTarget[0] - dirX * nextDistance,
+      nextTarget[1] - dirY * nextDistance,
+      nextTarget[2] - dirZ * nextDistance,
+    ];
+    target = nextTarget;
+    if (Math.abs(needed - 1) < 0.02 && Math.abs(centerX) < 0.01 && Math.abs(centerY) < 0.01) {
+      break;
+    }
+  }
+  return { position, target };
+}
+
+/**
+ * Frame the whole table for a viewport of the given aspect (width / height).
+ * Overhead views turn on portrait screens and slide along their axis; oblique
+ * views (seat POV, the default perspective) are additionally re-centred.
+ */
+export function fitPoseToAspect(
+  pose: CameraPresetPose,
+  aspect: number | null | undefined,
+  fovDegrees: number,
+): CameraPresetPose {
+  if (!aspect || !Number.isFinite(aspect) || aspect <= 0) return pose;
+  const oriented = orientPoseForAspect(pose, aspect);
+  const along = fitAlongViewDirection(oriented, aspect, fovDegrees);
+  if (isOverheadPose(oriented)) return along;
+  return centerFit(along, aspect, fovDegrees);
 }
 
 // --- Seat-POV geometry (T-022) ---------------------------------------------

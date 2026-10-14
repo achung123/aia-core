@@ -215,6 +215,8 @@ class PlayerStatusEntry(BaseModel):
     last_action: str | None = None
     current_chips: float | None = None
     pot_contribution: float = 0
+    # Has put their whole stack in; they take no further actions this hand
+    is_all_in: bool = False
 
 
 class HandStatusResponse(BaseModel):

@@ -53,6 +53,7 @@ export function DealerApp() {
   const [streetComplete, setStreetComplete] = useState(true);
   const [handPhase, setHandPhase] = useState<string>('preflop');
   const [potContributions, setPotContributions] = useState<Record<string, number>>({});
+  const [allInPlayers, setAllInPlayers] = useState<string[]>([]);
   const [playerChips, setPlayerChips] = useState<Record<string, number | null>>({});
   const [actionIndex, setActionIndex] = useState(0);
 
@@ -101,6 +102,7 @@ export function DealerApp() {
           }
           setPotContributions(contribs);
           setActionIndex(data.action_index ?? 0);
+          setAllInPlayers((data.players || []).filter((player) => player.is_all_in).map((player) => player.name));
           setPlayerChips(Object.fromEntries((data.players || []).map((player) => [player.name, player.current_chips])));
 
           // The server is the source of truth for cards. Re-read the hand on
@@ -449,6 +451,7 @@ export function DealerApp() {
               streetComplete={streetComplete}
               handPhase={handPhase}
               potContributions={potContributions}
+              allInPlayers={allInPlayers}
               playerChips={playerChips}
               actionIndex={actionIndex}
               onOverride={triggerDealerPoll}

@@ -1003,7 +1003,7 @@ class TestRuntimeDockerfiles:
     ):
         text = dockerfile_path.read_text()
 
-        assert 'mkdir -p /app/uploads /app/data /home/app' in text
+        assert 'mkdir -p /app/uploads /app/data /app/backups /home/app' in text
 
 
 class TestPinnedRuntimeImages:
@@ -1040,3 +1040,17 @@ class TestPinnedRuntimeImages:
     def test_deployment_docs_record_the_digest_refresh_review_step(self):
         assert 'manual review' in self.deployment_docs
         assert 'docker buildx imagetools inspect' in self.deployment_docs
+
+
+class TestServicesRestartOnTheirOwn:
+    """A crashed or rebooted host must not leave a proxy in front of nothing."""
+
+    def setup_method(self):
+        compose_path = pathlib.Path(__file__).parents[2] / 'docker-compose.yml'
+        self.services = yaml.safe_load(compose_path.read_text())['services']
+
+    @pytest.mark.parametrize(
+        'service_name', ['proxy', 'mdns', 'backend', 'backend-gpu', 'frontend']
+    )
+    def test_service_restarts_unless_stopped(self, service_name):
+        assert self.services[service_name].get('restart') == 'unless-stopped'

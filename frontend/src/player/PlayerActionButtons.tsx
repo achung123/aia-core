@@ -85,8 +85,16 @@ export function PlayerActionButtons({
       onActionConfirmed?.();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Action failed';
-      setError(message);
       setChipAction(null);
+      if (message.startsWith('HTTP 409')) {
+        // The hand moved on while this screen was showing old information
+        // (someone else acted, or the dealer corrected something). Nothing
+        // was recorded; show the current state instead of acting on a stale one.
+        setError('The hand just changed — updating. Check the table and try again.');
+        onActionConfirmed?.();
+        return;
+      }
+      setError(message);
     }
   }
 

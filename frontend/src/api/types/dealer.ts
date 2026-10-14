@@ -15,6 +15,7 @@ export interface PlayerStatusEntry {
   last_action: string | null;
   current_chips: number | null;
   pot_contribution: number;
+  is_all_in?: boolean;
 }
 
 export interface HandStatusResponse {

@@ -84,10 +84,46 @@ export interface ActiveHandDashboardProps {
   streetComplete?: boolean;
   handPhase?: string;
   potContributions?: Record<string, number>;
+  /** Names of players who have put their whole stack in. */
+  allInPlayers?: string[];
   // Dealer overrides
   playerChips?: Record<string, number | null>;
   actionIndex?: number;
   onOverride?: () => void;
+}
+
+/**
+ * What to tell the dealer when betting on a street has finished and nobody
+ * is left to act. That is the ordinary case after everyone checks or calls,
+ * so it must not claim an all-in unless players really are all-in.
+ */
+export function describeBettingClosed(
+  community: CommunityCards,
+  players: Player[],
+  allInPlayers: string[],
+): string {
+  const contenders = players.filter(
+    (player) => player.status !== 'folded' && player.status !== 'not_playing',
+  );
+  const allIn = contenders.filter((player) => allInPlayers.includes(player.name));
+  // Nobody can bet any more: everyone is all-in, or only one player still
+  // has chips and has no one to bet against.
+  const runningOut =
+    contenders.length >= 2 && allIn.length >= 1 && contenders.length - allIn.length <= 1;
+  const everyoneAllIn = runningOut && allIn.length === contenders.length;
+
+  if (community.riverRecorded) {
+    return runningOut
+      ? '✅ Betting is closed — finish the hand'
+      : '✅ Betting complete — finish the hand';
+  }
+  const next = !community.flopRecorded ? 'flop' : !community.turnRecorded ? 'turn' : 'river';
+  if (everyoneAllIn) return `🃏 All players are all-in — deal the ${next}`;
+  if (runningOut) {
+    const count = allIn.length;
+    return `🃏 ${count === 1 ? '1 player is' : `${count} players are`} all-in, no more betting — deal the ${next}`;
+  }
+  return `✅ Betting complete — deal the ${next}`;
 }
 
 export function ActiveHandDashboard({
@@ -114,6 +150,7 @@ export function ActiveHandDashboard({
   streetComplete,
   handPhase,
   potContributions,
+  allInPlayers = [],
   playerChips,
   actionIndex = 0,
   onOverride,
@@ -324,7 +361,7 @@ export function ActiveHandDashboard({
                   : currentPlayerName
                     ? `Turn: ${currentPlayerName}`
                     : streetComplete && handPhase !== 'showdown'
-                      ? '🃏 All players all-in — deal community cards'
+                      ? describeBettingClosed(community, players, allInPlayers)
                       : 'Waiting for turn…'}
               </span>
               {pot !== undefined && pot > 0 && (

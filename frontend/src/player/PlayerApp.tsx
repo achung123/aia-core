@@ -120,6 +120,9 @@ export function PlayerApp() {
   const [minimumBet, setMinimumBet] = useState<number | null>(null);
   const [minimumRaise, setMinimumRaise] = useState<number | null>(null);
   const [pot, setPot] = useState(0);
+  // How many actions the server had recorded when this screen last heard.
+  // Sent with every action so a stale screen cannot act twice.
+  const [actionIndex, setActionIndex] = useState<number | null>(null);
   const [runningTotal, setRunningTotal] = useState<number | null>(null);
 
   useEffect(() => {
@@ -284,6 +287,7 @@ export function PlayerApp() {
               setMinimumBet(result.data.minimum_bet ?? null);
               setMinimumRaise(result.data.minimum_raise ?? null);
               setPot(result.data.pot ?? 0);
+              setActionIndex(result.data.action_index ?? null);
               const me = result.data.players.find(p => p.name === playerName);
               if (me) {
                 setPlayerStatus(me.participation_status as ParticipationStatus);
@@ -363,6 +367,7 @@ export function PlayerApp() {
             />
             {playerStatus === 'joined' && handNumber && isMyTurn && (
               <PlayerActionButtons
+                expectedActionIndex={actionIndex}
                 gameId={gameId!}
                 handNumber={handNumber}
                 playerName={playerName}
