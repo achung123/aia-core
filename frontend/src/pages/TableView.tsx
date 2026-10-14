@@ -158,6 +158,11 @@ export function TableView() {
         </button>
         {loading && <p style={styles.loadingText}>Loading table…</p>}
         {noHands && <p style={styles.error}>No hands found for this game.</p>}
+        {tableState && (
+          <span data-testid="player-table-street" style={styles.srOnly}>
+            {tableState.phase}
+          </span>
+        )}
       </div>
 
       <div data-testid="canvas-area" style={styles.canvasArea}>
@@ -257,6 +262,17 @@ const styles: Record<string, CSSProperties> = {
   scrubberMount: {
     flexShrink: 0,
     zIndex: 5,
+  },
+  srOnly: {
+    position: 'absolute',
+    width: 1,
+    height: 1,
+    padding: 0,
+    margin: -1,
+    overflow: 'hidden',
+    clip: 'rect(0, 0, 0, 0)',
+    whiteSpace: 'nowrap',
+    border: 0,
   },
   newHandBanner: {
     position: 'absolute',
