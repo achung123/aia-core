@@ -225,8 +225,10 @@ const styles: Record<string, React.CSSProperties> = {
     overflowX: 'auto' as const,
   },
   donutWrap: {
-    flex: '0 1 320px',
+    flex: '1 1 280px',
+    maxWidth: '360px',
     minWidth: 0,
+    margin: '0 auto',
   },
   donutHeading: {
     fontSize: '1rem',
