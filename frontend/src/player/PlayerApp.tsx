@@ -422,15 +422,17 @@ export function PlayerApp() {
         )}
 
         <div style={styles.secondaryRow}>
-          <button
-            data-testid="table-view-btn"
-            style={styles.tableViewBtn}
-            onClick={() => {
-              window.location.hash = `#/player/table?game=${gameId}&player=${encodeURIComponent(playerName)}`;
-            }}
-          >
-            Table View
-          </button>
+          {!canRenderWebGL && (
+            <button
+              data-testid="table-view-btn"
+              style={styles.tableViewBtn}
+              onClick={() => {
+                window.location.hash = `#/player/table?game=${gameId}&player=${encodeURIComponent(playerName)}`;
+              }}
+            >
+              Table View
+            </button>
+          )}
           <button
             data-testid="leave-game-btn"
             style={styles.changeBtn}
@@ -588,7 +590,7 @@ const styles: Record<string, CSSProperties> = {
   secondaryRow: {
     display: 'flex',
     gap: '0.5rem',
-    marginTop: '1.5rem',
+    marginTop: '2.5rem',
   },
   eyebrow: {
     color: theme.muted,

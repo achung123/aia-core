@@ -17,7 +17,10 @@ test('player table sees a dealer-dealt flop without reloading', async ({ browser
     await table.check(bob);
 
     const alicePhone = table.page(alice);
-    await alicePhone.getByTestId('table-view-btn').click();
+    // The player screen embeds the table; open the full-screen table directly.
+    await alicePhone.evaluate(([game, name]) => {
+      window.location.hash = `#/player/table?game=${game}&player=${encodeURIComponent(name)}`;
+    }, [table.gameId, alice] as const);
     await expect(alicePhone).toHaveURL(/#\/player\/table/);
     await expect(alicePhone.locator('canvas')).toBeVisible();
 

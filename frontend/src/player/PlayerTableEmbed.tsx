@@ -63,16 +63,16 @@ const styles: Record<string, CSSProperties> = {
   // The scene frames the whole room; zoom in so the table fills the width.
   zoom: {
     position: 'absolute',
-    width: '145%',
-    height: '145%',
-    left: '-22.5%',
-    top: '-22.5%',
+    width: '132%',
+    height: '132%',
+    left: '-16%',
+    top: '-16%',
   },
   wrap: {
     position: 'relative',
     width: '100%',
-    height: 'clamp(200px, 30dvh, 300px)',
-    margin: '0 0 0.5rem',
+    height: 'clamp(220px, 32dvh, 320px)',
+    margin: '0.5rem 0 1.25rem',
     overflow: 'hidden',
     // Fade the canvas into the page so the table floats on the background.
     WebkitMaskImage: 'radial-gradient(ellipse 72% 70% at 50% 50%, #000 55%, transparent 100%)',
