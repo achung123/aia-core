@@ -1173,6 +1173,44 @@ describe('DealerApp hand status polling', () => {
     });
   });
 
+  it('adopts server board cards during status refresh', async () => {
+    const container = renderToContainer(<DealerApp />);
+    await clickStartHand(container);
+
+    (fetchHandStatus as ReturnType<typeof vi.fn>).mockResolvedValue({
+      hand_number: 1,
+      community_recorded: true,
+      street_complete: false,
+      current_player_name: null,
+      legal_actions: [],
+      amount_to_call: 0,
+      pot: 0,
+      phase: 'flop',
+      players: [
+        { name: 'Alice', participation_status: 'joined' },
+        { name: 'Bob', participation_status: 'joined' },
+        { name: 'Charlie', participation_status: 'joined' },
+      ],
+    });
+    (fetchHand as ReturnType<typeof vi.fn>).mockResolvedValue({
+      hand_number: 1,
+      flop_1: '3c', flop_2: '8d', flop_3: '9s',
+      turn: null, river: null,
+      player_hands: [],
+    });
+
+    await vi.advanceTimersByTimeAsync(3000);
+
+    await vi.waitFor(() => {
+      expect(useDealerStore.getState().community).toMatchObject({
+        flop1: '3c',
+        flop2: '8d',
+        flop3: '9s',
+        flopRecorded: true,
+      });
+    });
+  });
+
   it('stops polling when leaving activeHand step', async () => {
     const container = renderToContainer(<DealerApp />);
     await clickStartHand(container);
