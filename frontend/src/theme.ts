@@ -24,9 +24,9 @@ export const theme = {
   accentSoft: '#fecdd3',
   accentTint: 'rgba(225, 29, 72, 0.15)',
   accentTintSoft: 'rgba(225, 29, 72, 0.1)',
-  accentSurface: '#1c0d12',
-  accentSurfaceStrong: '#33101a',
-  accentBorder: '#7f1d1d',
+  accentSurface: '#151215',
+  accentSurfaceStrong: '#21151a',
+  accentBorder: '#3b1a22',
   // semantic
   success: '#22c55e',
   successText: '#4ade80',

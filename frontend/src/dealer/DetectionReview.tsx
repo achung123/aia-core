@@ -4,7 +4,7 @@ import type { CardDetectionEntry } from '../api/types';
 import { theme } from '../theme';
 
 const SUIT_MAP: Record<string, string> = { h: '♥', s: '♠', d: '♦', c: '♣' };
-const SUIT_COLORS: Record<string, string> = { '♥': '#dc2626', '♠': theme.raised, '♦': '#dc2626', '♣': theme.raised };
+const SUIT_COLORS: Record<string, string> = { '♥': '#f87171', '♠': theme.text, '♦': '#f87171', '♣': theme.text };
 
 function formatCard(detectedValue: string): { rank: string; suit: string } {
   const suit = detectedValue.slice(-1).toLowerCase();

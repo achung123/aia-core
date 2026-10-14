@@ -47,8 +47,8 @@ export interface TableProps {
  */
 /* eslint-disable react/no-unknown-property -- R3F JSX intrinsics */
 export function Table({
-  feltColor = '#1a7a1a',
-  railColor = '#3b2414',
+  feltColor = '#0f4a2a',
+  railColor = '#1b1411',
   qualityTier = 'medium',
 }: TableProps = {}) {
   const { feltNormalMap, feltRoughnessMap, railNormalMap } =

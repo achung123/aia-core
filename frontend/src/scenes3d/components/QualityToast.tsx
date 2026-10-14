@@ -1,3 +1,4 @@
+import { theme } from '../../theme';
 // T-028 — Quality-change toast surface.
 //
 // DOM-side companion to `useFPSMonitor`. Reads the `tierToast` slice from
@@ -50,7 +51,7 @@ const buttonStyle: CSSProperties = {
   minHeight: MIN_TAP_TARGET_PX,
   padding: '0 12px',
   borderRadius: 4,
-  color: '#9ecbff',
+  color: theme.accentText,
   fontWeight: 600,
 };
 

@@ -30,9 +30,9 @@ export interface FeltColorOption {
 }
 
 export const FELT_COLORS: ReadonlyArray<FeltColorOption> = [
-  // `emerald` matches the pre-T-015 <Table> default (#1a7a1a), so existing
+  // `emerald` matches the pre-T-015 <Table> default (#0f4a2a), so existing
   // persisted states and snapshots keep rendering the same green felt.
-  { id: 'emerald', label: 'Emerald', hex: '#1a7a1a' },
+  { id: 'emerald', label: 'Emerald', hex: '#0f4a2a' },
   { id: 'burgundy', label: 'Burgundy', hex: '#7a1a3a' },
   { id: 'navy', label: 'Navy', hex: '#1a3a7a' },
 ];

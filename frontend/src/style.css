@@ -27,9 +27,9 @@ html, body {
   --accent-soft: #fecdd3;
   --accent-bg: rgba(225, 29, 72, 0.15);
   --accent-border: rgba(225, 29, 72, 0.5);
-  --accent-surface: #1c0d12;
-  --accent-surface-strong: #33101a;
-  --accent-deep: #7f1d1d;
+  --accent-surface: #151215;
+  --accent-surface-strong: #21151a;
+  --accent-deep: #3b1a22;
   --success: #22c55e;
   --success-text: #4ade80;
   --warning: #f59e0b;
@@ -73,6 +73,33 @@ html, body, #app {
   flex-direction: column;
   flex: 1;
   min-height: 100svh;
+}
+
+/* Base control styling: inline styles and component classes override these. */
+button {
+  background: var(--raised);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  min-height: 44px;
+  padding: 0 14px;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+input, select, textarea {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+}
+
+input::placeholder, textarea::placeholder {
+  color: var(--faint);
 }
 
 button, input, select, textarea {
