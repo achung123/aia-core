@@ -332,6 +332,12 @@ export function PlayerApp() {
           )}
         </div>
 
+        {handNumber && !noActiveHand && (
+          <p data-testid="player-pot" style={styles.potLine}>
+            In the pot <span style={styles.potAmount}>${pot.toFixed(2)}</span>
+          </p>
+        )}
+
         {captureStep === 'camera' && gameId && (
           <CameraCapture
             gameId={gameId}
@@ -555,6 +561,21 @@ const styles: Record<string, CSSProperties> = {
     background: 'transparent',
     color: theme.accentText,
     cursor: 'pointer',
+  },
+  potLine: {
+    margin: '0 0 1rem',
+    color: theme.muted,
+    fontSize: '0.8rem',
+    letterSpacing: '0.12em',
+    textTransform: 'uppercase',
+  },
+  potAmount: {
+    color: theme.warningText,
+    fontSize: '1.05rem',
+    fontWeight: 600,
+    letterSpacing: 0,
+    fontVariantNumeric: 'tabular-nums',
+    marginLeft: '0.35rem',
   },
   secondaryRow: {
     display: 'flex',
