@@ -651,7 +651,7 @@ describe('DealerApp community card PATCH wiring', () => {
 
     await vi.waitFor(() => {
       const flopTile = container.querySelector('[data-testid="flop-tile"]');
-      expect(flopTile!.textContent).toContain('✅');
+      expect(flopTile!.textContent).toContain('✓');
     });
   });
 
@@ -679,7 +679,7 @@ describe('DealerApp community card PATCH wiring', () => {
     });
 
     const flopTile = container.querySelector('[data-testid="flop-tile"]');
-    expect(flopTile!.textContent).not.toContain('✅');
+    expect(flopTile!.textContent).not.toContain('✓');
   });
 });
 
@@ -1568,7 +1568,7 @@ describe('DealerApp incremental community card capture', () => {
 
     await vi.waitFor(() => {
       const turnTile = container.querySelector('[data-testid="turn-tile"]');
-      expect(turnTile!.textContent).toContain('✅');
+      expect(turnTile!.textContent).toContain('✓');
     });
   });
 
@@ -1628,7 +1628,7 @@ describe('DealerApp incremental community card capture', () => {
 
     await vi.waitFor(() => {
       const riverTile = container.querySelector('[data-testid="river-tile"]');
-      expect(riverTile!.textContent).toContain('✅');
+      expect(riverTile!.textContent).toContain('✓');
     });
   });
 

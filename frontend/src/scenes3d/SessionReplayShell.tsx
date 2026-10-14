@@ -513,7 +513,7 @@ const summaryStyle: CSSProperties = {
   textOverflow: 'ellipsis',
 };
 
-const summaryHandStyle: CSSProperties = { fontWeight: 700, color: theme.text };
+const summaryHandStyle: CSSProperties = { fontWeight: 600, color: theme.text };
 
 const liveOnStyle: CSSProperties = {
   marginLeft: 'auto',
@@ -523,7 +523,7 @@ const liveOnStyle: CSSProperties = {
   padding: '0 12px',
   minHeight: MIN_TAP_TARGET_PX,
   color: '#86efac',
-  fontWeight: 700,
+  fontWeight: 600,
   fontSize: 13,
   letterSpacing: '0.08em',
 };
@@ -541,7 +541,7 @@ const liveJumpStyle: CSSProperties = {
   minHeight: MIN_TAP_TARGET_PX,
   padding: '0 14px',
   cursor: 'pointer',
-  fontWeight: 700,
+  fontWeight: 600,
   ...CONTROL_BUTTON_STYLE,
   background: '#14532d',
   borderColor: '#22c55e',

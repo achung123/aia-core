@@ -91,7 +91,7 @@ function PlayerStatusView({ status, onCapture }: PlayerStatusViewProps) {
     case 'handed_back':
       return <p style={{ color: '#60a5fa' }}>Waiting for dealer decision…</p>;
     case 'won':
-      return <p style={{ color: '#4ade80' }}>You won! 🏆</p>;
+      return <p style={{ color: '#4ade80' }}>You won</p>;
     case 'lost':
       return <p style={{ color: theme.muted }}>You lost.</p>;
     default:
@@ -325,7 +325,7 @@ export function PlayerApp() {
         {runningTotal !== null && (
           <p
             data-testid="player-stack"
-            style={{ color: stackColor, fontWeight: 700, fontSize: '1.1rem', margin: '0 0 0.5rem' }}
+            style={{ color: stackColor, fontWeight: 600, fontSize: '1.1rem', margin: '0 0 0.5rem' }}
           >
             Stack: {runningTotal < 0 ? `-$${Math.abs(runningTotal).toFixed(2)}` : `$${runningTotal.toFixed(2)}`}
           </p>
@@ -412,7 +412,7 @@ export function PlayerApp() {
             window.location.hash = `#/player/table?game=${gameId}&player=${encodeURIComponent(playerName)}`;
           }}
         >
-          🎬 Table View
+          Table View
         </button>
 
         <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
@@ -475,7 +475,7 @@ const styles: Record<string, CSSProperties> = {
   },
   playerName: {
     fontSize: '1.6rem',
-    fontWeight: 700,
+    fontWeight: 600,
     margin: '0 0 0.25rem',
     color: theme.text,
   },
@@ -493,7 +493,7 @@ const styles: Record<string, CSSProperties> = {
     flexDirection: 'column',
     gap: '0.4rem',
     padding: '1rem',
-    borderRadius: '12px',
+    borderRadius: '8px',
     border: `2px solid ${theme.accent}`,
     background: theme.accentTint,
     color: theme.accentSoft,
@@ -504,7 +504,7 @@ const styles: Record<string, CSSProperties> = {
     WebkitTapHighlightColor: 'transparent',
   },
   cardDate: {
-    fontWeight: 'bold',
+    fontWeight: 600,
     fontSize: '1.1rem',
   },
   gameId: {
@@ -535,7 +535,7 @@ const styles: Record<string, CSSProperties> = {
     minWidth: '48px',
     width: '100%',
     fontSize: '1rem',
-    fontWeight: 'bold',
+    fontWeight: 600,
     border: 'none',
     borderRadius: '8px',
     background: theme.accent,
@@ -548,7 +548,7 @@ const styles: Record<string, CSSProperties> = {
     minHeight: '48px',
     width: '100%',
     fontSize: '1rem',
-    fontWeight: 'bold',
+    fontWeight: 600,
     border: `2px solid ${theme.accent}`,
     borderRadius: '8px',
     background: theme.accentTint,

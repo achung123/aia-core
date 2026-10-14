@@ -202,7 +202,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   warning: {
     color: '#d97706',
-    fontWeight: 'bold',
+    fontWeight: 600,
     fontSize: '0.9rem',
     marginBottom: '0.75rem',
   },
@@ -219,7 +219,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     padding: '0.75rem 1rem',
     border: `2px solid ${theme.accentBorder}`,
-    borderRadius: '10px',
+    borderRadius: '8px',
     background: theme.surface,
     minWidth: '64px',
     minHeight: '48px',
@@ -228,7 +228,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   cardText: {
     fontSize: '1.5rem',
-    fontWeight: 'bold',
+    fontWeight: 600,
     lineHeight: 1,
   },
   confidence: {
@@ -238,7 +238,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   positionLabel: {
     fontSize: '0.65rem',
-    fontWeight: '700',
+    fontWeight: 600,
     color: theme.accent,
     textTransform: 'uppercase' as const,
     letterSpacing: '0.05em',
@@ -254,7 +254,7 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: '48px',
     minWidth: '48px',
     fontSize: '1rem',
-    fontWeight: 'bold',
+    fontWeight: 600,
     border: `2px solid ${theme.borderStrong}`,
     borderRadius: '8px',
     background: theme.surface,
@@ -266,7 +266,7 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: '48px',
     minWidth: '48px',
     fontSize: '1rem',
-    fontWeight: 'bold',
+    fontWeight: 600,
     border: 'none',
     borderRadius: '8px',
     background: theme.accent,
@@ -305,7 +305,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   altCardText: {
     fontSize: '1.2rem',
-    fontWeight: 'bold',
+    fontWeight: 600,
     lineHeight: 1,
   },
   altConfidence: {

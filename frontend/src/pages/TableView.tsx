@@ -250,7 +250,7 @@ const styles: Record<string, CSSProperties> = {
     padding: '0.3rem 0.6rem',
     minHeight: '36px',
     fontSize: '0.85rem',
-    fontWeight: 'bold',
+    fontWeight: 600,
     border: 'none',
     borderRadius: '8px',
     background: theme.accent,

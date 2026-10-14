@@ -61,7 +61,7 @@ export const gameSelectorStyles: Record<string, CSSProperties> = {
     opacity: 0.58,
   },
   cardDate: {
-    fontWeight: 'bold',
+    fontWeight: 600,
     fontSize: '1.1rem',
   },
   gameId: {
@@ -77,7 +77,7 @@ export const gameSelectorStyles: Record<string, CSSProperties> = {
   },
   cardAction: {
     fontSize: '0.9rem',
-    fontWeight: 700,
+    fontWeight: 600,
   },
   winnersRow: {
     fontSize: '0.85rem',
@@ -120,7 +120,7 @@ export const playbackLayoutStyles: Record<string, CSSProperties> = {
   },
   statusTitle: {
     fontSize: 18,
-    fontWeight: 700,
+    fontWeight: 600,
     color: theme.text,
   },
   statusDetail: {
@@ -177,7 +177,7 @@ export const equityRowStyles: Record<string, CSSProperties> = {
   },
   equity: {
     fontSize: 16,
-    fontWeight: 700,
+    fontWeight: 600,
     fontFamily: 'system-ui, sans-serif',
   },
 };

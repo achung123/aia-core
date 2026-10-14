@@ -35,8 +35,8 @@ export function ShowdownRecord({
         }}
       >
         <div style={{ textAlign: 'center', flex: 1 }}>
-          <div style={{ fontSize: '1.25rem', fontWeight: 700 }}>{player1Name}</div>
-          <div data-testid="p1-wins" style={{ fontSize: '2rem', fontWeight: 800 }}>
+          <div style={{ fontSize: '1.25rem', fontWeight: 600 }}>{player1Name}</div>
+          <div data-testid="p1-wins" style={{ fontSize: '2rem', fontWeight: 600 }}>
             {player1Wins}
           </div>
         </div>
@@ -46,8 +46,8 @@ export function ShowdownRecord({
         </div>
 
         <div style={{ textAlign: 'center', flex: 1 }}>
-          <div style={{ fontSize: '1.25rem', fontWeight: 700 }}>{player2Name}</div>
-          <div data-testid="p2-wins" style={{ fontSize: '2rem', fontWeight: 800 }}>
+          <div style={{ fontSize: '1.25rem', fontWeight: 600 }}>{player2Name}</div>
+          <div data-testid="p2-wins" style={{ fontSize: '2rem', fontWeight: 600 }}>
             {player2Wins}
           </div>
         </div>
@@ -96,7 +96,7 @@ export function ShowdownRecord({
             borderRadius: 6,
           }}
         >
-          🏆 {dominant} dominates this rivalry
+          {dominant} dominates this rivalry
         </div>
       )}
     </div>

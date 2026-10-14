@@ -640,9 +640,9 @@ function HandDetails({ session, onRefresh }: HandDetailsProps) {
     <td colSpan={COLUMNS.length}>
       <div className="action-bar">
         <button type="button" className="dv-btn dv-btn-sm" onClick={() => setShowAddHand(true)}>+ Add Hand</button>
-        <button type="button" className="dv-btn dv-btn-sm" onClick={handleExportCsv}>📥 Export CSV</button>
-        <button type="button" className="dv-btn dv-btn-sm" onClick={handleExportZip}>📦 Export ZIP</button>
-        <button type="button" className="dv-btn dv-btn-sm dv-btn-danger" onClick={handleDeleteGame}>🗑 Delete Game</button>
+        <button type="button" className="dv-btn dv-btn-sm" onClick={handleExportCsv}>Export CSV</button>
+        <button type="button" className="dv-btn dv-btn-sm" onClick={handleExportZip}>Export ZIP</button>
+        <button type="button" className="dv-btn dv-btn-sm dv-btn-danger" onClick={handleDeleteGame}>Delete Game</button>
       </div>
       {hands.length === 0 ? (
         <p className="empty-msg">No hands recorded.</p>
@@ -766,7 +766,7 @@ export function DataView() {
 
   return (
     <div className="data-view">
-      <h1 className="dv-title">📊 Game Sessions</h1>
+      <h1 className="dv-title">Game Sessions</h1>
       <div className="toolbar">
         <button type="button" className="dv-btn dv-btn-primary" onClick={() => setShowCreateGame(true)}>+ New Game</button>
         <button type="button" className="dv-btn" onClick={() => setShowCsvUpload(true)}>Import CSV</button>

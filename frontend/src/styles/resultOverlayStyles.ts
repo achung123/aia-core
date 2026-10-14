@@ -22,7 +22,7 @@ export const resultHeaderStyle: CSSProperties = {
 
 export const resultTitleStyle: CSSProperties = {
   fontSize: '1.1em',
-  fontWeight: 'bold',
+  fontWeight: 600,
   letterSpacing: '0.04em',
 };
 

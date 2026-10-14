@@ -83,32 +83,26 @@ export function AnalyticsPage() {
         <h2 style={styles.subheading}>Explore</h2>
         <div style={styles.cardGrid}>
           <Link to="/dealer" style={styles.card}>
-            <span style={styles.cardEmoji}>🃏</span>
             <span style={styles.cardLabel}>Dealer</span>
             <span style={styles.cardDesc}>Run a live game</span>
           </Link>
           <Link to="/player" style={styles.card}>
-            <span style={styles.cardEmoji}>👤</span>
             <span style={styles.cardLabel}>Game</span>
             <span style={styles.cardDesc}>Join a session</span>
           </Link>
           <Link to="/data" style={styles.card}>
-            <span style={styles.cardEmoji}>🎰</span>
             <span style={styles.cardLabel}>Game Sessions</span>
             <span style={styles.cardDesc}>Browse game sessions and recaps</span>
           </Link>
           <Link to="/head-to-head" style={styles.card}>
-            <span style={styles.cardEmoji}>⚔️</span>
             <span style={styles.cardLabel}>Head to Head</span>
             <span style={styles.cardDesc}>Compare two players</span>
           </Link>
           <Link to="/awards" style={styles.card}>
-            <span style={styles.cardEmoji}>🏆</span>
             <span style={styles.cardLabel}>Awards</span>
             <span style={styles.cardDesc}>Superlative awards and trophies</span>
           </Link>
           <Link to={playerName ? `/players/${playerName}` : '#'} style={styles.card}>
-            <span style={styles.cardEmoji}>📊</span>
             <span style={styles.cardLabel}>My Stats</span>
             <span style={styles.cardDesc}>View your performance stats</span>
           </Link>
@@ -128,7 +122,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   title: {
     fontSize: 'clamp(1.5rem, 6vw, 2.5rem)',
-    fontWeight: 700,
+    fontWeight: 600,
     marginBottom: '0.5rem',
     color: theme.text,
     textAlign: 'center' as const,
@@ -141,7 +135,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   heading: {
     fontSize: '1.75rem',
-    fontWeight: 700,
+    fontWeight: 600,
     color: '#fff',
     marginBottom: '1rem',
   },
@@ -164,7 +158,7 @@ const styles: Record<string, React.CSSProperties> = {
     width: '100%',
     borderCollapse: 'collapse' as const,
     background: theme.bg,
-    borderRadius: 12,
+    borderRadius: 8,
     overflow: 'hidden',
   },
   th: {
@@ -202,7 +196,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '1.5rem 1rem',
     background: theme.accentSurface,
     border: `1px solid ${theme.accentBorder}`,
-    borderRadius: '14px',
+    borderRadius: '8px',
     textDecoration: 'none',
     color: theme.text,
     transition: 'transform 0.15s, box-shadow 0.15s',

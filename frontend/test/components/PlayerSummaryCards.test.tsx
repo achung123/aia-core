@@ -52,10 +52,10 @@ describe('PlayerSummaryCards', () => {
     render(<PlayerSummaryCards players={players} />);
     // Alice has highest profit_loss so she is the winner
     const aliceCard = screen.getByTestId('player-card-Alice');
-    expect(aliceCard.textContent).toContain('🏆');
+    expect(aliceCard.textContent).toContain('★');
     // Bob should not have trophy
     const bobCard = screen.getByTestId('player-card-Bob');
-    expect(bobCard.textContent).not.toContain('🏆');
+    expect(bobCard.textContent).not.toContain('★');
   });
 
   it('highlights multiple winners when tied for highest P&L', () => {
@@ -64,8 +64,8 @@ describe('PlayerSummaryCards', () => {
       { player_name: 'Y', hands_played: 10, hands_won: 5, hands_lost: 5, hands_folded: 0, win_rate: 50, profit_loss: 100 },
     ];
     render(<PlayerSummaryCards players={tied} />);
-    expect(screen.getByTestId('player-card-X').textContent).toContain('🏆');
-    expect(screen.getByTestId('player-card-Y').textContent).toContain('🏆');
+    expect(screen.getByTestId('player-card-X').textContent).toContain('★');
+    expect(screen.getByTestId('player-card-Y').textContent).toContain('★');
   });
 
   it('does not highlight winner when all P&L are zero or negative', () => {
@@ -74,8 +74,8 @@ describe('PlayerSummaryCards', () => {
       { player_name: 'B', hands_played: 10, hands_won: 3, hands_lost: 7, hands_folded: 0, win_rate: 30, profit_loss: 0 },
     ];
     render(<PlayerSummaryCards players={losers} />);
-    expect(screen.getByTestId('player-card-A').textContent).not.toContain('🏆');
-    expect(screen.getByTestId('player-card-B').textContent).not.toContain('🏆');
+    expect(screen.getByTestId('player-card-A').textContent).not.toContain('★');
+    expect(screen.getByTestId('player-card-B').textContent).not.toContain('★');
   });
 
   it('renders an empty state when no players', () => {

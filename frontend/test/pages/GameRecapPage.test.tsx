@@ -271,8 +271,8 @@ describe('GameRecapPage', () => {
     await waitFor(() => {
       expect(screen.getByTestId('player-card-Winner')).toBeTruthy();
     });
-    expect(screen.getByTestId('player-card-Winner').textContent).toContain('🏆');
-    expect(screen.getByTestId('player-card-Loser').textContent).not.toContain('🏆');
+    expect(screen.getByTestId('player-card-Winner').textContent).toContain('★');
+    expect(screen.getByTestId('player-card-Loser').textContent).not.toContain('★');
   });
 
   it('hides awards section when no awards are returned', async () => {

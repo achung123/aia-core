@@ -83,7 +83,7 @@ const styles: Record<string, CSSProperties> = {
   blindLevel: {
     color: '#fbbf24',
     fontSize: '0.85rem',
-    fontWeight: 'bold',
+    fontWeight: 600,
   },
   positions: {
     display: 'flex',
@@ -96,7 +96,7 @@ const styles: Record<string, CSSProperties> = {
   },
   highlightLabel: {
     color: '#34d399',
-    fontWeight: 'bold',
+    fontWeight: 600,
     textShadow: '0 0 6px rgba(52,211,153,0.5)',
   },
   separator: {

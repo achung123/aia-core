@@ -35,7 +35,7 @@ export function AwardsGridPage() {
 
   return (
     <div style={styles.page}>
-      <h1 style={styles.heading}>🏆 Awards</h1>
+      <h1 style={styles.heading}>Awards</h1>
 
       <select
         data-testid="game-filter-select"
@@ -92,7 +92,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   heading: {
     fontSize: '1.75rem',
-    fontWeight: 700,
+    fontWeight: 600,
     color: '#fff',
     marginBottom: '1rem',
   },

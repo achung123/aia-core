@@ -70,7 +70,7 @@ describe('ResultOverlay', () => {
     const rows = screen.getAllByRole('row');
     // row 0 = header, row 1 = Alice (winner)
     expect(rows[1].style.background).toBe('#b8860b');
-    expect(rows[1].style.fontWeight).toBe('bold');
+    expect(rows[1].style.fontWeight).toBe('600');
   });
 
   it('calls onDismiss when dismiss button is clicked', () => {

@@ -48,7 +48,7 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     padding: '16px 12px',
     background: '#1a1a1a',
-    borderRadius: '12px',
+    borderRadius: '8px',
     border: '1px solid #333',
     textAlign: 'center',
     height: '100%',
@@ -78,12 +78,12 @@ const styles: Record<string, React.CSSProperties> = {
   },
   statValue: {
     fontSize: '1.25rem',
-    fontWeight: 700,
+    fontWeight: 600,
     color: '#fff',
   },
   statValueMuted: {
     fontSize: '1.25rem',
-    fontWeight: 700,
+    fontWeight: 600,
     color: theme.muted,
   },
   statLabel: {

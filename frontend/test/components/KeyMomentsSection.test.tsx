@@ -57,7 +57,7 @@ describe('KeyMomentsSection', () => {
 
   it('displays type icon for streak_start', () => {
     render(<KeyMomentsSection highlights={[makeHighlight({ highlight_type: 'streak_start' })]} />);
-    expect(screen.getByTestId('highlight-chip-0').textContent).toContain('🏆');
+    expect(screen.getByTestId('highlight-chip-0').textContent).toContain('★');
   });
 
   it('displays fallback icon for unknown type', () => {

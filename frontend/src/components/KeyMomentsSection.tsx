@@ -10,7 +10,7 @@ export interface KeyMomentsSectionProps {
 const typeIcons: Record<string, string> = {
   most_action: '🔥',
   river_showdown: '🃏',
-  streak_start: '🏆',
+  streak_start: '★',
 };
 
 function getIcon(highlightType: string): string {
@@ -54,7 +54,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: '0.4rem',
     padding: '0.4rem 0.75rem',
-    borderRadius: 16,
+    borderRadius: 8,
     border: `1px solid ${theme.border}`,
     background: theme.surface,
     cursor: 'pointer',

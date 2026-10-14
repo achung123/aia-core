@@ -205,15 +205,15 @@ const styles: Record<string, React.CSSProperties> = {
     color: theme.text,
   },
   potLabel: {
-    fontWeight: 'bold',
+    fontWeight: 600,
     color: '#4ade80',
   },
   callLabel: {
-    fontWeight: 'bold',
+    fontWeight: 600,
     color: '#fbbf24',
   },
   minimumLabel: {
-    fontWeight: 'bold',
+    fontWeight: 600,
     color: '#93c5fd',
   },
   buttonRow: {
@@ -228,7 +228,7 @@ const styles: Record<string, React.CSSProperties> = {
     minWidth: '48px',
     padding: '0.75rem 1rem',
     fontSize: '1rem',
-    fontWeight: 'bold',
+    fontWeight: 600,
     border: 'none',
     borderRadius: '8px',
     cursor: 'pointer',

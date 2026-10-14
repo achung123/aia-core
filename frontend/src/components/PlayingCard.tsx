@@ -50,7 +50,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '8px',
     background: '#ffffff',
     cursor: 'pointer',
-    fontWeight: 'bold',
+    fontWeight: 600,
     boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
   },
   rank: {
@@ -75,6 +75,6 @@ const styles: Record<string, React.CSSProperties> = {
     color: theme.faint,
     cursor: 'pointer',
     fontSize: '1.2rem',
-    fontWeight: 'bold',
+    fontWeight: 600,
   },
 };

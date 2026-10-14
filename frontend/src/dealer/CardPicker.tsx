@@ -63,7 +63,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   modal: {
     background: theme.surface,
-    borderRadius: '12px',
+    borderRadius: '8px',
     padding: '1rem',
     maxWidth: '95vw',
     maxHeight: '90vh',
@@ -85,7 +85,7 @@ const styles: Record<string, React.CSSProperties> = {
     minWidth: '48px',
     minHeight: '48px',
     fontSize: '1rem',
-    fontWeight: 'bold',
+    fontWeight: 600,
     border: `1px solid ${theme.borderStrong}`,
     borderRadius: '6px',
     background: theme.surface,

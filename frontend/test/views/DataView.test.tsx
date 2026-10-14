@@ -76,7 +76,7 @@ afterEach(() => {
 describe('DataView', () => {
   it('renders the title', async () => {
     render(<MemoryRouter><DataView /></MemoryRouter>);
-    expect(screen.getByText('📊 Game Sessions')).toBeTruthy();
+    expect(screen.getByText('Game Sessions')).toBeTruthy();
   });
 
   it('displays loading state initially', () => {
@@ -174,8 +174,8 @@ describe('DataView', () => {
     await waitFor(() => screen.getByText('2026-04-01'));
     fireEvent.click(screen.getByText('2026-04-01'));
     await waitFor(() => {
-      expect(screen.getByText('📦 Export ZIP')).toBeTruthy();
-      expect(screen.getByText('📥 Export CSV')).toBeTruthy();
+      expect(screen.getByText('Export ZIP')).toBeTruthy();
+      expect(screen.getByText('Export CSV')).toBeTruthy();
     });
   });
 
@@ -252,7 +252,7 @@ describe('DataView', () => {
     await waitFor(() => screen.getByText('+ Add Hand'));
 
     // Click Delete Game
-    fireEvent.click(screen.getByText('🗑 Delete Game'));
+    fireEvent.click(screen.getByText('Delete Game'));
 
     await waitFor(() => {
       expect(deleteGame).toHaveBeenCalledWith(1);

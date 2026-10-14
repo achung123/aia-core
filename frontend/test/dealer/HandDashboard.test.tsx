@@ -364,11 +364,11 @@ describe('HandDashboard', () => {
     });
     screen.getByTestId('winner-checkbox-Alice').click();
     await waitFor(() => {
-      expect(screen.getByTestId('winner-checkbox-Alice').textContent).toContain('✅');
+      expect(screen.getByTestId('winner-checkbox-Alice').textContent).toContain('●');
     });
     screen.getByTestId('winner-checkbox-Bob').click();
     await waitFor(() => {
-      expect(screen.getByTestId('winner-checkbox-Bob').textContent).toContain('✅');
+      expect(screen.getByTestId('winner-checkbox-Bob').textContent).toContain('●');
     });
     screen.getByTestId('winner-checkbox-Carol').click();
     // Third should not toggle on (still only 2 selected)
@@ -392,7 +392,7 @@ describe('HandDashboard', () => {
     });
     screen.getByTestId('winner-checkbox-Alice').click();
     await waitFor(() => {
-      expect(screen.getByTestId('winner-checkbox-Alice').textContent).toContain('✅');
+      expect(screen.getByTestId('winner-checkbox-Alice').textContent).toContain('●');
     });
     screen.getByTestId('end-game-confirm-yes').click();
     await waitFor(() => {
@@ -422,7 +422,7 @@ describe('HandDashboard', () => {
     render(<HandDashboard gameId={42} onSelectHand={() => {}} onBack={() => {}} />);
     await waitFor(() => {
       const rows = screen.getAllByTestId('hand-row');
-      expect(rows[0].textContent).toContain('🏆');
+      expect(rows[0].textContent).toContain('★');
     });
   });
 

@@ -159,7 +159,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   heading: {
     fontSize: '1.75rem',
-    fontWeight: 700,
+    fontWeight: 600,
     color: '#fff',
     marginBottom: '1.5rem',
   },
@@ -216,7 +216,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   avatarLetter: {
     fontSize: '1.5rem',
-    fontWeight: 700,
+    fontWeight: 600,
     color: '#fff',
   },
   uploadBtn: {

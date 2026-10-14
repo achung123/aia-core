@@ -71,7 +71,7 @@ export function GameRecapPage() {
         <h1>Game Recap</h1>
         {stats && (
           <>
-            <div style={{ fontSize: '1.125rem', fontWeight: 'bold' }}>{stats.game_date}</div>
+            <div style={{ fontSize: '1.125rem', fontWeight: 600 }}>{stats.game_date}</div>
             <div style={{ color: '#666' }}>{stats.total_hands} hands &middot; {stats.player_stats.length} players</div>
           </>
         )}

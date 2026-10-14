@@ -48,7 +48,7 @@ export function PlayerGrid({ players, community, onTileSelect, onDirectOutcome, 
           onClick={() => onTileSelect('flop')}
         >
           <span style={styles.tileName}>Flop</span>
-          {community.flopRecorded && <span style={styles.check}>✅</span>}
+          {community.flopRecorded && <span style={styles.check}>✓</span>}
         </button>
         <button
           data-testid="turn-tile"
@@ -60,7 +60,7 @@ export function PlayerGrid({ players, community, onTileSelect, onDirectOutcome, 
           disabled={!community.flopRecorded}
         >
           <span style={styles.tileName}>Turn</span>
-          {community.turnRecorded && <span style={styles.check}>✅</span>}
+          {community.turnRecorded && <span style={styles.check}>✓</span>}
         </button>
         <button
           data-testid="river-tile"
@@ -72,7 +72,7 @@ export function PlayerGrid({ players, community, onTileSelect, onDirectOutcome, 
           disabled={!community.turnRecorded}
         >
           <span style={styles.tileName}>River</span>
-          {community.riverRecorded && <span style={styles.check}>✅</span>}
+          {community.riverRecorded && <span style={styles.check}>✓</span>}
         </button>
       </div>
 
@@ -100,7 +100,7 @@ export function PlayerGrid({ players, community, onTileSelect, onDirectOutcome, 
               </button>
               <div style={styles.statusCol}>
                 <span style={styles.statusText}>
-                  {needsAction ? '⚠️ Decide outcome' : formatStatus(player.status, player.outcomeStreet)}
+                  {needsAction ? 'Decide outcome' : formatStatus(player.status, player.outcomeStreet)}
                 </span>
                 {showOutcomeBtn && (
                   <button
@@ -167,9 +167,9 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     fontSize: '1.1rem',
-    fontWeight: 'bold',
+    fontWeight: 600,
     border: `2px solid ${theme.accentBorder}`,
-    borderRadius: '12px',
+    borderRadius: '8px',
     background: theme.accentTint,
     color: theme.text,
     cursor: 'pointer',
@@ -188,9 +188,9 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     fontSize: '1.1rem',
-    fontWeight: 'bold',
+    fontWeight: 600,
     border: `2px solid ${theme.accentBorder}`,
-    borderRadius: '12px',
+    borderRadius: '8px',
     background: theme.accentTint,
     color: theme.text,
     cursor: 'pointer',
@@ -207,7 +207,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     border: `2px solid ${theme.accentBorder}`,
-    borderRadius: '12px',
+    borderRadius: '8px',
     overflow: 'hidden',
     minHeight: '56px',
   },
@@ -218,7 +218,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '0.5rem',
     padding: '0.75rem 1rem',
     fontSize: '1.1rem',
-    fontWeight: 'bold',
+    fontWeight: 600,
     border: 'none',
     background: 'transparent',
     color: theme.text,
@@ -270,7 +270,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '0.75rem',
     minHeight: '48px',
     fontSize: '1.1rem',
-    fontWeight: 'bold',
+    fontWeight: 600,
     border: 'none',
     borderRadius: '8px',
     background: '#16a34a',

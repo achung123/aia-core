@@ -616,7 +616,7 @@ const dialogOverlayStyle: React.CSSProperties = {
 
 const dialogStyle: React.CSSProperties = {
   background: theme.surface,
-  borderRadius: '12px',
+  borderRadius: '8px',
   padding: '1.5rem',
   maxWidth: '400px',
   width: '90%',

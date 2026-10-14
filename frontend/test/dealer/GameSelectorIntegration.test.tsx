@@ -307,7 +307,7 @@ describe('GameSelector integration in DealerApp', () => {
 
     // Community should show as recorded (check mark on flop tile)
     const flopTile = container.querySelector('[data-testid="flop-tile"]');
-    expect(flopTile!.textContent).toContain('✅');
+    expect(flopTile!.textContent).toContain('✓');
   });
 
   it('HandDashboard Back button returns to GameSelector', async () => {

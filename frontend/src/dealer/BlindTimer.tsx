@@ -277,7 +277,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '0.5rem 0.75rem',
     background: theme.accentSurface,
     color: theme.accentSoft,
-    borderRadius: '10px',
+    borderRadius: '8px',
     fontSize: '0.9rem',
     fontWeight: 600,
     flexWrap: 'wrap',
@@ -295,7 +295,7 @@ const styles: Record<string, React.CSSProperties> = {
     marginTop: '0.4rem',
     padding: '0.75rem',
     background: theme.accentSurface,
-    borderRadius: '10px',
+    borderRadius: '8px',
   },
   startRow: {
     display: 'flex',
@@ -312,7 +312,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '6px',
     cursor: 'pointer',
     fontSize: '0.9rem',
-    fontWeight: 700,
+    fontWeight: 600,
     letterSpacing: '0.03em',
   },
   timerControls: {
@@ -380,7 +380,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#fff',
     cursor: 'pointer',
     fontSize: '0.85rem',
-    fontWeight: 700,
+    fontWeight: 600,
   },
   level: {
     whiteSpace: 'nowrap',
@@ -400,7 +400,7 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     gap: '0.5rem',
     color: '#fbbf24',
-    fontWeight: 700,
+    fontWeight: 600,
   },
   advanceBtn: {
     background: '#f59e0b',
@@ -410,6 +410,6 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '0.3rem 0.75rem',
     cursor: 'pointer',
     fontSize: '0.85rem',
-    fontWeight: 700,
+    fontWeight: 600,
   },
 };

@@ -103,7 +103,7 @@ const styles: Record<string, CSSProperties> = {
     top: '50%',
     transform: 'translate(-50%, -50%)',
     fontSize: '1.2rem',
-    fontWeight: 700,
+    fontWeight: 600,
     color: theme.faint,
     pointerEvents: 'none',
   },

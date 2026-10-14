@@ -41,7 +41,7 @@ html, body {
   --shadow: rgba(0, 0, 0, 0.5) 0 10px 15px -3px, rgba(0, 0, 0, 0.3) 0 4px 6px -2px;
 
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
+  --heading: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
   --mono: ui-monospace, Consolas, monospace;
 
   font: 18px/145% var(--sans);
@@ -112,6 +112,7 @@ h1,
 h2 {
   font-family: var(--heading);
   font-weight: 500;
+  letter-spacing: 0.01em;
   color: var(--text-h);
 }
 
@@ -1023,4 +1024,20 @@ code {
 :focus-visible {
   outline: 2px solid var(--accent-hover);
   outline-offset: 2px;
+}
+
+/* Refined chrome: quiet, letter-spaced navigation and small-caps labels. */
+.top-nav a {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+.top-nav a.active {
+  font-weight: 600;
+}
+
+h3, th {
+  letter-spacing: 0.08em;
 }

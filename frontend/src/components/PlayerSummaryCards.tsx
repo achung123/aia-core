@@ -33,7 +33,7 @@ export function PlayerSummaryCards({ players }: PlayerSummaryCardsProps) {
             }}
           >
             <div style={styles.nameRow}>
-              {isWinner && <span style={styles.trophy}>🏆</span>}
+              {isWinner && <span style={styles.trophy}>★</span>}
               <span style={styles.playerName}>{player.player_name}</span>
             </div>
             <div style={styles.statsGrid}>
@@ -69,7 +69,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '8px',
     padding: '16px',
     background: '#111',
-    borderRadius: '12px',
+    borderRadius: '8px',
     border: '1px solid #333',
     minWidth: '260px',
     flexShrink: 0,
@@ -88,7 +88,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   playerName: {
     fontSize: '1.125rem',
-    fontWeight: 700,
+    fontWeight: 600,
     color: '#fff',
   },
   statsGrid: {

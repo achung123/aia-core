@@ -19,7 +19,7 @@ interface ResultBadgeProps {
 function ResultBadge({ playerHand }: ResultBadgeProps) {
   if (!playerHand.result) return <span>{playerHand.player_name} </span>;
   const color = resultColors[playerHand.result] || theme.faint;
-  const icon = playerHand.result === 'won' ? '\ud83c\udfc6 ' : '';
+  const icon = playerHand.result === 'won' ? '★ ' : '';
   const street = playerHand.outcome_street ? ` (${playerHand.outcome_street})` : '';
   const handDesc = playerHand.winning_hand_description ? ` — ${playerHand.winning_hand_description}` : '';
   return (
@@ -198,7 +198,7 @@ export function HandDashboard({ gameId, players: playerNames, onSelectHand, onBa
       </button>
       {warnings.length > 0 && (
         <div data-testid="start-hand-warning" style={styles.startWarning}>
-          {warnings.map((w, i) => <div key={i}>⚠ {w}</div>)}
+          {warnings.map((w, i) => <div key={i}>{w}</div>)}
         </div>
       )}
       {startError && (
@@ -313,7 +313,7 @@ export function HandDashboard({ gameId, players: playerNames, onSelectHand, onBa
                     }}
                     onClick={() => toggleWinner(name)}
                   >
-                    {selected ? '✅' : '⬜'} {name}
+                    {selected ? '●' : '○'} {name}
                   </button>
                 );
               })}
@@ -370,7 +370,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '0.75rem',
     minHeight: '48px',
     fontSize: '1.1rem',
-    fontWeight: 'bold',
+    fontWeight: 600,
     border: 'none',
     borderRadius: '8px',
     background: theme.accent,
@@ -397,7 +397,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '0.75rem',
     minHeight: '48px',
     fontSize: '1.1rem',
-    fontWeight: 'bold',
+    fontWeight: 600,
     border: 'none',
     borderRadius: '8px',
     background: '#dc2626',
@@ -436,7 +436,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   dialog: {
     background: theme.surface,
-    borderRadius: '12px',
+    borderRadius: '8px',
     padding: '1.5rem',
     maxWidth: '400px',
     width: '90%',

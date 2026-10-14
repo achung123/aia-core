@@ -429,7 +429,7 @@ export function ReviewScreen({ gameId, handId, players, community, onSaved, onCa
                     ...(isFolded ? { opacity: 0.7, fontStyle: 'italic' } : {}),
                   }}
                 >
-                  {isWinner ? `🏆 ${desc}` : isFolded ? `(Would have: ${desc})` : desc}
+                  {isWinner ? `★ ${desc}` : isFolded ? `(Would have: ${desc})` : desc}
                 </div>
               );
             })()}
@@ -590,7 +590,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '0.9rem',
   },
   previewWarn: { background: '#422006', borderColor: '#a16207', color: 'rgba(250, 204, 21, 0.14)' },
-  previewTitle: { fontWeight: 700, marginBottom: '0.4rem', color: theme.accentSoft },
+  previewTitle: { fontWeight: 600, marginBottom: '0.4rem', color: theme.accentSoft },
   previewMuted: { color: theme.muted, fontSize: '0.8rem', marginTop: '0.4rem' },
   previewPots: { marginBottom: '0.4rem', color: theme.textSecondary },
   previewRow: { display: 'flex', justifyContent: 'space-between', padding: '2px 0' },
@@ -602,7 +602,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   heading: {
     fontSize: '1.4rem',
-    fontWeight: 700,
+    fontWeight: 600,
     color: theme.text,
     marginBottom: '0.25rem',
   },
@@ -696,7 +696,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '0.75rem',
     minHeight: '48px',
     fontSize: '1.1rem',
-    fontWeight: 'bold',
+    fontWeight: 600,
     border: 'none',
     borderRadius: '8px',
     background: theme.accent,
@@ -730,7 +730,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   dialog: {
     background: theme.surface,
-    borderRadius: '12px',
+    borderRadius: '8px',
     padding: '1.5rem',
     maxWidth: '360px',
     width: '90%',
@@ -738,7 +738,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   dialogHeading: {
     fontSize: '1.1rem',
-    fontWeight: 700,
+    fontWeight: 600,
     color: theme.text,
     marginBottom: '0.75rem',
   },

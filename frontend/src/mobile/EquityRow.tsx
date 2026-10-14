@@ -35,7 +35,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   equity: {
     fontSize: '16px',
-    fontWeight: 700,
+    fontWeight: 600,
     fontFamily: 'system-ui, sans-serif',
   },
 };

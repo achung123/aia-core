@@ -84,7 +84,7 @@ export function HandTimeline({ hands }: HandTimelineProps) {
               )}
 
               {winnerName && (
-                <div style={styles.winner}>🏆 {winnerName}</div>
+                <div style={styles.winner}>{winnerName}</div>
               )}
             </div>
 

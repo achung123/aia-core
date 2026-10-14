@@ -92,7 +92,7 @@ export default function NavBar() {
                   onClick={handleViewStats}
                   type="button"
                 >
-                  📊 My Stats
+                  My Stats
                 </button>
                 <button
                   data-testid="profile-settings-btn"
@@ -100,7 +100,7 @@ export default function NavBar() {
                   onClick={handleProfileSettings}
                   type="button"
                 >
-                  ⚙️ Profile Settings
+                  Profile Settings
                 </button>
                 <div className="nav-profile-divider" />
               </>
@@ -112,7 +112,7 @@ export default function NavBar() {
                 onClick={() => setSwitching(true)}
                 type="button"
               >
-                🔄 Switch Profile
+                Switch Profile
               </button>
             ) : (
               <>

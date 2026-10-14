@@ -68,7 +68,7 @@ const box: CSSProperties = {
   maxWidth: 480,
   margin: '3rem auto',
   padding: '1.25rem',
-  borderRadius: 12,
+  borderRadius: 8,
   background: theme.accentSurface,
   border: `1px solid ${theme.accentPressed}`,
   color: theme.accentSoft,

@@ -661,9 +661,9 @@ describe('ReviewScreen — winning hand descriptions', () => {
       expect(container.querySelector('[data-testid="review-player-Alice-hand-desc"]')).not.toBeNull();
     });
     // Alice has result 'won' — should show trophy
-    expect(container.querySelector('[data-testid="review-player-Alice-hand-desc"]')!.textContent).toContain('🏆');
+    expect(container.querySelector('[data-testid="review-player-Alice-hand-desc"]')!.textContent).toContain('★');
     // Bob has result 'lost' — no trophy
-    expect(container.querySelector('[data-testid="review-player-Bob-hand-desc"]')!.textContent).not.toContain('🏆');
+    expect(container.querySelector('[data-testid="review-player-Bob-hand-desc"]')!.textContent).not.toContain('★');
   });
 
   it('gracefully handles fetchEquity failure', async () => {

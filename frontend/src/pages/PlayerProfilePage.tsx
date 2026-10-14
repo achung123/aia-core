@@ -129,7 +129,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   heading: {
     fontSize: '1.5rem',
-    fontWeight: 700,
+    fontWeight: 600,
     marginBottom: '0.75rem',
   },
   selectorWrapper: {

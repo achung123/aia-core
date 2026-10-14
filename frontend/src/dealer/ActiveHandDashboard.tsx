@@ -115,8 +115,8 @@ export function describeBettingClosed(
 
   if (community.riverRecorded) {
     return runningOut
-      ? '✅ Betting is closed — finish the hand'
-      : '✅ Betting complete — finish the hand';
+      ? 'Betting is closed — finish the hand'
+      : 'Betting complete — finish the hand';
   }
   const next = !community.flopRecorded ? 'flop' : !community.turnRecorded ? 'turn' : 'river';
   if (everyoneAllIn) return `🃏 All players are all-in — deal the ${next}`;
@@ -124,7 +124,7 @@ export function describeBettingClosed(
     const count = allIn.length;
     return `🃏 ${count === 1 ? '1 player is' : `${count} players are`} all-in, no more betting — deal the ${next}`;
   }
-  return `✅ Betting complete — deal the ${next}`;
+  return `Betting complete — deal the ${next}`;
 }
 
 export function ActiveHandDashboard({
@@ -265,7 +265,7 @@ export function ActiveHandDashboard({
               {dealerEquityEntries.map((e) => (
                 <div key={e.player_name} style={{ minWidth: 70, padding: '6px 10px', borderRadius: 8, background: theme.accentSurface, border: `1px solid ${theme.accentSurfaceStrong}`, textAlign: 'center', flexShrink: 0 }}>
                   <div style={{ color: theme.accentSoft, fontSize: 11, fontWeight: 600, marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.player_name}</div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: e.equity >= 0.5 ? '#4ade80' : e.equity >= 0.25 ? '#facc15' : '#f87171' }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: e.equity >= 0.5 ? '#4ade80' : e.equity >= 0.25 ? '#facc15' : '#f87171' }}>
                     {equityEstimated ? '~' : ''}{(e.equity * 100).toFixed(1)}%
                   </div>
                   {e.win != null && e.tie != null && (
@@ -337,7 +337,7 @@ export function ActiveHandDashboard({
               disabled={!community.flopRecorded && streetComplete === false}
             >
               <span style={styles.tileName}>Flop</span>
-              {community.flopRecorded && <span style={styles.check}>✅</span>}
+              {community.flopRecorded && <span style={styles.check}>✓</span>}
             </button>
             <button
               data-testid="turn-tile"
@@ -349,7 +349,7 @@ export function ActiveHandDashboard({
               disabled={!community.flopRecorded || (!community.turnRecorded && streetComplete === false)}
             >
               <span style={styles.tileName}>Turn</span>
-              {community.turnRecorded && <span style={styles.check}>✅</span>}
+              {community.turnRecorded && <span style={styles.check}>✓</span>}
             </button>
             <button
               data-testid="river-tile"
@@ -361,7 +361,7 @@ export function ActiveHandDashboard({
               disabled={!community.turnRecorded || (!community.riverRecorded && streetComplete === false)}
             >
               <span style={styles.tileName}>River</span>
-              {community.riverRecorded && <span style={styles.check}>✅</span>}
+              {community.riverRecorded && <span style={styles.check}>✓</span>}
             </button>
           </div>
         </div>
@@ -427,7 +427,7 @@ export function ActiveHandDashboard({
                   )}
                   <div style={styles.statusCol}>
                     <span style={styles.statusText}>
-                      {needsAction ? '⚠️ Decide outcome' : formatStatus(player.status, player.outcomeStreet)}
+                      {needsAction ? 'Decide outcome' : formatStatus(player.status, player.outcomeStreet)}
                     </span>
                     {showOutcomeBtn && (
                       <button
@@ -545,7 +545,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '0.5rem 0.75rem',
     background: theme.accentSurface,
     color: theme.accentSoft,
-    borderRadius: '10px',
+    borderRadius: '8px',
     marginBottom: '0.75rem',
     fontSize: '0.9rem',
     fontWeight: 600,
@@ -608,9 +608,9 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     fontSize: '0.95rem',
-    fontWeight: 'bold',
+    fontWeight: 600,
     border: `2px solid ${theme.accentBorder}`,
-    borderRadius: '12px',
+    borderRadius: '8px',
     background: theme.accentTint,
     color: theme.text,
     cursor: 'pointer',
@@ -630,7 +630,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     border: `2px solid ${theme.accentBorder}`,
-    borderRadius: '12px',
+    borderRadius: '8px',
     overflow: 'hidden',
     minHeight: '56px',
   },
@@ -641,7 +641,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '0.5rem',
     padding: '0.75rem 1rem',
     fontSize: '1.1rem',
-    fontWeight: 'bold',
+    fontWeight: 600,
     border: 'none',
     background: 'transparent',
     color: theme.text,
@@ -673,7 +673,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '0.75rem',
     fontWeight: 600,
     padding: '2px 8px',
-    borderRadius: '10px',
+    borderRadius: '8px',
     background: theme.accentTint,
     color: theme.accentSoft,
     textTransform: 'uppercase',
@@ -681,9 +681,9 @@ const styles: Record<string, React.CSSProperties> = {
   },
   potContribBadge: {
     fontSize: '0.75rem',
-    fontWeight: 700,
+    fontWeight: 600,
     padding: '2px 8px',
-    borderRadius: '10px',
+    borderRadius: '8px',
     background: 'rgba(34, 197, 94, 0.14)',
     color: theme.successText,
     whiteSpace: 'nowrap',
@@ -716,9 +716,9 @@ const styles: Record<string, React.CSSProperties> = {
     width: '100%',
     padding: '1rem',
     fontSize: '1.1rem',
-    fontWeight: 'bold',
+    fontWeight: 600,
     border: 'none',
-    borderRadius: '12px',
+    borderRadius: '8px',
     background: theme.accent,
     color: '#fff',
     cursor: 'pointer',
@@ -736,7 +736,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '0.75rem',
     marginBottom: '0.75rem',
     border: `2px solid ${theme.accentBorder}`,
-    borderRadius: '12px',
+    borderRadius: '8px',
     background: theme.accentTint,
   },
   betVerifyHeader: {
@@ -746,7 +746,7 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: '0.5rem',
   },
   betVerifyLabel: {
-    fontWeight: 700,
+    fontWeight: 600,
     fontSize: '1rem',
     color: theme.text,
   },

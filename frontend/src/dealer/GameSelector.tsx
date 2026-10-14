@@ -65,7 +65,7 @@ export function GameSelector({ onSelectGame, onNewGame }: GameSelectorProps) {
               </div>
               {session.winners && session.winners.length > 0 && (
                 <div style={styles.winnersRow}>
-                  🏆 {session.winners.join(', ')}
+                  {session.winners.join(', ')}
                 </div>
               )}
             </button>
@@ -92,9 +92,9 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '14px',
     minHeight: '48px',
     fontSize: '1.1rem',
-    fontWeight: 'bold',
+    fontWeight: 600,
     border: `2px dashed ${theme.accent}`,
-    borderRadius: '12px',
+    borderRadius: '8px',
     background: theme.accentTint,
     color: theme.accentText,
     cursor: 'pointer',
@@ -126,7 +126,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     gap: '0.4rem',
     padding: '1rem',
-    borderRadius: '12px',
+    borderRadius: '8px',
     border: '2px solid',
     cursor: 'pointer',
     textAlign: 'left',
@@ -146,7 +146,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: theme.muted,
   },
   cardDate: {
-    fontWeight: 'bold',
+    fontWeight: 600,
     fontSize: '1.1rem',
   },
   gameId: {

@@ -8,7 +8,6 @@ export function LandingPage() {
       <p style={styles.subtitle}>Poker session tracking &amp; analysis</p>
       <div style={styles.links}>
         <a href="#/analytics" style={styles.card} data-testid="nav-analytics">
-          <div style={styles.cardIcon}>📈</div>
           <div style={styles.cardTitle}>Analytics</div>
           <div style={styles.cardDesc}>Leaderboard &amp; player stats</div>
         </a>
@@ -30,7 +29,7 @@ const styles: Record<string, CSSProperties> = {
   },
   title: {
     fontSize: '2.5rem',
-    fontWeight: 700,
+    fontWeight: 600,
     marginBottom: '0.5rem',
     color: theme.text,
   },
@@ -53,7 +52,7 @@ const styles: Record<string, CSSProperties> = {
     padding: '1.75rem 1.25rem',
     background: theme.accentSurface,
     border: `1px solid ${theme.accentBorder}`,
-    borderRadius: '14px',
+    borderRadius: '8px',
     textDecoration: 'none',
     textAlign: 'center',
     color: theme.accentSoft,

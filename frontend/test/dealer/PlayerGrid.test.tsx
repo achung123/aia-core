@@ -82,25 +82,25 @@ describe('PlayerGrid', () => {
     expect(screen.queryByTestId('outcome-btn-Eve')).toBeNull();
   });
 
-  it('shows ✅ on Flop tile when flop is recorded', () => {
+  it('shows ✓ on Flop tile when flop is recorded', () => {
     const recordedCommunity: CommunityCards = { ...emptyCommunity, flopRecorded: true, flop1: 'Ah', flop2: 'Kd', flop3: '5c' };
     render(<PlayerGrid {...defaultProps} community={recordedCommunity} />);
     const flopTile = screen.getByTestId('flop-tile');
     expect(flopTile.textContent).toContain('Flop');
-    expect(flopTile.textContent).toContain('✅');
+    expect(flopTile.textContent).toContain('✓');
   });
 
-  it('does not show ✅ on Flop tile when flop is not recorded', () => {
+  it('does not show ✓ on Flop tile when flop is not recorded', () => {
     render(<PlayerGrid {...defaultProps} community={emptyCommunity} />);
     const flopTile = screen.getByTestId('flop-tile');
     expect(flopTile.textContent).toContain('Flop');
-    expect(flopTile.textContent).not.toContain('✅');
+    expect(flopTile.textContent).not.toContain('✓');
   });
 
-  it('does not show ✅ on player tile when recorded', () => {
+  it('does not show ✓ on player tile when recorded', () => {
     render(<PlayerGrid {...defaultProps} />);
     const bobRow = screen.getByTestId('player-row-Bob');
-    expect(bobRow.textContent).not.toContain('✅');
+    expect(bobRow.textContent).not.toContain('✓');
   });
 
   it('renders a back button that calls onBack', () => {

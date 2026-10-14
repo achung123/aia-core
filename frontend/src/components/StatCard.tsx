@@ -53,13 +53,13 @@ const styles: Record<string, React.CSSProperties> = {
   },
   value: {
     fontSize: '1.5rem',
-    fontWeight: 700,
+    fontWeight: 600,
     color: '#fff',
     lineHeight: 1.2,
   },
   valueMuted: {
     fontSize: '1.5rem',
-    fontWeight: 700,
+    fontWeight: 600,
     color: theme.muted,
     lineHeight: 1.2,
   },

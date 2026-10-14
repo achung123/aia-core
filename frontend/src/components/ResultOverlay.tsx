@@ -52,7 +52,7 @@ function CardSpan({ card }: { card: Card }) {
 
 function PlayerRow({ player, isWinner }: { player: PlayerHandResult; isWinner: boolean }) {
   const rowStyle: React.CSSProperties = isWinner
-    ? { background: '#b8860b', fontWeight: 'bold' }
+    ? { background: '#b8860b', fontWeight: 600 }
     : {};
 
   const hasCards = player.hole_cards && player.hole_cards.length > 0;
