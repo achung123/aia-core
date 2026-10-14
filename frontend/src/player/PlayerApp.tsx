@@ -19,6 +19,7 @@ import { PlayerActionButtons } from './PlayerActionButtons.tsx';
 import { usePolling } from '../hooks/usePolling.ts';
 import { usePlayerStore } from '../stores/playerStore';
 import { theme } from '../theme';
+import { PlayerTableEmbed } from './PlayerTableEmbed.tsx';
 
 export const PLAYER_SESSION_KEY = 'aia-player-session';
 
@@ -98,6 +99,9 @@ function PlayerStatusView({ status, onCapture }: PlayerStatusViewProps) {
       return <p style={{ color: theme.muted }}>Waiting for hand…</p>;
   }
 }
+
+// Environments without WebGL (tests, very old browsers) just skip the table.
+const canRenderWebGL = typeof WebGLRenderingContext !== 'undefined';
 
 export function PlayerApp() {
   const [step, setStep] = useState<PlayerStep>('gameSelect');
@@ -336,6 +340,10 @@ export function PlayerApp() {
           <p data-testid="player-pot" style={styles.potLine}>
             In the pot <span style={styles.potAmount}>${pot.toFixed(2)}</span>
           </p>
+        )}
+
+        {!captureStep && !noActiveHand && handNumber && gameId && canRenderWebGL && (
+          <PlayerTableEmbed gameId={gameId} playerName={playerName} />
         )}
 
         {captureStep === 'camera' && gameId && (
