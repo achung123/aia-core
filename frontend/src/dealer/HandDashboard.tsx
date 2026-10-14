@@ -342,6 +342,7 @@ const styles: Record<string, React.CSSProperties> = {
   heading: {
     fontSize: '1.4rem',
     marginBottom: '1rem',
+    color: '#e2e8f0',
   },
   backButton: {
     marginBottom: '0.75rem',

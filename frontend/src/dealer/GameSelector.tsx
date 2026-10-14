@@ -84,6 +84,7 @@ const styles: Record<string, React.CSSProperties> = {
   heading: {
     fontSize: '1.4rem',
     marginBottom: '0.75rem',
+    color: '#e2e8f0',
   },
   newGameButton: {
     width: '100%',
