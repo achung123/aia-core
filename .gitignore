@@ -35,3 +35,7 @@ start.ps1
 # Nginx Proxy Manager runtime data (generated on first run)
 npm_data/
 npm_letsencrypt/
+
+# SQLite write-ahead log files (created beside the database at runtime)
+*.db-wal
+*.db-shm

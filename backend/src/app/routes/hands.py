@@ -31,6 +31,7 @@ from app.services.betting import (
     validate_action,
 )
 from app.services.equity import analyze_equity, calculate_player_equity
+from app.services.events import game_events
 from app.services.hand_ranking import describe_hand
 from app.services.hand_state import (
     activate_preflop,
@@ -321,6 +322,8 @@ def get_hand_status(
             db.commit()
             db.refresh(state)
             db.refresh(hand)
+            # A read moved the hand on; the other screens need to hear it too
+            game_events.publish(game_id)
         # If phase advanced, actions for the new phase are empty
         if state.phase != old_phase:
             actions_data = get_actions_this_street(db, hand, state.phase)
@@ -610,6 +613,7 @@ def get_hand_state(
         state.updated_at = datetime.now(timezone.utc)
         db.commit()
         db.refresh(state)
+        game_events.publish(game_id)
 
     current_name = _get_player_name_for_seat(db, game_id, state.current_seat)
 

@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import time
 import uuid
 
@@ -7,7 +8,46 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
+from app.services.events import game_events
+
 logger = logging.getLogger('app.middleware')
+
+_GAME_PATH = re.compile(r'^/games/(\d+)(?:/|$)')
+_READ_ONLY_METHODS = {'GET', 'HEAD', 'OPTIONS'}
+
+
+class GameChangeNotifier:
+    """Announce a game change after every successful write to it.
+
+    Hooking this in one place means no endpoint can forget to notify: any
+    non-read request under `/games/{id}` that succeeds wakes every screen
+    watching that game. Written as a plain ASGI middleware so it does not sit
+    in the path of the long-lived event stream's body.
+    """
+
+    def __init__(self, app) -> None:
+        self.app = app
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope['type'] != 'http' or scope['method'] in _READ_ONLY_METHODS:
+            await self.app(scope, receive, send)
+            return
+        match = _GAME_PATH.match(scope['path'])
+        if match is None:
+            await self.app(scope, receive, send)
+            return
+
+        status = 500
+
+        async def capture_status(message) -> None:
+            nonlocal status
+            if message['type'] == 'http.response.start':
+                status = message['status']
+            await send(message)
+
+        await self.app(scope, receive, capture_status)
+        if status < 400:
+            game_events.publish(int(match.group(1)))
 
 
 class RequestIdMiddleware(BaseHTTPMiddleware):
