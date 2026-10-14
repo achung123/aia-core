@@ -119,10 +119,10 @@ export function describeBettingClosed(
       : 'Betting complete — finish the hand';
   }
   const next = !community.flopRecorded ? 'flop' : !community.turnRecorded ? 'turn' : 'river';
-  if (everyoneAllIn) return `🃏 All players are all-in — deal the ${next}`;
+  if (everyoneAllIn) return `All players are all-in — deal the ${next}`;
   if (runningOut) {
     const count = allIn.length;
-    return `🃏 ${count === 1 ? '1 player is' : `${count} players are`} all-in, no more betting — deal the ${next}`;
+    return `${count === 1 ? '1 player is' : `${count} players are`} all-in, no more betting — deal the ${next}`;
   }
   return `Betting complete — deal the ${next}`;
 }
@@ -243,6 +243,16 @@ export function ActiveHandDashboard({
       winning_hand_description: matched?.winning_hand_description ?? null,
     };
   });
+
+  // The one thing the dealer needs to do next, shown as a single docked button.
+  const nextStreet: 'flop' | 'turn' | 'river' | null = !community.flopRecorded
+    ? 'flop'
+    : !community.turnRecorded
+      ? 'turn'
+      : !community.riverRecorded
+        ? 'river'
+        : null;
+  const streetReady = streetComplete !== false && handPhase !== 'awaiting_cards';
 
   return (
     <div style={isWide ? styles.containerWide : styles.container}>
@@ -453,34 +463,41 @@ export function ActiveHandDashboard({
             })}
           </div>
 
-          {canFinish && (
-            <button
-              style={styles.finishButton}
-              onClick={onFinishHand}
-            >
-              Finish Hand
-            </button>
-          )}
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
-        <button
-          data-testid="view-toggle-btn"
-          onClick={() => {
-            setStreetScrub3D(liveStreet);
-            setViewMode('3d');
-            fetchHands(gameId).then(setHands3D).catch(() => {});
-          }}
-          style={{ ...styles.viewToggleButton, flex: 1 }}
-        >
-          3D View
-        </button>
-        {onBack && (
-          <button data-testid="back-btn" onClick={onBack} style={{ ...styles.backButton, flex: 1, marginBottom: 0 }}>
-            Back to Hands
+      <div data-testid="action-dock" style={styles.dock}>
+        {canFinish ? (
+          <button data-testid="primary-action-btn" style={styles.primaryAction} onClick={onFinishHand}>
+            Finish Hand
           </button>
-        )}
+        ) : nextStreet && streetReady ? (
+          <button
+            data-testid="primary-action-btn"
+            style={styles.primaryAction}
+            onClick={() => (onStreetCapture ?? onTileSelect)(nextStreet)}
+          >
+            Deal the {nextStreet}
+          </button>
+        ) : null}
+        <div style={styles.dockSecondary}>
+          <button
+            data-testid="view-toggle-btn"
+            onClick={() => {
+              setStreetScrub3D(liveStreet);
+              setViewMode('3d');
+              fetchHands(gameId).then(setHands3D).catch(() => {});
+            }}
+            style={styles.dockGhost}
+          >
+            3D View
+          </button>
+          {onBack && (
+            <button data-testid="back-btn" onClick={onBack} style={styles.dockGhost}>
+              Back to Hands
+            </button>
+          )}
+        </div>
       </div>
       {onOverride && gameId != null && handNumber != null && (
         <DealerOverrides
@@ -512,6 +529,43 @@ export function ActiveHandDashboard({
 }
 
 const styles: Record<string, React.CSSProperties> = {
+  dock: {
+    position: 'sticky',
+    bottom: '72px',
+    zIndex: 20,
+    marginTop: '0.75rem',
+    padding: '0.75rem 0 0.5rem',
+    background: `linear-gradient(to top, ${theme.bg} 70%, rgba(10, 10, 11, 0))`,
+  },
+  primaryAction: {
+    width: '100%',
+    minHeight: '52px',
+    padding: '0.9rem 1rem',
+    fontSize: '1rem',
+    fontWeight: 600,
+    letterSpacing: '0.04em',
+    border: 'none',
+    borderRadius: '8px',
+    background: theme.accent,
+    color: theme.onAccent,
+    cursor: 'pointer',
+    marginBottom: '0.5rem',
+  },
+  dockSecondary: {
+    display: 'flex',
+    gap: '0.5rem',
+  },
+  dockGhost: {
+    flex: 1,
+    minHeight: '44px',
+    padding: '0.5rem 0.75rem',
+    fontSize: '0.85rem',
+    border: `1px solid ${theme.border}`,
+    borderRadius: '8px',
+    background: 'transparent',
+    color: theme.muted,
+    cursor: 'pointer',
+  },
   container: {
     maxWidth: '480px',
     margin: '0 auto',

@@ -319,18 +319,18 @@ export function PlayerApp() {
     const stackColor = runningTotal === null ? theme.muted : runningTotal > 0 ? '#4ade80' : runningTotal < 0 ? '#f87171' : theme.text;
 
     return (
-      <div style={styles.container}>
-        <p style={{ color: theme.muted, margin: '0 0 0.25rem', fontSize: '0.85rem' }}>Game #{gameId}</p>
-        <h2 style={styles.playerName}>{playerName}</h2>
-        {runningTotal !== null && (
-          <p
-            data-testid="player-stack"
-            style={{ color: stackColor, fontWeight: 600, fontSize: '1.1rem', margin: '0 0 0.5rem' }}
-          >
-            Stack: {runningTotal < 0 ? `-$${Math.abs(runningTotal).toFixed(2)}` : `$${runningTotal.toFixed(2)}`}
-          </p>
-        )}
-        {handNumber && <p style={{ color: theme.faint, margin: '0 0 0.75rem', fontSize: '0.85rem' }}>Hand #{handNumber}</p>}
+      <div style={{ ...styles.container, paddingBottom: playerStatus === 'joined' && isMyTurn ? '13rem' : styles.container.padding }}>
+        <p style={styles.eyebrow}>
+          Game #{gameId}{handNumber ? ` · Hand #${handNumber}` : ''}
+        </p>
+        <div style={styles.headerRow}>
+          <h2 style={styles.playerName}>{playerName}</h2>
+          {runningTotal !== null && (
+            <p data-testid="player-stack" style={{ ...styles.stack, color: stackColor }}>
+              Stack: {runningTotal < 0 ? `-$${Math.abs(runningTotal).toFixed(2)}` : `$${runningTotal.toFixed(2)}`}
+            </p>
+          )}
+        </div>
 
         {captureStep === 'camera' && gameId && (
           <CameraCapture
@@ -367,6 +367,7 @@ export function PlayerApp() {
               onCapture={handleStartCapture}
             />
             {playerStatus === 'joined' && handNumber && isMyTurn && (
+              <div data-testid="action-dock" style={styles.dock}>
               <PlayerActionButtons
                 expectedActionIndex={actionIndex}
                 gameId={gameId!}
@@ -384,6 +385,7 @@ export function PlayerApp() {
                   triggerPlayerPoll();
                 }}
               />
+              </div>
             )}
             {playerStatus === 'joined' && handNumber && !isMyTurn && (
               <p data-testid="waiting-turn" style={{ color: theme.warningText }}>Waiting for your turn…</p>
@@ -405,17 +407,16 @@ export function PlayerApp() {
           </>
         )}
 
-        <button
-          data-testid="table-view-btn"
-          style={styles.tableViewBtn}
-          onClick={() => {
-            window.location.hash = `#/player/table?game=${gameId}&player=${encodeURIComponent(playerName)}`;
-          }}
-        >
-          Table View
-        </button>
-
-        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+        <div style={styles.secondaryRow}>
+          <button
+            data-testid="table-view-btn"
+            style={styles.tableViewBtn}
+            onClick={() => {
+              window.location.hash = `#/player/table?game=${gameId}&player=${encodeURIComponent(playerName)}`;
+            }}
+          >
+            Table View
+          </button>
           <button
             data-testid="leave-game-btn"
             style={styles.changeBtn}
@@ -474,9 +475,10 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: '0.75rem',
   },
   playerName: {
+    fontFamily: 'var(--heading)',
     fontSize: '1.6rem',
-    fontWeight: 600,
-    margin: '0 0 0.25rem',
+    fontWeight: 500,
+    margin: 0,
     color: theme.text,
   },
   error: {
@@ -543,16 +545,54 @@ const styles: Record<string, CSSProperties> = {
     cursor: 'pointer',
   },
   tableViewBtn: {
-    marginTop: '1rem',
-    padding: '0.75rem 1.5rem',
-    minHeight: '48px',
-    width: '100%',
-    fontSize: '1rem',
+    flex: 1,
+    padding: '0.6rem 1rem',
+    minHeight: '44px',
+    fontSize: '0.9rem',
     fontWeight: 600,
-    border: `2px solid ${theme.accent}`,
+    border: `1px solid ${theme.accentBorder}`,
     borderRadius: '8px',
-    background: theme.accentTint,
+    background: 'transparent',
     color: theme.accentText,
     cursor: 'pointer',
+  },
+  secondaryRow: {
+    display: 'flex',
+    gap: '0.5rem',
+    marginTop: '1.5rem',
+  },
+  eyebrow: {
+    color: theme.muted,
+    margin: '0 0 0.25rem',
+    fontSize: '0.75rem',
+    letterSpacing: '0.12em',
+    textTransform: 'uppercase',
+  },
+  headerRow: {
+    display: 'flex',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: '0.75rem',
+    marginBottom: '1rem',
+    textAlign: 'left',
+  },
+  stack: {
+    fontWeight: 600,
+    fontSize: '1rem',
+    margin: 0,
+    fontVariantNumeric: 'tabular-nums',
+  },
+  dock: {
+    position: 'fixed',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 50,
+    padding: '0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom))',
+    background: theme.surface,
+    borderTop: `1px solid ${theme.border}`,
+    boxShadow: '0 -12px 32px rgba(0, 0, 0, 0.5)',
+    maxHeight: '75vh',
+    overflowY: 'auto',
   },
 };
