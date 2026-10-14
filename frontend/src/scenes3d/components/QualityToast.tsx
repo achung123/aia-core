@@ -10,7 +10,7 @@
 // (T-028 AC-3) sourced from the store, not hard-coded here — keeps the
 // hook as single source of truth for the message.
 
-import type { CSSProperties } from 'react';
+import { useEffect, type CSSProperties } from 'react';
 
 import { useTableStore } from '../state/tableStore';
 
@@ -18,9 +18,9 @@ const toastStyle: CSSProperties = {
   position: 'fixed',
   // Top of the screen: the bottom is where the replay controls live
   top: 68,
-  maxWidth: 'calc(100vw - 24px)',
-  left: '50%',
-  transform: 'translateX(-50%)',
+  // Tucked into the corner: centred it sat on top of the table
+  right: 12,
+  maxWidth: 'min(300px, calc(100vw - 24px))',
   zIndex: 1000,
   display: 'flex',
   alignItems: 'center',
@@ -33,6 +33,9 @@ const toastStyle: CSSProperties = {
   boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
   pointerEvents: 'auto',
 };
+
+/** How long the notice stays up before dismissing itself. */
+export const TOAST_VISIBLE_MS = 6000;
 
 // T-029 AC-2 — 44×44pt minimum tap target (iOS HIG / Material).
 const MIN_TAP_TARGET_PX = 44;
@@ -63,6 +66,13 @@ export interface QualityToastProps {
 export function QualityToast({ className }: QualityToastProps = {}) {
   const tierToast = useTableStore((s) => s.tierToast);
   const dismiss = useTableStore((s) => s.dismissTierToast);
+
+  // A notice, not a prompt: it clears itself.
+  useEffect(() => {
+    if (tierToast === null) return;
+    const timer = setTimeout(dismiss, TOAST_VISIBLE_MS);
+    return () => clearTimeout(timer);
+  }, [tierToast, dismiss]);
 
   if (tierToast === null) return null;
 

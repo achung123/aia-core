@@ -10,19 +10,18 @@
 
 import * as THREE from 'three';
 
-/** Label scale per world unit of camera distance, and its limits. */
-export const LABEL_SCALE_PER_DISTANCE = 0.12;
-export const LABEL_MIN_SCALE = 1;
-export const LABEL_MAX_SCALE = 2.4;
-/** World units a label moves away from the table centre per unit of scale. */
-export const LABEL_OUTWARD_SHIFT = 0.3;
+import {
+  LABEL_OUTWARD_SHIFT,
+  computeLabelScale,
+} from './labelScale';
 
-export function computeLabelScale(distance: number): number {
-  return Math.min(
-    LABEL_MAX_SCALE,
-    Math.max(LABEL_MIN_SCALE, distance * LABEL_SCALE_PER_DISTANCE),
-  );
-}
+export {
+  LABEL_MAX_SCALE,
+  LABEL_MIN_SCALE,
+  LABEL_OUTWARD_SHIFT,
+  LABEL_SCALE_PER_DISTANCE,
+  computeLabelScale,
+} from './labelScale';
 
 const up = new THREE.Vector3();
 

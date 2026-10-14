@@ -191,15 +191,15 @@ export function PlaybackView() {
     refetchInterval: isActive ? ACTIVE_POLL_INTERVAL_MS : false,
   });
 
-  // A live game refreshes the moment something happens; the interval above
-  // is only the fallback.
-  useGameEvents(isActive ? gameId : null, () => {
-    void handsQuery.refetch();
-    void gameQuery.refetch();
-  });
-
   const hands = handsQuery.data ?? EMPTY_HANDS;
-  const selectedActionHand = hands.at(-1) ?? null;
+
+  // Bets and actions for the hand being viewed (not just the newest), so
+  // scrubbing back through a session shows real chip stacks and badges.
+  const viewedIndex = useTableStore((state) => state.replay.handIndex);
+  const selectedActionHand =
+    hands.length > 0 ? hands[Math.min(Math.max(viewedIndex, 0), hands.length - 1)] : null;
+  const viewingNewestHand =
+    selectedActionHand !== null && selectedActionHand === hands[hands.length - 1];
   const selectedActionQuery = useQuery({
     queryKey: ['hand-actions', gameId, selectedActionHand?.hand_number ?? null],
     queryFn: () => fetchHandActions(gameId as number, selectedActionHand!.hand_number),
@@ -207,13 +207,26 @@ export function PlaybackView() {
       gameId !== null &&
       !Number.isNaN(gameId) &&
       selectedActionHand !== null,
-    staleTime: isActive ? 0 : Infinity,
+    // A finished hand's actions never change; the newest hand of a live
+    // game is refreshed by the change signal below.
+    staleTime: isActive && viewingNewestHand ? 0 : Infinity,
     retry: 1,
   });
   const actionsByHandId = useMemo(() => {
     if (!selectedActionHand || !selectedActionQuery.data) return {};
     return { [selectedActionHand.hand_id]: selectedActionQuery.data };
   }, [selectedActionHand, selectedActionQuery.data]);
+
+  // A live game refreshes the moment something happens; the interval above
+  // is only the fallback.
+  const { refetch: refetchHands } = handsQuery;
+  const { refetch: refetchGame } = gameQuery;
+  const { refetch: refetchActions } = selectedActionQuery;
+  useGameEvents(isActive ? gameId : null, () => {
+    void refetchHands();
+    void refetchGame();
+    if (viewingNewestHand) void refetchActions();
+  });
 
   const handleBack = useCallback(() => navigate('/data'), [navigate]);
   const handleSelectGame = useCallback(
@@ -277,6 +290,7 @@ export function PlaybackView() {
           actionsByHandId={actionsByHandId}
           initialHandIndex={hands.length - 1}
           initialSpeed={1}
+          live={isActive}
           viewer={SPECTATOR_VIEWER}
           style={shellStyle}
         >

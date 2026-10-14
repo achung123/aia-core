@@ -24,6 +24,7 @@
 import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Text } from '@react-three/drei';
+import { LABEL_FONT_URL } from './labelFont';
 
 import {
   BILLBOARD_EPSILON,
@@ -277,6 +278,7 @@ export function ActionBadge({
         />
       </mesh>
       <Text
+        font={LABEL_FONT_URL}
         name="action-badge-text"
         position={[0, 0, 0.001]}
         fontSize={ACTION_BADGE_FONT_SIZE}

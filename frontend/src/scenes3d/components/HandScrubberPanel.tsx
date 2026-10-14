@@ -63,6 +63,11 @@ export interface HandScrubberPanelProps {
    * would fire in parallel and double-tick the scrubber.
    */
   disableAutoAdvance?: boolean;
+  /**
+   * Show the play/pause button. The session replay shell has its own, so it
+   * turns this one off rather than showing two buttons for one control.
+   */
+  showPlayToggle?: boolean;
   hidden?: boolean;
   className?: string;
   style?: CSSProperties;
@@ -126,6 +131,7 @@ export function HandScrubberPanel({
   onStreetIndexChange,
   onPlayingChange,
   disableAutoAdvance = false,
+  showPlayToggle = true,
   hidden,
   className,
   style,
@@ -225,23 +231,25 @@ export function HandScrubberPanel({
         ...style,
       }}
     >
-      <button
-        type="button"
-        aria-pressed={isPlaying}
-        aria-label={isPlaying ? 'Pause' : 'Play'}
-        data-testid="scrubber-play-toggle"
-        data-playing={isPlaying ? 'true' : 'false'}
-        onClick={() => setPlaying(!isPlaying)}
-        style={{
-          minWidth: MIN_TAP_TARGET_PX,
-          minHeight: MIN_TAP_TARGET_PX,
-          cursor: 'pointer',
-          fontWeight: 600,
-          ...CONTROL_BUTTON_STYLE,
-        }}
-      >
-        {isPlaying ? '❚❚' : '▶'}
-      </button>
+      {showPlayToggle && (
+        <button
+          type="button"
+          aria-pressed={isPlaying}
+          aria-label={isPlaying ? 'Pause' : 'Play'}
+          data-testid="scrubber-play-toggle"
+          data-playing={isPlaying ? 'true' : 'false'}
+          onClick={() => setPlaying(!isPlaying)}
+          style={{
+            minWidth: MIN_TAP_TARGET_PX,
+            minHeight: MIN_TAP_TARGET_PX,
+            cursor: 'pointer',
+            fontWeight: 600,
+            ...CONTROL_BUTTON_STYLE,
+          }}
+        >
+          {isPlaying ? '❚❚' : '▶'}
+        </button>
+      )}
       <div
         role="group"
         aria-label="Street"

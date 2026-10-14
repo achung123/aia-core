@@ -13,6 +13,7 @@
 
 import type { Vec3 } from './tweens';
 import { easeOutCubic, lerpVec3 } from './tweens';
+import { computeLabelScale } from '../components/labelScale';
 import {
   SEAT_RING_OFFSET,
   TABLE_RADIUS_X,
@@ -91,20 +92,24 @@ export const FIT_FILL = 0.94;
 
 const FIT_SAMPLES = 24;
 
-function fitSamplePoints(): Vec3[] {
-  const rx = TABLE_RADIUS_X + SEAT_RING_OFFSET + FIT_OUTER_MARGIN;
-  const rz = TABLE_RADIUS_Z + SEAT_RING_OFFSET + FIT_OUTER_MARGIN;
+/**
+ * Points the framed area must contain. `scale` is the size labels will be
+ * drawn at: they sit outside the seat ring and grow with distance, so the
+ * margin has to grow with them or the outer names are cut off.
+ */
+function fitSamplePoints(scale: number): Vec3[] {
+  const margin = FIT_OUTER_MARGIN * scale;
+  const rx = TABLE_RADIUS_X + SEAT_RING_OFFSET + margin;
+  const rz = TABLE_RADIUS_Z + SEAT_RING_OFFSET + margin;
   const points: Vec3[] = [];
   for (let i = 0; i < FIT_SAMPLES; i++) {
     const angle = (i / FIT_SAMPLES) * Math.PI * 2;
     const x = Math.cos(angle) * rx;
     const z = Math.sin(angle) * rz;
-    points.push([x, 0, z], [x, FIT_TOP_HEIGHT, z]);
+    points.push([x, 0, z], [x, FIT_TOP_HEIGHT * scale, z]);
   }
   return points;
 }
-
-const FIT_POINTS = fitSamplePoints();
 
 /**
  * Move the camera along its viewing direction so the table fills a viewport
@@ -112,12 +117,43 @@ const FIT_POINTS = fitSamplePoints();
  * unchanged; only the distance is. Returns the pose untouched when the
  * aspect is unknown or degenerate.
  */
+/** Below this width/height ratio the screen is "portrait" for fitting. */
+export const PORTRAIT_ASPECT = 0.85;
+
+/** Looking (nearly) straight down at the table. */
+function isOverheadPose(pose: CameraPresetPose): boolean {
+  const [px, py, pz] = pose.position;
+  const [tx, ty, tz] = pose.target;
+  return py - ty > 6 && Math.hypot(px - tx, pz - tz) < 1;
+}
+
+/**
+ * The table is a wide oval, so on a tall phone screen it is limited by its
+ * width and leaves most of the canvas empty. Viewed from straight above, the
+ * camera can simply be turned a quarter so the long side runs up the screen.
+ * Cards and labels follow the camera, so nothing else needs to change.
+ */
+export function orientPoseForAspect(
+  pose: CameraPresetPose,
+  aspect: number | null | undefined,
+): CameraPresetPose {
+  if (!aspect || !Number.isFinite(aspect) || aspect >= PORTRAIT_ASPECT) return pose;
+  if (!isOverheadPose(pose)) return pose;
+  const [px, py, pz] = pose.position;
+  const [tx, , tz] = pose.target;
+  return {
+    position: [tx + (pz - tz), py, tz - (px - tx)],
+    target: pose.target,
+  };
+}
+
 export function fitPoseToAspect(
   pose: CameraPresetPose,
   aspect: number | null | undefined,
   fovDegrees: number,
 ): CameraPresetPose {
   if (!aspect || !Number.isFinite(aspect) || aspect <= 0) return pose;
+  pose = orientPoseForAspect(pose, aspect);
   const [px, py, pz] = pose.position;
   const [tx, ty, tz] = pose.target;
   let fx = tx - px;
@@ -134,7 +170,10 @@ export function fitPoseToAspect(
   let rx = -fz;
   let rz = fx;
   const rLength = Math.hypot(rx, rz);
-  if (rLength < 1e-3) {
+  // Only a view along the vertical axis exactly has no horizontal
+  // direction; the overhead presets keep a small offset on purpose, and
+  // that offset is what says which way is up on screen.
+  if (rLength < 1e-9) {
     rx = 1;
     rz = 0;
   } else {
@@ -149,15 +188,26 @@ export function fitPoseToAspect(
   const tanV = Math.tan((fovDegrees * Math.PI) / 360) * FIT_FILL;
   const tanH = tanV * aspect;
 
+  // The distance decides the label size and the label size decides the
+  // distance; a few rounds settle it (the scale is capped, so it converges).
   let distance = 0;
-  for (const [x, y, z] of FIT_POINTS) {
-    const dx = x - tx;
-    const dy = y - ty;
-    const dz = z - tz;
-    const along = dx * fx + dy * fy + dz * fz;
-    const across = Math.abs(dx * rx + dz * rz);
-    const up = Math.abs(dx * ux + dy * uy + dz * uz);
-    distance = Math.max(distance, across / tanH - along, up / tanV - along);
+  for (let round = 0; round < 4; round++) {
+    const points = fitSamplePoints(computeLabelScale(distance));
+    let needed = 0;
+    for (const [x, y, z] of points) {
+      const dx = x - tx;
+      const dy = y - ty;
+      const dz = z - tz;
+      const along = dx * fx + dy * fy + dz * fz;
+      const across = Math.abs(dx * rx + dz * rz);
+      const up = Math.abs(dx * ux + dy * uy + dz * uz);
+      needed = Math.max(needed, across / tanH - along, up / tanV - along);
+    }
+    if (Math.abs(needed - distance) < 0.01) {
+      distance = needed;
+      break;
+    }
+    distance = needed;
   }
   return {
     position: [tx - fx * distance, ty - fy * distance, tz - fz * distance],

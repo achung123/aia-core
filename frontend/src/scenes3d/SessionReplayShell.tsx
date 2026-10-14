@@ -23,7 +23,12 @@ import {
 import type { GameSessionResponse, HandResponse } from '../api/types/game';
 import type { HandActionResponse } from '../api/types/dealer';
 import { SessionScrubber } from '../components/SessionScrubber';
-import { ACTIVE_CONTROL_BUTTON_STYLE, CONTROL_BUTTON_STYLE, HandScrubberPanel } from './components/HandScrubberPanel';
+import {
+  ACTIVE_CONTROL_BUTTON_STYLE,
+  CONTROL_BUTTON_STYLE,
+  HandScrubberPanel,
+  streetIndexFromOutcomePhase,
+} from './components/HandScrubberPanel';
 import { handsToTableState } from './data/handsToTableState';
 import {
   REPLAY_SPEEDS,
@@ -94,6 +99,10 @@ export interface SessionReplayContextValue {
   streetIndex: StreetIdx;
   speed: ReplaySpeed;
   isPlaying: boolean;
+  /** The game is still being played (new hands and cards can arrive). */
+  live: boolean;
+  /** Viewing the newest hand at the newest street, and following it. */
+  atLiveEdge: boolean;
 }
 
 const SessionReplayContext = createContext<SessionReplayContextValue | null>(
@@ -137,6 +146,13 @@ export interface SessionReplayShellProps {
   actionsByHandId?: Record<number, HandActionResponse[]>;
   initialHandIndex?: number;
   initialSpeed?: ReplaySpeed;
+  /**
+   * The game is in progress. The replay then follows it: it opens on the
+   * newest street of the newest hand, and while the viewer is sitting at
+   * that edge it moves along as new cards and hands arrive. Scrubbing away
+   * stops the following until the viewer jumps back to live.
+   */
+  live?: boolean;
   /** Viewer policy exposed to children via context. Default spectator. */
   viewer?: ViewerContext;
   className?: string;
@@ -157,6 +173,7 @@ export function SessionReplayShell({
   actionsByHandId,
   initialHandIndex = 0,
   initialSpeed = 1,
+  live = false,
   viewer = DEFAULT_VIEWER,
   className,
   style,
@@ -183,12 +200,51 @@ export function SessionReplayShell({
     const max = Math.max(0, hands.length - 1);
     const clamped = Math.min(Math.max(0, initialHandIndex), max);
     setReplayHandIndex(clamped);
-    setReplayStreetIndex(0);
+    // A live game opens at its newest street so the cards already dealt
+    // are on the table; a finished one replays from the start.
+    const openingStreet =
+      live && clamped === max && hands[clamped]
+        ? streetIndexFromOutcomePhase(outcomePhaseForResolvedHand(hands[clamped]))
+        : 0;
+    setReplayStreetIndex(openingStreet);
     setReplaySpeed(initialSpeed);
     setReplayPlaying(false);
     // initialHandIndex / initialSpeed / hands.length are read once on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // --- Follow a live game --------------------------------------------------
+  // The newest hand and how far it has got. When either moves and the viewer
+  // was sitting exactly at the previous edge, carry them to the new one.
+  // A viewer who scrubbed away is left alone.
+  const lastIndex = hands.length - 1;
+  const lastHand: HandResponse | null = hands[lastIndex] ?? null;
+  const latestStreet: StreetIdx = lastHand
+    ? streetIndexFromOutcomePhase(outcomePhaseForResolvedHand(lastHand))
+    : 0;
+  const edgeRef = useRef<{ last: number; street: StreetIdx } | null>(null);
+  useEffect(() => {
+    const previous = edgeRef.current;
+    edgeRef.current = { last: lastIndex, street: latestStreet };
+    if (!live || previous === null || lastIndex < 0) return;
+    if (previous.last === lastIndex && previous.street === latestStreet) return;
+    const state = useTableStore.getState().replay;
+    const wasAtEdge =
+      state.handIndex === previous.last && state.streetIndex === previous.street;
+    if (!wasAtEdge) return;
+    setReplayHandIndex(lastIndex);
+    setReplayStreetIndex(latestStreet);
+    // Only a change in what has arrived should move the viewer.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [live, lastIndex, latestStreet]);
+
+  const atLiveEdge = live && handIndex === lastIndex && streetIndex === latestStreet;
+  const jumpToLive = () => {
+    if (lastIndex < 0) return;
+    setReplayPlaying(false);
+    setReplayHandIndex(lastIndex);
+    setReplayStreetIndex(latestStreet);
+  };
 
   // --- Dev-only off-route warning (AC 6) ---------------------------------
   useEffect(() => {
@@ -290,6 +346,8 @@ export function SessionReplayShell({
       streetIndex,
       speed,
       isPlaying,
+      live,
+      atLiveEdge,
     }),
     [
       tableState,
@@ -301,6 +359,8 @@ export function SessionReplayShell({
       streetIndex,
       speed,
       isPlaying,
+      live,
+      atLiveEdge,
     ],
   );
 
@@ -323,18 +383,27 @@ export function SessionReplayShell({
       <SessionReplayContext.Provider value={contextValue}>
         {children}
       </SessionReplayContext.Provider>
+      <div
+        data-testid="session-hand-summary"
+        style={summaryStyle}
+        aria-live="polite"
+      >
+        <span style={summaryHandStyle}>Hand {currentHand?.hand_number ?? '—'}</span>
+        <span>{summarizeHand(currentHand)}</span>
+      </div>
       <SessionScrubber
         handCount={Math.max(1, hands.length)}
         currentHand={Math.min(handIndex + 1, Math.max(1, hands.length))}
         onChange={onScrubHand}
       />
-      {/* Per-hand street scrubber — binds to the same `replay` slice
-          as this shell so play/pause + speed here and in HandScrubberPanel
-          stay in lockstep. Clamps reachable streets to the current hand's
-          outcome (e.g. folded preflop → only preflop reachable). */}
+      {/* Per-hand street scrubber — binds to the same `replay` slice as this
+          shell. Clamps reachable streets to how far the current hand got
+          (folded preflop → only preflop reachable). Play/pause lives in the
+          controls row below, so this one is hidden. */}
       <HandScrubberPanel
         bindToReplay
         disableAutoAdvance
+        showPlayToggle={false}
         outcomeStreet={outcomePhase}
         style={streetScrubberStyle}
       />
@@ -382,6 +451,22 @@ export function SessionReplayShell({
             );
           })}
         </div>
+        {live && (
+          atLiveEdge ? (
+            <span data-testid="session-live-indicator" style={liveOnStyle}>
+              <span aria-hidden style={liveDotStyle} /> LIVE
+            </span>
+          ) : (
+            <button
+              type="button"
+              data-testid="session-jump-live"
+              onClick={jumpToLive}
+              style={liveJumpStyle}
+            >
+              Jump to live
+            </button>
+          )
+        )}
       </div>
     </section>
   );
@@ -394,11 +479,79 @@ export function SessionReplayShell({
 
 const MIN_TAP_TARGET_PX = 44;
 
+/** One line describing a hand: its pot and who took it. */
+export function summarizeHand(hand: HandResponse | null): string {
+  if (!hand) return 'No hand recorded';
+  const winners = hand.player_hands.filter((ph) => ph.result === 'won');
+  const pot = hand.pot > 0 ? `Pot $${hand.pot.toFixed(2)}` : null;
+  const parts: string[] = [];
+  if (pot) parts.push(pot);
+  if (winners.length > 0) {
+    const names = winners.map((ph) => ph.player_name).join(', ');
+    const how = winners.length === 1 ? winners[0].winning_hand_description : null;
+    parts.push(`${names} won${how ? ` with ${how}` : ''}`);
+  } else if (hand.player_hands.some((ph) => ph.result === 'folded')) {
+    parts.push('Folded round');
+  } else {
+    parts.push('In progress');
+  }
+  return parts.join(' · ');
+}
+
+const summaryStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'baseline',
+  gap: 10,
+  padding: '8px 12px 0',
+  background: '#0f0f1a',
+  color: '#c7d2fe',
+  fontSize: 'clamp(12px, 3.2vw, 14px)',
+  minHeight: 22,
+  overflow: 'hidden',
+  whiteSpace: 'nowrap',
+  textOverflow: 'ellipsis',
+};
+
+const summaryHandStyle: CSSProperties = { fontWeight: 700, color: '#f8fafc' };
+
+const liveOnStyle: CSSProperties = {
+  marginLeft: 'auto',
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
+  padding: '0 12px',
+  minHeight: MIN_TAP_TARGET_PX,
+  color: '#86efac',
+  fontWeight: 700,
+  fontSize: 13,
+  letterSpacing: '0.08em',
+};
+
+const liveDotStyle: CSSProperties = {
+  width: 8,
+  height: 8,
+  borderRadius: '50%',
+  background: '#22c55e',
+  boxShadow: '0 0 0 3px rgba(34,197,94,0.25)',
+};
+
+const liveJumpStyle: CSSProperties = {
+  marginLeft: 'auto',
+  minHeight: MIN_TAP_TARGET_PX,
+  padding: '0 14px',
+  cursor: 'pointer',
+  fontWeight: 700,
+  ...CONTROL_BUTTON_STYLE,
+  background: '#14532d',
+  borderColor: '#22c55e',
+  color: '#dcfce7',
+};
+
 const controlsStyle: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: 8,
-  padding: 8,
+  padding: '4px 8px 8px',
   background: '#0f0f1a',
 };
 
@@ -413,6 +566,7 @@ const playBtnStyle: CSSProperties = {
 const speedGroupStyle: CSSProperties = {
   display: 'flex',
   gap: 4,
+  minWidth: 0,
 };
 const streetScrubberStyle: CSSProperties = {
   background: '#0f0f1a',

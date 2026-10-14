@@ -20,6 +20,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Text } from '@react-three/drei';
+import { LABEL_FONT_URL } from './labelFont';
 
 import { seatAnchorLocalToWorld } from './tableLayout';
 import { useReducedMotion } from '../state/useReducedMotion';
@@ -369,6 +370,7 @@ export function Nameplate({
         draws on top of the card background.
       */}
       <Text
+        font={LABEL_FONT_URL}
         ref={textRef}
         name="nameplate-text"
         position={[0, 0, 0.001]}

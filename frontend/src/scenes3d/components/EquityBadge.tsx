@@ -18,6 +18,7 @@
 import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Text } from '@react-three/drei';
+import { LABEL_FONT_URL } from './labelFont';
 
 import { seatAnchorLocalToWorld } from './tableLayout';
 import {
@@ -160,6 +161,7 @@ export function EquityBadge({ seatIndex, seatCount, equity }: EquityBadgeProps) 
         <meshBasicMaterial color="#0f172a" transparent opacity={0.7} />
       </mesh>
       <Text
+        font={LABEL_FONT_URL}
         name="equity-badge-text"
         position={[0, 0, 0.001]}
         fontSize={EQUITY_BADGE_FONT_SIZE}
