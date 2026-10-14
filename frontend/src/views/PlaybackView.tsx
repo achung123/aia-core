@@ -24,6 +24,7 @@ import { useTableStore } from '../scenes3d/state/tableStore.ts';
 import { useSessionReplayContext } from '../scenes3d/SessionReplayShell.tsx';
 import type { ViewerContext } from '../scenes3d/types';
 import { playbackLayoutStyles as mobileStyles, gameSelectorStyles as selectorStyles } from '../styles/playbackStyles';
+import { useGameEvents } from '../hooks/useGameEvents.ts';
 
 // Stable reference — `<PokerTable>` memoizes on `viewer` identity.
 const SPECTATOR_VIEWER: ViewerContext = { policy: 'spectator' };
@@ -188,6 +189,13 @@ export function PlaybackView() {
     queryFn: () => fetchHands(gameId as number),
     enabled: gameId !== null && !Number.isNaN(gameId),
     refetchInterval: isActive ? ACTIVE_POLL_INTERVAL_MS : false,
+  });
+
+  // A live game refreshes the moment something happens; the interval above
+  // is only the fallback.
+  useGameEvents(isActive ? gameId : null, () => {
+    void handsQuery.refetch();
+    void gameQuery.refetch();
   });
 
   const hands = handsQuery.data ?? EMPTY_HANDS;

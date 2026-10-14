@@ -75,6 +75,7 @@ export function DealerApp() {
   const { isReconnecting: dealerReconnecting, triggerNow: triggerDealerPoll } = usePolling({
     intervalMs: 3000,
     enabled: currentStep === 'activeHand' && !!gameId && !!currentHandId,
+    gameId,
     fetchFn: (signal) =>
       fetchHandStatus(gameId!, currentHandId!, { signal })
         .then((data) => {
@@ -102,27 +103,35 @@ export function DealerApp() {
           setActionIndex(data.action_index ?? 0);
           setPlayerChips(Object.fromEntries((data.players || []).map((player) => [player.name, player.current_chips])));
 
-          const joinedPlayers = (data.players || []).filter(
-            (player) => player.participation_status === 'joined' || player.participation_status === 'handed_back',
-          );
-          const needsCards = joinedPlayers.some((joinedPlayer) => {
-            const localPlayer = players.find((existingPlayer) => existingPlayer.name === joinedPlayer.name);
-            return localPlayer && !localPlayer.card1 && !localPlayer.card2;
-          });
-
-          if (needsCards) {
-            fetchHand(gameId!, currentHandId!)
-              .then((handData) => {
-                if (signal.aborted) return;
-                (handData.player_hands || []).forEach((playerHand) => {
-                  const localPlayer = players.find((existingPlayer) => existingPlayer.name === playerHand.player_name);
-                  if (localPlayer && !localPlayer.card1 && !localPlayer.card2 && playerHand.card_1 && playerHand.card_2) {
-                    setPlayerCards({ name: playerHand.player_name, card1: playerHand.card_1, card2: playerHand.card_2 });
-                  }
-                });
-              })
-              .catch(() => { /* ignore card fetch errors */ });
-          }
+          // The server is the source of truth for cards. Re-read the hand on
+          // every refresh and adopt anything this screen does not have or
+          // has differently — cards entered on a player's phone, a board
+          // corrected from another device, or state lost to a reload.
+          return fetchHand(gameId!, currentHandId!)
+            .then((handData) => {
+              if (signal.aborted) return;
+              const same = (a: string | null | undefined, b: string | null | undefined) =>
+                (a ?? '').toUpperCase() === (b ?? '').toUpperCase();
+              (handData.player_hands || []).forEach((playerHand) => {
+                if (!playerHand.card_1 || !playerHand.card_2) return;
+                const localPlayer = players.find((existingPlayer) => existingPlayer.name === playerHand.player_name);
+                if (!localPlayer) return;
+                if (!same(localPlayer.card1, playerHand.card_1) || !same(localPlayer.card2, playerHand.card_2)) {
+                  setPlayerCards({ name: playerHand.player_name, card1: playerHand.card_1, card2: playerHand.card_2 });
+                }
+              });
+              if (
+                handData.flop_1 && handData.flop_2 && handData.flop_3
+                && (!same(community.flop1, handData.flop_1)
+                  || !same(community.flop2, handData.flop_2)
+                  || !same(community.flop3, handData.flop_3))
+              ) {
+                setFlopCards({ flop1: handData.flop_1, flop2: handData.flop_2, flop3: handData.flop_3 });
+              }
+              if (handData.turn && !same(community.turn, handData.turn)) setTurnCard(handData.turn);
+              if (handData.river && !same(community.river, handData.river)) setRiverCard(handData.river);
+            })
+            .catch(() => { /* cards catch up on the next refresh */ });
         }),
   });
 

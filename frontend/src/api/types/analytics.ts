@@ -48,12 +48,19 @@ export interface LeaderboardEntry {
 
 export interface PlayerEquityEntry {
   player_name: string;
+  /** Expected share of the pot, ties split. */
   equity: number;
+  /** Chance of winning outright / of splitting. */
+  win?: number | null;
+  tie?: number | null;
   winning_hand_description: string | null;
 }
 
 export interface EquityResponse {
   equities: PlayerEquityEntry[];
+  /** 'exact' from the flop onward; 'monte_carlo' preflop. */
+  method?: 'exact' | 'monte_carlo' | null;
+  samples?: number | null;
 }
 
 // --- Trends ---

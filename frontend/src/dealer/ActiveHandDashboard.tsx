@@ -7,6 +7,7 @@ import { StreetScrubber, type Street } from '../mobile/StreetScrubber.tsx';
 import type { HandResponse, PlayerEquityEntry } from '../api/types';
 import { PlayingCard } from '../components/PlayingCard.tsx';
 import { DealerOverrides } from './DealerOverrides.tsx';
+import { useGameEvents } from '../hooks/useGameEvents.ts';
 
 const BOARD_STREET = ['flop', 'flop', 'flop', 'turn', 'river'] as const;
 
@@ -137,6 +138,12 @@ export function ActiveHandDashboard({
     return () => mql.removeEventListener('change', handler);
   }, []);
 
+  // Equity depends on who has folded and which cards are known, so it is
+  // recomputed whenever the game changes — not only when this screen's own
+  // copy of the board does.
+  const [equityRefresh, setEquityRefresh] = useState(0);
+  useGameEvents(viewMode === '3d' ? gameId : null, () => setEquityRefresh((n) => n + 1));
+
   // Fetch equity when in 3D view mode and we have a hand
   useEffect(() => {
     if (viewMode !== '3d' || !gameId || !handNumber) {
@@ -146,7 +153,7 @@ export function ActiveHandDashboard({
     fetchEquity(gameId, handNumber, equityStreetFromScrubber(streetScrub3D))
       .then((res) => setEquityEntries(res.equities))
       .catch(() => setEquityEntries([]));
-  }, [viewMode, gameId, handNumber, community, streetScrub3D]);
+  }, [viewMode, gameId, handNumber, community, streetScrub3D, equityRefresh]);
 
   const boardCards = [
     community.flop1,

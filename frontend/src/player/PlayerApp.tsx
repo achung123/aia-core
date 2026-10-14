@@ -249,6 +249,7 @@ export function PlayerApp() {
   const { isReconnecting: playerReconnecting, triggerNow: triggerPlayerPoll } = usePolling({
     intervalMs: 5000,
     enabled: step === 'playing' && !!gameId && !!playerName,
+    gameId,
     fetchFn: (signal) =>
       fetchLatestHand(gameId!, { signal })
         .then(latest => {

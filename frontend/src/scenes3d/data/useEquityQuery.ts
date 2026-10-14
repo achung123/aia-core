@@ -14,6 +14,7 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
 import { fetchEquity } from '../../api/client';
+import { useGameEvents } from '../../hooks/useGameEvents';
 import type { EquityResponse } from '../../api/types';
 import type { TableState } from '../types';
 
@@ -60,7 +61,7 @@ export function useEquityQuery({
   streetIndex,
   enabled,
 }: UseEquityQueryArgs): UseQueryResult<EquityResponse, Error> {
-  return useQuery<EquityResponse, Error>({
+  const query = useQuery<EquityResponse, Error>({
     queryKey: buildEquityQueryKey(gameId, handNumber, streetIndex),
     queryFn: () => fetchEquity(gameId, handNumber, equityStreetFromStreetIndex(streetIndex)),
     enabled,
@@ -71,4 +72,12 @@ export function useEquityQuery({
     // Equity is fresh for the life of a street; don't refetch on focus.
     refetchOnWindowFocus: false,
   });
+  // A fold or a newly entered card changes the numbers without changing
+  // the street, so refresh on any change to the game. The server caches
+  // equity, so an unchanged hand costs nothing.
+  const { refetch } = query;
+  useGameEvents(enabled ? gameId : null, () => {
+    void refetch();
+  });
+  return query;
 }

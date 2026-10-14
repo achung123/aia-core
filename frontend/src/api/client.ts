@@ -55,8 +55,29 @@ interface RequestOptions extends RequestInit {
   signal?: AbortSignal;
 }
 
+/** Extra attempts for a read that fails before reaching the server. */
+const READ_RETRIES = 2;
+const RETRY_DELAY_MS = 300;
+
+function isAbort(err: unknown): boolean {
+  return (err instanceof DOMException || err instanceof Error) && err.name === 'AbortError';
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const response = await fetch(`${BASE_URL}${path}`, { signal: options.signal, ...options });
+  // Reads are safe to repeat, so a blip on the Wi-Fi does not surface as an
+  // error. Writes are never retried: the first attempt may have landed.
+  const method = (options.method ?? 'GET').toUpperCase();
+  const attempts = method === 'GET' ? READ_RETRIES + 1 : 1;
+  let response: Response | undefined;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      response = await fetch(`${BASE_URL}${path}`, { signal: options.signal, ...options });
+      break;
+    } catch (err) {
+      if (isAbort(err) || options.signal?.aborted || attempt >= attempts) throw err;
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS * attempt));
+    }
+  }
   if (!response.ok) {
     const text = await response.text();
     throw new Error(`HTTP ${response.status}: ${text}`);
